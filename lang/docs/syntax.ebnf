@@ -1,0 +1,87 @@
+(* Semantic Prompt Language (SPL) - syntax in EBNF.
+   Notation: ISO-style. { x } = zero or more, [ x ] = optional, ( ) = grouping, | = alternative.
+   Statements are separated by newlines or ';'. Newlines are insignificant inside ( ) and [ ].
+   '#' starts a comment that runs to the end of the line. *)
+
+program        = { directive , NL } , { statement , ( NL | ";" ) } ;
+directive      = "@" , "{" , directive_item , { "," , directive_item } , "}" ;
+directive_item = "model" , "=" , plain_string ;           (* only allowed before the first statement *)
+
+block          = "{" , { statement , ( NL | ";" ) } , "}" ;   (* '{' must be on the same line as its keyword *)
+
+statement      = let_stmt | assign_stmt | if_stmt | for_stmt | while_stmt | def_stmt
+               | "return" , [ expr ]          (* only inside def *)
+               | "break" | "continue" | "pass" (* break/continue only inside loops *)
+               | try_stmt | assert_stmt | fail_stmt | success_stmt
+               | constraint_stmt | restrict_stmt | expr ;
+
+let_stmt       = "let" , NAME , "=" , expr ;
+assign_stmt    = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
+target         = NAME | postfix "." NAME | postfix "[" expr "]" ;
+
+if_stmt        = "if" , expr , block , { NL* "elif" , expr , block } , [ NL* "else" , block ] ;
+for_stmt       = "for" , NAME , { "," , NAME } , "in" , expr , block ;
+while_stmt     = "while" , expr , block ;
+def_stmt       = "def" , NAME , "(" , [ NAME , { "," , NAME } ] , ")" , block ;
+try_stmt       = "try" , block , NL* , "except" , NAME , block ;
+
+assert_stmt    = "assert" , expr , [ expr ] ;              (* optional message *)
+fail_stmt      = "fail" , expr ;
+success_stmt   = "success" , [ expr ] ;
+
+constraint_stmt = ( "enforce" | "forbid" ) , expr , block ;
+restrict_stmt   = "restrict" , [ "fs" | "net" | "exec" ] , expr , block ;  (* default kind: fs *)
+
+(* Expressions, lowest to highest precedence *)
+expr           = or_expr , [ "if" , or_expr , "else" , expr ] ;
+or_expr        = and_expr , { "or" , and_expr } ;
+and_expr       = not_expr , { "and" , not_expr } ;
+not_expr       = "not" , not_expr | comparison ;
+comparison     = sum , { ( "==" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not" "in" ) , sum } ;
+sum            = term , { ( "+" | "-" ) , term } ;
+term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
+unary          = ( "-" | "+" ) , unary | power ;
+power          = postfix , [ "**" , unary ] ;
+postfix        = primary , { call | index | slice | member } ;
+call           = "(" , [ expr , { "," , expr } ] , ")" ;
+index          = "[" , expr , "]" ;
+slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
+member         = "." , NAME ;
+
+primary        = NUMBER | string | "True" | "False" | "None" | NAME
+               | "(" , expr , ")" | list | dict
+               | llm_call | think_call | tool_call ;
+list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
+dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
+
+(* LLM commands. The prompt operand is a postfix expression, so  ?'a' + b  is  (?'a') + b *)
+llm_call       = "?" , [ ask_mods ] , postfix ;
+think_call     = "think" , [ think_mods ] , postfix ;
+tool_call      = tool_name , tool_params , postfix ;        (* the last operand holds the instructions *)
+
+ask_mods       = "{" , ask_mod , { "," , ask_mod } , "}" ;
+ask_mod        = "len" , "=" , ( "'word'" | "'sentence'" | "'paragraph'" | "'long'" )
+               | "fmt" , "=" , ( "'text'" | "'object'" ) ;
+think_mods     = "{" , think_mod , { "," , think_mod } , "}" ;
+think_mod      = "level" , "=" , ( "'low'" | "'medium'" | "'high'" )
+               | "show" , "=" , ( "True" | "False" ) ;      (* each modifier at most once *)
+
+tool_name      = "read_file" | "write_file" | "web_fetch" | "shell" ;
+tool_params    = "{" , tool_param , { "," , tool_param } , "}" ;
+tool_param     = "path" , "=" , expr       (* read_file, write_file; required *)
+               | "content" , "=" , expr    (* write_file; optional - the LLM writes the file when omitted *)
+               | "url" , "=" , expr        (* web_fetch; required *)
+               | "command" , "=" , expr ;  (* shell; required *)
+
+(* Lexical rules *)
+string         = [ "r" ] , ( "'" | '"' | "'''" | '"""' ) , { char | escape | interpolation } , closing_quote ;
+plain_string   = string without interpolation ;
+escape         = "\" , ( "n" | "t" | "r" | "0" | "\" | "'" | '"' | "{" | "}" ) ;
+interpolation  = "{" , expr , "}" ;        (* "{{" and "}}" are literal braces; raw strings (r'...') have no escapes or interpolation *)
+NUMBER         = digit+ , [ "." , digit+ ] , [ ( "e" | "E" ) , [ "+" | "-" ] , digit+ ] ;
+NAME           = ( letter | "_" ) , { letter | digit | "_" } ;   (* not a reserved word *)
+NL             = newline ;
+
+(* Reserved words:
+   let if elif else for in while def return try except assert fail success enforce forbid restrict
+   think break continue pass and or not True False None read_file write_file web_fetch shell *)

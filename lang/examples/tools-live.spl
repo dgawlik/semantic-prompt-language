@@ -1,0 +1,7 @@
+# Run from this folder after: mkdir sandbox; echo hello world > sandbox/note.txt
+restrict './sandbox' {
+    let content = read_file{path='./sandbox/note.txt'} 'Return the file content verbatim'
+    let why = think{level='high', show=True} 'In one sentence: why is the file content "{content}" a greeting?'
+    let w = write_file{path='./sandbox/out.txt'} 'Write the single word OK into the file'
+    success {'content': content, 'why': why, 'written': read_file{path='./sandbox/out.txt'} 'Return the file content verbatim'}
+}

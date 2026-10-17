@@ -1,0 +1,35 @@
+@{model='gpt-5'}
+
+# Deterministic part: functions, loops, interpolation
+def fib(n) {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+let nums = []
+for i in range(8) {
+    nums.append(fib(i))
+}
+log("fib: {nums}")
+
+# LLM call with modifiers and parsed object
+let joke = ?{len='sentence', fmt='object'} 'A joke about programmers as {{"setup": ..., "punchline": ...}}'
+log("setup: {joke['setup']}")
+
+# Scoped constraints
+enforce 'Answer in English' {
+    forbid 'Mentioning the word cat' {
+        let animal = ?{len='word'} 'Name a pet animal'
+    }
+}
+
+# Failure handling
+try {
+    assert len(nums) == 3 'expected three numbers'
+} except err {
+    log("caught {err.status_code}: {err.reason}")
+}
+
+success {'fib': nums, 'animal': animal}

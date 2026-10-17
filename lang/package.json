@@ -1,0 +1,39 @@
+{
+  "name": "spl-lang",
+  "version": "0.1.0",
+  "description": "Semantic Prompt Language: a Python-like language with LLM calls built into the syntax",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "spl": "./dist/cli.js",
+    "spl-lang": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "test": "npm run build && vitest run",
+    "start": "node dist/cli.js"
+  },
+  "keywords": [
+    "llm",
+    "language",
+    "copilot"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "@github/copilot-sdk": "^1.0.22"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
