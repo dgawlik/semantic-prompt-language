@@ -37,7 +37,7 @@ def fib(n) {
 }
 
 # an LLM call, validated and parsed as JSON
-let joke = ?{len='sentence', fmt='object'} 'A joke about programmers'
+let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
 
 # deliberate before answering
 let why = think{level='high'} 'Why is {joke.setup} funny?'
