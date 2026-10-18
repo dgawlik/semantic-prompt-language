@@ -1,0 +1,26 @@
+@{model='gpt-5.5'}
+
+def fib(n) {
+    if n < 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+# an LLM call, validated and parsed as JSON
+let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
+
+# deliberate before answering
+let why = think{level='high'} 'Why is {joke.setup} funny?'
+
+# rules for every call inside the block
+let hi = None
+enforce 'Answer in English' {
+    forbid 'profanity' { let hi = ?'Say hi' }
+}
+
+# the model may only touch ./out
+restrict './out' {
+    write_file{path='./out/a.txt', content='{fib(10)}'} 'Confirm'
+}
+
+try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
+success {'joke': joke, 'why': why, 'hi': hi}

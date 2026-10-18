@@ -96,6 +96,12 @@ describe.skipIf(!live)('tools on Copilot', () => {
         expect(backend.calls[0]).toMatchObject({ kind: 'tool', reasoningEffort: 'medium' });
     }, t);
 
+    it('rejects an unknown model instead of silently using the default', async () => {
+        const result = await run(parse(`@{model='no-such-model'}\nlet a = ?'hi'`), { backend, logger: new Logger('silent'), cwd: dir });
+        expect(failure(result)).toMatchObject({ status_code: 'llm_error' });
+        expect(failure(result).reason).toMatch(/unknown model 'no-such-model'/);
+    }, t);
+
     it('read_file with a path feeds the content to the instructions', async () => {
         fs.writeFileSync(path.join(dir, 'f.txt'), 'The magic word is PINEAPPLE.');
         const result = await exec(`success read_file{path='f.txt'} 'Reply with the magic word only'`);

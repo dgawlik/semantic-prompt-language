@@ -36,7 +36,7 @@ needs an LLM and finds no credentials fails with `llm_error` and tells you to ru
 ## Language at a glance
 
 ```
-@{model='gpt-5'}
+@{model='gpt-5.5'}
 
 def fib(n) {
     if n < 2 { return n }

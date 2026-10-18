@@ -68,8 +68,18 @@ export class CopilotBackend implements LlmBackend {
         return req.reasoningEffort;
     }
 
+    /** Fails on a model id the runtime does not offer; it would otherwise silently fall back to the default model. */
+    private async checkModel(client: CopilotClient, model: string | undefined): Promise<void> {
+        if (!model) return;
+        const models = await this.listModels(client);
+        if (models && !models.some((m) => m.id === model)) {
+            throw new LlmError(`unknown model '${model}' (available: ${models.map((m) => m.id).join(', ')})`);
+        }
+    }
+
     async call(req: LlmRequest): Promise<LlmResponse> {
         const client = await this.getClient();
+        await this.checkModel(client, req.model);
         let effort = await this.resolveEffort(client, req);
         let violation: Failure | undefined;
         let session: CopilotSession | undefined;
