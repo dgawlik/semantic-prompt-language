@@ -14,7 +14,8 @@ const IS_WINDOWS = process.platform === 'win32';
 const violation = (msg: string): Failure => new Failure('restriction_violation', msg);
 
 /** Resolves symlinks of the nearest existing ancestor so `..` and links cannot escape a folder. */
-export function canonicalPath(p: string, cwd: string): string {
+export function canonicalPath(p: string, cwd: string, depth = 0): string {
+    if (depth > 32) throw violation(`too many symbolic links while resolving '${p}'`);
     const abs = path.resolve(cwd, p);
     const rest: string[] = [];
     let cur = abs;
@@ -23,11 +24,23 @@ export function canonicalPath(p: string, cwd: string): string {
             const real = fs.realpathSync.native(cur);
             return path.join(real, ...rest.reverse());
         } catch (e) {
-            const parent = path.dirname(cur);
-            if (parent === cur) return abs;
-            if ((e as NodeJS.ErrnoException).code !== 'ENOENT' && (e as NodeJS.ErrnoException).code !== 'ENOTDIR') {
+            const code = (e as NodeJS.ErrnoException).code;
+            if (code !== 'ENOENT' && code !== 'ENOTDIR') {
                 throw violation(`cannot resolve path '${p}': ${(e as Error).message}`);
             }
+            // A dangling symlink must be followed too: writing through it would create its target.
+            let link: string | undefined;
+            try {
+                if (fs.lstatSync(cur).isSymbolicLink()) link = fs.readlinkSync(cur);
+            } catch {
+                link = undefined;
+            }
+            if (link !== undefined) {
+                const target = canonicalPath(path.resolve(path.dirname(cur), link), cwd, depth + 1);
+                return path.join(target, ...rest.reverse());
+            }
+            const parent = path.dirname(cur);
+            if (parent === cur) return abs;
             rest.push(path.basename(cur));
             cur = parent;
         }
@@ -117,7 +130,11 @@ export class Restrictions {
     checkExec(name: string): void {
         const n = normalizeExec(name);
         for (const r of this.list) {
-            if (r.kind === 'exec' && !r.values.includes(n)) {
+            if (r.kind !== 'exec') continue;
+            if (/[\\/]/.test(name.trim())) {
+                throw violation(`executable '${name}' blocked: inside a restrict exec block executables must be named without a path`);
+            }
+            if (!r.values.includes(n)) {
                 throw violation(`executable '${n}' blocked: allowed executables are ${r.values.join(', ')}`);
             }
         }

@@ -1,0 +1,55 @@
+# Triage a batch of issues into labels and priorities, with validated JSON and retries.
+# Pattern: LLM output is untrusted input; deterministic code checks it and asks again on failure.
+
+let LABELS = ['bug', 'feature', 'question', 'docs']
+let PRIORITIES = ['low', 'medium', 'high']
+
+let issues = [
+    {'id': 101, 'title': 'App crashes on startup', 'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
+    {'id': 102, 'title': 'Support dark mode', 'body': 'It would be great to have a dark theme, my eyes hurt at night.'},
+    {'id': 103, 'title': 'How do I export to CSV?', 'body': 'I cannot find the export option anywhere in the menus.'},
+    {'id': 104, 'title': 'Typo in install guide', 'body': 'The guide says "npm instal", should be "npm install".'},
+]
+
+def triage(issue) {
+    let problem = ''
+    for attempt in range(3) {
+        try {
+            let r = ?{fmt='object'} '''
+Classify this GitHub issue. {problem}
+Title: {issue['title']}
+Body: {issue['body']}
+
+Reply as JSON: {{"label": one of {LABELS}, "priority": one of {PRIORITIES}, "reason": "one short sentence"}}'''
+            assert r.label in LABELS "label must be one of {LABELS}"
+            assert r.priority in PRIORITIES "priority must be one of {PRIORITIES}"
+            return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
+        } except err {
+            problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
+            log("issue {issue['id']}: attempt {attempt + 1} failed: {err.reason}")
+        }
+    }
+    fail "could not triage issue {issue['id']}"
+}
+
+let results = []
+let counts = {}
+for issue in issues {
+    let t = triage(issue)
+    results.append(t)
+    if t['label'] in counts {
+        counts[t['label']] += 1
+    } else {
+        counts[t['label']] = 1
+    }
+}
+
+let urgent = []
+for t in results {
+    if t['priority'] == 'high' {
+        urgent.append(t['title'])
+    }
+}
+
+let summary = ?{len='sentence'} 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
+success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}

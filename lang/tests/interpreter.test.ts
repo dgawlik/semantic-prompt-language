@@ -303,6 +303,22 @@ describe('restrict enforcement', () => {
         expect(failure(r.result).status_code).toBe('restriction_violation');
     });
 
+    it('follows dangling symlinks so writes cannot escape through them', async () => {
+        fs.mkdirSync(path.join(dir, 'out'));
+        fs.mkdirSync(path.join(dir, 'outside'));
+        // a junction to an existing folder is followed; a file symlink needs privileges on Windows, so use a junction to a missing dir
+        const missing = path.join(dir, 'outside', 'not-yet');
+        fs.symlinkSync(missing, path.join(dir, 'out', 'dangling'), 'junction');
+        const r = await exec(`restrict './out' { let v = write_file{path='./out/dangling/x.txt', content='x'} 'x' }`);
+        expect(failure(r.result).status_code).toBe('restriction_violation');
+        expect(fs.existsSync(path.join(missing, 'x.txt'))).toBe(false);
+    });
+
+    it('blocks path-qualified executables inside restrict exec', async () => {
+        const r = await exec(`restrict exec 'git' { let v = shell{command='./evil/git status'} 'x' }`);
+        expect(failure(r.result).reason).toMatch(/without a path/);
+    });
+
     it('blocks network and exec for explicit tools', async () => {
         const net = await exec(`restrict net 'api.example.com' { let v = web_fetch{url='https://evil.example.org/x'} 'x' }`);
         expect(failure(net.result).status_code).toBe('restriction_violation');

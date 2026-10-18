@@ -1,0 +1,45 @@
+# Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
+#
+# Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd <project>
+# Exit code is 1 (failure payload on stdout) when high-severity findings exist.
+# The review phase may only touch ./src; the report is written under ./reports.
+
+let target = './src/restrict.ts'
+
+let notes = ''
+restrict './src' {
+    forbid 'suggesting purely stylistic changes' {
+        notes = think{level='high'} '''
+Read {target} and review it for security problems and correctness bugs.
+List each finding with its location, why it matters and a suggested fix.'''
+    }
+}
+
+let review = ?{fmt='object'} '''
+Convert this review into JSON:
+{{"findings": [{{"severity": "low"|"medium"|"high", "title": str, "location": str, "fix": str}}]}}
+Use an empty list when there are no findings.
+
+{notes}'''
+
+let lines = ["# Review of {target}", '']
+let high = 0
+for f in review.findings {
+    assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
+    if f.severity == 'high' {
+        high += 1
+    }
+    lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
+    lines.append("  - Fix: {f.fix}")
+}
+lines.append('')
+lines.append("{len(review.findings)} finding(s), {high} high severity")
+
+restrict './reports' {
+    write_file{path='./reports/review.md', content='\n'.join(lines)} 'Confirm that the report was written'
+}
+
+if high > 0 {
+    fail "{high} high severity finding(s), see ./reports/review.md"
+}
+success '\n'.join(lines)

@@ -1,0 +1,44 @@
+# Extract structured data from messy text and cross-check it with plain arithmetic.
+# If the numbers do not add up, the rejection reason is fed back to the LLM for another try.
+
+let document = '''
+ACME Industrial Supplies GmbH            Invoice No. INV-2026-0042
+Date: 2026-03-14                          Currency: EUR
+
+  3 x Hex bolt M8 (box of 100)        @ 12.50     37.50
+  2 x Safety gloves, size L           @  8.90     17.80
+  1 x Cordless drill                  @ 119.00   119.00
+
+Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
+'''
+
+let feedback = ''
+let invoice = None
+
+for attempt in range(3) {
+    if invoice != None {
+        break
+    }
+    try {
+        let r = ?{fmt='object'} '''
+Extract the invoice below. {feedback}
+Reply as JSON: {{"vendor": str, "number": str, "date": "YYYY-MM-DD", "currency": str,
+"lines": [{{"description": str, "quantity": number, "unit_price": number}}], "subtotal": number, "total": number}}
+
+{document}'''
+        assert type(r.lines) == 'list' and len(r.lines) > 0 'lines must be a non-empty list'
+        let computed = 0
+        for line in r.lines {
+            computed += line.quantity * line.unit_price
+        }
+        assert abs(computed - r.subtotal) < 0.01 "lines add up to {round(computed, 2)} but subtotal is {r.subtotal}"
+        assert r.total >= r.subtotal "total {r.total} is smaller than subtotal {r.subtotal}"
+        invoice = r
+    } except err {
+        feedback = "Your previous extraction was rejected: {err.reason}. Re-read the document and fix it."
+        log("attempt {attempt + 1} rejected: {err.reason}")
+    }
+}
+
+assert invoice != None 'extraction kept failing validation'
+success invoice

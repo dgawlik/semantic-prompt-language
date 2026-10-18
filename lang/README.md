@@ -90,6 +90,24 @@ model default is used. Guard against variance with `assert` and `fmt='object'`.
 `--store vars.json` loads top-level variables from the file at start and writes them back at exit (also on failure).
 `--store-module ./mystore.mjs` plugs in your own store: export `createStore()` returning `{ load(): Record, save(vars) }`.
 
+## Examples
+
+All in [examples/](examples); run from the project root, `--cwd <dir>` points a script at another project. The retry logic
+of `triage-issues` and `extract-invoice` is covered by `tests/examples.test.ts`.
+
+| Script | Shows |
+|--------|-------|
+| `commit-message.spl` | `shell` under `restrict exec 'git'`, validation helper, retry loop |
+| `triage-issues.spl` | `fmt='object'` + `assert` validation with feedback retries, aggregation, summary |
+| `extract-invoice.spl` | structured extraction cross-checked with arithmetic before it is accepted |
+| `code-review.spl` | `think` then structure, `restrict` on read and on write, `fail` as a CI gate |
+| `release-notes.spl` | nested `forbid`/`enforce`, git history to a file inside `./out` |
+| `web-digest.spl` | `restrict net`, `web_fetch`, catching a blocked second host |
+| `fix-failing-tests.spl` | agent loop: run `npm test`, let the LLM fix the source, repeat |
+| `translate-docs.spl` | `write_file` without `content` (LLM writes, path pinned), dict iteration |
+| `journal.spl` | state across runs with `--store` |
+| `basics.spl`, `live.spl`, `restrict-live.spl`, `tools-live.spl` | small feature tours |
+
 ## Develop
 
 ```

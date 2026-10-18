@@ -1,0 +1,41 @@
+# Draft a Conventional Commit message for the staged changes.
+#
+#   cd your-repo && git add -p
+#   spl path/to/commit-message.spl
+#
+# The LLM may only run `git`; the result is validated deterministically and retried with feedback.
+
+let TYPES = ['feat', 'fix', 'docs', 'refactor', 'test', 'chore', 'perf']
+
+def is_valid(msg) {
+    let first = msg.splitlines()[0]
+    if len(first) > 72 or ': ' not in first {
+        return False
+    }
+    return first.split(':')[0].split('(')[0] in TYPES
+}
+
+let msg = ''
+let attempt = 0
+
+restrict exec 'git' {
+    forbid 'wrapping the message in quotes or code fences' {
+        while attempt < 3 {
+            attempt += 1
+            msg = shell{command='git diff --staged'} '''
+Write a Conventional Commit message for this diff: a subject line of at most 72 characters
+("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
+Reply with ONLY the message. If the diff is empty reply exactly NO_CHANGES.'''
+            if msg == 'NO_CHANGES' {
+                fail 'nothing is staged'
+            }
+            if is_valid(msg) {
+                break
+            }
+            log("attempt {attempt}: invalid message, retrying")
+        }
+    }
+}
+
+assert is_valid(msg) 'could not produce a valid commit message'
+success msg

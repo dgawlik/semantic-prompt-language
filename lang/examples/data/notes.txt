@@ -1,0 +1,6 @@
+Sprint 41 notes
+
+- Finished the migration of the billing service to the new queue. Two flaky tests remain.
+- Customer onboarding flow is 30% faster after caching the plan catalogue.
+- Blocked: waiting on security review for the SSO change; ETA unknown.
+- Next: start the dark mode work and fix the CSV export encoding bug.
