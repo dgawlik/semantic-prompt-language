@@ -501,7 +501,7 @@ class Interpreter {
                 restrictions: this.restrictions,
             }),
             model: this.model,
-            reasoningEffort: c.effort,
+            reasoningEffort: c.effort ?? (c.kind === 'tool' ? 'medium' : undefined),
             showReasoning: c.show ?? false,
             restrictions: this.restrictions,
             tools: new ToolHost(this.restrictions, this.cwd),

@@ -90,6 +90,12 @@ success [color, later, last]
 describe.skipIf(!live)('tools on Copilot', () => {
     const t = LIVE_TIMEOUT;
 
+    it('tool calls use the default medium reasoning effort', async () => {
+        fs.writeFileSync(path.join(dir, 'f.txt'), 'The magic word is PINEAPPLE.');
+        await exec(`success read_file{path='f.txt'} 'Reply with the magic word only'`);
+        expect(backend.calls[0]).toMatchObject({ kind: 'tool', reasoningEffort: 'medium' });
+    }, t);
+
     it('read_file with a path feeds the content to the instructions', async () => {
         fs.writeFileSync(path.join(dir, 'f.txt'), 'The magic word is PINEAPPLE.');
         const result = await exec(`success read_file{path='f.txt'} 'Reply with the magic word only'`);
