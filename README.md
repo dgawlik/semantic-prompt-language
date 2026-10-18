@@ -1,18 +1,67 @@
 # spl-lang: Semantic Prompt Language interpreter
 
+Site - https://dgawlik.github.io/semantic-prompt-language/
+
+Github - https://github.com/dgawlik/semantic-prompt-language
+
 A Python-like language where LLM calls are part of the syntax. Everything outside LLM calls is deterministic; LLM
-calls go through the GitHub Copilot SDK. See [../LANG-PRD.md](../LANG-PRD.md) for the full spec,
-[docs/syntax.ebnf](docs/syntax.ebnf) for the grammar and the [documentation site](../docs/index.html) (open it in a
-browser, or publish `docs/` with GitHub Pages) for guides and reference.
+calls go through the GitHub Copilot SDK.
 
 ## Run
 
+Install:
+
 ```
-npm install && npm run build
-node dist/cli.js login                                   # once: authenticate with GitHub Copilot
-node dist/cli.js examples/live.spl
-npx file:./lang examples/live.spl                        # npx from a checkout (or `npx spl-lang` once published)
+npm i -g spl-lang
 ```
+
+Auth copilot:
+
+```
+spl login
+```
+
+You are good to go
+
+```
+# example.spl
+
+
+@{model='gpt-5.5'}
+
+def fib(n) {
+    if n < 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+# an LLM call, validated and parsed as JSON
+let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
+
+# deliberate before answering
+let why = think{level='high'} 'Why is {joke.setup} funny?'
+
+# rules for every call inside the block
+let hi = None
+enforce 'Answer in English' {
+    forbid 'profanity' { let hi = ?'Say hi' }
+}
+
+# the model may only touch ./out
+restrict './out' {
+    write_file{path='./out/a.txt', content='{fib(10)}'} 'Confirm'
+}
+
+try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
+success {'joke': joke, 'why': why, 'hi': hi}
+```
+
+Run 
+
+```
+spl example.spl
+```
+
+
 
 Requires Node 20+ and an authenticated GitHub Copilot.
 

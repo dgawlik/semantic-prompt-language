@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "description": "Computer Use is currently in preview.",
+  "name": "computer-use",
+  "version": "0.1.94"
+}
