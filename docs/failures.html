@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How SPL handles failures: payloads, status codes, try/except, assert, fail, success and exit codes.">
+<title>Failures &amp; errors - SPL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="failures">
+<main id="page">
+
+<div class="eyebrow">The language</div>
+<h1>Failures &amp; errors</h1>
+<p class="lead">A failure stops the script immediately &mdash; unless you catch it. Every kind of failure shares one JSON payload, so handling code is uniform whether the cause was a bad model answer, a blocked tool call or an <code>assert</code>.</p>
+
+<h2 id="payload">The failure payload</h2>
+<pre><code class="language-json">
+{
+    "status": "failure",
+    "reason": "label must be one of [\"bug\",\"feature\",\"question\",\"docs\"]",
+    "command": "assert r.label in LABELS \"label must be one of {LABELS}\"",
+    "line": 24,
+    "status_code": "assertion_failed"
+}
+</code></pre>
+<div class="table-wrap"><table>
+<thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>status</code></td><td>Always <code>"failure"</code>.</td></tr>
+<tr><td><code>reason</code></td><td>Human-readable explanation.</td></tr>
+<tr><td><code>command</code></td><td>The source line, as plain text, where the failure was raised.</td></tr>
+<tr><td><code>line</code></td><td>1-based line number.</td></tr>
+<tr><td><code>status_code</code></td><td>Machine-readable category &mdash; see below.</td></tr>
+</tbody></table></div>
+
+<h2 id="status-codes">Status codes</h2>
+<div class="table-wrap"><table>
+<thead><tr><th><code>status_code</code></th><th>Raised when</th></tr></thead>
+<tbody>
+<tr><td><code>assertion_failed</code></td><td>An <code>assert</code> condition is falsy.</td></tr>
+<tr><td><code>explicit_failure</code></td><td>The script executes <code>fail '…'</code>.</td></tr>
+<tr><td><code>invalid_format</code></td><td>A <code>fmt='object'</code> response is not valid JSON (object or array).</td></tr>
+<tr><td><code>restriction_violation</code></td><td>A tool call is blocked by an active <code>restrict</code> scope.</td></tr>
+<tr><td><code>llm_error</code></td><td>The backend failed: network, authentication, timeout, model error.</td></tr>
+<tr><td><code>tool_error</code></td><td>A tool failed: missing file, HTTP error, non-zero <code>shell</code> exit code, invalid URL.</td></tr>
+<tr><td><code>runtime_error</code></td><td>Ordinary runtime problems: undefined name, type mismatch, division by zero, index out of range, missing dict key, call depth exceeded.</td></tr>
+</tbody></table></div>
+<p>The set of codes is provisional.</p>
+
+<h2 id="try-except">try / except</h2>
+<p>Handle failures with <code>try</code> and <code>except name</code>. The caught payload is bound to <code>name</code> as a dict. <code>try</code> without <code>except</code> is a syntax error. Any <code>enforce</code>/<code>forbid</code> and <code>restrict</code> scopes opened inside the <code>try</code> block are unwound before the handler runs.</p>
+<pre><code class="language-spl">
+try {
+    let response = ?{fmt='object'} 'A joke about programmers'
+} except err {
+    let response = {'setup': 'none', 'punchline': err.reason}
+}
+log("{err.status_code} on line {err.line}")
+</code></pre>
+<div class="callout">
+  <span class="ico">ℹ️</span>
+  <div class="body"><span class="title">Not everything is catchable</span>
+  <p>Syntax errors are found before the script starts and are never catchable. Everything raised while running &mdash; including runtime errors &mdash; is.</p></div>
+</div>
+<p>A neat consequence: reading an undefined variable is a catchable <code>runtime_error</code>, which the <a href="examples.html#journal">journal</a> example uses to detect a first run.</p>
+
+<h2 id="assert-fail-success">assert, fail, success</h2>
+<p>Three special statements control when the program stops.</p>
+
+<h3 id="assert">assert</h3>
+<p><code>assert cond ['message']</code> raises <code>assertion_failed</code> when the condition is falsy. The message is an optional expression and interpolates like any string.</p>
+<pre><code class="language-spl">
+assert 1 == 2 'Abnormal'
+assert len(items) &gt; 0 "expected items, got {len(items)}"
+</code></pre>
+
+<h3 id="fail">fail</h3>
+<p><code>fail reason</code> raises <code>explicit_failure</code>. Use it for conditions that are not simple expressions, such as a CI gate.</p>
+<pre><code class="language-spl">
+if high &gt; 0 {
+    fail "{high} high severity finding(s)"
+}
+</code></pre>
+
+<h3 id="success">success</h3>
+<p><code>success [result]</code> stops the script successfully. <code>result</code> is printed to stdout &mdash; strings raw, everything else as JSON &mdash; and returned by the interpreter. Without a value nothing is printed. A script that simply runs to the end also exits with code 0.</p>
+<pre><code class="language-spl">
+success {'counts': counts, 'summary': summary}
+</code></pre>
+
+<h2 id="uncaught">Uncaught failures</h2>
+<p>An uncaught failure prints the payload (pretty-printed JSON) to stdout and exits with code <strong>1</strong>. Even then the variable store is saved, so state recorded before the failure survives.</p>
+<pre><code class="language-bash">
+$ spl examples/triage-issues.spl; echo $?
+{
+    "status": "failure",
+    "reason": "could not triage issue 103",
+    "command": "fail \"could not triage issue {issue['id']}\"",
+    "line": 32,
+    "status_code": "explicit_failure"
+}
+1
+</code></pre>
+<p>Syntax errors are reported on stderr as <code>file:line:col: syntax error: message</code> with exit code <strong>2</strong>.</p>
+
+<h2 id="retry">Retry patterns</h2>
+<p>LLM output is untrusted input. The idiom is: validate deterministically, feed the rejection reason back, ask again, and give up with <code>fail</code> when the budget is spent.</p>
+<pre><code class="language-spl">
+def triage(issue) {
+    let problem = ''
+    for attempt in range(3) {
+        try {
+            let r = ?{fmt='object'} '''
+Classify this issue. {problem}
+Title: {issue['title']}
+Reply as JSON: {{"label": one of {LABELS}}}'''
+            assert r.label in LABELS "label must be one of {LABELS}"
+            return r
+        } except err {
+            problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
+            log("attempt {attempt + 1} failed: {err.reason}")
+        }
+    }
+    fail "could not triage issue {issue['id']}"
+}
+</code></pre>
+<div class="callout tip">
+  <span class="ico">💡</span>
+  <div class="body"><span class="title">Why this works</span>
+  <p>Variance in LLM output can't be removed, but it can be <em>contained</em>: <code>fmt='object'</code> catches malformed JSON, <code>assert</code> catches semantically wrong JSON, and the retry loop turns both into a second chance with better instructions.</p></div>
+</div>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

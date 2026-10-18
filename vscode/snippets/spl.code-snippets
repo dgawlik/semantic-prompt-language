@@ -1,0 +1,132 @@
+{
+  "Function": {
+    "prefix": "def",
+    "body": ["def ${1:name}(${2:args}) {", "\t$0", "}"],
+    "description": "Function definition"
+  },
+  "If": {
+    "prefix": "if",
+    "body": ["if ${1:condition} {", "\t$0", "}"],
+    "description": "if block"
+  },
+  "If / else": {
+    "prefix": "ifelse",
+    "body": ["if ${1:condition} {", "\t$2", "} else {", "\t$0", "}"],
+    "description": "if / else block"
+  },
+  "For loop": {
+    "prefix": "for",
+    "body": ["for ${1:item} in ${2:items} {", "\t$0", "}"],
+    "description": "for loop"
+  },
+  "While loop": {
+    "prefix": "while",
+    "body": ["while ${1:condition} {", "\t$0", "}"],
+    "description": "while loop"
+  },
+  "Variable": {
+    "prefix": "let",
+    "body": ["let ${1:name} = ${0:value}"],
+    "description": "Variable declaration"
+  },
+  "LLM call": {
+    "prefix": "ask",
+    "body": ["let ${1:answer} = ?{len='${2|word,sentence,paragraph,long|}'} '${0:prompt}'"],
+    "description": "LLM call with a length hint"
+  },
+  "LLM call (object)": {
+    "prefix": "askobj",
+    "body": ["let ${1:result} = ?{fmt='object'} '''", "${2:prompt}", "", "Reply as JSON: {{\"${3:key}\": ${4:str}}}'''"],
+    "description": "LLM call whose JSON response is validated and parsed"
+  },
+  "Think": {
+    "prefix": "think",
+    "body": ["let ${1:answer} = think{level='${2|low,medium,high|}', show=${3|False,True|}} '${0:problem}'"],
+    "description": "think command with level"
+  },
+  "Try / except": {
+    "prefix": "try",
+    "body": ["try {", "\t$1", "} except ${2:err} {", "\t$0", "}"],
+    "description": "Catch failures"
+  },
+  "Retry loop": {
+    "prefix": "retry",
+    "body": [
+      "let ${1:feedback} = ''",
+      "for attempt in range(${2:3}) {",
+      "\ttry {",
+      "\t\t$3",
+      "\t\tbreak",
+      "\t} except err {",
+      "\t\t${1:feedback} = \"Previous attempt was rejected: {err.reason}\"",
+      "\t}",
+      "}"
+    ],
+    "description": "Retry a validated LLM call with feedback"
+  },
+  "Enforce": {
+    "prefix": "enforce",
+    "body": ["enforce '${1:rule}' {", "\t$0", "}"],
+    "description": "Scoped rule the LLM must follow"
+  },
+  "Forbid": {
+    "prefix": "forbid",
+    "body": ["forbid '${1:rule}' {", "\t$0", "}"],
+    "description": "Scoped rule the LLM must not break"
+  },
+  "Restrict folder": {
+    "prefix": "restrict",
+    "body": ["restrict '${1:./folder}' {", "\t$0", "}"],
+    "description": "Limit reads and writes to a folder"
+  },
+  "Restrict network": {
+    "prefix": "restrictnet",
+    "body": ["restrict net '${1:api.example.com}' {", "\t$0", "}"],
+    "description": "Limit network access to hosts"
+  },
+  "Restrict exec": {
+    "prefix": "restrictexec",
+    "body": ["restrict exec '${1:git,npm}' {", "\t$0", "}"],
+    "description": "Limit shell commands to executables"
+  },
+  "Read file": {
+    "prefix": "read_file",
+    "body": ["let ${1:content} = read_file{path='${2:./file}'} '${0:Return the file content}'"],
+    "description": "read_file tool call"
+  },
+  "Write file": {
+    "prefix": "write_file",
+    "body": ["write_file{path='${1:./out/file}', content=${2:text}} '${0:Confirm the file was written}'"],
+    "description": "write_file tool call"
+  },
+  "Fetch URL": {
+    "prefix": "web_fetch",
+    "body": ["let ${1:page} = web_fetch{url='${2:https://example.com}'} '${0:Summarize the page}'"],
+    "description": "web_fetch tool call"
+  },
+  "Shell": {
+    "prefix": "shell",
+    "body": ["let ${1:output} = shell{command='${2:git status}'} '${0:Return the output}'"],
+    "description": "shell tool call"
+  },
+  "Assert": {
+    "prefix": "assert",
+    "body": ["assert ${1:condition} '${0:message}'"],
+    "description": "Fail with assertion_failed when false"
+  },
+  "Fail": {
+    "prefix": "fail",
+    "body": ["fail '${0:reason}'"],
+    "description": "Stop with explicit_failure"
+  },
+  "Success": {
+    "prefix": "success",
+    "body": ["success ${0:result}"],
+    "description": "Stop successfully with a result"
+  },
+  "Model directive": {
+    "prefix": "model",
+    "body": ["@{model='${0:model-id}'}"],
+    "description": "Select the model (top of the script)"
+  }
+}

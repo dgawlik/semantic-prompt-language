@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The complete SPL grammar in EBNF, with reserved words and lexical rules.">
+<title>Grammar (EBNF) - SPL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="grammar">
+<main id="page">
+
+<div class="eyebrow">Reference</div>
+<h1>Grammar (EBNF)</h1>
+<p class="lead">The authoritative syntax definition, as shipped in <code>lang/docs/syntax.ebnf</code>. The parser is strict: anything outside this grammar is a syntax error reported with exit code 2.</p>
+
+<div class="callout">
+  <span class="ico">📖</span>
+  <div class="body"><span class="title">Notation</span>
+  <p>ISO-style. <code>{ x }</code> = zero or more, <code>[ x ]</code> = optional, <code>( )</code> = grouping, <code>|</code> = alternative. Statements are separated by newlines or <code>;</code>. Newlines are insignificant inside <code>( )</code> and <code>[ ]</code>. <code>#</code> starts a comment that runs to the end of the line.</p></div>
+</div>
+
+<h2 id="program">Program &amp; statements</h2>
+<pre><code class="language-ebnf" data-file="syntax.ebnf">
+program        = { directive , NL } , { statement , ( NL | ";" ) } ;
+directive      = "@" , "{" , directive_item , { "," , directive_item } , "}" ;
+directive_item = "model" , "=" , plain_string ;           (* only allowed before the first statement *)
+
+block          = "{" , { statement , ( NL | ";" ) } , "}" ;   (* '{' must be on the same line as its keyword *)
+
+statement      = let_stmt | assign_stmt | if_stmt | for_stmt | while_stmt | def_stmt
+               | "return" , [ expr ]          (* only inside def *)
+               | "break" | "continue" | "pass" (* break/continue only inside loops *)
+               | try_stmt | assert_stmt | fail_stmt | success_stmt
+               | constraint_stmt | restrict_stmt | expr ;
+
+let_stmt       = "let" , NAME , "=" , expr ;
+assign_stmt    = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
+target         = NAME | postfix "." NAME | postfix "[" expr "]" ;
+
+if_stmt        = "if" , expr , block , { NL* "elif" , expr , block } , [ NL* "else" , block ] ;
+for_stmt       = "for" , NAME , { "," , NAME } , "in" , expr , block ;
+while_stmt     = "while" , expr , block ;
+def_stmt       = "def" , NAME , "(" , [ NAME , { "," , NAME } ] , ")" , block ;
+try_stmt       = "try" , block , NL* , "except" , NAME , block ;
+
+assert_stmt    = "assert" , expr , [ expr ] ;              (* optional message *)
+fail_stmt      = "fail" , expr ;
+success_stmt   = "success" , [ expr ] ;
+
+constraint_stmt = ( "enforce" | "forbid" ) , expr , block ;
+restrict_stmt   = "restrict" , [ "fs" | "net" | "exec" ] , expr , block ;  (* default kind: fs *)
+</code></pre>
+
+<h2 id="expressions">Expressions</h2>
+<p>Listed from lowest to highest precedence.</p>
+<pre><code class="language-ebnf">
+expr           = or_expr , [ "if" , or_expr , "else" , expr ] ;
+or_expr        = and_expr , { "or" , and_expr } ;
+and_expr       = not_expr , { "and" , not_expr } ;
+not_expr       = "not" , not_expr | comparison ;
+comparison     = sum , { ( "==" | "!=" | "&lt;" | "&lt;=" | "&gt;" | "&gt;=" | "in" | "not" "in" ) , sum } ;
+sum            = term , { ( "+" | "-" ) , term } ;
+term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
+unary          = ( "-" | "+" ) , unary | power ;
+power          = postfix , [ "**" , unary ] ;
+postfix        = primary , { call | index | slice | member } ;
+call           = "(" , [ expr , { "," , expr } ] , ")" ;
+index          = "[" , expr , "]" ;
+slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
+member         = "." , NAME ;
+
+primary        = NUMBER | string | "True" | "False" | "None" | NAME
+               | "(" , expr , ")" | list | dict
+               | llm_call | think_call | tool_call ;
+list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
+dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
+</code></pre>
+
+<h2 id="llm-grammar">LLM commands</h2>
+<pre><code class="language-ebnf">
+(* The prompt operand is a postfix expression, so  ?'a' + b  is  (?'a') + b *)
+llm_call       = "?" , [ ask_mods ] , postfix ;
+think_call     = "think" , [ think_mods ] , postfix ;
+tool_call      = tool_name , tool_params , postfix ;        (* the last operand holds the instructions *)
+
+ask_mods       = "{" , ask_mod , { "," , ask_mod } , "}" ;
+ask_mod        = "len" , "=" , ( "'word'" | "'sentence'" | "'paragraph'" | "'long'" )
+               | "fmt" , "=" , ( "'text'" | "'object'" ) ;
+think_mods     = "{" , think_mod , { "," , think_mod } , "}" ;
+think_mod      = "level" , "=" , ( "'low'" | "'medium'" | "'high'" )
+               | "show" , "=" , ( "True" | "False" ) ;      (* each modifier at most once *)
+
+tool_name      = "read_file" | "write_file" | "web_fetch" | "shell" ;
+tool_params    = "{" , tool_param , { "," , tool_param } , "}" ;
+tool_param     = "path" , "=" , expr       (* read_file, write_file; required *)
+               | "content" , "=" , expr    (* write_file; optional - the LLM writes the file when omitted *)
+               | "url" , "=" , expr        (* web_fetch; required *)
+               | "command" , "=" , expr ;  (* shell; required *)
+</code></pre>
+
+<h2 id="lexical">Lexical rules</h2>
+<pre><code class="language-ebnf">
+string         = [ "r" ] , ( "'" | '"' | "'''" | '"""' ) , { char | escape | interpolation } , closing_quote ;
+plain_string   = string without interpolation ;
+escape         = "\" , ( "n" | "t" | "r" | "0" | "\" | "'" | '"' | "{" | "}" ) ;
+interpolation  = "{" , expr , "}" ;        (* "{{" and "}}" are literal braces; raw strings (r'...') have no escapes or interpolation *)
+NUMBER         = digit+ , [ "." , digit+ ] , [ ( "e" | "E" ) , [ "+" | "-" ] , digit+ ] ;
+NAME           = ( letter | "_" ) , { letter | digit | "_" } ;   (* not a reserved word *)
+NL             = newline ;
+</code></pre>
+
+<h2 id="reserved">Reserved words</h2>
+<p>These cannot be used as variable, function or parameter names:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Group</th><th>Words</th></tr></thead>
+<tbody>
+<tr><td>Declarations &amp; flow</td><td><code>let</code> <code>def</code> <code>return</code> <code>if</code> <code>elif</code> <code>else</code> <code>for</code> <code>in</code> <code>while</code> <code>break</code> <code>continue</code> <code>pass</code></td></tr>
+<tr><td>Failure handling</td><td><code>try</code> <code>except</code> <code>assert</code> <code>fail</code> <code>success</code></td></tr>
+<tr><td>Scopes</td><td><code>enforce</code> <code>forbid</code> <code>restrict</code></td></tr>
+<tr><td>LLM &amp; tools</td><td><code>think</code> <code>read_file</code> <code>write_file</code> <code>web_fetch</code> <code>shell</code></td></tr>
+<tr><td>Operators &amp; literals</td><td><code>and</code> <code>or</code> <code>not</code> <code>True</code> <code>False</code> <code>None</code></td></tr>
+</tbody></table></div>
+<div class="callout">
+  <span class="ico">ℹ️</span>
+  <div class="body"><span class="title">Contextual words</span>
+  <p><code>fs</code>, <code>net</code> and <code>exec</code> only have meaning directly after <code>restrict</code>; modifier names (<code>len</code>, <code>fmt</code>, <code>level</code>, <code>show</code>, <code>path</code>, <code>content</code>, <code>url</code>, <code>command</code>) only inside a modifier list.</p></div>
+</div>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="SPL language basics: variables, types, strings, operators, control flow and functions.">
+<title>Language basics - SPL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="language">
+<main id="page">
+
+<div class="eyebrow">The language</div>
+<h1>Language basics</h1>
+<p class="lead">The deterministic half of SPL: a Python-flavoured language with braces. Nothing on this page calls a model &mdash; given the same inputs it always produces the same results.</p>
+
+<div class="callout">
+  <span class="ico">📌</span>
+  <div class="body"><span class="title">Design decisions at a glance</span>
+  <ul>
+    <li><strong>Blocks use braces</strong>; the opening <code>{</code> must be on the same line as its keyword. Statements end at a newline (or <code>;</code>).</li>
+    <li><code>let</code> binds in the <em>enclosing function scope</em>, not per block. <code>x = …</code> reassigns an existing variable.</li>
+    <li><strong>Every string interpolates</strong> <code>{expr}</code>.</li>
+    <li>Strict parsing: unknown modifiers or values, <code>break</code> outside loops, <code>return</code> outside functions, and <code>try</code> without <code>except</code> are syntax errors (exit code 2).</li>
+  </ul></div>
+</div>
+
+<h2 id="structure">Program structure</h2>
+<p>A script is an optional <code>@{…}</code> directive header followed by statements. <code>#</code> starts a comment that runs to the end of the line.</p>
+<pre><code class="language-spl">
+@{model='gpt-5'}        # header: only allowed before the first statement
+
+let greeting = 'hello'  # a statement
+log(greeting)           # an expression statement
+</code></pre>
+
+<h3 id="directives">Directives</h3>
+<p>The only directive in the MVP is <code>model</code>. Its value must be a plain string (no interpolation). The <code>--model</code> CLI option takes precedence over the directive.</p>
+
+<h2 id="variables">Variables</h2>
+<p>Declare with <code>let</code>; variables are mutable for the duration of the run. Reassign with <code>=</code> or a compound operator (<code>+= -= *= /= //= %=</code>). Assigning to an undeclared name is a runtime error.</p>
+<pre><code class="language-spl">
+let count = 0
+count += 1                 # ok
+total = 5                  # runtime_error: cannot assign to undeclared variable 'total'
+
+let user = {'name': 'Ada'}
+user.name = 'Grace'        # member assignment
+user['age'] = 36           # item assignment
+</code></pre>
+
+<h3 id="scope">Scope</h3>
+<p><code>let</code> inside <code>if</code>, <code>for</code>, <code>while</code>, <code>try</code> and <code>restrict</code> blocks is visible after the block &mdash; scope is per <em>function</em>. Functions are closures; parameters are local to the call.</p>
+<pre><code class="language-spl">
+try {
+    let response = ?{fmt='object'} 'A joke about programmers'
+} except err {
+    let response = {'setup': 'none', 'punchline': err.reason}
+}
+log(response)              # visible here, whichever branch ran
+</code></pre>
+
+<h3 id="persistence">Persistence</h3>
+<p>Top-level variables can be saved between runs with the variable store (<code>--store</code>). See <a href="cli.html#store">CLI &amp; runtime</a>.</p>
+
+<h2 id="types">Types &amp; values</h2>
+<div class="table-wrap"><table>
+<thead><tr><th><code>type()</code></th><th>Literals</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>'None'</code></td><td><code>None</code></td><td>Falsy.</td></tr>
+<tr><td><code>'bool'</code></td><td><code>True</code> <code>False</code></td><td>Python spelling.</td></tr>
+<tr><td><code>'number'</code></td><td><code>42</code> <code>3.14</code> <code>1e-3</code></td><td>One numeric type. <code>int()</code> truncates, <code>float()</code> parses.</td></tr>
+<tr><td><code>'str'</code></td><td><code>'a'</code> <code>"a"</code> <code>'''a'''</code> <code>r'a'</code></td><td>Indexed by Unicode character.</td></tr>
+<tr><td><code>'list'</code></td><td><code>[1, 2, 3]</code></td><td>Mutable, trailing comma allowed.</td></tr>
+<tr><td><code>'dict'</code></td><td><code>{'a': 1}</code></td><td>Keys must be strings. Insertion ordered. Also readable as <code>d.a</code>.</td></tr>
+<tr><td><code>'function'</code></td><td><code>def f(x) { … }</code></td><td>First-class values.</td></tr>
+</tbody></table></div>
+
+<div class="callout warn">
+  <span class="ico">⚠️</span>
+  <div class="body"><span class="title"><code>type()</code> returns a string</span>
+  <p>Compare it with a quoted name: <code>type(x) == 'list'</code>. There is no separate <code>int</code>/<code>float</code> distinction &mdash; both report <code>'number'</code>.</p></div>
+</div>
+
+<h3 id="truthiness">Truthiness</h3>
+<p><code>None</code>, <code>False</code>, <code>0</code>, empty strings, empty lists and empty dicts are falsy. Everything else (including functions) is truthy.</p>
+
+<h2 id="strings">Strings &amp; interpolation</h2>
+<p>All four quote styles interpolate <code>{expression}</code>. Any expression is allowed, including calls and indexing. Substitution is <em>as is</em>: strings raw, <code>True</code>/<code>False</code>/<code>None</code> in Python spelling, lists and dicts as JSON.</p>
+<pre><code class="language-spl">
+let items = ['a', 'b']
+let n = 2
+log("found {n} items: {items}")          # found 2 items: ["a","b"]
+log("first is {items[0].upper()}")       # first is A
+log("{{literal}} and \{also literal\}")  # {literal} and {also literal}
+log(r'{"raw": "no {interpolation} here"}')
+</code></pre>
+
+<h3 id="quotes">Quote styles &amp; escapes</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Form</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td><code>'…'</code> &nbsp;<code>"…"</code></td><td>Single line; escapes and interpolation.</td></tr>
+<tr><td><code>'''…'''</code> &nbsp;<code>"""…"""</code></td><td>May span lines; escapes and interpolation. Ideal for prompts.</td></tr>
+<tr><td><code>r'…'</code></td><td>Raw: no escapes, no interpolation.</td></tr>
+</tbody></table></div>
+<p>Valid escapes: <code>\n \t \r \0 \\ \' \" \{ \}</code>. Anything else is a syntax error, and so is a stray single <code>}</code> in a string &mdash; write <code>}}</code> or <code>\}</code>.</p>
+
+<h2 id="operators">Operators</h2>
+<p>Lowest to highest precedence:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Operators</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>x if cond else y</code></td><td>Conditional expression.</td></tr>
+<tr><td><code>or</code></td><td>Logical or (short-circuit).</td></tr>
+<tr><td><code>and</code></td><td>Logical and (short-circuit).</td></tr>
+<tr><td><code>not</code></td><td>Logical negation.</td></tr>
+<tr><td><code>== != &lt; &lt;= &gt; &gt;= in</code> &nbsp;<code>not in</code></td><td>Comparison and membership. <code>==</code> is deep for lists and dicts. Ordering works on numbers, strings and lists.</td></tr>
+<tr><td><code>+ -</code></td><td>Add / subtract. <code>+</code> also joins two strings or two lists &mdash; mixing types is an error (use interpolation or <code>str()</code>).</td></tr>
+<tr><td><code>* / // %</code></td><td>Multiply, divide, floor-divide, modulo. <code>*</code> repeats strings and lists. Division by zero is a failure.</td></tr>
+<tr><td><code>-x +x</code></td><td>Unary sign.</td></tr>
+<tr><td><code>**</code></td><td>Power.</td></tr>
+<tr><td><code>f(x)</code> <code>a[i]</code> <code>a[i:j]</code> <code>a.b</code></td><td>Call, index, slice, member. Negative indexes count from the end.</td></tr>
+</tbody></table></div>
+<pre><code class="language-spl">
+let xs = [10, 20, 30, 40]
+log(xs[-1])                  # 40
+log(xs[1:3])                 # [20,30]
+log('ab' * 3)                # ababab
+log('x' in 'text')           # True
+log('role' in {'role': 1})   # True  (dicts test keys)
+log(7 // 2, 7 % 3, 2 ** 10)  # 3 1 1024
+let label = 'many' if len(xs) > 3 else 'few'
+</code></pre>
+
+<h2 id="control-flow">Control flow</h2>
+<h3 id="if">if / elif / else</h3>
+<pre><code class="language-spl">
+if score &gt;= 90 {
+    grade = 'A'
+} elif score &gt;= 80 {
+    grade = 'B'
+} else {
+    grade = 'C'
+}
+</code></pre>
+
+<h3 id="loops">for &amp; while</h3>
+<p><code>for</code> iterates lists, strings (characters) and dicts (keys). Several names unpack list items, which pairs well with <code>items()</code> and <code>enumerate()</code>. <code>break</code>, <code>continue</code> and <code>pass</code> work as in Python.</p>
+<pre><code class="language-spl">
+for i in range(3) { log(i) }
+
+for code, language in items({'de': 'German', 'pl': 'Polish'}) {
+    log("{code} = {language}")
+}
+
+let tries = 0
+while tries &lt; 3 {
+    tries += 1
+    if tries == 2 { continue }
+}
+</code></pre>
+
+<h2 id="functions">Functions</h2>
+<p>Define with <code>def</code>. Functions take positional arguments only (the count is checked), return <code>None</code> unless <code>return</code> is used, can recurse (up to a maximum call depth of 200) and close over their defining scope.</p>
+<pre><code class="language-spl">
+def fib(n) {
+    if n &lt; 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+def is_valid(msg) {
+    let first = msg.splitlines()[0]
+    return len(first) &lt;= 72 and ': ' in first
+}
+</code></pre>
+<p>Functions are the right place for validators &mdash; the deterministic code that decides whether to trust an LLM answer. See <a href="examples.html#commit-message">commit-message</a>.</p>
+
+<h2 id="builtins-brief">Built-ins</h2>
+<p>A compact standard library is available without imports: <code>len</code>, <code>range</code>, <code>sorted</code>, <code>json_parse</code>, <code>log</code>, and Python-style methods on strings, lists and dicts. The full list is on the <a href="builtins.html">Built-ins</a> page.</p>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

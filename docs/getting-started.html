@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Install the SPL interpreter, run your first script offline and against GitHub Copilot.">
+<title>Getting started - SPL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="getting-started">
+<main id="page">
+
+<div class="eyebrow">Introduction</div>
+<h1>Getting started</h1>
+<p class="lead">From a fresh checkout to a running script in a few minutes. You don't need a Copilot login for the first run &mdash; the offline mock backend is enough.</p>
+
+<h2 id="requirements">Requirements</h2>
+<ul>
+  <li><strong>Node.js 20 or newer.</strong></li>
+  <li>For the default backend: an authenticated GitHub Copilot, for example via <code>gh auth login</code>.</li>
+  <li>Not needed for <code>--backend mock</code> or <code>--check</code>.</li>
+</ul>
+
+<h2 id="install">Install &amp; build</h2>
+<p>The interpreter lives in the <code>lang/</code> folder of the repository.</p>
+<pre><code class="language-bash">
+cd lang
+npm install
+npm run build
+</code></pre>
+<p><code>npm install</code> also runs <code>prepare</code>, which compiles the TypeScript sources to <code>dist/</code>. The package exposes two binaries, <code>spl</code> and <code>spl-lang</code>, both pointing at <code>dist/cli.js</code>.</p>
+
+<h2 id="first-run">Your first run</h2>
+<ol class="steps">
+  <li><strong>Check the syntax.</strong> <code>--check</code> parses the script and exits &mdash; no LLM, no side effects.
+<pre><code class="language-bash">
+node dist/cli.js examples/basics.spl --check
+</code></pre></li>
+  <li><strong>Run it offline.</strong> The mock backend returns deterministic placeholder answers, so control flow and validation can be tested anywhere.
+<pre><code class="language-bash">
+node dist/cli.js examples/basics.spl --backend mock
+</code></pre></li>
+  <li><strong>Run it against Copilot.</strong> Without <code>--backend</code> the Copilot SDK is used with your login.
+<pre><code class="language-bash">
+node dist/cli.js examples/live.spl
+</code></pre></li>
+  <li><strong>Or use <code>npx</code>.</strong> From a checkout, or as <code>npx spl-lang</code> once published.
+<pre><code class="language-bash">
+npx file:./lang examples/live.spl
+</code></pre></li>
+</ol>
+
+<div class="callout">
+  <span class="ico">ℹ️</span>
+  <div class="body"><span class="title">stdout vs. stderr</span>
+  <p>The value passed to <code>success</code> goes to <strong>stdout</strong> (strings raw, everything else as JSON). Logs &mdash; including model, reasoning effort, <code>temperature</code> and <code>seed</code> of every LLM call &mdash; go to <strong>stderr</strong>, so results can be piped safely.</p></div>
+</div>
+
+<h2 id="hello">Write a script</h2>
+<p>Create <code>hello.spl</code>:</p>
+<pre><code class="language-spl" data-file="hello.spl">
+# Ask for structured data, validate it, then use it like any other value
+let user = ?{fmt='object'} 'Invent a fictional user as {{"name": str, "age": number}}'
+
+assert type(user.age) == 'number' 'age must be a number'
+
+let greeting = ?{len='sentence'} 'Write a greeting for {user.name}, who is {user.age}.'
+success greeting
+</code></pre>
+<pre><code class="language-bash">
+node dist/cli.js hello.spl --backend mock    # offline
+node dist/cli.js hello.spl --model gpt-5      # real run with a model override
+</code></pre>
+
+<div class="callout tip">
+  <span class="ico">💡</span>
+  <div class="body"><span class="title">Literal braces in prompts</span>
+  <p>Every string interpolates <code>{expr}</code>. To write a literal brace &mdash; for example a JSON template &mdash; double it (<code>{{ }}</code>), escape it (<code>\{ \}</code>) or use a raw string <code>r'{"a": 1}'</code>.</p></div>
+</div>
+
+<h2 id="exit-codes">Exit codes</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>0</code></td><td>The script finished (reached <code>success</code> or the end).</td></tr>
+<tr><td><code>1</code></td><td>Uncaught failure &mdash; the failure payload is printed to stdout.</td></tr>
+<tr><td><code>2</code></td><td>Syntax error or command-line usage error.</td></tr>
+<tr><td><code>70</code></td><td>Internal interpreter error.</td></tr>
+</tbody></table></div>
+
+<h2 id="repo-tour">Repository tour</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Path</th><th>Contents</th></tr></thead>
+<tbody>
+<tr><td><code>LANG-PRD.md</code></td><td>Product requirements &mdash; the language specification.</td></tr>
+<tr><td><code>lang/</code></td><td>The interpreter: <code>src/</code>, <code>tests/</code>, <code>examples/</code> and <code>docs/syntax.ebnf</code>.</td></tr>
+<tr><td><code>vscode/</code></td><td>VS Code extension: TextMate grammar, snippets, language configuration, tests.</td></tr>
+<tr><td><code>docs/</code></td><td>This documentation site.</td></tr>
+</tbody></table></div>
+
+<h2 id="tests">Run the tests</h2>
+<pre><code class="language-bash">
+cd lang
+npm test     # builds, then runs parser, interpreter, restriction, example and CLI tests (offline, mock backend)
+</code></pre>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

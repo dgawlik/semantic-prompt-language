@@ -1,8 +1,9 @@
 # spl-lang: Semantic Prompt Language interpreter
 
 A Python-like language where LLM calls are part of the syntax. Everything outside LLM calls is deterministic; LLM
-calls go through the GitHub Copilot SDK. See [../LANG-PRD.md](../LANG-PRD.md) for the full spec and
-[docs/syntax.ebnf](docs/syntax.ebnf) for the grammar.
+calls go through the GitHub Copilot SDK. See [../LANG-PRD.md](../LANG-PRD.md) for the full spec,
+[docs/syntax.ebnf](docs/syntax.ebnf) for the grammar and the [documentation site](../docs/index.html) (open it in a
+browser, or publish `docs/` with GitHub Pages) for guides and reference.
 
 ## Run
 
@@ -114,4 +115,4 @@ of `triage-issues` and `extract-invoice` is covered by `tests/examples.test.ts`.
 npm test          # builds, then runs parser, interpreter, restriction and CLI tests (offline, mock backend)
 ```
 
-Not included: the VS Code syntax-highlighting extension from the MVP scope.
+The VS Code extension (syntax highlighting, snippets) lives in `../vscode`.

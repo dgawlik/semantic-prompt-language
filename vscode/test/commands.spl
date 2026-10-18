@@ -1,0 +1,47 @@
+# SYNTAX TEST "source.spl" "LLM commands, modifiers, tools, constraints and restrictions"
+
+    @{model='gpt-5'}
+#   ^ keyword.other.directive.spl
+#     ^^^^^ variable.parameter.directive.spl
+#           ^^^^^^^ string.quoted.single.spl
+    let a = ?'hello'
+#           ^ keyword.operator.llm.spl
+#            ^^^^^^^ string.quoted.single.spl
+    let b = ?{len='sentence', fmt='object'} 'joke'
+#           ^ keyword.operator.llm.spl
+#             ^^^ variable.parameter.modifier.spl
+#                 ^^^^^^^^^^ string.quoted.single.spl
+#                             ^^^ variable.parameter.modifier.spl
+#                                           ^^^^^^ string.quoted.single.spl
+    think{level='low', show=True} 'why'
+#   ^^^^^ keyword.other.think.spl
+#         ^^^^^ variable.parameter.modifier.spl
+#                      ^^^^ variable.parameter.modifier.spl
+#                           ^^^^ constant.language.spl
+    think 'plain'
+#   ^^^^^ keyword.other.think.spl
+    let r = read_file{path='./a.txt'} 'Return it'
+#           ^^^^^^^^^ support.function.tool.spl
+#                     ^^^^ variable.parameter.modifier.spl
+    write_file{path='./o', content=text} 'ok'
+#   ^^^^^^^^^^ support.function.tool.spl
+#                          ^^^^^^^ variable.parameter.modifier.spl
+    shell{command='git status'} 'x'
+#   ^^^^^ support.function.tool.spl
+#         ^^^^^^^ variable.parameter.modifier.spl
+    web_fetch{url='https://a.com'} 'x'
+#   ^^^^^^^^^ support.function.tool.spl
+#             ^^^ variable.parameter.modifier.spl
+    enforce 'be nice' { pass }
+#   ^^^^^^^ keyword.control.constraint.spl
+    forbid 'rude' { pass }
+#   ^^^^^^ keyword.control.constraint.spl
+    restrict './out' { pass }
+#   ^^^^^^^^ keyword.control.restrict.spl
+    restrict net 'a.com' { pass }
+#   ^^^^^^^^ keyword.control.restrict.spl
+#            ^^^ storage.modifier.restrict-kind.spl
+    restrict exec 'git' { pass }
+#            ^^^^ storage.modifier.restrict-kind.spl
+    content = 5
+#   ^^^^^^^ - variable.parameter.modifier.spl

@@ -1,0 +1,59 @@
+{
+  "name": "spl-lang-vscode",
+  "displayName": "SPL - Semantic Prompt Language",
+  "description": "Syntax highlighting, snippets and editing support for Semantic Prompt Language (.spl) scripts",
+  "version": "0.1.0",
+  "publisher": "spl-lang",
+  "license": "ISC",
+  "private": true,
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "spl",
+    "llm",
+    "prompt",
+    "copilot"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "spl",
+        "aliases": [
+          "SPL",
+          "Semantic Prompt Language"
+        ],
+        "extensions": [
+          ".spl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "spl",
+        "scopeName": "source.spl",
+        "path": "./syntaxes/spl.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "spl",
+        "path": "./snippets/spl.code-snippets"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node test/run-assertions.mjs && node test/check-examples.mjs",
+    "package": "vsce package --allow-missing-repository --skip-license"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.0.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.0.0"
+  }
+}

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="SPL (Semantic Prompt Language) is a Python-like language where LLM calls are part of the syntax.">
+<title>SPL - Semantic Prompt Language</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="index">
+<main id="page">
+
+<section class="hero">
+  <div class="badges">
+    <span class="badge"><b>v0.1</b> MVP</span>
+    <span class="badge">TypeScript</span>
+    <span class="badge">Node 20+</span>
+    <span class="badge">GitHub Copilot SDK</span>
+  </div>
+  <h1>Write programs where <span class="grad-text">prompts are syntax.</span></h1>
+  <p class="lead">SPL is a Python-like language with LLM calls built into the grammar. Everything outside the model call is plain, deterministic code &mdash; loops, arithmetic, validation, retries &mdash; and every tool the model touches is checked by the runtime.</p>
+  <div class="btn-row">
+    <a class="btn primary" href="getting-started.html">Get started &rarr;</a>
+    <a class="btn" href="language.html">Read the language guide</a>
+    <a class="btn" href="examples.html">Browse examples</a>
+  </div>
+</section>
+
+<pre><code class="language-spl" data-file="quickstart.spl">
+@{model='gpt-5'}
+
+def fib(n) {
+    if n &lt; 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+# an LLM call, validated and parsed as JSON
+let joke = ?{len='sentence', fmt='object'} 'A joke about programmers'
+
+# deliberate before answering
+let why = think{level='high'} 'Why is {joke.setup} funny?'
+
+# rules for every call inside the block
+enforce 'Answer in English' {
+    forbid 'profanity' { let hi = ?'Say hi' }
+}
+
+# the model may only touch ./out
+restrict './out' {
+    write_file{path='./out/a.txt', content='{fib(10)}'} 'Confirm'
+}
+
+try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
+success {'joke': joke, 'why': why}
+</code></pre>
+
+<h2 id="why">Why SPL?</h2>
+<p>Scripts that glue LLMs to files, shells and the web usually end up as a pile of string-building and ad-hoc parsing. SPL makes the interesting parts first-class and keeps the rest boring on purpose.</p>
+
+<div class="grid">
+  <div class="card"><div class="ico">🧠</div><h3>Prompts are expressions</h3><p><code>?'…'</code> and <code>think '…'</code> return values you can store, test and pass to functions. Strings interpolate <code>{expr}</code> everywhere.</p></div>
+  <div class="card"><div class="ico">🧱</div><h3>Deterministic everywhere else</h3><p>Control flow, arithmetic, interpolation and variables never touch the model. Only the LLM commands introduce variance.</p></div>
+  <div class="card"><div class="ico">🔒</div><h3>Least privilege, enforced</h3><p><code>restrict</code> scopes narrow files, hosts and executables. The runtime blocks violations &mdash; it doesn't just ask nicely.</p></div>
+  <div class="card"><div class="ico">✅</div><h3>Untrusted output, validated</h3><p><code>fmt='object'</code> parses JSON for you; <code>assert</code> and <code>try/except</code> turn bad answers into retries.</p></div>
+  <div class="card"><div class="ico">⚡</div><h3>Runs with <code>npx</code></h3><p>One command-line interpreter, an offline mock backend for CI, a pluggable variable store.</p></div>
+  <div class="card"><div class="ico">🎨</div><h3>Editor support</h3><p>A VS Code extension ships highlighting, snippets and bracket handling for <code>.spl</code> files.</p></div>
+</div>
+
+<h2 id="tenets">Design tenets</h2>
+<div class="compare">
+  <div class="callout tip"><span class="ico">🎯</span><div class="body"><span class="title">Best-effort reproducibility</span>
+  <p>Control flow, arithmetic and interpolation are fully deterministic. For LLM calls the runtime requests <code>temperature=0</code> and a fixed seed and logs what was actually applied. Identical output is <strong>not</strong> guaranteed &mdash; guard with <code>assert</code> and <code>fmt</code>.</p></div></div>
+  <div class="callout warn"><span class="ico">🛡️</span><div class="body"><span class="title">Least privilege by restriction</span>
+  <p>The MVP is allow-by-default: a script has the permissions of the user running it. Authors narrow permissions with scoped <code>restrict</code> blocks, enforced by the runtime on every tool call.</p></div></div>
+</div>
+
+<h2 id="how-it-works">How a run works</h2>
+<div class="pipeline">
+  <div class="node"><b>Parse</b>Strict lexer &amp; parser. Unknown modifiers are syntax errors.</div>
+  <span class="arrow">→</span>
+  <div class="node"><b>Interpret</b>Deterministic evaluation of statements and expressions.</div>
+  <span class="arrow">→</span>
+  <div class="node"><b>Assemble</b>Constraints, restrictions and modifier hints are prepended to the prompt.</div>
+  <span class="arrow">→</span>
+  <div class="node"><b>Call</b>Copilot SDK (or mock). Tool calls are intercepted and checked.</div>
+  <span class="arrow">→</span>
+  <div class="node"><b>Result</b>Value of <code>success</code> to stdout, logs to stderr.</div>
+</div>
+
+<h2 id="explore">Where to next</h2>
+<div class="grid">
+  <a class="card" href="getting-started.html"><div class="ico">🚀</div><h3>Getting started</h3><p>Install, run your first script offline, then against Copilot.</p><span class="more">Open →</span></a>
+  <a class="card" href="language.html"><div class="ico">📘</div><h3>Language basics</h3><p>Variables, strings, operators, control flow and functions.</p><span class="more">Open →</span></a>
+  <a class="card" href="llm-commands.html"><div class="ico">💬</div><h3>LLM commands</h3><p><code>?</code>, <code>think</code>, <code>enforce</code>/<code>forbid</code> and the four tools.</p><span class="more">Open →</span></a>
+  <a class="card" href="restrictions.html"><div class="ico">🔐</div><h3>Restrictions</h3><p>Sandbox files, network and executables per block.</p><span class="more">Open →</span></a>
+  <a class="card" href="failures.html"><div class="ico">🧯</div><h3>Failures &amp; errors</h3><p>Payloads, status codes, <code>try/except</code>, exit codes.</p><span class="more">Open →</span></a>
+  <a class="card" href="examples.html"><div class="ico">🧪</div><h3>Examples</h3><p>Thirteen ready-to-run scripts: commit messages, triage, CI gates.</p><span class="more">Open →</span></a>
+</div>
+
+<h2 id="non-goals">Non-goals</h2>
+<ul>
+  <li>Bit-for-bit reproducible LLM output (no record/replay or response cache in the MVP).</li>
+  <li>Being a full Python implementation &mdash; only a reasonable subset is supported.</li>
+</ul>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

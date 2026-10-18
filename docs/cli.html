@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="SPL command-line interpreter reference: options, logging, backends, variable store and reproducibility.">
+<title>CLI &amp; runtime - SPL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="cli">
+<main id="page">
+
+<div class="eyebrow">Reference</div>
+<h1>CLI &amp; runtime</h1>
+<p class="lead">The interpreter runs one script file to completion. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.</p>
+
+<h2 id="usage">Usage</h2>
+<pre><code class="language-bash">
+spl &lt;script.spl&gt; [--log-level error|info|debug] [--silent] [--model &lt;id&gt;]
+                 [--store &lt;file.json&gt; | --store-module &lt;module&gt;] [--backend copilot|mock]
+                 [--timeout &lt;s&gt;] [--seed &lt;n&gt;] [--cwd &lt;dir&gt;] [--check]
+</code></pre>
+<p>From a checkout use <code>node dist/cli.js</code> or <code>npx file:./lang</code>. The package installs two equivalent binaries: <code>spl</code> and <code>spl-lang</code>. Exactly one script file is expected.</p>
+
+<h2 id="options">Options</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>--log-level &lt;level&gt;</code></td><td><code>info</code></td><td><code>error</code>, <code>info</code> or <code>debug</code>. Logs go to stderr.</td></tr>
+<tr><td><code>--silent</code></td><td>off</td><td>Suppress all logs; only the result is printed.</td></tr>
+<tr><td><code>--model &lt;id&gt;</code></td><td>SDK default</td><td>Model override. Takes precedence over <code>@{model=…}</code>.</td></tr>
+<tr><td><code>--store &lt;file.json&gt;</code></td><td>&mdash;</td><td>Persist top-level variables in a JSON file.</td></tr>
+<tr><td><code>--store-module &lt;path&gt;</code></td><td>&mdash;</td><td>Custom store module exporting <code>createStore()</code>. Mutually exclusive with <code>--store</code>.</td></tr>
+<tr><td><code>--backend &lt;name&gt;</code></td><td><code>copilot</code></td><td><code>copilot</code> uses the GitHub Copilot SDK; <code>mock</code> is offline and deterministic.</td></tr>
+<tr><td><code>--timeout &lt;seconds&gt;</code></td><td><code>300</code></td><td>Per-LLM-call timeout.</td></tr>
+<tr><td><code>--seed &lt;n&gt;</code></td><td><code>0</code></td><td>Seed <em>requested</em> for LLM calls (an integer).</td></tr>
+<tr><td><code>--cwd &lt;dir&gt;</code></td><td>current dir</td><td>Base directory for relative paths, <code>restrict</code> checks, and the working directory of tools and the model.</td></tr>
+<tr><td><code>--check</code></td><td>off</td><td>Parse the script and exit &mdash; syntax check only.</td></tr>
+<tr><td><code>-v</code>, <code>--version</code></td><td>&mdash;</td><td>Print the version.</td></tr>
+<tr><td><code>-h</code>, <code>--help</code></td><td>&mdash;</td><td>Print usage.</td></tr>
+</tbody></table></div>
+
+<h2 id="streams">Output streams &amp; exit codes</h2>
+<div class="compare">
+  <div>
+    <h4>stdout</h4>
+    <p>The value of <code>success</code>: strings raw, everything else as pretty-printed JSON. On an uncaught failure: the failure payload.</p>
+  </div>
+  <div>
+    <h4>stderr</h4>
+    <p>Logs, <code>log()</code> output, syntax errors, and for every LLM call the effective model, reasoning effort, <code>temperature</code> and <code>seed</code>.</p>
+  </div>
+</div>
+<div class="table-wrap"><table>
+<thead><tr><th>Exit code</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>0</code></td><td>Success.</td></tr>
+<tr><td><code>1</code></td><td>Uncaught script failure.</td></tr>
+<tr><td><code>2</code></td><td>Syntax or usage error.</td></tr>
+<tr><td><code>70</code></td><td>Internal error in the interpreter.</td></tr>
+</tbody></table></div>
+
+<h2 id="logging">Logging</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Level</th><th>Shows</th></tr></thead>
+<tbody>
+<tr><td><code>error</code></td><td>Errors only (for example a variable store that could not be saved).</td></tr>
+<tr><td><code>info</code> (default)</td><td>Warnings, one line per LLM call with its effective parameters and duration, <code>think{show=True}</code> reasoning, <code>log()</code> messages.</td></tr>
+<tr><td><code>debug</code></td><td>Everything above plus the full assembled prompt and the raw response of every call, tool invocations, caught failures and active restrictions.</td></tr>
+</tbody></table></div>
+<pre><code class="language-bash">
+spl script.spl --silent                    # result only
+spl script.spl --log-level debug 2&gt; run.log   # keep the full transcript, pipe the result
+</code></pre>
+
+<h2 id="store">Variable store</h2>
+<p>Scripts can keep state between runs. <code>--store vars.json</code> loads top-level variables from the file at start and writes them back at exit &mdash; <strong>also on failure</strong>. Functions are not persisted. The file must contain a JSON object; writes are atomic (temp file + rename).</p>
+<pre><code class="language-bash">
+spl examples/journal.spl --store journal.json
+</code></pre>
+
+<h3 id="custom-store">Custom stores</h3>
+<p><code>--store-module ./mystore.mjs</code> plugs in your own persistence. The module exports <code>createStore()</code> (or a default export of that shape) returning an object with <code>load()</code> and <code>save(vars)</code>:</p>
+<pre><code class="language-js" data-file="mystore.mjs">
+import fs from 'node:fs';
+
+export function createStore() {
+  const file = './state.json';
+  return {
+    load() { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}; },
+    save(vars) { fs.writeFileSync(file, JSON.stringify(vars)); },
+  };
+}
+</code></pre>
+<div class="callout warn">
+  <span class="ico">⚠️</span>
+  <div class="body"><span class="title">Synchronous interface</span>
+  <p><code>load()</code> and <code>save()</code> are synchronous, so a store must complete its I/O before returning. <code>createStore()</code> itself may be async. <code>save()</code> receives plain JSON-compatible values (<code>vars</code>), never functions.</p></div>
+</div>
+
+<h2 id="backends">Backends</h2>
+<h3 id="copilot">copilot</h3>
+<p>The default. Each LLM call opens a fresh session through the <a href="https://github.com/features/copilot">GitHub Copilot SDK</a> with a system message that frames the model as the execution engine of a script, exposing exactly four tools &mdash; <code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>shell</code> &mdash; implemented by the SPL runtime so that restrictions apply. Any other permission request is denied. Authenticate with <code>gh auth login</code>.</p>
+<h3 id="mock">mock</h3>
+<p>Offline and deterministic: answers <code>mock: &lt;prompt tail&gt;</code> (or a <code>{"response": …}</code> JSON object for <code>fmt='object'</code>). Use it to syntax-check flows, exercise retry logic, and in CI.</p>
+
+<h2 id="reproducibility">Reproducibility</h2>
+<p>Control flow, arithmetic and interpolation are deterministic. For LLM calls reproducibility is <strong>best effort</strong>:</p>
+<ul>
+  <li>The runtime requests <code>temperature=0</code> and the <code>--seed</code>. The Copilot SDK currently exposes neither setting, so the values cannot be applied; the log line of every call says exactly that.</li>
+  <li><code>think</code> levels map to the SDK reasoning effort. If the selected model does not support it, a warning is logged and the model default is used.</li>
+  <li>Guard against variance with <code>assert</code> and <code>fmt='object'</code>; see <a href="failures.html#retry">retry patterns</a>.</li>
+</ul>
+<pre><code class="language-text">
+[info] llm ask call: {"backend":"copilot-sdk","model":"gpt-5","reasoningEffort":null,"temperature":null,"seed":null,
+  "requested":{"temperature":0,"seed":0},"note":"temperature/seed are not supported by the Copilot SDK and were not applied"} (1840 ms)
+</code></pre>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

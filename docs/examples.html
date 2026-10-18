@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Annotated SPL example scripts: commit messages, issue triage, invoice extraction, code review, release notes and more.">
+<title>Examples - SPL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="examples">
+<main id="page">
+
+<div class="eyebrow">Guides</div>
+<h1>Examples</h1>
+<p class="lead">Real scripts from <code>lang/examples/</code>. Run them from the <code>lang/</code> folder; <code>--cwd &lt;dir&gt;</code> points a script at another project. The retry logic of <code>triage-issues</code> and <code>extract-invoice</code> is covered by <code>tests/examples.test.ts</code>.</p>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Script</th><th>Shows</th></tr></thead>
+<tbody>
+<tr><td><a href="#commit-message"><code>commit-message.spl</code></a></td><td><code>shell</code> under <code>restrict exec 'git'</code>, validation helper, retry loop</td></tr>
+<tr><td><a href="#triage-issues"><code>triage-issues.spl</code></a></td><td><code>fmt='object'</code> + <code>assert</code> validation with feedback retries, aggregation, summary</td></tr>
+<tr><td><a href="#extract-invoice"><code>extract-invoice.spl</code></a></td><td>Structured extraction cross-checked with arithmetic before it is accepted</td></tr>
+<tr><td><a href="#code-review"><code>code-review.spl</code></a></td><td><code>think</code> then structure, <code>restrict</code> on read and on write, <code>fail</code> as a CI gate</td></tr>
+<tr><td><a href="#release-notes"><code>release-notes.spl</code></a></td><td>Nested <code>forbid</code>/<code>enforce</code>, git history to a file inside <code>./out</code></td></tr>
+<tr><td><a href="#web-digest"><code>web-digest.spl</code></a></td><td><code>restrict net</code>, <code>web_fetch</code>, catching a blocked second host</td></tr>
+<tr><td><a href="#fix-failing-tests"><code>fix-failing-tests.spl</code></a></td><td>Agent loop: run <code>npm test</code>, let the LLM fix the source, repeat</td></tr>
+<tr><td><a href="#translate-docs"><code>translate-docs.spl</code></a></td><td><code>write_file</code> without <code>content</code> (LLM writes, path pinned), dict iteration</td></tr>
+<tr><td><a href="#journal"><code>journal.spl</code></a></td><td>State across runs with <code>--store</code></td></tr>
+<tr><td><a href="#tours"><code>basics</code>, <code>live</code>, <code>restrict-live</code>, <code>tools-live</code></a></td><td>Small feature tours</td></tr>
+</tbody></table></div>
+
+<h2 id="commit-message">Commit message</h2>
+<p>Draft a Conventional Commit message for the staged changes. The model may only run <code>git</code>; the result is validated deterministically and retried until it passes.</p>
+<pre><code class="language-bash">
+cd your-repo &amp;&amp; git add -p
+spl path/to/commit-message.spl
+</code></pre>
+<pre><code class="language-spl" data-file="commit-message.spl">
+let TYPES = ['feat', 'fix', 'docs', 'refactor', 'test', 'chore', 'perf']
+
+def is_valid(msg) {
+    let first = msg.splitlines()[0]
+    if len(first) &gt; 72 or ': ' not in first {
+        return False
+    }
+    return first.split(':')[0].split('(')[0] in TYPES
+}
+
+let msg = ''
+let attempt = 0
+
+restrict exec 'git' {
+    forbid 'wrapping the message in quotes or code fences' {
+        while attempt &lt; 3 {
+            attempt += 1
+            msg = shell{command='git diff --staged'} '''
+Write a Conventional Commit message for this diff: a subject line of at most 72 characters
+("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
+Reply with ONLY the message. If the diff is empty reply exactly NO_CHANGES.'''
+            if msg == 'NO_CHANGES' {
+                fail 'nothing is staged'
+            }
+            if is_valid(msg) {
+                break
+            }
+            log("attempt {attempt}: invalid message, retrying")
+        }
+    }
+}
+
+assert is_valid(msg) 'could not produce a valid commit message'
+success msg
+</code></pre>
+<div class="callout tip"><span class="ico">🔑</span><div class="body"><span class="title">Pattern: deterministic validator</span>
+<p>The model proposes; <code>is_valid()</code> decides. The loop gives it three tries, and the final <code>assert</code> makes sure a script never succeeds with an invalid message.</p></div></div>
+
+<h2 id="triage-issues">Triage issues</h2>
+<p>Classify a batch of issues into labels and priorities. LLM output is treated as untrusted input: deterministic code checks it and asks again, telling the model why it was rejected.</p>
+<pre><code class="language-spl" data-file="triage-issues.spl">
+let LABELS = ['bug', 'feature', 'question', 'docs']
+let PRIORITIES = ['low', 'medium', 'high']
+
+let issues = [
+    {'id': 101, 'title': 'App crashes on startup', 'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
+    {'id': 102, 'title': 'Support dark mode', 'body': 'It would be great to have a dark theme, my eyes hurt at night.'},
+    {'id': 103, 'title': 'How do I export to CSV?', 'body': 'I cannot find the export option anywhere in the menus.'},
+    {'id': 104, 'title': 'Typo in install guide', 'body': 'The guide says "npm instal", should be "npm install".'},
+]
+
+def triage(issue) {
+    let problem = ''
+    for attempt in range(3) {
+        try {
+            let r = ?{fmt='object'} '''
+Classify this GitHub issue. {problem}
+Title: {issue['title']}
+Body: {issue['body']}
+
+Reply as JSON: {{"label": one of {LABELS}, "priority": one of {PRIORITIES}, "reason": "one short sentence"}}'''
+            assert r.label in LABELS "label must be one of {LABELS}"
+            assert r.priority in PRIORITIES "priority must be one of {PRIORITIES}"
+            return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
+        } except err {
+            problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
+            log("issue {issue['id']}: attempt {attempt + 1} failed: {err.reason}")
+        }
+    }
+    fail "could not triage issue {issue['id']}"
+}
+
+let results = []
+let counts = {}
+for issue in issues {
+    let t = triage(issue)
+    results.append(t)
+    if t['label'] in counts {
+        counts[t['label']] += 1
+    } else {
+        counts[t['label']] = 1
+    }
+}
+
+let urgent = []
+for t in results {
+    if t['priority'] == 'high' {
+        urgent.append(t['title'])
+    }
+}
+
+let summary = ?{len='sentence'} 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
+success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}
+</code></pre>
+
+<h2 id="extract-invoice">Extract an invoice</h2>
+<p>Extract structured data from messy text and cross-check it with plain arithmetic. If the numbers do not add up, the rejection reason is fed back to the model for another try.</p>
+<pre><code class="language-spl" data-file="extract-invoice.spl">
+let document = '''
+ACME Industrial Supplies GmbH            Invoice No. INV-2026-0042
+Date: 2026-03-14                          Currency: EUR
+
+  3 x Hex bolt M8 (box of 100)        @ 12.50     37.50
+  2 x Safety gloves, size L           @  8.90     17.80
+  1 x Cordless drill                  @ 119.00   119.00
+
+Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
+'''
+
+let feedback = ''
+let invoice = None
+
+for attempt in range(3) {
+    if invoice != None {
+        break
+    }
+    try {
+        let r = ?{fmt='object'} '''
+Extract the invoice below. {feedback}
+Reply as JSON: {{"vendor": str, "number": str, "date": "YYYY-MM-DD", "currency": str,
+"lines": [{{"description": str, "quantity": number, "unit_price": number}}], "subtotal": number, "total": number}}
+
+{document}'''
+        assert type(r.lines) == 'list' and len(r.lines) &gt; 0 'lines must be a non-empty list'
+        let computed = 0
+        for line in r.lines {
+            computed += line.quantity * line.unit_price
+        }
+        assert abs(computed - r.subtotal) &lt; 0.01 "lines add up to {round(computed, 2)} but subtotal is {r.subtotal}"
+        assert r.total &gt;= r.subtotal "total {r.total} is smaller than subtotal {r.subtotal}"
+        invoice = r
+    } except err {
+        feedback = "Your previous extraction was rejected: {err.reason}. Re-read the document and fix it."
+        log("attempt {attempt + 1} rejected: {err.reason}")
+    }
+}
+
+assert invoice != None 'extraction kept failing validation'
+success invoice
+</code></pre>
+
+<h2 id="code-review">Code review as a CI gate</h2>
+<p>A two-stage review: <em>think</em> deeply in prose, then <em>structure</em> the findings. The review phase may only touch <code>./src</code>; the report is written under <code>./reports</code>. Exit code 1 (failure payload on stdout) when high-severity findings exist.</p>
+<pre><code class="language-bash">
+spl examples/code-review.spl --cwd &lt;project&gt;
+</code></pre>
+<pre><code class="language-spl" data-file="code-review.spl">
+let target = './src/restrict.ts'
+
+let notes = ''
+restrict './src' {
+    forbid 'suggesting purely stylistic changes' {
+        notes = think{level='high'} '''
+Read {target} and review it for security problems and correctness bugs.
+List each finding with its location, why it matters and a suggested fix.'''
+    }
+}
+
+let review = ?{fmt='object'} '''
+Convert this review into JSON:
+{{"findings": [{{"severity": "low"|"medium"|"high", "title": str, "location": str, "fix": str}}]}}
+Use an empty list when there are no findings.
+
+{notes}'''
+
+let lines = ["# Review of {target}", '']
+let high = 0
+for f in review.findings {
+    assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
+    if f.severity == 'high' {
+        high += 1
+    }
+    lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
+    lines.append("  - Fix: {f.fix}")
+}
+lines.append('')
+lines.append("{len(review.findings)} finding(s), {high} high severity")
+
+restrict './reports' {
+    write_file{path='./reports/review.md', content='\n'.join(lines)} 'Confirm that the report was written'
+}
+
+if high &gt; 0 {
+    fail "{high} high severity finding(s), see ./reports/review.md"
+}
+success '\n'.join(lines)
+</code></pre>
+
+<h2 id="release-notes">Release notes</h2>
+<p>Generate release notes from recent git history and save them to <code>./out/RELEASE_NOTES.md</code>. The model may only run <code>git</code>; file access is limited to <code>./out</code>. Note how rules and restrictions nest.</p>
+<pre><code class="language-spl" data-file="release-notes.spl">
+let notes = ''
+
+restrict exec 'git' {
+    forbid 'inventing changes that are not in the commit list' {
+        enforce 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
+            notes = shell{command='git log --oneline -n 40'} '''
+Write release notes for end users from these commits (one per line: hash and subject).
+Rewrite technical subjects into clear user-facing sentences and drop merge/chore noise.'''
+        }
+    }
+}
+
+assert len(notes) &gt; 20 'release notes are suspiciously short'
+
+restrict './out' {
+    write_file{path='./out/RELEASE_NOTES.md', content=notes} 'Confirm that the file was written'
+}
+success notes
+</code></pre>
+
+<h2 id="web-digest">Web digest</h2>
+<p>Summarize a web page with network access limited to a single host &mdash; and prove the sandbox holds by catching a blocked request to a second host.</p>
+<pre><code class="language-spl" data-file="web-digest.spl">
+restrict net 'news.ycombinator.com' {
+    let headlines = web_fetch{url='https://news.ycombinator.com'} '''
+From this HTML list the 10 top stories as a Markdown bullet list: "- title (domain)".
+Reply with ONLY the list.'''
+
+    let themes = ?{len='paragraph'} 'What themes run through these headlines?\n{headlines}'
+
+    try {
+        web_fetch{url='https://example.org'} 'Return the page'
+        fail 'the request to a second host should have been blocked'
+    } except err {
+        assert err.status_code == 'restriction_violation' "unexpected failure: {err.reason}"
+        log("blocked as expected: {err.reason}")
+    }
+}
+
+success "{headlines}\n\n{themes}"
+</code></pre>
+
+<h2 id="fix-failing-tests">Fix failing tests</h2>
+<p>An agent loop: run the suite, let the model repair the source, repeat (at most three rounds). Only <code>npm</code> may be executed, files are limited to the project, and tests are off limits. Every <code>npm test</code> run costs one LLM call, because tool output is passed through your instructions.</p>
+<pre><code class="language-bash">
+spl examples/fix-failing-tests.spl --cwd &lt;your npm project&gt;
+</code></pre>
+<pre><code class="language-spl" data-file="fix-failing-tests.spl">
+let attempt = 0
+let green = False
+
+restrict exec 'npm' {
+    restrict '.' {
+        forbid 'editing or deleting test files, or weakening assertions' {
+            while attempt &lt; 3 and not green {
+                attempt += 1
+                try {
+                    shell{command='npm test'} 'Reply with OK'
+                    green = True
+                } except err {
+                    log("tests failing (round {attempt}): {err.status_code}")
+                    think{level='medium'} '''
+The test run failed with this output:
+{err.reason}
+
+Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.'''
+                }
+            }
+        }
+    }
+}
+
+assert green 'tests are still failing after 3 rounds'
+success "tests pass after {attempt} run(s)"
+</code></pre>
+<div class="callout"><span class="ico">🔑</span><div class="body"><span class="title">Pattern: failure as input</span>
+<p>A failing <code>npm test</code> is a <code>tool_error</code> whose <code>reason</code> contains the test output. Catching it turns the failure into the prompt for the next step.</p></div></div>
+
+<h2 id="translate-docs">Translate docs</h2>
+<p>Translate a document into several languages, one file each, without leaving the project folder. The model reads the source and writes each output itself &mdash; the output path is pinned by the script.</p>
+<pre><code class="language-spl" data-file="translate-docs.spl">
+let locales = {'de': 'German', 'pl': 'Polish', 'ja': 'Japanese'}
+let written = []
+
+restrict '.' {
+    enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
+        for code, language in items(locales) {
+            write_file{path="./out/translations/product-update.{code}.md"} '''
+Read ./examples/data/product-update.md, translate it to {language}, and write the translation to the file.'''
+            written.append("./out/translations/product-update.{code}.md")
+        }
+    }
+}
+
+success written
+</code></pre>
+
+<h2 id="journal">Journal with persistent state</h2>
+<p>A rolling journal that remembers previous runs through the variable store. Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.</p>
+<pre><code class="language-bash">
+spl examples/journal.spl --store journal.json
+</code></pre>
+<pre><code class="language-spl" data-file="journal.spl">
+try {
+    runs
+} except first_run {
+    # `runs` is not in the store yet, so this is the first run (the caught payload is dropped again)
+    first_run = None
+    let runs = 0
+    let history = []
+}
+
+runs += 1
+
+let todays = read_file{path='./examples/data/notes.txt'} 'Summarize these notes in one sentence'
+history.append({'run': runs, 'summary': todays})
+if len(history) &gt; 5 {
+    history = history[1:]
+}
+
+let trend = ''
+if len(history) &gt; 1 {
+    trend = ?{len='paragraph'} '''
+Here are my last journal summaries, oldest first: {history}
+What is changing from run to run? Be concrete.'''
+}
+
+success {'run': runs, 'today': todays, 'trend': trend}
+</code></pre>
+
+<h2 id="tours">Feature tours</h2>
+<p>Small scripts that exercise one area each.</p>
+<h3 id="basics">basics.spl &mdash; offline-friendly tour</h3>
+<pre><code class="language-spl" data-file="basics.spl">
+@{model='gpt-5'}
+
+# Deterministic part: functions, loops, interpolation
+def fib(n) {
+    if n &lt; 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+let nums = []
+for i in range(8) {
+    nums.append(fib(i))
+}
+log("fib: {nums}")
+
+# LLM call with modifiers and parsed object
+let joke = ?{len='sentence', fmt='object'} 'A joke about programmers as {{"setup": ..., "punchline": ...}}'
+log("setup: {joke['setup']}")
+
+# Scoped constraints
+enforce 'Answer in English' {
+    forbid 'Mentioning the word cat' {
+        let animal = ?{len='word'} 'Name a pet animal'
+    }
+}
+
+# Failure handling
+try {
+    assert len(nums) == 3 'expected three numbers'
+} except err {
+    log("caught {err.status_code}: {err.reason}")
+}
+
+success {'fib': nums, 'animal': animal}
+</code></pre>
+
+<h3 id="live-tours">Live tours</h3>
+<ul>
+  <li><code>live.spl</code> &mdash; a quick smoke test of <code>?</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>enforce</code> and <code>assert</code> against the real model.</li>
+  <li><code>tools-live.spl</code> &mdash; <code>read_file</code>, <code>write_file</code> and <code>think{show=True}</code> inside <code>restrict './sandbox'</code>. Run it after <code>mkdir sandbox; echo hello world &gt; sandbox/note.txt</code>.</li>
+  <li><code>restrict-live.spl</code> &mdash; asks the model to read <code>secret.txt</code> outside the sandbox and shows the runtime blocking it, returning a <code>restriction_violation</code> payload.</li>
+</ul>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

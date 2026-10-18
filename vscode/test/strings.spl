@@ -1,0 +1,36 @@
+# SYNTAX TEST "source.spl" "strings, escapes and interpolation"
+
+    let s = 'Hello {name}! {{literal}} \n \{x\}'
+#           ^ punctuation.definition.string.begin.spl
+#                  ^^^^^^ meta.interpolation.spl
+#                          ^^ constant.character.escape.brace.spl
+#                                   ^^ constant.character.escape.brace.spl
+#                                      ^^ constant.character.escape.spl
+#                                         ^^ constant.character.escape.spl
+    let t = "a {x + 1} {d['k']} b"
+#           ^^ string.quoted.double.spl
+#              ^^^^^^^ meta.interpolation.spl
+#                 ^ keyword.operator.arithmetic.spl
+#                         ^^^ string.quoted.single.spl
+    let u = r'{no} \interp'
+#           ^ storage.type.string.spl
+#            ^^^^^^^^^^^^^^ string.quoted.single.raw.spl
+    let v = 'bad \q'
+#                ^^ invalid.illegal.escape.spl
+    let w = 'x } y'
+#              ^ invalid.illegal.brace.spl
+    let m = '''line one {a}
+#           ^^^ punctuation.definition.string.begin.spl
+#                       ^^^ meta.interpolation.spl
+Reply as JSON: {{"label": str}} and {call(1)}
+'''
+    let n = f(1) + obj.field + obj.method()
+#           ^ entity.name.function.call.spl
+#                      ^^^^^ variable.other.property.spl
+#                                  ^^^^^^ entity.name.function.method.spl
+    let o = len(xs) + sorted(ys)
+#           ^^^ support.function.builtin.spl
+#                     ^^^^^^ support.function.builtin.spl
+    let p = "unterminated
+    let ok = 1
+#   ^^^ storage.type.spl

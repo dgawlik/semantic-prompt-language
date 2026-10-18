@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The SPL VS Code extension: syntax highlighting, snippets and editing support for .spl files.">
+<title>VS Code extension - SPL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="editor">
+<main id="page">
+
+<div class="eyebrow">Guides</div>
+<h1>VS Code extension</h1>
+<p class="lead">Syntax highlighting, snippets and editing support for <code>.spl</code> scripts. The extension lives in the <code>vscode/</code> folder of the repository.</p>
+
+<h2 id="features">Features</h2>
+<div class="grid">
+  <div class="card"><div class="ico">🎨</div><h3>Highlighting</h3><p>Keywords, <code>let</code>/<code>def</code> declarations, numbers, comments, the <code>@{model=…}</code> directive and strings with <code>{expr}</code> interpolation.</p></div>
+  <div class="card"><div class="ico">💬</div><h3>LLM commands</h3><p><code>?</code>, <code>think</code> and the four tools, including their modifiers (<code>len</code>, <code>fmt</code>, <code>level</code>, <code>show</code>, <code>path</code>, <code>content</code>, <code>url</code>, <code>command</code>).</p></div>
+  <div class="card"><div class="ico">🧭</div><h3>Scopes &amp; failures</h3><p><code>enforce</code>, <code>forbid</code>, <code>restrict [fs|net|exec]</code>, <code>try</code>/<code>except</code>, <code>assert</code>, <code>fail</code>, <code>success</code>.</p></div>
+  <div class="card"><div class="ico">✂️</div><h3>Snippets</h3><p>Type a prefix and press Tab. Covers control flow, LLM commands, tools and scopes.</p></div>
+  <div class="card"><div class="ico">⌨️</div><h3>Editing</h3><p><code>#</code> comments (Ctrl+/), bracket matching and auto-closing for <code>{}</code> <code>[]</code> <code>()</code> and quotes (including <code>'''</code>), auto-indent after <code>{</code>, <code>#region</code> folding.</p></div>
+  <div class="card"><div class="ico">🚩</div><h3>Escape checking</h3><p>Illegal escapes and stray <code>}</code> in strings are flagged with the <code>invalid</code> scope.</p></div>
+</div>
+<p>String highlighting understands interpolation <code>{expr}</code>, the <code>{{ }}</code> and <code>\{ \}</code> brace escapes, raw <code>r'…'</code> strings and triple-quoted strings.</p>
+
+<div class="callout">
+  <span class="ico">ℹ️</span>
+  <div class="body"><span class="title">Lexical only</span>
+  <p>The grammar is purely lexical (TextMate). Semantic checks such as unknown modifiers come from <code>spl --check</code>, which parses the script and exits with code 2 on a syntax error.</p></div>
+</div>
+
+<h2 id="install">Install</h2>
+<pre><code class="language-bash">
+cd vscode
+npm install
+npm run package                                  # creates spl-lang-vscode-0.1.0.vsix
+code --install-extension spl-lang-vscode-0.1.0.vsix
+</code></pre>
+<p>For development, open the <code>vscode/</code> folder in VS Code and press <kbd>F5</kbd> to launch an Extension Development Host.</p>
+
+<h2 id="snippets">Snippets</h2>
+<p>Type the prefix, then <kbd>Tab</kbd>.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Area</th><th>Prefixes</th></tr></thead>
+<tbody>
+<tr><td>Control flow</td><td><code>def</code> <code>if</code> <code>ifelse</code> <code>for</code> <code>while</code> <code>let</code></td></tr>
+<tr><td>LLM</td><td><code>ask</code> <code>askobj</code> <code>think</code> <code>model</code></td></tr>
+<tr><td>Failures</td><td><code>try</code> <code>retry</code> <code>assert</code> <code>fail</code> <code>success</code></td></tr>
+<tr><td>Scopes</td><td><code>enforce</code> <code>forbid</code> <code>restrict</code> <code>restrictnet</code> <code>restrictexec</code></td></tr>
+<tr><td>Tools</td><td><code>read_file</code> <code>write_file</code> <code>web_fetch</code> <code>shell</code></td></tr>
+</tbody></table></div>
+
+<h2 id="develop">Develop &amp; test</h2>
+<pre><code class="language-bash">
+npm test
+</code></pre>
+<ul>
+  <li><code>test/*.spl</code> contain <strong>scope assertions</strong>: a line <code>#   ^^^ scope.name</code> asserts the scope of the columns under the carets on the line above (<code>- scope</code> asserts absence). <code>test/run-assertions.mjs</code> runs them with <code>vscode-textmate</code>.</li>
+  <li><code>test/check-examples.mjs</code> tokenizes every script in <code>../lang/examples</code> and fails on <code>invalid</code> scopes or on strings/blocks that are left open at the end of a file.</li>
+</ul>
+<div class="callout warn">
+  <span class="ico">🔄</span>
+  <div class="body"><span class="title">Keep the grammar in sync</span>
+  <p>When the language changes, update <code>syntaxes/spl.tmLanguage.json</code> together with <code>lang/docs/syntax.ebnf</code>.</p></div>
+</div>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

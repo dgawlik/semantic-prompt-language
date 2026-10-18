@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Least-privilege scopes in SPL: restrict files, network hosts and executables, enforced by the runtime.">
+<title>Restrictions - SPL</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("spl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body data-page="restrictions">
+<main id="page">
+
+<div class="eyebrow">The language</div>
+<h1>Restrictions</h1>
+<p class="lead"><code>restrict</code> narrows what a block &mdash; and the LLM tools it invokes &mdash; may do. Without it, everything is allowed: a script has the full permissions of the user running the interpreter.</p>
+
+<h2 id="forms">The three forms</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Form</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>restrict './target/out' { … }</code></td><td>Reads and writes are allowed only inside the folder. Same as <code>restrict fs</code>.</td></tr>
+<tr><td><code>restrict net 'api.example.com' { … }</code></td><td>Network access is allowed only to the listed hosts.</td></tr>
+<tr><td><code>restrict exec 'npm,git' { … }</code></td><td>Shell commands are allowed only for the listed executables.</td></tr>
+</tbody></table></div>
+<pre><code class="language-spl">
+restrict './out' {
+    think 'Run the report and write it to ./out/report.md'
+}
+
+restrict net 'news.ycombinator.com' {
+    let page = web_fetch{url='https://news.ycombinator.com'} 'List the headlines'
+}
+
+restrict exec 'git' {
+    let diff = shell{command='git diff --staged'} 'Summarize the diff'
+}
+</code></pre>
+<p>The argument is an expression evaluating to a comma-separated string (<code>'npm,git'</code>) or a list of strings. An empty list is an error.</p>
+
+<h2 id="enforcement">Two layers of enforcement</h2>
+<div class="compare">
+  <div class="callout"><span class="ico">🗣️</span><div class="body"><span class="title">1 · Guidance</span><p>The runtime tells the model about the active restrictions in the prompt, so it plans within them.</p></div></div>
+  <div class="callout danger"><span class="ico">🚧</span><div class="body"><span class="title">2 · Hard enforcement</span><p>The runtime intercepts <em>every</em> file, network and exec call and blocks any that violate the active scopes.</p></div></div>
+</div>
+<p>A blocked call raises a <code>restriction_violation</code> failure. It is catchable with <code>try/except</code>:</p>
+<pre><code class="language-spl" data-file="web-digest.spl">
+restrict net 'news.ycombinator.com' {
+    try {
+        web_fetch{url='https://example.org'} 'Return the page'
+        fail 'the request to a second host should have been blocked'
+    } except err {
+        assert err.status_code == 'restriction_violation' "unexpected failure: {err.reason}"
+        log("blocked as expected: {err.reason}")
+    }
+}
+</code></pre>
+
+<h2 id="nesting">Nesting</h2>
+<p>Restrictions are scoped to their block and can be nested. Nested restrictions of the same kind <strong>intersect</strong>: they can only narrow the allowed set, never widen it. Different kinds combine freely.</p>
+<pre><code class="language-spl">
+restrict exec 'npm' {
+    restrict '.' {                       # fs + exec both active
+        restrict './src' {               # fs narrowed to ./src (still inside '.')
+            shell{command='npm test'} 'Reply with OK'
+        }
+    }
+}
+</code></pre>
+
+<h2 id="rules">Matching rules</h2>
+<h3 id="fs">File system</h3>
+<ul>
+  <li>Paths are <strong>canonicalized</strong> before checking: made absolute relative to <code>--cwd</code>, <code>..</code> removed, symbolic links resolved &mdash; including dangling links, whose targets are followed so a write cannot escape through them.</li>
+  <li>A path is allowed when it is the allowed folder itself or inside it. On Windows the comparison is case-insensitive.</li>
+</ul>
+<h3 id="net">Network</h3>
+<ul>
+  <li><code>net</code> matches exact hostnames and <code>*.example.com</code> wildcards. Entries may be bare hosts or URLs (the host is extracted; ports are ignored).</li>
+  <li>Only <code>http:</code> and <code>https:</code> URLs are fetched. Redirects are followed manually (at most 5) and the host is <strong>re-checked on every hop</strong>.</li>
+</ul>
+<h3 id="exec">Executables</h3>
+<ul>
+  <li><code>exec</code> matches the executable <em>name</em>. On Windows <code>.exe</code>, <code>.cmd</code>, <code>.bat</code> and <code>.com</code> suffixes are ignored.</li>
+  <li>Inside a <code>restrict exec</code> block, commands must be named <em>without a path</em> (<code>git</code>, not <code>/usr/bin/git</code>).</li>
+  <li>While <strong>any</strong> restriction is active, <code>shell</code> accepts only simple commands: no <code>&amp; | ; &lt; &gt;</code>, redirects, substitution, chaining or embedded double quotes, so the check is exact. Path-like and URL arguments are also checked against the active <code>fs</code>/<code>net</code> scopes.</li>
+</ul>
+<div class="callout warn">
+  <span class="ico">⚠️</span>
+  <div class="body"><span class="title">Best effort for programs with their own I/O</span>
+  <p>The runtime can only inspect what it sees on the command line. A program that touches files or the network on its own (a build tool, a package manager) is limited by its executable name, not by what it does internally.</p></div>
+</div>
+
+<h2 id="what-is-guarded">What is covered</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Caller</th><th>Checked?</th></tr></thead>
+<tbody>
+<tr><td>Explicit tool call in a script (<code>read_file{…}</code>, <code>shell{…}</code>, …)</td><td><span class="pill ok">yes</span></td></tr>
+<tr><td>Tool calls the model makes during <code>?</code> / <code>think</code> / tool commands</td><td><span class="pill ok">yes</span></td></tr>
+<tr><td>Any other Copilot permission request</td><td><span class="pill danger">rejected</span></td></tr>
+<tr><td>Plain SPL code (arithmetic, <code>log</code>, variables)</td><td>nothing to restrict</td></tr>
+</tbody></table></div>
+
+<div class="callout">
+  <span class="ico">🔮</span>
+  <div class="body"><span class="title">Future direction</span>
+  <p>A deny-by-default permission model is a possible future change. The MVP is allow-by-default.</p></div>
+</div>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

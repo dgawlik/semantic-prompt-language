@@ -1,0 +1,47 @@
+# SYNTAX TEST "source.spl" "declarations, keywords and constants"
+
+    let x = 1
+#   ^^^ storage.type.spl
+#       ^ variable.other.definition.spl
+#           ^ constant.numeric.spl
+    let MAX = 3.5e2
+#       ^^^ variable.other.definition.spl
+#             ^^^^^ constant.numeric.spl
+    def fib(n) {
+#   ^^^ storage.type.function.spl
+#       ^^^ entity.name.function.spl
+    }
+    if a and not b { pass } elif c { break } else { continue }
+#   ^^ keyword.control.flow.spl
+#        ^^^ keyword.operator.logical.spl
+#            ^^^ keyword.operator.logical.spl
+#                    ^^^^ keyword.control.flow.spl
+#                           ^^^^ keyword.control.flow.spl
+#                                            ^^^^ keyword.control.flow.spl
+    for k, v in items(d) {
+#   ^^^ keyword.control.flow.spl
+#            ^^ keyword.operator.logical.spl
+#               ^^^^^ support.function.builtin.spl
+    }
+    try { x } except err { return None }
+#   ^^^ keyword.control.exception.spl
+#             ^^^^^^ keyword.control.exception.spl
+#                    ^^^ variable.other.definition.spl
+#                          ^^^^^^ keyword.control.flow.spl
+#                                 ^^^^ constant.language.spl
+    assert x == 1 'msg'
+#   ^^^^^^ keyword.control.result.spl
+#            ^^ keyword.operator.comparison.spl
+    fail 'no'
+#   ^^^^ keyword.control.result.spl
+    success True
+#   ^^^^^^^ keyword.control.result.spl
+#           ^^^^ constant.language.spl
+    x += 2 ** 3 // 4
+#     ^^ keyword.operator.assignment.compound.spl
+#          ^^ keyword.operator.arithmetic.spl
+#               ^^ keyword.operator.arithmetic.spl
+    # a comment with let and 'quotes'
+#   ^^^^^^^^^^^^^^^^^^^^^^^^ comment.line.number-sign.spl
+    let after = 1  # trailing
+#                  ^^^^^^^^^^ comment.line.number-sign.spl

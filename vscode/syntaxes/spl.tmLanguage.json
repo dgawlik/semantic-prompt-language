@@ -1,0 +1,276 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SPL",
+  "scopeName": "source.spl",
+  "patterns": [
+    { "include": "#directive" },
+    { "include": "#expression" }
+  ],
+  "repository": {
+    "expression": {
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#command-with-modifiers" },
+        { "include": "#declarations" },
+        { "include": "#keywords" },
+        { "include": "#constants" },
+        { "include": "#builtins" },
+        { "include": "#calls" },
+        { "include": "#member" },
+        { "include": "#operators" },
+        { "include": "#group" }
+      ]
+    },
+
+    "comment": {
+      "name": "comment.line.number-sign.spl",
+      "match": "#.*$",
+      "captures": { "0": { "name": "punctuation.definition.comment.spl" } }
+    },
+
+    "directive": {
+      "name": "meta.directive.spl",
+      "begin": "(@)(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.directive.spl" },
+        "2": { "name": "punctuation.section.directive.begin.spl" }
+      },
+      "endCaptures": { "0": { "name": "punctuation.section.directive.end.spl" } },
+      "patterns": [
+        { "include": "#comment" },
+        { "name": "variable.parameter.directive.spl", "match": "\\b[A-Za-z_]\\w*\\b(?=\\s*=(?!=))" },
+        { "include": "#string" },
+        { "name": "keyword.operator.assignment.spl", "match": "=" },
+        { "name": "punctuation.separator.comma.spl", "match": "," }
+      ]
+    },
+
+    "string": {
+      "patterns": [
+        {
+          "name": "string.quoted.triple.raw.spl",
+          "begin": "([rR])('''|\"\"\")",
+          "end": "\\2",
+          "beginCaptures": {
+            "1": { "name": "storage.type.string.spl" },
+            "2": { "name": "punctuation.definition.string.begin.spl" }
+          },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.spl" } }
+        },
+        {
+          "name": "string.quoted.single.raw.spl",
+          "begin": "([rR])('|\")",
+          "end": "(\\2)|$",
+          "beginCaptures": {
+            "1": { "name": "storage.type.string.spl" },
+            "2": { "name": "punctuation.definition.string.begin.spl" }
+          },
+          "endCaptures": { "1": { "name": "punctuation.definition.string.end.spl" } }
+        },
+        {
+          "name": "string.quoted.triple.spl",
+          "begin": "'''",
+          "end": "'''",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.spl" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.spl" } },
+          "patterns": [{ "include": "#string-content" }]
+        },
+        {
+          "name": "string.quoted.triple.spl",
+          "begin": "\"\"\"",
+          "end": "\"\"\"",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.spl" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.spl" } },
+          "patterns": [{ "include": "#string-content" }]
+        },
+        {
+          "name": "string.quoted.single.spl",
+          "begin": "'",
+          "end": "(')|$",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.spl" } },
+          "endCaptures": { "1": { "name": "punctuation.definition.string.end.spl" } },
+          "patterns": [{ "include": "#string-content" }]
+        },
+        {
+          "name": "string.quoted.double.spl",
+          "begin": "\"",
+          "end": "(\")|$",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.spl" } },
+          "endCaptures": { "1": { "name": "punctuation.definition.string.end.spl" } },
+          "patterns": [{ "include": "#string-content" }]
+        }
+      ]
+    },
+
+    "string-content": {
+      "patterns": [
+        { "name": "constant.character.escape.line-continuation.spl", "match": "\\\\$" },
+        { "name": "constant.character.escape.spl", "match": "\\\\[ntr0\\\\'\"{}]" },
+        { "name": "invalid.illegal.escape.spl", "match": "\\\\." },
+        { "name": "constant.character.escape.brace.spl", "match": "\\{\\{|\\}\\}" },
+        { "include": "#interpolation" },
+        { "name": "invalid.illegal.brace.spl", "match": "\\}" }
+      ]
+    },
+
+    "interpolation": {
+      "name": "meta.interpolation.spl",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.spl" } },
+      "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.spl" } },
+      "patterns": [{ "include": "#expression" }]
+    },
+
+    "number": {
+      "name": "constant.numeric.spl",
+      "match": "\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b"
+    },
+
+    "command-with-modifiers": {
+      "name": "meta.command.spl",
+      "begin": "(?:(\\?)|\\b(think)\\b|\\b(read_file|write_file|web_fetch|shell)\\b)\\s*(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": { "name": "keyword.operator.llm.spl" },
+        "2": { "name": "keyword.other.think.spl" },
+        "3": { "name": "support.function.tool.spl" },
+        "4": { "name": "punctuation.section.modifiers.begin.spl" }
+      },
+      "endCaptures": { "0": { "name": "punctuation.section.modifiers.end.spl" } },
+      "patterns": [
+        {
+          "name": "variable.parameter.modifier.spl",
+          "match": "\\b(?:len|fmt|level|show|path|content|url|command)\\b(?=\\s*=(?!=))"
+        },
+        { "include": "#expression" }
+      ]
+    },
+
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(def)\\s+([A-Za-z_]\\w*)",
+          "captures": {
+            "1": { "name": "storage.type.function.spl" },
+            "2": { "name": "entity.name.function.spl" }
+          }
+        },
+        {
+          "match": "\\b(let)\\s+([A-Za-z_]\\w*)",
+          "captures": {
+            "1": { "name": "storage.type.spl" },
+            "2": { "name": "variable.other.definition.spl" }
+          }
+        },
+        {
+          "match": "\\b(except)\\s+([A-Za-z_]\\w*)",
+          "captures": {
+            "1": { "name": "keyword.control.exception.spl" },
+            "2": { "name": "variable.other.definition.spl" }
+          }
+        },
+        {
+          "match": "\\b(restrict)(?:\\s+(fs|net|exec)\\b)?",
+          "captures": {
+            "1": { "name": "keyword.control.restrict.spl" },
+            "2": { "name": "storage.modifier.restrict-kind.spl" }
+          }
+        }
+      ]
+    },
+
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.exception.spl", "match": "\\b(?:try|except)\\b" },
+        { "name": "keyword.control.flow.spl", "match": "\\b(?:if|elif|else|for|while|break|continue|return|pass)\\b" },
+        { "name": "keyword.control.result.spl", "match": "\\b(?:assert|fail|success)\\b" },
+        { "name": "keyword.control.constraint.spl", "match": "\\b(?:enforce|forbid)\\b" },
+        { "name": "keyword.other.think.spl", "match": "\\bthink\\b" },
+        { "name": "support.function.tool.spl", "match": "\\b(?:read_file|write_file|web_fetch|shell)\\b" },
+        { "name": "keyword.operator.llm.spl", "match": "\\?" },
+        { "name": "keyword.operator.logical.spl", "match": "\\b(?:and|or|not|in)\\b" }
+      ]
+    },
+
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.spl", "match": "\\b(?:True|False|None)\\b" },
+        { "name": "variable.other.constant.spl", "match": "\\b[A-Z][A-Z0-9_]*\\b" }
+      ]
+    },
+
+    "builtins": {
+      "name": "support.function.builtin.spl",
+      "match": "(?<![.\\w])(?:len|str|int|float|bool|type|list|range|abs|round|min|max|sum|sorted|reversed|enumerate|zip|any|all|keys|values|items|json_parse|json_stringify|log)(?=\\s*\\()"
+    },
+
+    "calls": {
+      "patterns": [
+        {
+          "match": "(\\.)\\s*([A-Za-z_]\\w*)(?=\\s*\\()",
+          "captures": {
+            "1": { "name": "punctuation.accessor.spl" },
+            "2": { "name": "entity.name.function.method.spl" }
+          }
+        },
+        {
+          "name": "entity.name.function.call.spl",
+          "match": "(?<![.\\w])[A-Za-z_]\\w*(?=\\s*\\()"
+        }
+      ]
+    },
+
+    "member": {
+      "match": "(\\.)\\s*([A-Za-z_]\\w*)",
+      "captures": {
+        "1": { "name": "punctuation.accessor.spl" },
+        "2": { "name": "variable.other.property.spl" }
+      }
+    },
+
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.assignment.compound.spl", "match": "//=|\\+=|-=|\\*=|/=|%=" },
+        { "name": "keyword.operator.comparison.spl", "match": "==|!=|<=|>=|<|>" },
+        { "name": "keyword.operator.arithmetic.spl", "match": "\\*\\*|//|[-+*/%]" },
+        { "name": "keyword.operator.assignment.spl", "match": "=" },
+        { "name": "punctuation.separator.comma.spl", "match": "," },
+        { "name": "punctuation.separator.colon.spl", "match": ":" },
+        { "name": "punctuation.terminator.statement.spl", "match": ";" }
+      ]
+    },
+
+    "group": {
+      "patterns": [
+        {
+          "name": "meta.block.spl",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.section.block.begin.spl" } },
+          "endCaptures": { "0": { "name": "punctuation.section.block.end.spl" } },
+          "patterns": [{ "include": "#expression" }]
+        },
+        {
+          "name": "meta.brackets.spl",
+          "begin": "\\[",
+          "end": "\\]",
+          "beginCaptures": { "0": { "name": "punctuation.section.brackets.begin.spl" } },
+          "endCaptures": { "0": { "name": "punctuation.section.brackets.end.spl" } },
+          "patterns": [{ "include": "#expression" }]
+        },
+        {
+          "name": "meta.parens.spl",
+          "begin": "\\(",
+          "end": "\\)",
+          "beginCaptures": { "0": { "name": "punctuation.section.parens.begin.spl" } },
+          "endCaptures": { "0": { "name": "punctuation.section.parens.end.spl" } },
+          "patterns": [{ "include": "#expression" }]
+        }
+      ]
+    }
+  }
+}
