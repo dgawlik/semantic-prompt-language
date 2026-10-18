@@ -28,13 +28,9 @@
   NAV.forEach(function (g) { g.items.forEach(function (i) { i.group = g.group; FLAT.push(i); }); });
 
   var page = document.body.getAttribute("data-page") || "index";
-  var root = document.documentElement;
 
-  /* ---------- theme ---------- */
-  var saved = null;
-  try { saved = localStorage.getItem("spl-theme"); } catch (e) {}
-  var theme = saved || (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  root.setAttribute("data-theme", theme);
+  var COLOR_SCHEME_KEY = "color-scheme";
+  var NAV_BREAKPOINT = "(max-width: 56rem)"; /* keep in sync with the sidebar breakpoint in style.css */
 
   function el(tag, attrs, html) {
     var n = document.createElement(tag);
@@ -187,13 +183,18 @@
       var file = code.getAttribute("data-file");
       var wrap = el("div", { "class": "code-block" });
       var head = el("div", { "class": "code-head" },
-        '<span class="dots"><i></i><i></i><i></i></span>' +
+        '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>' +
         (file ? '<span class="file">' + esc(file) + "</span>" : "") +
         '<span class="lang">' + (LABELS[lang] || lang) + "</span>");
-      var btn = el("button", { "class": "copy-btn", type: "button", "aria-label": "Copy code" }, "Copy");
+      var btn = el("button", { "class": "copy-btn", type: "button", "aria-label": "Copy " + (file || LABELS[lang] || lang) + " code" }, "Copy");
       btn.addEventListener("click", function () {
-        var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1400); };
-        if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, done); else done();
+        var done = function (ok) {
+          btn.textContent = ok === false ? "Failed" : "Copied";
+          announce(ok === false ? "Copy failed" : "Copied to clipboard");
+          setTimeout(function () { btn.textContent = "Copy"; }, 1400);
+        };
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+        else done(false);
       });
       head.appendChild(btn);
       pre.parentNode.insertBefore(wrap, pre);
@@ -205,45 +206,68 @@
   /* ---------- layout ---------- */
   function slug(t) { return t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 
+  var announcer = null;
+  function announce(message) {
+    if (!announcer) return;
+    announcer.textContent = "";
+    setTimeout(function () { announcer.textContent = message; }, 50);
+  }
+
+  var ICON_MENU = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+  var ICON_CLOSE = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  var ICON_SEARCH = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+
+  function navListHtml() {
+    return NAV.map(function (g) {
+      return '<p class="nav-title">' + g.group + '</p><ul class="nav-list" role="list">' + g.items.map(function (i) {
+        return '<li><a href="' + i.href + '"' + (i.id === page ? ' aria-current="page"' : "") + ">" + esc(i.title) + "</a></li>";
+      }).join("") + "</ul>";
+    }).join("");
+  }
+
   function build() {
     var main = document.getElementById("page");
     var current = FLAT.filter(function (p) { return p.id === page; })[0] || FLAT[0];
 
+    var skip = el("a", { "class": "skip-link", href: "#content" }, "Skip to content");
+
     // header
     var header = el("header", { "class": "site-header" });
     header.innerHTML =
-      '<button class="icon-btn menu-btn" aria-label="Menu" id="menu-btn">☰</button>' +
-      '<a class="brand" href="index.html"><span class="brand-mark">?</span><span>SPL</span><small>v0.1</small></a>' +
-      '<nav class="header-nav">' +
+      '<button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="drawer">' + ICON_MENU + "</button>" +
+      '<a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">?</span><span>SPL</span><small>v0.1</small></a>' +
+      '<nav class="header-nav" aria-label="Primary">' +
       [["getting-started", "Get started"], ["language", "Language"], ["cli", "Reference"], ["examples", "Examples"]].map(function (l) {
         var cur = FLAT.filter(function (p) { return p.id === l[0]; })[0];
-        var active = current.group === cur.group ? " active" : "";
-        return '<a class="' + active.trim() + '" href="' + cur.href + '">' + l[1] + "</a>";
+        return '<a href="' + cur.href + '"' + (current.group === cur.group ? ' aria-current="true"' : "") + ">" + l[1] + "</a>";
       }).join("") + "</nav>" +
       '<span class="header-spacer"></span>' +
-      '<button class="search-btn" id="search-btn"><span>🔍</span><span class="lbl">Search docs</span><kbd>Ctrl K</kbd></button>' +
-      '<button class="icon-btn" id="theme-btn" aria-label="Toggle theme"></button>';
+      '<button class="search-btn" id="search-btn" type="button" commandfor="search" command="show-modal" aria-keyshortcuts="Control+K">' +
+      ICON_SEARCH + '<span class="lbl">Search docs</span><kbd aria-hidden="true">Ctrl K</kbd></button>';
 
-    // sidebar
-    var sidebar = el("aside", { "class": "sidebar" });
-    sidebar.innerHTML = NAV.map(function (g) {
-      return "<h4>" + g.group + "</h4>" + g.items.map(function (i) {
-        return '<a href="' + i.href + '"' + (i.id === page ? ' class="active"' : "") + ">" + esc(i.title) + "</a>";
-      }).join("");
-    }).join("");
+    // sidebar (wide screens) and drawer (narrow screens) share one nav list
+    var sidebar = el("nav", { "class": "sidebar", "aria-label": "Documentation" }, navListHtml());
+    var drawer = el("div", { "class": "Drawer", id: "drawer", popover: "manual" });
+    drawer.innerHTML =
+      '<div class="Drawer-scroller"><nav class="Drawer-sheet" tabindex="-1" aria-label="Documentation">' +
+      '<div class="Drawer-head"><span>Documentation</span><button class="icon-btn" id="drawer-close" type="button" aria-label="Close menu">' + ICON_CLOSE + "</button></div>" +
+      '<div class="Drawer-body">' + navListHtml() + "</div></nav></div>";
 
-    // content
-    var content = el("article", { "class": "content" });
-    while (main.firstChild) content.appendChild(main.firstChild);
-    main.parentNode.removeChild(main);
+    // content: the original <main> becomes the main landmark and skip-link target
+    main.id = "content";
+    main.tabIndex = -1;
+    var content = el("div", { "class": "content" });
+    main.parentNode.replaceChild(content, main);
+    content.appendChild(main);
+    Array.prototype.forEach.call(main.querySelectorAll(".ico, .pipeline .arrow"), function (n) { n.setAttribute("aria-hidden", "true"); });
 
     // headings: anchors + toc
-    var heads = Array.prototype.filter.call(content.querySelectorAll("h2, h3"), function (h) { return !h.closest(".card"); });
-    var toc = el("nav", { "class": "toc" }, "<h5>On this page</h5>");
+    var heads = Array.prototype.filter.call(main.querySelectorAll("h2, h3"), function (h) { return !h.closest(".card"); });
+    var toc = el("nav", { "class": "toc", "aria-label": "On this page" }, '<p class="toc-title">On this page</p>');
     heads.forEach(function (h) {
       if (!h.id) h.id = slug(h.textContent);
       var label = h.textContent.trim();
-      h.appendChild(el("a", { "class": "anchor", href: "#" + h.id, "aria-label": "Link" }, "#"));
+      h.appendChild(el("a", { "class": "anchor", href: "#" + h.id, "aria-label": "Link to " + label }, "#"));
       var a = el("a", { href: "#" + h.id, "class": h.tagName === "H3" ? "l3" : "" });
       a.textContent = label;
       toc.appendChild(a);
@@ -252,14 +276,16 @@
     // prev / next
     var idx = FLAT.indexOf(current);
     if (document.body.getAttribute("data-nav") !== "none") {
-      var pn = el("div", { "class": "page-nav" });
-      pn.innerHTML = (idx > 0 ? '<a class="prev" href="' + FLAT[idx - 1].href + '"><small>Previous</small>← ' + esc(FLAT[idx - 1].title) + "</a>" : '<span class="spacer"></span>') +
-        (idx < FLAT.length - 1 ? '<a class="next" href="' + FLAT[idx + 1].href + '"><small>Next</small>' + esc(FLAT[idx + 1].title) + " →</a>" : '<span class="spacer"></span>');
-      content.appendChild(pn);
+      var pn = el("nav", { "class": "page-nav", "aria-label": "Pagination" });
+      pn.innerHTML = (idx > 0 ? '<a class="prev" rel="prev" href="' + FLAT[idx - 1].href + '"><small>Previous</small><span aria-hidden="true">← </span>' + esc(FLAT[idx - 1].title) + "</a>" : '<span class="spacer"></span>') +
+        (idx < FLAT.length - 1 ? '<a class="next" rel="next" href="' + FLAT[idx + 1].href + '"><small>Next</small>' + esc(FLAT[idx + 1].title) + '<span aria-hidden="true"> →</span></a>' : '<span class="spacer"></span>');
+      main.appendChild(pn);
     }
-    content.appendChild(el("footer", { "class": "site-footer" },
-      'Semantic Prompt Language &middot; documentation generated from the repository sources &middot; ' +
-      '<a href="https://github.com/dgawlik/semantic-prompt-language">GitHub</a>'));
+    var footer = el("footer", { "class": "site-footer" },
+      '<p>Semantic Prompt Language &middot; documentation generated from the repository sources &middot; ' +
+      '<a href="https://github.com/dgawlik/semantic-prompt-language">GitHub</a></p>' +
+      '<label class="theme-picker">Theme <select id="theme-select"><option value="">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>');
+    content.appendChild(footer);
 
     var wrap = el("div", { "class": "content-wrap" });
     wrap.appendChild(content);
@@ -267,45 +293,155 @@
     var layout = el("div", { "class": "layout" });
     layout.appendChild(sidebar);
     layout.appendChild(wrap);
+
+    announcer = el("p", { "class": "visually-hidden", role: "status" });
     document.body.insertBefore(layout, document.body.firstChild);
     document.body.insertBefore(header, document.body.firstChild);
+    document.body.insertBefore(skip, document.body.firstChild);
+    document.body.appendChild(drawer);
+    document.body.appendChild(announcer);
 
-    document.title = (content.querySelector("h1") ? content.querySelector("h1").textContent.replace(/\s+/g, " ").trim() + " · " : "") + "SPL docs";
+    document.title = (main.querySelector("h1") ? main.querySelector("h1").textContent.replace(/\s+/g, " ").trim() + " · " : "") + "SPL docs";
 
     enhanceCode();
-    wireTheme(); wireMenu(); wireSearch(); wireScrollSpy(heads, toc);
+    wireScrollers(main);
+    wireTheme(document.getElementById("theme-select"));
+    wireDrawer(drawer, [header, layout]);
+    wireSearch();
+    wireScrollSpy(heads, toc);
 
-    var active = sidebar.querySelector("a.active");
-    if (active && active.scrollIntoView) sidebar.scrollTop = Math.max(0, active.offsetTop - 140);
+    var active = sidebar.querySelector("a[aria-current]");
+    if (active) sidebar.scrollTop = Math.max(0, active.offsetTop - 140);
   }
 
-  function wireTheme() {
-    var btn = document.getElementById("theme-btn");
-    function paint() { btn.textContent = root.getAttribute("data-theme") === "dark" ? "☀️" : "🌙"; }
-    paint();
-    btn.addEventListener("click", function () {
-      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-      root.setAttribute("data-theme", next);
-      try { localStorage.setItem("spl-theme", next); } catch (e) {}
-      paint();
+  /* Scrollable tables and code are made keyboard-reachable only while they actually overflow. */
+  function wireScrollers(scope) {
+    if (!("ResizeObserver" in window)) return;
+    var ro = new ResizeObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var t = entry.target;
+        if (t.scrollWidth > t.clientWidth) {
+          t.tabIndex = 0;
+          t.setAttribute("role", "group");
+          t.setAttribute("aria-label", t.matches(".table-wrap") ? "Scrollable table" : "Scrollable code");
+        } else {
+          t.removeAttribute("tabindex");
+          t.removeAttribute("role");
+          t.removeAttribute("aria-label");
+        }
+      });
     });
+    Array.prototype.forEach.call(scope.querySelectorAll(".table-wrap, .code-block pre, pre.plain"), function (t) { ro.observe(t); });
   }
 
-  function wireMenu() {
-    document.getElementById("menu-btn").addEventListener("click", function () { document.body.classList.toggle("nav-open"); });
-    document.querySelector(".content-wrap").addEventListener("click", function () { document.body.classList.remove("nav-open"); });
+  /* Three states: system (nothing stored), light, dark. The <meta name="color-scheme"> carries the choice; CSS mirrors it. */
+  function wireTheme(select) {
+    var meta = document.querySelector('meta[name="color-scheme"]');
+    var dark = window.matchMedia("(prefers-color-scheme: dark)");
+    function stored() {
+      try { var v = localStorage.getItem(COLOR_SCHEME_KEY); return v === "light" || v === "dark" ? v : ""; } catch (e) { return ""; }
+    }
+    function apply(value) {
+      meta.content = value || "light dark";
+      select.value = value;
+    }
+    function paintSystemLabel() { select.options[0].textContent = "System (currently " + (dark.matches ? "dark" : "light") + ")"; }
+    select.addEventListener("change", function () {
+      try { if (select.value) localStorage.setItem(COLOR_SCHEME_KEY, select.value); else localStorage.removeItem(COLOR_SCHEME_KEY); } catch (e) {}
+      apply(select.value);
+    });
+    window.addEventListener("storage", function (e) { if (e.key === COLOR_SCHEME_KEY || e.key === null) apply(stored()); });
+    dark.addEventListener("change", paintSystemLabel);
+    paintSystemLabel();
+    apply(stored());
   }
 
+  /* Drawer: a popover whose swipe is native scroll-snapping; an IntersectionObserver is the single source of open/closed state. */
+  function wireDrawer(drawer, outside) {
+    var openBtn = document.getElementById("menu-btn");
+    var scroller = drawer.querySelector(".Drawer-scroller");
+    var sheet = drawer.querySelector(".Drawer-sheet");
+
+    /* While opening, the sheet's transient off-screen position (jump-scroll fallback) must not count as closed. */
+    var opening = false;
+
+    async function openDrawer() {
+      opening = "jump";
+      drawer.showPopover();
+      if (!CSS.supports("scroll-initial-target", "nearest")) {
+        scroller.scrollTo({ left: scroller.offsetWidth, behavior: "instant" });
+        await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+      }
+      opening = "final";
+      scroller.scrollTo({ left: 0, behavior: "auto" });
+      setTimeout(function () {
+        if (!opening) return;
+        opening = false;
+        if (isOpen() && scroller.scrollLeft >= sheet.offsetWidth - 1) onClosed();
+      }, 1500);
+    }
+    function closeDrawer() { scroller.scrollTo({ left: scroller.offsetWidth, behavior: "auto" }); }
+    function isOpen() { return drawer.matches(":popover-open"); }
+
+    function onOpened() {
+      opening = false;
+      outside.forEach(function (n) { n.inert = true; });
+      openBtn.setAttribute("aria-expanded", "true");
+      sheet.focus();
+    }
+    function onClosed() {
+      if (isOpen()) drawer.hidePopover();
+      outside.forEach(function (n) { n.inert = false; });
+      openBtn.setAttribute("aria-expanded", "false");
+      openBtn.focus();
+    }
+
+    var visibleThreshold = 1 / window.innerWidth;
+    new IntersectionObserver(function (entries) {
+      var entry = entries[entries.length - 1];
+      if (entry.intersectionRatio < visibleThreshold) { if (isOpen() && !opening) onClosed(); }
+      else if (entry.intersectionRatio === 1 && isOpen() && opening !== "jump") onOpened();
+    }, { root: drawer, threshold: [visibleThreshold, 1] }).observe(sheet);
+
+    if (!CSS.supports("animation-timeline: scroll()")) {
+      scroller.addEventListener("scroll", function () {
+        drawer.style.setProperty("--drawer-backdrop", 1 - scroller.scrollLeft / sheet.offsetWidth);
+      });
+    }
+
+    openBtn.addEventListener("click", openDrawer);
+    document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+    drawer.addEventListener("click", function (e) { if (!sheet.contains(e.target)) closeDrawer(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && isOpen()) closeDrawer(); });
+    matchMedia(NAV_BREAKPOINT).addEventListener("change", function (e) { if (!e.matches && isOpen()) closeDrawer(); });
+  }
+
+  /* Native scroll-target-group + :target-current where available; the IntersectionObserver toggles the same class elsewhere. */
   function wireScrollSpy(heads, toc) {
-    if (!heads.length || !("IntersectionObserver" in window)) return;
-    var links = {};
-    Array.prototype.forEach.call(toc.querySelectorAll("a"), function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var links = Array.prototype.slice.call(toc.querySelectorAll("a"));
+    if (!links.length) return;
+
+    if (CSS.supports("scroll-target-group: auto")) {
+      var sync = function () {
+        var currentLink = toc.querySelector("a:target-current");
+        links.forEach(function (a) { a.setAttribute("aria-current", a === currentLink ? "true" : "false"); });
+      };
+      sync();
+      document.addEventListener("scrollend", sync);
+      return;
+    }
+
+    if (!("IntersectionObserver" in window)) return;
+    var byId = {};
+    links.forEach(function (a) { byId[a.getAttribute("href").slice(1)] = a; });
     var obs = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
-        if (e.isIntersecting && links[e.target.id]) {
-          Object.keys(links).forEach(function (k) { links[k].classList.remove("active"); });
-          links[e.target.id].classList.add("active");
-        }
+        var target = byId[e.target.id];
+        if (!e.isIntersecting || !target) return;
+        links.forEach(function (a) {
+          a.classList.toggle(":target-current", a === target);
+          a.setAttribute("aria-current", a === target ? "true" : "false");
+        });
       });
     }, { rootMargin: "-80px 0px -70% 0px" });
     heads.forEach(function (h) { obs.observe(h); });
@@ -314,14 +450,15 @@
   /* ---------- search ---------- */
   function wireSearch() {
     var index = window.SPL_SEARCH_INDEX || [];
-    var overlay = el("div", { "class": "search-overlay" },
-      '<div class="search-box"><input type="text" placeholder="Search the documentation…" aria-label="Search"><div class="search-results"></div></div>');
-    document.body.appendChild(overlay);
-    var input = overlay.querySelector("input"), results = overlay.querySelector(".search-results");
+    var dialog = el("dialog", { "class": "search", id: "search", "aria-label": "Search documentation" },
+      '<input class="search-input" type="text" role="combobox" enterkeyhint="search" aria-label="Search the documentation" aria-autocomplete="list" aria-expanded="true" aria-controls="search-results" autocomplete="off" spellcheck="false" autofocus placeholder="Search the documentation…">' +
+      '<div class="search-results" id="search-results" role="listbox" aria-label="Results"></div>' +
+      '<p class="visually-hidden" role="status"></p>');
+    document.body.appendChild(dialog);
+    var input = dialog.querySelector("input"), results = dialog.querySelector(".search-results"), status = dialog.querySelector("[role=status]");
     var sel = 0, shown = [];
 
-    function open() { overlay.classList.add("open"); input.value = ""; render(""); input.focus(); }
-    function close() { overlay.classList.remove("open"); }
+    function open() { if (!dialog.open) dialog.showModal(); }
 
     function render(q) {
       q = q.trim().toLowerCase();
@@ -344,16 +481,24 @@
       scored.sort(function (a, b) { return b.s - a.s; });
       shown = scored.slice(0, 30).map(function (x) { return x.e; });
       sel = 0;
-      if (!shown.length) { results.innerHTML = '<div class="search-empty">No results for “' + esc(q) + '”</div>'; return; }
+      input.removeAttribute("aria-activedescendant");
+      if (!shown.length) {
+        results.innerHTML = '<div class="search-empty">No results for “' + esc(q) + '”</div>';
+        status.textContent = "No results";
+        return;
+      }
       results.innerHTML = shown.map(function (e, i) {
-        return '<a href="' + e.href + '"' + (i === 0 ? ' class="sel"' : "") + "><span>" + esc(e.title) + "</span><small>" + esc(e.page) + (e.level > 1 ? " › " + esc(e.title) : "") + "</small></a>";
+        return '<a id="search-opt-' + i + '" role="option" aria-selected="' + (i === 0) + '" href="' + e.href + '"><span>' + esc(e.title) + "</span><small>" + esc(e.page) + (e.level > 1 ? " › " + esc(e.title) : "") + "</small></a>";
       }).join("");
+      input.setAttribute("aria-activedescendant", "search-opt-0");
+      status.textContent = terms.length ? shown.length + (shown.length === 1 ? " result" : " results") : "";
     }
     function move(d) {
       var items = results.querySelectorAll("a"); if (!items.length) return;
-      items[sel].classList.remove("sel");
+      items[sel].setAttribute("aria-selected", "false");
       sel = (sel + d + items.length) % items.length;
-      items[sel].classList.add("sel");
+      items[sel].setAttribute("aria-selected", "true");
+      input.setAttribute("aria-activedescendant", items[sel].id);
       items[sel].scrollIntoView({ block: "nearest" });
     }
     input.addEventListener("input", function () { render(input.value); });
@@ -362,12 +507,15 @@
       else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
       else if (e.key === "Enter" && shown[sel]) { window.location.href = shown[sel].href; }
     });
-    overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
-    document.getElementById("search-btn").addEventListener("click", open);
+    dialog.addEventListener("click", function (e) { if (e.target === dialog) dialog.close(); });
+    dialog.addEventListener("close", function () { input.value = ""; render(""); });
+    render("");
+
+    // Invoker commands are native in current browsers; older ones get the same behavior from a click handler.
+    if (!("commandForElement" in HTMLButtonElement.prototype)) document.getElementById("search-btn").addEventListener("click", open);
     document.addEventListener("keydown", function (e) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); open(); }
-      else if (e.key === "/" && !/input|textarea/i.test((e.target.tagName || ""))) { e.preventDefault(); open(); }
-      else if (e.key === "Escape") close();
+      else if (e.key === "/" && !dialog.open && !/input|textarea|select/i.test((e.target.tagName || "")) && !e.target.isContentEditable) { e.preventDefault(); open(); }
     });
   }
 
