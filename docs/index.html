@@ -43,6 +43,7 @@ let joke = ?{len='sentence', fmt='object'} 'A joke about programmers'
 let why = think{level='high'} 'Why is {joke.setup} funny?'
 
 # rules for every call inside the block
+let hi = None
 enforce 'Answer in English' {
     forbid 'profanity' { let hi = ?'Say hi' }
 }
@@ -53,7 +54,7 @@ restrict './out' {
 }
 
 try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
-success {'joke': joke, 'why': why}
+success {'joke': joke, 'why': why, 'hi': hi}
 </code></pre>
 
 <h2 id="why">Why SPL?</h2>
