@@ -132,7 +132,7 @@
 
     "command-with-modifiers": {
       "name": "meta.command.spl",
-      "begin": "(?:(\\?)|\\b(think)\\b|\\b(read_file|write_file|web_fetch|shell)\\b)\\s*(\\{)",
+      "begin": "(?:(\\?)|\\b(think)\\b|\\b(read_file|write_file|web_fetch|web_search|shell)\\b)\\s*(\\{)",
       "end": "\\}",
       "beginCaptures": {
         "1": { "name": "keyword.operator.llm.spl" },
@@ -190,7 +190,7 @@
         { "name": "keyword.control.result.spl", "match": "\\b(?:assert|fail|success)\\b" },
         { "name": "keyword.control.constraint.spl", "match": "\\b(?:enforce|forbid)\\b" },
         { "name": "keyword.other.think.spl", "match": "\\bthink\\b" },
-        { "name": "support.function.tool.spl", "match": "\\b(?:read_file|write_file|web_fetch|shell)\\b" },
+        { "name": "support.function.tool.spl", "match": "\\b(?:read_file|write_file|web_fetch|web_search|shell)\\b" },
         { "name": "keyword.operator.llm.spl", "match": "\\?" },
         { "name": "keyword.operator.logical.spl", "match": "\\b(?:and|or|not|in)\\b" }
       ]

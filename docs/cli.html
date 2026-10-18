@@ -19,10 +19,12 @@
 <h2 id="usage">Usage</h2>
 <pre><code class="language-bash">
 spl &lt;script.spl&gt; [--log-level error|info|debug] [--silent] [--model &lt;id&gt;]
-                 [--store &lt;file.json&gt; | --store-module &lt;module&gt;] [--backend copilot|mock]
-                 [--timeout &lt;s&gt;] [--seed &lt;n&gt;] [--cwd &lt;dir&gt;] [--check]
+                 [--store &lt;file.json&gt; | --store-module &lt;module&gt;]
+                 [--timeout &lt;s&gt;] [--cwd &lt;dir&gt;] [--check]
+spl login
+spl logout
 </code></pre>
-<p>From a checkout use <code>node dist/cli.js</code> or <code>npx file:./lang</code>. The package installs two equivalent binaries: <code>spl</code> and <code>spl-lang</code>. Exactly one script file is expected.</p>
+<p>From a checkout use <code>node dist/cli.js</code> or <code>npx file:./lang</code>. The package installs two equivalent binaries: <code>spl</code> and <code>spl-lang</code>. A script run expects exactly one script file; <code>login</code> and <code>logout</code> are separate commands, see <a href="#login">Authentication</a>.</p>
 
 <h2 id="options">Options</h2>
 <div class="table-wrap"><table>
@@ -33,9 +35,7 @@ spl &lt;script.spl&gt; [--log-level error|info|debug] [--silent] [--model &lt;id
 <tr><td><code>--model &lt;id&gt;</code></td><td>SDK default</td><td>Model override. Takes precedence over <code>@{model=…}</code>.</td></tr>
 <tr><td><code>--store &lt;file.json&gt;</code></td><td>&mdash;</td><td>Persist top-level variables in a JSON file.</td></tr>
 <tr><td><code>--store-module &lt;path&gt;</code></td><td>&mdash;</td><td>Custom store module exporting <code>createStore()</code>. Mutually exclusive with <code>--store</code>.</td></tr>
-<tr><td><code>--backend &lt;name&gt;</code></td><td><code>copilot</code></td><td><code>copilot</code> uses the GitHub Copilot SDK; <code>mock</code> is offline and deterministic.</td></tr>
 <tr><td><code>--timeout &lt;seconds&gt;</code></td><td><code>300</code></td><td>Per-LLM-call timeout.</td></tr>
-<tr><td><code>--seed &lt;n&gt;</code></td><td><code>0</code></td><td>Seed <em>requested</em> for LLM calls (an integer).</td></tr>
 <tr><td><code>--cwd &lt;dir&gt;</code></td><td>current dir</td><td>Base directory for relative paths, <code>restrict</code> checks, and the working directory of tools and the model.</td></tr>
 <tr><td><code>--check</code></td><td>off</td><td>Parse the script and exit &mdash; syntax check only.</td></tr>
 <tr><td><code>-v</code>, <code>--version</code></td><td>&mdash;</td><td>Print the version.</td></tr>
@@ -46,11 +46,11 @@ spl &lt;script.spl&gt; [--log-level error|info|debug] [--silent] [--model &lt;id
 <div class="compare">
   <div>
     <h4>stdout</h4>
-    <p>The value of <code>success</code>: strings raw, everything else as pretty-printed JSON. On an uncaught failure: the failure payload.</p>
+    <p>The value of <code>success</code> or of a top-level <code>return</code>: strings raw, everything else as pretty-printed JSON. On an uncaught failure: the failure payload.</p>
   </div>
   <div>
     <h4>stderr</h4>
-    <p>Logs, <code>log()</code> output, syntax errors, and for every LLM call the effective model, reasoning effort, <code>temperature</code> and <code>seed</code>.</p>
+    <p>Logs, <code>log()</code> output, syntax errors, and for every LLM call the effective model and reasoning effort.</p>
   </div>
 </div>
 <div class="table-wrap"><table>
@@ -100,22 +100,27 @@ export function createStore() {
   <p><code>load()</code> and <code>save()</code> are synchronous, so a store must complete its I/O before returning. <code>createStore()</code> itself may be async. <code>save()</code> receives plain JSON-compatible values (<code>vars</code>), never functions.</p></div>
 </div>
 
-<h2 id="backends">Backends</h2>
-<h3 id="copilot">copilot</h3>
-<p>The default. Each LLM call opens a fresh session through the <a href="https://github.com/features/copilot">GitHub Copilot SDK</a> with a system message that frames the model as the execution engine of a script, exposing exactly four tools &mdash; <code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>shell</code> &mdash; implemented by the SPL runtime so that restrictions apply. Any other permission request is denied. Authenticate with <code>gh auth login</code>.</p>
-<h3 id="mock">mock</h3>
-<p>Offline and deterministic: answers <code>mock: &lt;prompt tail&gt;</code> (or a <code>{"response": …}</code> JSON object for <code>fmt='object'</code>). Use it to syntax-check flows, exercise retry logic, and in CI.</p>
+<h2 id="login">Authentication</h2>
+<p>LLM calls go to GitHub Copilot, so the runtime needs credentials. Run <code>spl login</code> once: it does nothing if the runtime is already authenticated (an earlier login, a Copilot CLI or <code>gh</code> login, or <code>COPILOT_GITHUB_TOKEN</code> / <code>GH_TOKEN</code> / <code>GITHUB_TOKEN</code>); otherwise it starts GitHub's device flow, prints a one-time code and a URL, waits until you confirm in the browser, verifies the token with the Copilot runtime and saves it to <code>~/.spl/credentials.json</code> (folder overridable with <code>SPL_HOME</code>). Scripts pick that token up automatically. <code>spl logout</code> deletes the saved file.</p>
+<pre><code class="language-bash">
+spl login
+# Open https://github.com/login/device and enter the code: ABCD-1234
+# Authenticated with GitHub Copilot as octocat.
+</code></pre>
+<p>A script that needs an LLM without credentials fails with <code>llm_error</code> and asks you to run <code>spl login</code>. Scripts that never call an LLM (and <code>--check</code>) need no login.</p>
+
+<h2 id="backends">Backend</h2>
+<p>Each LLM call opens a fresh session through the <a href="https://github.com/features/copilot">GitHub Copilot SDK</a> with a system message that frames the model as the execution engine of a script, exposing exactly five tools &mdash; <code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>, <code>shell</code> &mdash; implemented by the SPL runtime so that restrictions apply. Any other permission request is denied. There is no offline backend: tests run against Copilot itself.</p>
 
 <h2 id="reproducibility">Reproducibility</h2>
 <p>Control flow, arithmetic and interpolation are deterministic. For LLM calls reproducibility is <strong>best effort</strong>:</p>
 <ul>
-  <li>The runtime requests <code>temperature=0</code> and the <code>--seed</code>. The Copilot SDK currently exposes neither setting, so the values cannot be applied; the log line of every call says exactly that.</li>
+  <li>The Copilot SDK has no <code>temperature</code> or <code>seed</code> setting, so the language has none either.</li>
   <li><code>think</code> levels map to the SDK reasoning effort. If the selected model does not support it, a warning is logged and the model default is used.</li>
   <li>Guard against variance with <code>assert</code> and <code>fmt='object'</code>; see <a href="failures.html#retry">retry patterns</a>.</li>
 </ul>
 <pre><code class="language-text">
-[info] llm ask call: {"backend":"copilot-sdk","model":"gpt-5","reasoningEffort":null,"temperature":null,"seed":null,
-  "requested":{"temperature":0,"seed":0},"note":"temperature/seed are not supported by the Copilot SDK and were not applied"} (1840 ms)
+[info] llm ask call: {"backend":"copilot-sdk","model":"gpt-5","reasoningEffort":null} (1840 ms)
 </code></pre>
 
 </main>

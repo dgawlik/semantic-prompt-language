@@ -79,6 +79,7 @@ restrict exec 'npm' {
 <ul>
   <li><code>net</code> matches exact hostnames and <code>*.example.com</code> wildcards. Entries may be bare hosts or URLs (the host is extracted; ports are ignored).</li>
   <li>Only <code>http:</code> and <code>https:</code> URLs are fetched. Redirects are followed manually (at most 5) and the host is <strong>re-checked on every hop</strong>.</li>
+  <li><code>web_search</code> is network access too: it queries <code>html.duckduckgo.com</code>, so a <code>restrict net</code> scope must list that host for searches to work.</li>
 </ul>
 <h3 id="exec">Executables</h3>
 <ul>

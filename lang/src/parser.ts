@@ -13,7 +13,7 @@ import type {
 import { SplSyntaxError } from './errors.js';
 import { tokenize, type StringPart, type Token } from './lexer.js';
 
-export const TOOL_NAMES: readonly ToolName[] = ['read_file', 'write_file', 'web_fetch', 'shell'];
+export const TOOL_NAMES: readonly ToolName[] = ['read_file', 'write_file', 'web_fetch', 'web_search', 'shell'];
 
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
@@ -33,11 +33,15 @@ export const MODIFIER_SCHEMA: Record<'?' | 'think', Record<string, readonly (str
     },
 };
 
-/** Tool parameter schema: allowed names and required names. */
+/**
+ * Tool parameter schema: the allowed names, and the `required` ones that let the runtime run the tool itself.
+ * Every parameter is optional in a script; the LLM supplies the missing required ones when it calls the tool.
+ */
 export const TOOL_SCHEMA: Record<ToolName, { params: string[]; required: string[] }> = {
     read_file: { params: ['path'], required: ['path'] },
-    write_file: { params: ['path', 'content'], required: ['path'] },
+    write_file: { params: ['path', 'content'], required: ['path', 'content'] },
     web_fetch: { params: ['url'], required: ['url'] },
+    web_search: { params: ['query'], required: ['query'] },
     shell: { params: ['command'], required: ['command'] },
 };
 
@@ -54,7 +58,6 @@ export function parse(source: string): Program {
 class Parser {
     private pos = 0;
     private loopDepth = 0;
-    private funcDepth = 0;
 
     constructor(
         private readonly toks: Token[],
@@ -222,12 +225,7 @@ class Parser {
         if (t.type === 'op' && t.value === '@') this.fail('directives are only allowed at the top of the script');
         if (t.type === 'name') {
             switch (t.value) {
-                case 'let': {
-                    this.next();
-                    const name = this.expectIdent('a variable name');
-                    this.expectOp('=');
-                    return { t: 'let', line, name, value: this.parseExpr() };
-                }
+                case 'let': return this.parseLet();
                 case 'if': return this.parseIf();
                 case 'for': {
                     this.next();
@@ -253,7 +251,6 @@ class Parser {
                 case 'pass': this.next(); return { t: 'pass', line };
                 case 'def': return this.parseDef();
                 case 'return': {
-                    if (this.funcDepth === 0) this.fail("'return' outside of a function");
                     this.next();
                     return { t: 'return', line, value: this.atStatementEnd() ? undefined : this.parseExpr() };
                 }
@@ -295,7 +292,23 @@ class Parser {
                     break;
             }
         }
+        if (t.type === 'op' && t.value === '{') return { t: 'block', line, body: this.parseBlock() };
         return this.parseSimpleStatement();
+    }
+
+    private parseLet(): Stmt {
+        const line = this.tok.line;
+        this.next();
+        const startTok = this.tok;
+        if (startTok.type === 'name' && KEYWORDS.has(startTok.value)) {
+            this.fail(`'${startTok.value}' is a reserved word and cannot be used as a variable name`);
+        }
+        if (startTok.type !== 'name') this.fail(`expected a variable name but found ${this.describe(startTok)}`);
+        const target = this.toTarget(this.parsePostfix(), startTok);
+        const opTok = this.tok;
+        if (opTok.type !== 'op' || !ASSIGN_OPS.has(opTok.value)) this.fail(`expected '=' after the target of 'let' but found ${this.describe(opTok)}`);
+        this.next();
+        return { t: 'let', line, target, op: (opTok as { value: string }).value as '=', value: this.parseExpr() };
     }
 
     private parseIf(): Stmt {
@@ -340,9 +353,7 @@ class Parser {
         this.next();
         const savedLoop = this.loopDepth;
         this.loopDepth = 0;
-        this.funcDepth++;
         const body = this.parseBlock();
-        this.funcDepth--;
         this.loopDepth = savedLoop;
         return { t: 'def', line, name, params, body };
     }
@@ -369,14 +380,10 @@ class Parser {
 
     private parseSimpleStatement(): Stmt {
         const line = this.tok.line;
-        const startTok = this.tok;
         const e = this.parseExpr();
         const t = this.tok;
         if (t.type === 'op' && ASSIGN_OPS.has(t.value)) {
-            const target = this.toTarget(e, startTok);
-            this.next();
-            const value = this.parseExpr();
-            return { t: 'assign', line, target, op: t.value as '=', value };
+            this.fail(`variables are modified with 'let' (write 'let <target> ${t.value} ...')`, t);
         }
         return { t: 'expr', line, e };
     }
@@ -474,6 +481,11 @@ class Parser {
         if (this.isOp('-') || this.isOp('+')) {
             const op = (this.next() as { value: string }).value as '-' | '+';
             return { t: 'unary', op, e: this.parseUnary() };
+        }
+        if (this.isOp('?')) {
+            this.next();
+            const mods = this.isOp('{') ? (this.parseMods('?') as AskMods) : {};
+            return { t: 'ask', mods, prompt: this.parsePrompt('?') };
         }
         return this.parsePower();
     }
@@ -584,9 +596,7 @@ class Parser {
             return { t: 'dict', entries };
         }
         if (t.value === '?') {
-            this.next();
-            const mods = this.isOp('{') ? (this.parseMods('?') as AskMods) : {};
-            return { t: 'ask', mods, prompt: this.parsePrompt('?') };
+            return this.fail("'?' is a prefix operator and cannot be used here");
         }
         return this.fail(`unexpected ${this.describe(t)}`);
     }
@@ -604,6 +614,7 @@ class Parser {
             case 'read_file':
             case 'write_file':
             case 'web_fetch':
+            case 'web_search':
             case 'shell':
                 return this.parseToolCall(t.value);
             default:
@@ -656,34 +667,32 @@ class Parser {
     }
 
     private parseToolCall(tool: ToolName): Expr {
-        const startTok = this.next();
+        this.next();
         const schema = TOOL_SCHEMA[tool];
         const params: Record<string, Expr> = {};
-        if (!this.isOp('{')) this.fail(`tool '${tool}' requires parameters, e.g. ${tool}{${schema.required[0]}=...} 'instructions'`);
-        this.next();
-        this.skipNl();
-        while (!this.isOp('}')) {
-            const nameTok = this.tok;
-            if (nameTok.type !== 'name') this.fail('expected a parameter name');
-            const name = (nameTok as { value: string }).value;
+        if (this.isOp('{')) {
             this.next();
-            if (!schema.params.includes(name)) {
-                this.fail(`unknown parameter '${name}' for '${tool}' (allowed: ${schema.params.join(', ')})`, nameTok);
-            }
-            if (name in params) this.fail(`duplicate parameter '${name}'`, nameTok);
-            this.expectOp('=');
-            params[name] = this.parseExpr();
             this.skipNl();
-            if (this.isOp(',')) {
+            while (!this.isOp('}')) {
+                const nameTok = this.tok;
+                if (nameTok.type !== 'name') this.fail('expected a parameter name');
+                const name = (nameTok as { value: string }).value;
                 this.next();
+                if (!schema.params.includes(name)) {
+                    this.fail(`unknown parameter '${name}' for '${tool}' (allowed: ${schema.params.join(', ')})`, nameTok);
+                }
+                if (name in params) this.fail(`duplicate parameter '${name}'`, nameTok);
+                this.expectOp('=');
+                params[name] = this.parseExpr();
                 this.skipNl();
-            } else if (!this.isOp('}')) {
-                this.fail("expected ',' or '}' in tool parameters");
+                if (this.isOp(',')) {
+                    this.next();
+                    this.skipNl();
+                } else if (!this.isOp('}')) {
+                    this.fail("expected ',' or '}' in tool parameters");
+                }
             }
-        }
-        this.next();
-        for (const req of schema.required) {
-            if (!(req in params)) this.fail(`tool '${tool}' requires parameter '${req}'`, startTok);
+            this.next();
         }
         return { t: 'tool', tool, params, instructions: this.parsePrompt(tool) };
     }

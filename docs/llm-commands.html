@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="The SPL LLM commands: ask, think, enforce/forbid and the four built-in tools.">
+<meta name="description" content="The LLM commands document: ask, think, enforce/forbid and the five built-in tools.">
 <title>LLM commands - SPL</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/style.css">
@@ -22,11 +22,11 @@
 <tr><td><a href="#ask"><code>?</code></a></td><td>Ask the model a question.</td><td><code>len</code>, <code>fmt</code></td></tr>
 <tr><td><a href="#think"><code>think</code></a></td><td>Ask the model to deliberate first.</td><td><code>level</code>, <code>show</code></td></tr>
 <tr><td><a href="#constraints"><code>enforce</code> / <code>forbid</code></a></td><td>Scoped rules prepended to every call in a block.</td><td>&mdash;</td></tr>
-<tr><td><a href="#tools"><code>read_file</code> <code>write_file</code> <code>web_fetch</code> <code>shell</code></a></td><td>Run a runtime tool, then let the model process its output.</td><td><code>path</code>, <code>content</code>, <code>url</code>, <code>command</code></td></tr>
+<tr><td><a href="#tools"><code>read_file</code> <code>write_file</code> <code>web_fetch</code> <code>web_search</code> <code>shell</code></a></td><td>Run a runtime tool, then let the model process its output.</td><td><code>path</code>, <code>content</code>, <code>url</code>, <code>query</code>, <code>command</code></td></tr>
 </tbody></table></div>
 
 <h2 id="modifiers">Operational modifiers</h2>
-<p>Every command has sensible defaults and lets you override its mode with a brace list of <em>modifiers</em> directly after the command name:</p>
+<p>Every command has sensible defaults and the braces are optional: <code>?'q'</code>, <code>think 'q'</code> and <code>read_file 'what to do'</code> all run as they are. A brace list of <em>modifiers</em> directly after the command name overrides its mode:</p>
 <pre><code class="language-spl">
 think{level='high'} 'What is the meaning of life'
 </code></pre>
@@ -36,7 +36,7 @@ think{level='high'} 'What is the meaning of life'
 </ul>
 
 <h2 id="ask">Ask: <code>?</code></h2>
-<p>The operand is the prompt &mdash; a postfix expression, so <code>?'a' + b</code> means <code>(?'a') + b</code>.</p>
+<p><code>?</code> is a <strong>prefix operator</strong> at unary precedence. The operand is the prompt &mdash; a postfix expression, so <code>?'a' + b</code> means <code>(?'a') + b</code> and <code>-?'n'</code> means <code>-(?'n')</code>.</p>
 <pre><code class="language-spl">
 let capital = ?'What is the capital of France?'
 let response = ?{len='sentence', fmt='object'} 'A joke about programmers'
@@ -85,6 +85,7 @@ enforce 'Answer in English' {
         let animal = ?{len='word'} 'Name a pet animal'
     }
 }
+log(animal)    # enforce/forbid blocks share the enclosing scope, so the result is visible here
 </code></pre>
 <p>Both rules above are sent as:</p>
 <pre class="plain"><code>Rules you must follow strictly:
@@ -97,18 +98,20 @@ enforce 'Answer in English' {
 </div>
 
 <h2 id="tools">Tool calls</h2>
-<p>A tool call has the form <code>tool{param=value} 'instructions'</code>. In the MVP the tools are a <strong>fixed built-in set</strong>; user-defined tools and MCP servers are out of scope.</p>
+<p>A tool call has the form <code>tool{param=value} 'instructions'</code>, and the braces are optional: <code>read_file 'Read notes.txt and summarize it'</code>. In the MVP the tools are a <strong>fixed built-in set</strong>; user-defined tools and MCP servers are out of scope.</p>
 
 <div class="table-wrap"><table>
-<thead><tr><th>Tool</th><th>Parameters</th><th>Purpose</th><th>Governed by</th></tr></thead>
+<thead><tr><th>Tool</th><th>Parameters (all optional)</th><th>Purpose</th><th>Governed by</th></tr></thead>
 <tbody>
-<tr><td><code>read_file</code></td><td><code>path</code> (required)</td><td>Read a file</td><td><code>restrict fs</code></td></tr>
-<tr><td><code>write_file</code></td><td><code>path</code> (required), <code>content</code> (optional)</td><td>Create or modify a file</td><td><code>restrict fs</code></td></tr>
-<tr><td><code>web_fetch</code></td><td><code>url</code> (required)</td><td>Fetch a URL (http/https)</td><td><code>restrict net</code></td></tr>
-<tr><td><code>shell</code></td><td><code>command</code> (required)</td><td>Run a shell command</td><td><code>restrict exec</code></td></tr>
+<tr><td><code>read_file</code></td><td><code>path</code></td><td>Read a file</td><td><code>restrict fs</code></td></tr>
+<tr><td><code>write_file</code></td><td><code>path</code>, <code>content</code></td><td>Create or modify a file</td><td><code>restrict fs</code></td></tr>
+<tr><td><code>web_fetch</code></td><td><code>url</code></td><td>Fetch a URL (http/https)</td><td><code>restrict net</code></td></tr>
+<tr><td><code>web_search</code></td><td><code>query</code></td><td>Search the web (DuckDuckGo): title, URL and snippet of the top results</td><td><code>restrict net</code> (host <code>html.duckduckgo.com</code>)</td></tr>
+<tr><td><code>shell</code></td><td><code>command</code></td><td>Run a shell command</td><td><code>restrict exec</code></td></tr>
 </tbody></table></div>
 
 <h3 id="tool-flow">How a tool call runs</h3>
+<p>Which side calls the tool depends on what the script supplies. When <strong>every</strong> parameter the tool needs is given (<code>path</code> for <code>read_file</code>, <code>path</code> and <code>content</code> for <code>write_file</code>, <code>url</code>, <code>query</code>, <code>command</code>), the runtime runs it:</p>
 <div class="pipeline">
   <div class="node"><b>1 &middot; Run</b>The runtime executes the tool with your parameters after checking restrictions.</div>
   <span class="arrow">→</span>
@@ -116,12 +119,15 @@ enforce 'Answer in English' {
   <span class="arrow">→</span>
   <div class="node"><b>3 &middot; Answer</b>The model's reply is the value of the expression.</div>
 </div>
+<p>When a needed parameter is missing, the <strong>model calls the tool itself</strong> from your instructions, and the parameters you did give stay fixed (the model cannot change them). Restrictions apply to its call exactly as to yours.</p>
 <pre><code class="language-spl">
-let readme = read_file{path='./README.md'} 'Return the file content'
+let readme = read_file{path='./README.md'} 'Return the file content'   # runtime reads the file
+let notes = read_file 'Read ./notes.txt and summarize it'              # model reads the file
 let log_text = shell{command='git log --oneline -n 40'} 'Summarize these commits'
 let page = web_fetch{url='https://example.com'} 'List the headings'
+let news = web_search{query='latest Node.js LTS version'} 'Which version is it?'
 </code></pre>
-<p>Parameters <code>path</code>, <code>url</code> and <code>command</code> must evaluate to strings. Tool output is truncated at 200,000 characters.</p>
+<p>Parameters <code>path</code>, <code>url</code>, <code>query</code> and <code>command</code> must evaluate to strings. Tool output is truncated at 200,000 characters.</p>
 
 <h3 id="write-file">write_file: two modes</h3>
 <div class="compare">
@@ -144,7 +150,7 @@ and write it to the file.'''
 </div>
 
 <h3 id="llm-tools">Tools the model may use</h3>
-<p>Inside any <code>?</code>, <code>think</code> or tool call, the model itself may use these same four tools. Every call it makes goes through the same interception and is checked against the active <code>restrict</code> scopes. Any other Copilot permission request is rejected.</p>
+<p>Inside any <code>?</code>, <code>think</code> or tool call, the model itself may use these same five tools. Every call it makes goes through the same interception and is checked against the active <code>restrict</code> scopes. Any other Copilot permission request is rejected.</p>
 
 <h2 id="prompt-assembly">How the final prompt is built</h2>
 <p>Before each call the runtime assembles sections in a fixed order, separated by blank lines:</p>

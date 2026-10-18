@@ -3,10 +3,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 import { CopilotBackend } from './copilot.js';
+import { AuthError, login, logout } from './auth.js';
 import { SplSyntaxError } from './errors.js';
 import type { LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
-import { MockBackend } from './mock.js';
 import { parse } from './parser.js';
 import { run } from './interpreter.js';
 import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
@@ -15,6 +15,8 @@ import { toJson } from './values.js';
 const HELP = `spl - Semantic Prompt Language interpreter
 
 Usage: spl <script.spl> [options]
+       spl login               authenticate with GitHub Copilot (device flow in the browser)
+       spl logout              remove the credentials saved by 'spl login'
 
 Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
@@ -22,15 +24,13 @@ Options:
   --model <id>            model override (takes precedence over @{model=...})
   --store <file.json>     persist top-level variables in a JSON file
   --store-module <path>   custom variable store: module exporting createStore() -> { load(), save(vars) }
-  --backend <name>        copilot (default) | mock (offline, deterministic)
   --timeout <seconds>     per LLM call timeout (default: 300)
-  --seed <n>              seed requested for LLM calls (default: 0)
   --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
   --check                 parse the script and exit
   -v, --version           print version
   -h, --help              print this help
 
-The script result (the value of 'success', or the failure payload) is written to stdout.
+The script result (the value of 'success' or 'return', or the failure payload) is written to stdout.
 Exit codes: 0 success, 1 uncaught script failure, 2 syntax or usage error.`;
 
 function version(): string {
@@ -41,6 +41,29 @@ function version(): string {
 function usageError(msg: string): never {
     process.stderr.write(`spl: ${msg}\nTry 'spl --help'.\n`);
     process.exit(2);
+}
+
+async function loginCommand(): Promise<number> {
+    try {
+        const status = await login((line) => process.stdout.write(line + '\n'));
+        process.stdout.write(`Authenticated with GitHub Copilot${status.login ? ` as ${status.login}` : ''}.\n`);
+        return 0;
+    } catch (e) {
+        if (!(e instanceof AuthError)) throw e;
+        process.stderr.write(`spl: login failed: ${e.message}\n`);
+        return 1;
+    }
+}
+
+function logoutCommand(): number {
+    try {
+        process.stdout.write(logout() ? 'Saved credentials removed.\n' : 'No saved credentials.\n');
+        return 0;
+    } catch (e) {
+        if (!(e instanceof AuthError)) throw e;
+        process.stderr.write(`spl: ${e.message}\n`);
+        return 1;
+    }
 }
 
 async function main(): Promise<number> {
@@ -54,9 +77,7 @@ async function main(): Promise<number> {
                 model: { type: 'string' },
                 store: { type: 'string' },
                 'store-module': { type: 'string' },
-                backend: { type: 'string' },
                 timeout: { type: 'string' },
-                seed: { type: 'string' },
                 cwd: { type: 'string' },
                 check: { type: 'boolean' },
                 version: { type: 'boolean', short: 'v' },
@@ -75,6 +96,10 @@ async function main(): Promise<number> {
         process.stdout.write(version() + '\n');
         return 0;
     }
+    if (positionals[0] === 'login' || positionals[0] === 'logout') {
+        if (positionals.length !== 1) usageError(`'${positionals[0]}' takes no arguments`);
+        return positionals[0] === 'login' ? loginCommand() : logoutCommand();
+    }
     if (positionals.length !== 1) usageError('expected exactly one script file');
 
     const level = values['log-level'] ?? 'info';
@@ -83,10 +108,6 @@ async function main(): Promise<number> {
 
     const timeoutSec = Number(values.timeout ?? 300);
     if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) usageError('--timeout must be a positive number');
-    const seed = Number(values.seed ?? 0);
-    if (!Number.isInteger(seed)) usageError('--seed must be an integer');
-    const backendName = values.backend ?? 'copilot';
-    if (backendName !== 'copilot' && backendName !== 'mock') usageError(`invalid --backend '${backendName}'`);
     if (values.store && values['store-module']) usageError('--store and --store-module are mutually exclusive');
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
@@ -117,9 +138,9 @@ async function main(): Promise<number> {
         return usageError((e as Error).message);
     }
 
-    const backend: LlmBackend = backendName === 'mock' ? new MockBackend() : new CopilotBackend({ logger, cwd, timeoutMs: timeoutSec * 1000 });
+    const backend: LlmBackend = new CopilotBackend({ logger, cwd, timeoutMs: timeoutSec * 1000 });
     try {
-        const result = await run(program, { backend, logger, store, cwd, model: values.model, seed });
+        const result = await run(program, { backend, logger, store, cwd, model: values.model });
         if (result.status === 'failure') {
             process.stdout.write(JSON.stringify(result.failure, null, 4) + '\n');
             return 1;

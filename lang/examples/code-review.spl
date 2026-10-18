@@ -9,7 +9,7 @@ let target = './src/restrict.ts'
 let notes = ''
 restrict './src' {
     forbid 'suggesting purely stylistic changes' {
-        notes = think{level='high'} '''
+        let notes = think{level='high'} '''
 Read {target} and review it for security problems and correctness bugs.
 List each finding with its location, why it matters and a suggested fix.'''
     }
@@ -27,7 +27,7 @@ let high = 0
 for f in review.findings {
     assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
     if f.severity == 'high' {
-        high += 1
+        let high += 1
     }
     lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
     lines.append("  - Fix: {f.fix}")

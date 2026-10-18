@@ -17,18 +17,30 @@ afterEach(() => {
 function spl(script: string, ...args: string[]) {
     const file = path.join(dir, 's.spl');
     fs.writeFileSync(file, script);
-    const r = spawnSync(process.execPath, [CLI, file, '--backend', 'mock', ...args], { encoding: 'utf8', cwd: dir });
+    return run([file, ...args]);
+}
+
+function run(args: string[]) {
+    const r = spawnSync(process.execPath, [CLI, ...args], {
+        encoding: 'utf8',
+        cwd: dir,
+        env: { ...process.env, SPL_HOME: path.join(dir, 'spl-home') },
+    });
     return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
 describe('cli', () => {
     it('prints the success value to stdout and logs to stderr', () => {
-        const r = spl(`log('hi')\nlet a = ?'q'\nsuccess a`);
+        const r = spl(`log('hi')\nsuccess 'done'`);
         expect(r.code).toBe(0);
-        expect(r.out).toBe('mock: q\n');
+        expect(r.out).toBe('done\n');
         expect(r.err).toContain('[info] log: hi');
-        expect(r.err).toContain('"temperature":0');
-        expect(r.err).toContain('"seed":0');
+    });
+
+    it('prints the value of a top-level return', () => {
+        const r = spl(`let a = 41\n{\n    return a + 1\n}\nfail 'unreachable'`, '--silent');
+        expect(r.code).toBe(0);
+        expect(r.out).toBe('42\n');
     });
 
     it('prints non-string results as JSON', () => {
@@ -41,9 +53,8 @@ describe('cli', () => {
         expect(r.out).toBe('1\n');
     });
 
-    it('--log-level error hides info logs; debug shows prompts', () => {
-        expect(spl(`log('hi')\nlet a = ?'q'`, '--log-level', 'error').err).toBe('');
-        expect(spl(`let a = ?'q'`, '--log-level', 'debug').err).toContain('[debug] llm request');
+    it('--log-level error hides info logs', () => {
+        expect(spl(`log('hi')\nsuccess 1`, '--log-level', 'error').err).toBe('');
     });
 
     it('prints the failure payload to stdout and exits non-zero', () => {
@@ -67,22 +78,42 @@ describe('cli', () => {
     it('persists variables with --store', () => {
         const store = path.join(dir, 'vars.json');
         spl(`let n = 41`, '--store', store);
-        expect(spl(`n += 1\nsuccess n`, '--store', store).out).toBe('42\n');
+        expect(spl(`let n += 1\nsuccess n`, '--store', store).out).toBe('42\n');
     });
 
     it('supports a pluggable store module', () => {
         const mod = path.join(dir, 'store.mjs');
         fs.writeFileSync(
             mod,
-            `import fs from 'node:fs';\nexport function createStore() { return { load: () => ({ seed: 7 }), save: (v) => fs.writeFileSync(${JSON.stringify(path.join(dir, 'saved.json'))}, JSON.stringify(v)) }; }`,
+            `import fs from 'node:fs';\nexport function createStore() { return { load: () => ({ base: 7 }), save: (v) => fs.writeFileSync(${JSON.stringify(path.join(dir, 'saved.json'))}, JSON.stringify(v)) }; }`,
         );
-        expect(spl(`let r = seed * 6\nsuccess r`, '--store-module', mod).out).toBe('42\n');
-        expect(JSON.parse(fs.readFileSync(path.join(dir, 'saved.json'), 'utf8'))).toEqual({ seed: 7, r: 42 });
+        expect(spl(`let r = base * 6\nsuccess r`, '--store-module', mod).out).toBe('42\n');
+        expect(JSON.parse(fs.readFileSync(path.join(dir, 'saved.json'), 'utf8'))).toEqual({ base: 7, r: 42 });
     });
 
-    it('rejects bad usage', () => {
+    it('rejects bad usage and the removed mock/seed options', () => {
         const r = spawnSync(process.execPath, [CLI], { encoding: 'utf8' });
         expect(r.status).toBe(2);
         expect(spl(`success 1`, '--log-level', 'loud').code).toBe(2);
+        expect(spl(`success 1`, '--backend', 'mock').code).toBe(2);
+        expect(spl(`success 1`, '--seed', '1').code).toBe(2);
+    });
+
+    it('logout removes saved credentials and tolerates their absence', () => {
+        expect(run(['logout']).out).toBe('No saved credentials.\n');
+        const home = path.join(dir, 'spl-home');
+        fs.mkdirSync(home, { recursive: true });
+        fs.writeFileSync(path.join(home, 'credentials.json'), JSON.stringify({ token: 'x' }));
+        expect(run(['logout']).out).toBe('Saved credentials removed.\n');
+        expect(fs.existsSync(path.join(home, 'credentials.json'))).toBe(false);
+        expect(run(['logout', 'extra']).code).toBe(2);
+    });
+
+    it('lists login and logout in the help', () => {
+        const help = run(['--help']).out;
+        expect(help).toContain('spl login');
+        expect(help).toContain('spl logout');
+        expect(help).not.toContain('--backend');
+        expect(help).not.toContain('--seed');
     });
 });

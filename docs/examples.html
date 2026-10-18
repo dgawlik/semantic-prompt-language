@@ -54,8 +54,8 @@ let attempt = 0
 restrict exec 'git' {
     forbid 'wrapping the message in quotes or code fences' {
         while attempt &lt; 3 {
-            attempt += 1
-            msg = shell{command='git diff --staged'} '''
+            let attempt += 1
+            let msg = shell{command='git diff --staged'} '''
 Write a Conventional Commit message for this diff: a subject line of at most 72 characters
 ("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
 Reply with ONLY the message. If the diff is empty reply exactly NO_CHANGES.'''
@@ -103,7 +103,7 @@ Reply as JSON: {{"label": one of {LABELS}, "priority": one of {PRIORITIES}, "rea
             assert r.priority in PRIORITIES "priority must be one of {PRIORITIES}"
             return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
         } except err {
-            problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
+            let problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
             log("issue {issue['id']}: attempt {attempt + 1} failed: {err.reason}")
         }
     }
@@ -116,9 +116,9 @@ for issue in issues {
     let t = triage(issue)
     results.append(t)
     if t['label'] in counts {
-        counts[t['label']] += 1
+        let counts[t['label']] += 1
     } else {
-        counts[t['label']] = 1
+        let counts[t['label']] = 1
     }
 }
 
@@ -164,13 +164,13 @@ Reply as JSON: {{"vendor": str, "number": str, "date": "YYYY-MM-DD", "currency":
         assert type(r.lines) == 'list' and len(r.lines) &gt; 0 'lines must be a non-empty list'
         let computed = 0
         for line in r.lines {
-            computed += line.quantity * line.unit_price
+            let computed += line.quantity * line.unit_price
         }
         assert abs(computed - r.subtotal) &lt; 0.01 "lines add up to {round(computed, 2)} but subtotal is {r.subtotal}"
         assert r.total &gt;= r.subtotal "total {r.total} is smaller than subtotal {r.subtotal}"
-        invoice = r
+        let invoice = r
     } except err {
-        feedback = "Your previous extraction was rejected: {err.reason}. Re-read the document and fix it."
+        let feedback = "Your previous extraction was rejected: {err.reason}. Re-read the document and fix it."
         log("attempt {attempt + 1} rejected: {err.reason}")
     }
 }
@@ -190,7 +190,7 @@ let target = './src/restrict.ts'
 let notes = ''
 restrict './src' {
     forbid 'suggesting purely stylistic changes' {
-        notes = think{level='high'} '''
+        let notes = think{level='high'} '''
 Read {target} and review it for security problems and correctness bugs.
 List each finding with its location, why it matters and a suggested fix.'''
     }
@@ -208,7 +208,7 @@ let high = 0
 for f in review.findings {
     assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
     if f.severity == 'high' {
-        high += 1
+        let high += 1
     }
     lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
     lines.append("  - Fix: {f.fix}")
@@ -234,7 +234,7 @@ let notes = ''
 restrict exec 'git' {
     forbid 'inventing changes that are not in the commit list' {
         enforce 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
-            notes = shell{command='git log --oneline -n 40'} '''
+            let notes = shell{command='git log --oneline -n 40'} '''
 Write release notes for end users from these commits (one per line: hash and subject).
 Rewrite technical subjects into clear user-facing sentences and drop merge/chore noise.'''
         }
@@ -284,10 +284,10 @@ restrict exec 'npm' {
     restrict '.' {
         forbid 'editing or deleting test files, or weakening assertions' {
             while attempt &lt; 3 and not green {
-                attempt += 1
+                let attempt += 1
                 try {
                     shell{command='npm test'} 'Reply with OK'
-                    green = True
+                    let green = True
                 } except err {
                     log("tests failing (round {attempt}): {err.status_code}")
                     think{level='medium'} '''
@@ -336,22 +336,22 @@ try {
     runs
 } except first_run {
     # `runs` is not in the store yet, so this is the first run (the caught payload is dropped again)
-    first_run = None
+    let first_run = None
     let runs = 0
     let history = []
 }
 
-runs += 1
+let runs += 1
 
 let todays = read_file{path='./examples/data/notes.txt'} 'Summarize these notes in one sentence'
 history.append({'run': runs, 'summary': todays})
 if len(history) &gt; 5 {
-    history = history[1:]
+    let history = history[1:]
 }
 
 let trend = ''
 if len(history) &gt; 1 {
-    trend = ?{len='paragraph'} '''
+    let trend = ?{len='paragraph'} '''
 Here are my last journal summaries, oldest first: {history}
 What is changing from run to run? Be concrete.'''
 }

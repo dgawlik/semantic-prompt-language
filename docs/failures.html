@@ -120,7 +120,7 @@ Reply as JSON: {{"label": one of {LABELS}}}'''
             assert r.label in LABELS "label must be one of {LABELS}"
             return r
         } except err {
-            problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
+            let problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
             log("attempt {attempt + 1} failed: {err.reason}")
         }
     }

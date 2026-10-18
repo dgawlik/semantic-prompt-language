@@ -18,10 +18,9 @@ export interface LlmRequest {
     model?: string;
     reasoningEffort?: ReasoningLevel;
     showReasoning: boolean;
-    sampling: { temperature: number; seed: number };
     restrictions: Restrictions;
     tools: ToolHost;
-    /** For write_file without `content`: the LLM supplies the content, these params are fixed by the script. */
+    /** For tools the script left parameters out of: the LLM calls the tool itself, these params are fixed by the script. */
     pinned?: { tool: ToolName; params: Record<string, string> };
 }
 

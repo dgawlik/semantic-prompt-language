@@ -12,10 +12,10 @@ restrict exec 'npm' {
     restrict '.' {
         forbid 'editing or deleting test files, or weakening assertions' {
             while attempt < 3 and not green {
-                attempt += 1
+                let attempt += 1
                 try {
                     shell{command='npm test'} 'Reply with OK'
-                    green = True
+                    let green = True
                 } except err {
                     log("tests failing (round {attempt}): {err.status_code}")
                     think{level='medium'} '''

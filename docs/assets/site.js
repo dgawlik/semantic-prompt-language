@@ -47,7 +47,7 @@
 
   /* ---------- syntax highlighting ---------- */
   var KEYWORDS = "let if elif else for in while def return try except assert fail success enforce forbid restrict break continue pass and or not fs net exec".split(" ");
-  var TOOLS = "read_file write_file web_fetch shell".split(" ");
+  var TOOLS = "read_file write_file web_fetch web_search shell".split(" ");
   var CONSTS = ["True", "False", "None"];
   var BUILTINS = "len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log".split(" ");
   var MODS = "len fmt level show path content url command model".split(" ");

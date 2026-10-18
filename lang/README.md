@@ -9,22 +9,29 @@ browser, or publish `docs/` with GitHub Pages) for guides and reference.
 
 ```
 npm install && npm run build
-node dist/cli.js examples/basics.spl --backend mock      # offline run
-node dist/cli.js examples/live.spl                       # uses your Copilot login
+node dist/cli.js login                                   # once: authenticate with GitHub Copilot
+node dist/cli.js examples/live.spl
 npx file:./lang examples/live.spl                        # npx from a checkout (or `npx spl-lang` once published)
 ```
 
-Requires Node 20+ and, for the default backend, an authenticated GitHub Copilot (e.g. `gh auth login`).
+Requires Node 20+ and an authenticated GitHub Copilot.
 
 ```
 spl <script.spl> [--log-level error|info|debug] [--silent] [--model <id>]
-                 [--store <file.json> | --store-module <module>] [--backend copilot|mock]
-                 [--timeout <s>] [--seed <n>] [--cwd <dir>] [--check]
+                 [--store <file.json> | --store-module <module>]
+                 [--timeout <s>] [--cwd <dir>] [--check]
+spl login          # GitHub device flow: prints a code, you confirm it in the browser
+spl logout         # removes the credentials saved by `spl login`
 ```
 
-* stdout: the value of `success` (strings raw, everything else as JSON) or the failure payload.
-* stderr: logs, including model, reasoning effort, `temperature` and `seed` of every LLM call.
+* stdout: the value of `success` or a top-level `return` (strings raw, everything else as JSON) or the failure payload.
+* stderr: logs, including model and reasoning effort of every LLM call.
 * Exit code: `0` success, `1` uncaught failure, `2` syntax/usage error.
+
+`spl login` does nothing if the runtime is already authenticated (an earlier login, a Copilot CLI / `gh` login or
+`COPILOT_GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_TOKEN`). Otherwise it runs the device flow and saves the token to
+`~/.spl/credentials.json` (override the folder with `SPL_HOME`); scripts use that token automatically. A script that
+needs an LLM and finds no credentials fails with `llm_error` and tells you to run `spl login`.
 
 ## Language at a glance
 
@@ -39,8 +46,14 @@ def fib(n) {
 let joke = ?{len='sentence', fmt='object'} 'A joke about programmers'   # JSON validated and parsed
 let why  = think{level='high', show=True} 'Why is {joke.setup} funny?'
 
+let color = None
 enforce 'Answer in English' {
-    forbid 'profanity' { let a = ?'Say hi' }
+    forbid 'profanity' { let color = ?{len='word'} 'Your favorite color?' }   # results leave the block
+}
+
+{                                                      # a bare block is a nested scope
+    let color = 'Red'                                  # shadows the outer variable
+    log(color)
 }
 
 restrict './out' {                                    # also: restrict net 'host,..' / restrict exec 'git,npm'
@@ -48,32 +61,46 @@ restrict './out' {                                    # also: restrict net 'host
 }
 
 try { assert fib(5) == 4 'wrong' } except err { log(err.reason) }
-success {'joke': joke, 'why': why}
+success {'joke': joke, 'why': why, 'color': color}
 ```
 
 Decisions worth knowing (the PRD leaves them open):
 
-* **Blocks use braces**, statements end at a newline. `let` binds in the enclosing function scope (not per block);
-  `x = ...` reassigns an existing variable.
+* **Blocks use braces**, statements end at a newline.
+* **Every modification of a variable starts with `let`**: `let x = 1`, `let x += 1`, `let d['k'] = 2`, `let d.k = 3`.
+  A bare `x = 1` is a syntax error.
+* **Scoping.** `let NAME = ...` binds in the current scope. Bare `{ ... }` blocks and function bodies open a new scope,
+  so `let` there shadows an outer variable and the outer one is untouched. `if`/`elif`/`else`, `for`, `while`,
+  `try`/`except`, `enforce`, `forbid` and `restrict` bodies share the enclosing scope, so `let` inside them updates the
+  enclosing variable: this is how the answer of an LLM call leaves an `enforce`/`forbid`/`restrict` block. A function
+  cannot rebind its caller's variables (use a list or dict to share state); names are read through all enclosing scopes.
+* **`return` exits immediately** from any scope: the innermost function, or the whole script when used at the top level
+  (like `success`). `break`/`continue` still belong to loops.
+* **`?` is a prefix operator**: `?'a' + b` is `(?'a') + b`, `-?'n'` is `-(?'n')`.
+* **LLM commands have defaults and braces are optional**: `?'q'`, `think 'q'` (level `medium`), and tools without
+  parameters, e.g. `read_file 'Read notes.txt and summarize it'`.
 * **Every string interpolates `{expr}`**. Write `{{`/`}}` or `\{`/`\}` for literal braces, or use a raw string
   `r'{"a": 1}'`. Values are substituted as is: strings raw, `True`/`False`/`None`, lists and dicts as JSON.
-* Tool calls (`read_file`, `write_file`, `web_fetch`, `shell`) run in the runtime first (restriction-checked); the
-  output plus your instructions go to the LLM and the LLM answer is the value. `write_file` without `content` lets the
-  LLM write the file (the path is fixed by the script).
+* Tool calls (`read_file`, `write_file`, `web_fetch`, `web_search`, `shell`): when the script supplies every parameter
+  the tool needs, the runtime runs it first (restriction-checked), and the output plus your instructions go to the LLM
+  whose answer is the value. When a parameter is missing (`read_file 'summarize notes.txt'`,
+  `write_file{path='a.txt'} 'write a haiku'`, `web_search 'latest Node.js LTS'`) the LLM calls the tool itself with the
+  parameters you gave kept fixed. `web_search` queries DuckDuckGo and counts as network access for `restrict net`.
 * Builtins: `len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys
   values items json_parse json_stringify log`, plus Python-style string/list/dict methods. `log(...)` writes to stderr.
-* Unknown modifiers/values, `break` outside loops, `return` outside functions, `try` without `except`, etc. are syntax
-  errors (exit code 2).
+* Unknown modifiers/values, `break` outside loops, `try` without `except`, a modification without `let`, etc. are
+  syntax errors (exit code 2).
 
 ## Restrictions
 
 Two layers: the LLM is told about active restrictions in the prompt, and the runtime enforces them. The LLM only gets
-the four runtime tools (`read_file`, `write_file`, `web_fetch`, `shell`); every call is checked against the active
-`restrict` scopes and any other Copilot permission request is rejected. A violation raises a
+the five runtime tools (`read_file`, `write_file`, `web_fetch`, `web_search`, `shell`); every call is checked against
+the active `restrict` scopes and any other Copilot permission request is rejected. A violation raises a
 `restriction_violation` failure (catchable with `try/except`).
 
 * Paths are canonicalized (symlinks resolved, `..` removed) relative to `--cwd` before the check.
-* `net` matches exact hosts (and `*.example.com` wildcards); redirects are re-checked on every hop.
+* `net` matches exact hosts (and `*.example.com` wildcards); redirects are re-checked on every hop. `web_search`
+  needs `html.duckduckgo.com` to be allowed.
 * `exec` matches the executable name. While any restriction is active, `shell` accepts only simple commands (no
   `&|;<>` redirects, substitution or chaining) so the check is exact; path-like and URL arguments are also checked
   against `fs`/`net`. This is best effort for programs that touch files or the network on their own.
@@ -81,10 +108,9 @@ the four runtime tools (`read_file`, `write_file`, `web_fetch`, `shell`); every 
 
 ## Reproducibility
 
-Control flow, arithmetic and interpolation are deterministic. The Copilot SDK currently exposes no `temperature` or
-`seed` setting, so the runtime requests `temperature=0`/`seed` (`--seed`), cannot apply them, and logs exactly that.
-`think` levels map to the SDK reasoning effort; if the selected model does not support it a warning is logged and the
-model default is used. Guard against variance with `assert` and `fmt='object'`.
+Control flow, arithmetic and interpolation are deterministic. The Copilot SDK has no `temperature` or `seed` setting,
+so the language has none either. `think` levels map to the SDK reasoning effort; if the selected model does not support
+it a warning is logged and the model default is used. Guard against variance with `assert` and `fmt='object'`.
 
 ## Variable store
 
@@ -93,8 +119,8 @@ model default is used. Guard against variance with `assert` and `fmt='object'`.
 
 ## Examples
 
-All in [examples/](examples); run from the project root, `--cwd <dir>` points a script at another project. The retry logic
-of `triage-issues` and `extract-invoice` is covered by `tests/examples.test.ts`.
+All in [examples/](examples); run from the project root, `--cwd <dir>` points a script at another project. The example
+syntax is checked by `tests/examples.test.ts`; `triage-issues` is also run on Copilot there.
 
 | Script | Shows |
 |--------|-------|
@@ -112,7 +138,10 @@ of `triage-issues` and `extract-invoice` is covered by `tests/examples.test.ts`.
 ## Develop
 
 ```
-npm test          # builds, then runs parser, interpreter, restriction and CLI tests (offline, mock backend)
+npm test          # builds, then runs parser, interpreter, restriction and CLI tests, plus live tests on Copilot
 ```
+
+The live tests (`tests/live.test.ts`, one example in `tests/examples.test.ts`) call the real GitHub Copilot service and
+are skipped automatically when the runtime is not authenticated: run `spl login` first to include them.
 
 The VS Code extension (syntax highlighting, snippets) lives in `../vscode`.

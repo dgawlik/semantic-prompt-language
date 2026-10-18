@@ -55,9 +55,9 @@ for i, v in enumerate(['a']) { continue }
 while False { break }
 let s = 'a{x + 1}b'[1:2]
 let t = x if x else None
-x += 1
-d['k'] = 2
-d.k = 3
+let x += 1
+let d['k'] = 2
+let d.k = 3
 let multi = {
     'a': 1,
     'b': [1, 2,
@@ -65,6 +65,27 @@ let multi = {
 }
 `);
         expect(p.body.length).toBeGreaterThan(8);
+    });
+
+    it('accepts tools with partial or no parameters and web_search', () => {
+        parse(`read_file{path='x'} 'y'\nread_file{} 'y'\nread_file 'y'\nwrite_file{path='a'} 'haiku'\nweb_search{query='spl'} 'top hit'\nweb_search 'news'\nshell 'list files'`);
+    });
+
+    it('parses ? as a prefix operator at unary precedence', () => {
+        const p = parse(`let a = ?'x' + 'y'\nlet b = -?{len='word'} 'n'\nlet c = not ?'q'`);
+        const first = p.body[0] as { value: { t: string; l: { t: string } } };
+        expect(first.value.t).toBe('binary');
+        expect(first.value.l.t).toBe('ask');
+        expect((p.body[1] as { value: { t: string; e: { t: string } } }).value).toMatchObject({ t: 'unary', e: { t: 'ask' } });
+    });
+
+    it('parses scope blocks, nested shadowing and top-level return', () => {
+        const p = parse(`let color = 'Blue'\n{\n    let color = 'Red'\n    log(color)\n}\nreturn color`);
+        expect(p.body.map((s) => s.t)).toEqual(['let', 'block', 'return']);
+    });
+
+    it('accepts break and continue only in loops, but return anywhere', () => {
+        parse(`if True { return 1 }\nfor i in [1] { { return i } }\nrestrict './x' { enforce 'a' { return } }`);
     });
 
     it('accepts else/except on the next line', () => {
@@ -89,21 +110,30 @@ describe('parser: strict syntax errors', () => {
 
     it('rejects bad tool calls', () => {
         bad(`read_file{file='x'} 'y'`, /unknown parameter 'file'/);
-        bad(`read_file{} 'y'`, /requires parameter 'path'/);
-        bad(`read_file 'y'`, /requires parameters/);
+        bad(`read_file{path='a', path='b'} 'y'`, /duplicate parameter/);
+        bad(`web_search{url='x'} 'y'`, /unknown parameter 'url'/);
         bad(`shell{command='ls'}`, /requires a prompt/);
+        bad(`read_file`, /requires a prompt/);
+    });
+
+    it('rejects modifications without let and the removed postfix form', () => {
+        bad(`x = 1`, /modified with 'let'/);
+        bad(`x += 1`, /modified with 'let'/);
+        bad(`d.k = 1`, /modified with 'let'/);
+        bad(`let x`, /expected '=' after the target/);
+        bad(`let 1 = 2`, /expected a variable name/);
+        bad(`let f() = 2`, /invalid assignment target/);
+        bad(`'x' ?`, /end of statement/);
     });
 
     it('rejects structural mistakes', () => {
         bad(`try { pass }`, /requires an 'except/);
         bad(`break`, /outside of a loop/);
-        bad(`return 1`, /outside of a function/);
         bad(`def f() { while True { def g() { break } } }`, /outside of a loop/);
         bad(`pass\n@{model='x'}`, /only allowed at the top/);
         bad(`@{colour='x'}`, /unknown directive/);
         bad(`@{model=x}`, /quoted string/);
         bad(`let if = 1`, /reserved word/);
-        bad(`1 = 2`, /invalid assignment target/);
         bad(`let a = 1 2`, /end of statement/);
         bad(`let a = 'unterminated`, /unterminated string/);
         bad(`let a = 'x {1 +} y'`, /interpolation|unexpected/);

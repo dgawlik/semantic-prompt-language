@@ -13,9 +13,10 @@ function decide(request: object, restrictions: Restrictions) {
 }
 
 describe('Copilot permission layer (hard enforcement)', () => {
-    it('approves only the four runtime tools', () => {
+    it('approves only the five runtime tools', () => {
         const none = new Restrictions(cwd);
         expect(decide({ kind: 'custom-tool', toolName: 'read_file' }, none).result.kind).toBe('approve-once');
+        expect(decide({ kind: 'custom-tool', toolName: 'web_search' }, none).result.kind).toBe('approve-once');
         expect(decide({ kind: 'custom-tool', toolName: 'other' }, none).result.kind).toBe('reject');
         expect(decide({ kind: 'mcp', toolName: 'x' }, none).result.kind).toBe('reject');
     });

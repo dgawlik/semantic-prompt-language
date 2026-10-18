@@ -31,7 +31,7 @@ export interface ThinkMods {
     show?: boolean;
 }
 
-export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'shell';
+export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'web_search' | 'shell';
 export type RestrictKind = 'fs' | 'net' | 'exec';
 
 export type AssignTarget =
@@ -45,8 +45,8 @@ interface Base {
 
 export type Stmt = Base &
     (
-        | { t: 'let'; name: string; value: Expr }
-        | { t: 'assign'; target: AssignTarget; op: '=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%='; value: Expr }
+        | { t: 'let'; target: AssignTarget; op: '=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%='; value: Expr }
+        | { t: 'block'; body: Stmt[] }
         | { t: 'expr'; e: Expr }
         | { t: 'if'; branches: { cond: Expr; body: Stmt[] }[]; orelse?: Stmt[] }
         | { t: 'for'; vars: string[]; iter: Expr; body: Stmt[] }

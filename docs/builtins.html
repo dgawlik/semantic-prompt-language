@@ -125,7 +125,7 @@
 <pre><code class="language-spl">
 let counts = {}
 for t in results {
-    if t['label'] in counts { counts[t['label']] += 1 } else { counts[t['label']] = 1 }
+    if t['label'] in counts { let counts[t['label']] += 1 } else { let counts[t['label']] = 1 }
 }
 
 let lines = []

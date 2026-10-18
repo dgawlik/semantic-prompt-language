@@ -8,22 +8,22 @@ try {
     runs
 } except first_run {
     # `runs` is not in the store yet, so this is the first run (the caught payload is dropped again)
-    first_run = None
+    let first_run = None
     let runs = 0
     let history = []
 }
 
-runs += 1
+let runs += 1
 
 let todays = read_file{path='./examples/data/notes.txt'} 'Summarize these notes in one sentence'
 history.append({'run': runs, 'summary': todays})
 if len(history) > 5 {
-    history = history[1:]
+    let history = history[1:]
 }
 
 let trend = ''
 if len(history) > 1 {
-    trend = ?{len='paragraph'} '''
+    let trend = ?{len='paragraph'} '''
 Here are my last journal summaries, oldest first: {history}
 What is changing from run to run? Be concrete.'''
 }

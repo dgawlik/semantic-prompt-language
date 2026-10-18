@@ -5,7 +5,7 @@ import { LlmError, buildPrompt, parseObjectResponse, type Constraint, type LlmBa
 import type { Logger } from './logger.js';
 import { Restrictions, makeRestriction } from './restrict.js';
 import { MemoryStore, type VariableStore } from './store.js';
-import { ToolHost } from './tools.js';
+import { ToolHost, TOOL_SPECS } from './tools.js';
 import {
     compareValues,
     equals,
@@ -32,7 +32,6 @@ export interface RunOptions {
     cwd?: string;
     /** Overrides the `@{model=...}` directive. */
     model?: string;
-    seed?: number;
     maxCallDepth?: number;
 }
 
@@ -40,9 +39,7 @@ export type RunResult =
     | { status: 'success'; value: Value; hasValue: boolean }
     | { status: 'failure'; failure: FailurePayload };
 
-type Signal = { k: 'break' } | { k: 'continue' } | { k: 'return'; v: Value };
-
-const TEMPERATURE = 0;
+type Signal = { k: 'break' } | { k: 'continue' } | { k: 'return'; v: Value; hasValue: boolean };
 
 export async function run(program: Program, opts: RunOptions): Promise<RunResult> {
     return new Interpreter(program, opts).run();
@@ -54,7 +51,6 @@ class Interpreter {
     private readonly store: VariableStore;
     private readonly cwd: string;
     private readonly model?: string;
-    private readonly seed: number;
     private readonly maxDepth: number;
     private constraints: Constraint[] = [];
     private restrictions: Restrictions;
@@ -67,7 +63,6 @@ class Interpreter {
         this.cwd = opts.cwd ?? process.cwd();
         this.store = opts.store ?? new MemoryStore();
         this.model = opts.model ?? program.directives.model;
-        this.seed = opts.seed ?? 0;
         this.maxDepth = opts.maxCallDepth ?? 200;
         this.restrictions = new Restrictions(this.cwd);
         this.builtins = makeBuiltins({ log: (m) => opts.logger.info(`log: ${m}`) });
@@ -78,7 +73,8 @@ class Interpreter {
         try {
             for (const [k, v] of Object.entries(this.store.load())) this.globals.vars.set(k, v);
             const signal = await this.execBlock(this.program.body, this.globals);
-            if (signal) throw runtimeError(`'${signal.k}' outside of ${signal.k === 'return' ? 'a function' : 'a loop'}`);
+            if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
+            if (signal) throw runtimeError(`'${signal.k}' outside of a loop`);
             return { status: 'success', value: null, hasValue: false };
         } catch (e) {
             if (e instanceof SuccessSignal) return { status: 'success', value: e.value as Value, hasValue: true };
@@ -109,16 +105,6 @@ class Interpreter {
         throw runtimeError(`name '${name}' is not defined`);
     }
 
-    private assignName(name: string, value: Value, env: Env): void {
-        for (let e: Env | undefined = env; e; e = e.parent) {
-            if (e.vars.has(name)) {
-                e.vars.set(name, value);
-                return;
-            }
-        }
-        throw runtimeError(`cannot assign to undeclared variable '${name}' (declare it with 'let')`);
-    }
-
     // ---- statements ----------------------------------------------------
 
     private async execBlock(stmts: Stmt[], env: Env): Promise<Signal | undefined> {
@@ -144,11 +130,10 @@ class Interpreter {
     private async execStmtInner(s: Stmt, env: Env): Promise<Signal | undefined> {
         switch (s.t) {
             case 'let':
-                env.vars.set(s.name, await this.eval(s.value, env));
+                await this.execLet(s.target, s.op, s.value, env);
                 return;
-            case 'assign':
-                await this.execAssign(s.target, s.op, s.value, env);
-                return;
+            case 'block':
+                return this.execBlock(s.body, { vars: new Map(), parent: env });
             case 'expr':
                 await this.eval(s.e, env);
                 return;
@@ -159,7 +144,7 @@ class Interpreter {
             case 'continue':
                 return { k: 'continue' };
             case 'return':
-                return { k: 'return', v: s.value ? await this.eval(s.value, env) : null };
+                return { k: 'return', v: s.value ? await this.eval(s.value, env) : null, hasValue: s.value !== undefined };
             case 'if': {
                 for (const b of s.branches) {
                     if (truthy(await this.eval(b.cond, env))) return this.execBlock(b.body, env);
@@ -249,13 +234,14 @@ class Interpreter {
         vars.forEach((v, i) => env.vars.set(v, item[i]));
     }
 
-    private async execAssign(target: AssignTarget, op: string, valueExpr: Expr, env: Env): Promise<void> {
+    private async execLet(target: AssignTarget, op: string, valueExpr: Expr, env: Env): Promise<void> {
         const compute = async (current: () => Value): Promise<Value> => {
             const rhs = await this.eval(valueExpr, env);
             return op === '=' ? rhs : this.binary(op.slice(0, -1), current(), rhs);
         };
         if (target.t === 'name') {
-            this.assignName(target.name, await compute(() => this.lookup(target.name, env)), env);
+            // Binds in the current scope, which is what lets a nested block shadow an outer variable.
+            env.vars.set(target.name, await compute(() => this.lookup(target.name, env)));
             return;
         }
         const obj = await this.eval(target.obj, env);
@@ -517,7 +503,6 @@ class Interpreter {
             model: this.model,
             reasoningEffort: c.effort,
             showReasoning: c.show ?? false,
-            sampling: { temperature: TEMPERATURE, seed: this.seed },
             restrictions: this.restrictions,
             tools: new ToolHost(this.restrictions, this.cwd),
             pinned: c.pinned,
@@ -546,12 +531,14 @@ class Interpreter {
         const instructions = str(await this.eval(instrExpr, env));
         const host = new ToolHost(this.restrictions, this.cwd);
 
-        if (tool === 'write_file' && !('content' in params)) {
-            this.restrictions.checkPath(params.path, 'write');
+        // When the script leaves a required parameter out, the LLM calls the tool itself with the fixed ones pinned.
+        if (TOOL_SPECS[tool].required.some((p) => !(p in params))) {
+            if (tool === 'write_file' && params.path !== undefined) this.restrictions.checkPath(params.path, 'write');
+            const fixed = Object.keys(params).length ? ` with these fixed parameters (set by the script): ${JSON.stringify(params)}` : '';
             return this.callLlm({
                 kind: 'tool',
-                prompt: `Use the write_file tool to write the file at path "${params.path}" (the path is fixed by the script). Instructions: ${instructions}`,
-                pinned: { tool, params: { path: params.path } },
+                prompt: `Use the ${tool} tool${fixed}. Instructions: ${instructions}`,
+                pinned: { tool, params },
             });
         }
 

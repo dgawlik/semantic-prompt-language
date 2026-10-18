@@ -14,13 +14,13 @@
 
 <div class="eyebrow">Introduction</div>
 <h1>Getting started</h1>
-<p class="lead">From a fresh checkout to a running script in a few minutes. You don't need a Copilot login for the first run &mdash; the offline mock backend is enough.</p>
+<p class="lead">From a fresh checkout to a running script in a few minutes. Syntax checks work offline; running LLM commands needs a one-time <code>spl login</code>.</p>
 
 <h2 id="requirements">Requirements</h2>
 <ul>
   <li><strong>Node.js 20 or newer.</strong></li>
-  <li>For the default backend: an authenticated GitHub Copilot, for example via <code>gh auth login</code>.</li>
-  <li>Not needed for <code>--backend mock</code> or <code>--check</code>.</li>
+  <li>An authenticated GitHub Copilot: run <code>spl login</code> once (see <a href="cli.html#login">Authentication</a>).</li>
+  <li>Not needed for <code>--check</code> or for scripts without LLM commands.</li>
 </ul>
 
 <h2 id="install">Install &amp; build</h2>
@@ -38,11 +38,11 @@ npm run build
 <pre><code class="language-bash">
 node dist/cli.js examples/basics.spl --check
 </code></pre></li>
-  <li><strong>Run it offline.</strong> The mock backend returns deterministic placeholder answers, so control flow and validation can be tested anywhere.
+  <li><strong>Log in to Copilot.</strong> Once per machine; it opens GitHub's device flow (a code you confirm in the browser).
 <pre><code class="language-bash">
-node dist/cli.js examples/basics.spl --backend mock
+node dist/cli.js login
 </code></pre></li>
-  <li><strong>Run it against Copilot.</strong> Without <code>--backend</code> the Copilot SDK is used with your login.
+  <li><strong>Run it against Copilot.</strong> The Copilot SDK is used with your login.
 <pre><code class="language-bash">
 node dist/cli.js examples/live.spl
 </code></pre></li>
@@ -55,7 +55,7 @@ npx file:./lang examples/live.spl
 <div class="callout">
   <span class="ico">ℹ️</span>
   <div class="body"><span class="title">stdout vs. stderr</span>
-  <p>The value passed to <code>success</code> goes to <strong>stdout</strong> (strings raw, everything else as JSON). Logs &mdash; including model, reasoning effort, <code>temperature</code> and <code>seed</code> of every LLM call &mdash; go to <strong>stderr</strong>, so results can be piped safely.</p></div>
+  <p>The value passed to <code>success</code> (or to a top-level <code>return</code>) goes to <strong>stdout</strong> (strings raw, everything else as JSON). Logs &mdash; including model and reasoning effort of every LLM call &mdash; go to <strong>stderr</strong>, so results can be piped safely.</p></div>
 </div>
 
 <h2 id="hello">Write a script</h2>
@@ -70,8 +70,7 @@ let greeting = ?{len='sentence'} 'Write a greeting for {user.name}, who is {user
 success greeting
 </code></pre>
 <pre><code class="language-bash">
-node dist/cli.js hello.spl --backend mock    # offline
-node dist/cli.js hello.spl --model gpt-5      # real run with a model override
+node dist/cli.js hello.spl --model gpt-5      # run with a model override
 </code></pre>
 
 <div class="callout tip">
@@ -84,7 +83,7 @@ node dist/cli.js hello.spl --model gpt-5      # real run with a model override
 <div class="table-wrap"><table>
 <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
 <tbody>
-<tr><td><code>0</code></td><td>The script finished (reached <code>success</code> or the end).</td></tr>
+<tr><td><code>0</code></td><td>The script finished (reached <code>success</code>, a top-level <code>return</code> or the end).</td></tr>
 <tr><td><code>1</code></td><td>Uncaught failure &mdash; the failure payload is printed to stdout.</td></tr>
 <tr><td><code>2</code></td><td>Syntax error or command-line usage error.</td></tr>
 <tr><td><code>70</code></td><td>Internal interpreter error.</td></tr>
@@ -103,7 +102,7 @@ node dist/cli.js hello.spl --model gpt-5      # real run with a model override
 <h2 id="tests">Run the tests</h2>
 <pre><code class="language-bash">
 cd lang
-npm test     # builds, then runs parser, interpreter, restriction, example and CLI tests (offline, mock backend)
+npm test     # builds, then runs parser, interpreter, restriction and CLI tests, plus live tests on Copilot (skipped without a login)
 </code></pre>
 
 </main>

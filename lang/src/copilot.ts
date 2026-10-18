@@ -1,5 +1,6 @@
 import { CopilotClient, defineTool } from '@github/copilot-sdk';
 import type { CopilotSession, ModelInfo, PermissionRequest, PermissionRequestResult, Tool } from '@github/copilot-sdk';
+import { loadToken } from './auth.js';
 import type { ToolName } from './ast.js';
 import { Failure } from './errors.js';
 import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel } from './llm.js';
@@ -10,16 +11,10 @@ import { TOOL_SPECS } from './tools.js';
 const SYSTEM_MESSAGE = [
     'You are the execution engine of an automated script. Your reply is stored in a variable and used by the program.',
     'Reply with exactly what was asked for: no preamble, no sign-off, no commentary.',
-    'Use the provided tools (read_file, write_file, web_fetch, shell) only when the task needs them. No other tools exist.',
+    'Use the provided tools (read_file, write_file, web_fetch, web_search, shell) only when the task needs them. No other tools exist.',
 ].join(' ');
 
 const TOOL_NAMES = Object.keys(TOOL_SPECS) as ToolName[];
-
-/**
- * The Copilot SDK exposes no temperature/seed settings, so the runtime cannot apply them.
- * The requested values are still reported in the logs together with this fact.
- */
-const SAMPLING_SUPPORTED = false;
 
 export interface CopilotBackendOptions {
     logger: Logger;
@@ -35,10 +30,16 @@ export class CopilotBackend implements LlmBackend {
 
     private async getClient(): Promise<CopilotClient> {
         if (!this.client) {
-            const client = new CopilotClient();
+            const token = loadToken();
+            const client = new CopilotClient(token ? { gitHubToken: token } : {});
             try {
                 await client.start();
+                const status = await client.getAuthStatus();
+                if (!status.isAuthenticated) {
+                    throw new Error(`not authenticated with GitHub Copilot${status.statusMessage ? ` (${status.statusMessage})` : ''}; run 'spl login'`);
+                }
             } catch (e) {
+                await client.stop().catch(() => undefined);
                 throw new LlmError(`cannot start the Copilot runtime: ${(e as Error).message}`);
             }
             this.client = client;
@@ -145,10 +146,6 @@ export class CopilotBackend implements LlmBackend {
                     backend: 'copilot-sdk',
                     model: usedModel ?? req.model ?? 'default',
                     reasoningEffort: effort ?? null,
-                    temperature: SAMPLING_SUPPORTED ? req.sampling.temperature : null,
-                    seed: SAMPLING_SUPPORTED ? req.sampling.seed : null,
-                    requested: req.sampling,
-                    note: SAMPLING_SUPPORTED ? undefined : 'temperature/seed are not supported by the Copilot SDK and were not applied',
                 },
             };
         } finally {
@@ -163,7 +160,7 @@ export class CopilotBackend implements LlmBackend {
 }
 
 /**
- * Hard enforcement at the permission layer. Only the four runtime tools are exposed to the model, so any
+ * Hard enforcement at the permission layer. Only the five runtime tools are exposed to the model, so any
  * other request is denied; requests that would violate a restriction are additionally reported as violations.
  */
 export function decidePermission(
@@ -189,5 +186,5 @@ export function decidePermission(
             return { kind: 'reject', feedback: JSON.stringify(e.payload()) };
         }
     }
-    return { kind: 'reject', feedback: 'Only the read_file, write_file, web_fetch and shell tools may be used.' };
+    return { kind: 'reject', feedback: 'Only the read_file, write_file, web_fetch, web_search and shell tools may be used.' };
 }

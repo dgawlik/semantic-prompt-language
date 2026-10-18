@@ -42,6 +42,12 @@ export const TOOL_SPECS: Record<ToolName, ToolSpec> = {
         properties: { url: { type: 'string', description: 'URL to fetch' } },
         required: ['url'],
     },
+    web_search: {
+        name: 'web_search',
+        description: 'Search the web and return the top results (title, URL and snippet).',
+        properties: { query: { type: 'string', description: 'Search query' } },
+        required: ['query'],
+    },
     shell: {
         name: 'shell',
         description: 'Run a shell command and return its combined output.',
@@ -87,6 +93,49 @@ export function splitCommand(command: string): string[] {
     return args;
 }
 
+const SEARCH_ENDPOINT = 'https://html.duckduckgo.com/html/';
+const MAX_SEARCH_RESULTS = 10;
+
+export interface SearchResult {
+    title: string;
+    url: string;
+    snippet: string;
+}
+
+const decodeEntities = (s: string): string =>
+    s
+        .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+        .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;|&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+
+const plainText = (html: string): string => decodeEntities(html.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
+
+/** Extracts result links from DuckDuckGo's HTML results page; result links are redirects carrying the target in `uddg`. */
+export function parseSearchResults(html: string): SearchResult[] {
+    const results: SearchResult[] = [];
+    const link = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
+    const snippets = [...html.matchAll(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g)];
+    let m: RegExpExecArray | null;
+    let i = 0;
+    while ((m = link.exec(html)) && results.length < MAX_SEARCH_RESULTS) {
+        const href = decodeEntities(m[1]);
+        let url = href;
+        try {
+            const u = new URL(href, 'https://duckduckgo.com');
+            url = u.searchParams.get('uddg') ?? u.href;
+        } catch {
+            // keep the raw href
+        }
+        results.push({ title: plainText(m[2]), url, snippet: snippets[i] ? plainText(snippets[i][1]) : '' });
+        i++;
+    }
+    return results;
+}
+
 const looksLikeUrl = (s: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(s);
 const looksLikePath = (s: string) => /[\\/]/.test(s) || s.startsWith('.') || s.startsWith('~') || /^[a-z]:/i.test(s);
 
@@ -109,6 +158,7 @@ export class ToolHost {
                 return this.writeFile(needString(name, params, 'path'), content);
             }
             case 'web_fetch': return this.webFetch(needString(name, params, 'url'));
+            case 'web_search': return this.webSearch(needString(name, params, 'query'));
             case 'shell': return this.shell(needString(name, params, 'command'));
         }
     }
@@ -151,6 +201,25 @@ export class ToolHost {
             return body;
         }
         throw new Failure('tool_error', `web_fetch '${url}': too many redirects`);
+    }
+
+    /** Searches DuckDuckGo's HTML endpoint (no API key); it is a network call, so `restrict net` applies to it. */
+    private async webSearch(query: string): Promise<string> {
+        const url = this.restrictions.checkUrl(`${SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}`);
+        let html: string;
+        try {
+            const res = await fetch(url, {
+                headers: { 'user-agent': 'Mozilla/5.0 (compatible; spl-lang)' },
+                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            html = await res.text();
+        } catch (e) {
+            throw new Failure('tool_error', `web_search '${query}': ${(e as Error).message}`);
+        }
+        const results = parseSearchResults(html);
+        if (results.length === 0) return `No results for "${query}".`;
+        return results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}${r.snippet ? `\n   ${r.snippet}` : ''}`).join('\n');
     }
 
     private async shell(command: string): Promise<string> {

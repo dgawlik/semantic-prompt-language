@@ -25,7 +25,7 @@ Reply as JSON: {{"label": one of {LABELS}, "priority": one of {PRIORITIES}, "rea
             assert r.priority in PRIORITIES "priority must be one of {PRIORITIES}"
             return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
         } except err {
-            problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
+            let problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
             log("issue {issue['id']}: attempt {attempt + 1} failed: {err.reason}")
         }
     }
@@ -38,9 +38,9 @@ for issue in issues {
     let t = triage(issue)
     results.append(t)
     if t['label'] in counts {
-        counts[t['label']] += 1
+        let counts[t['label']] += 1
     } else {
-        counts[t['label']] = 1
+        let counts[t['label']] = 1
     }
 }
 

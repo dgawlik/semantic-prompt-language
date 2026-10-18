@@ -7,19 +7,24 @@ program        = { directive , NL } , { statement , ( NL | ";" ) } ;
 directive      = "@" , "{" , directive_item , { "," , directive_item } , "}" ;
 directive_item = "model" , "=" , plain_string ;           (* only allowed before the first statement *)
 
-block          = "{" , { statement , ( NL | ";" ) } , "}" ;   (* '{' must be on the same line as its keyword *)
+block          = "{" , { statement , ( NL | ";" ) } , "}" ;   (* '{' must be on the same line as its keyword; as a statement it is a nested scope *)
 
-statement      = let_stmt | assign_stmt | if_stmt | for_stmt | while_stmt | def_stmt
-               | "return" , [ expr ]          (* only inside def *)
+statement      = let_stmt | if_stmt | for_stmt | while_stmt | def_stmt | block
+               | "return" , [ expr ]          (* anywhere: ends the function, or the script when at the top level *)
                | "break" | "continue" | "pass" (* break/continue only inside loops *)
                | try_stmt | assert_stmt | fail_stmt | success_stmt
                | constraint_stmt | restrict_stmt | expr ;
 
-let_stmt       = "let" , NAME , "=" , expr ;
-assign_stmt    = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
+(* Every modification of a variable starts with 'let'; a bare  x = 1  is a syntax error.
+   Scoping: 'let NAME = ...' binds in the current scope. A bare block { ... }, a function body and its parameters
+   open a new scope, so 'let' there shadows an outer variable. if/elif/else, for, while, try/except, enforce, forbid
+   and restrict bodies do NOT open a scope: 'let' inside them updates the enclosing variable, which is how results
+   of LLM commands leave an enforce/forbid/restrict block. Reading a name searches the scopes outwards.
+   Compound forms (let x += 1) read the visible value and bind the result in the current scope. *)
+let_stmt       = "let" , target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
 target         = NAME | postfix "." NAME | postfix "[" expr "]" ;
 
-if_stmt        = "if" , expr , block , { NL* "elif" , expr , block } , [ NL* "else" , block ] ;
+if_stmt         = "if" , expr , block , { NL* "elif" , expr , block } , [ NL* "else" , block ] ;
 for_stmt       = "for" , NAME , { "," , NAME } , "in" , expr , block ;
 while_stmt     = "while" , expr , block ;
 def_stmt       = "def" , NAME , "(" , [ NAME , { "," , NAME } ] , ")" , block ;
@@ -40,7 +45,7 @@ not_expr       = "not" , not_expr | comparison ;
 comparison     = sum , { ( "==" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not" "in" ) , sum } ;
 sum            = term , { ( "+" | "-" ) , term } ;
 term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
-unary          = ( "-" | "+" ) , unary | power ;
+unary          = ( "-" | "+" ) , unary | llm_call | power ;
 power          = postfix , [ "**" , unary ] ;
 postfix        = primary , { call | index | slice | member } ;
 call           = "(" , [ expr , { "," , expr } ] , ")" ;
@@ -50,14 +55,16 @@ member         = "." , NAME ;
 
 primary        = NUMBER | string | "True" | "False" | "None" | NAME
                | "(" , expr , ")" | list | dict
-               | llm_call | think_call | tool_call ;
+               | think_call | tool_call ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
 
-(* LLM commands. The prompt operand is a postfix expression, so  ?'a' + b  is  (?'a') + b *)
+(* LLM commands. '?' is a prefix operator (see 'unary'). The prompt operand is a postfix expression,
+   so  ?'a' + b  is  (?'a') + b  and  -?'n'  is  -(?'n').
+   Every modifier and parameter is optional: ?'q', think 'q' and read_file 'what to do' run with defaults. *)
 llm_call       = "?" , [ ask_mods ] , postfix ;
 think_call     = "think" , [ think_mods ] , postfix ;
-tool_call      = tool_name , tool_params , postfix ;        (* the last operand holds the instructions *)
+tool_call      = tool_name , [ tool_params ] , postfix ;    (* the last operand holds the instructions *)
 
 ask_mods       = "{" , ask_mod , { "," , ask_mod } , "}" ;
 ask_mod        = "len" , "=" , ( "'word'" | "'sentence'" | "'paragraph'" | "'long'" )
@@ -66,12 +73,15 @@ think_mods     = "{" , think_mod , { "," , think_mod } , "}" ;
 think_mod      = "level" , "=" , ( "'low'" | "'medium'" | "'high'" )
                | "show" , "=" , ( "True" | "False" ) ;      (* each modifier at most once *)
 
-tool_name      = "read_file" | "write_file" | "web_fetch" | "shell" ;
-tool_params    = "{" , tool_param , { "," , tool_param } , "}" ;
-tool_param     = "path" , "=" , expr       (* read_file, write_file; required *)
-               | "content" , "=" , expr    (* write_file; optional - the LLM writes the file when omitted *)
-               | "url" , "=" , expr        (* web_fetch; required *)
-               | "command" , "=" , expr ;  (* shell; required *)
+tool_name      = "read_file" | "write_file" | "web_fetch" | "web_search" | "shell" ;
+tool_params    = "{" , [ tool_param , { "," , tool_param } ] , "}" ;
+(* When every parameter the tool needs is given, the runtime runs the tool and passes its output to the instructions.
+   When one is missing, the LLM calls the tool itself; the parameters that were given stay fixed. *)
+tool_param     = "path" , "=" , expr       (* read_file, write_file *)
+               | "content" , "=" , expr    (* write_file; the LLM writes the file when omitted *)
+               | "url" , "=" , expr        (* web_fetch *)
+               | "query" , "=" , expr      (* web_search *)
+               | "command" , "=" , expr ;  (* shell *)
 
 (* Lexical rules *)
 string         = [ "r" ] , ( "'" | '"' | "'''" | '"""' ) , { char | escape | interpolation } , closing_quote ;
@@ -84,4 +94,4 @@ NL             = newline ;
 
 (* Reserved words:
    let if elif else for in while def return try except assert fail success enforce forbid restrict
-   think break continue pass and or not True False None read_file write_file web_fetch shell *)
+   think break continue pass and or not True False None read_file write_file web_fetch web_search shell *)

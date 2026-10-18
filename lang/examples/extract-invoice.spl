@@ -29,13 +29,13 @@ Reply as JSON: {{"vendor": str, "number": str, "date": "YYYY-MM-DD", "currency":
         assert type(r.lines) == 'list' and len(r.lines) > 0 'lines must be a non-empty list'
         let computed = 0
         for line in r.lines {
-            computed += line.quantity * line.unit_price
+            let computed += line.quantity * line.unit_price
         }
         assert abs(computed - r.subtotal) < 0.01 "lines add up to {round(computed, 2)} but subtotal is {r.subtotal}"
         assert r.total >= r.subtotal "total {r.total} is smaller than subtotal {r.subtotal}"
-        invoice = r
+        let invoice = r
     } except err {
-        feedback = "Your previous extraction was rejected: {err.reason}. Re-read the document and fix it."
+        let feedback = "Your previous extraction was rejected: {err.reason}. Re-read the document and fix it."
         log("attempt {attempt + 1} rejected: {err.reason}")
     }
 }
