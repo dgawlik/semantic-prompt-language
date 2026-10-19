@@ -117,6 +117,10 @@ not filesystem paths. Paths and redirection targets remain subject to filesystem
 
 Pass `--mcp .vscode/mcp.json` to load MCP servers in VS Code's JSON format:
 
+See the [MCP configuration reference](../docs/cli.html#mcp) for HTTP/SSE and stdio examples,
+all supported fields, authentication, variable expansion and validation commands.
+Remote servers must explicitly set `"type": "http"` or `"type": "sse"`; omitting it defaults to stdio.
+
 ```json
 {
   "servers": {

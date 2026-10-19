@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "socialtoai": {
+      "url": "https://mcp.socialtoai.com/mcp",
+      "headers": {
+        "Authorization": "Bearer stai_live_AQ9zVkRyGkU7HcJ88mye06w4sdNmciNZ85uqhN2DOMY"
+      }
+    }
+  }
+}

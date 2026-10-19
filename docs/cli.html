@@ -80,7 +80,28 @@ spl script.spl --log-level debug 2&gt; run.log   # keep the full transcript, pip
 </code></pre>
 
 <h2 id="mcp">MCP configuration</h2>
-<p>Pass a JSON file using the VS Code <code>mcp.json</code> shape. MCP tools are available during <code>?</code>, <code>think</code> and tool-backed LLM calls; no separate SPL MCP call syntax is needed.</p>
+<p>Pass a JSON file using the VS Code <code>mcp.json</code> shape: a top-level <code>servers</code> object maps server names to connection settings. You can put several local and remote servers in the same object. MCP tools are available during <code>?</code>, <code>think</code> and tool-backed LLM calls; no separate SPL MCP call syntax is needed.</p>
+
+<h3 id="mcp-http">Remote HTTP or SSE server</h3>
+<p>For a URL-based server, explicitly set <code>"type": "http"</code> (or <code>"sse"</code> for an SSE endpoint). Omitting <code>type</code> defaults to <code>stdio</code>, so a config containing only <code>url</code> and <code>headers</code> is rejected.</p>
+<pre><code class="language-json">
+{
+  "servers": {
+    "socialtoai": {
+      "type": "http",
+      "url": "https://mcp.socialtoai.com/mcp",
+      "headers": {
+        "Authorization": "${env:SOCIALTOAI_AUTHORIZATION}"
+      },
+      "timeout": 30000
+    }
+  }
+}
+</code></pre>
+<p>Keep credentials out of the JSON file. Set <code>SOCIALTOAI_AUTHORIZATION</code> in the environment before running SPL. Its value must be the complete header value required by the service (for example <code>Bearer YOUR_TOKEN</code> if that service requires Bearer authentication). SPL substitutes the value verbatim; it does not add an authentication scheme. Omit <code>headers</code> when the server does not require them.</p>
+
+<h3 id="mcp-stdio">Local stdio server</h3>
+<p>A stdio server runs a local executable that speaks MCP over stdin/stdout. Replace the script path below with your MCP server's entry point. Keep the executable in <code>command</code> and its arguments as separate strings in <code>args</code>, not as one shell command.</p>
 <pre><code class="language-json">
 {
   "servers": {
@@ -89,16 +110,53 @@ spl script.spl --log-level debug 2&gt; run.log   # keep the full transcript, pip
       "command": "node",
       "args": ["${workspaceFolder}/tools/docs-server.js"],
       "env": { "TOKEN": "${env:DOCS_TOKEN}" },
-      "tools": ["search"]
+      "cwd": "${workspaceFolder}",
+      "tools": ["search"],
+      "timeout": 30000
     }
   }
 }
 </code></pre>
+
+<h3 id="mcp-fields">Configuration fields</h3>
+<p>Server names use letters, digits, underscores, dots or hyphens. They are the names used in <code>restrict mcp</code>, not a server's URL or executable name.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Field</th><th>Applies to</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>type</code></td><td>All</td><td><code>"stdio"</code> (default), <code>"http"</code> or <code>"sse"</code>. Always specify it for remote servers.</td></tr>
+<tr><td><code>command</code></td><td>stdio, required</td><td>Non-empty string: executable name or path.</td></tr>
+<tr><td><code>args</code></td><td>stdio, optional</td><td>Array of argument strings, such as <code>["server.js", "--port", "3000"]</code>.</td></tr>
+<tr><td><code>env</code></td><td>stdio, optional</td><td>Object mapping environment variable names to string values.</td></tr>
+<tr><td><code>cwd</code></td><td>stdio, optional</td><td>Working directory string; defaults to SPL's <code>--cwd</code>. Relative values resolve against <code>--cwd</code>.</td></tr>
+<tr><td><code>url</code></td><td>http/sse, required</td><td>Full MCP endpoint URL using <code>http:</code> or <code>https:</code>.</td></tr>
+<tr><td><code>headers</code></td><td>http/sse, optional</td><td>Object mapping HTTP header names to string values.</td></tr>
+<tr><td><code>tools</code></td><td>All, optional</td><td>Array of tool names exposed by the server, for example <code>["search"]</code>. Omitted or <code>["*"]</code> allows all; <code>[]</code> disables the server. This is a configuration allowlist, which <code>restrict mcp</code> can only narrow.</td></tr>
+<tr><td><code>timeout</code></td><td>All, optional</td><td>Positive number of milliseconds per MCP tool call, such as <code>30000</code>. This is separate from SPL's <code>--timeout</code> in seconds per LLM call.</td></tr>
+</tbody></table></div>
+
+<h3 id="mcp-variables">Variables, paths and unsupported settings</h3>
+<ul>
+  <li><code>${workspaceFolder}</code> expands to SPL's <code>--cwd</code>, not the folder containing the JSON file.</li>
+  <li><code>${env:NAME}</code> expands an environment variable in <code>command</code>, <code>args</code>, <code>env</code>, <code>cwd</code>, <code>url</code> or <code>headers</code> values. A missing variable is a configuration error, including during <code>--check</code>.</li>
+  <li>The <code>--mcp</code> filename is relative to the invoking directory, independently of <code>--cwd</code>. The config may be anywhere; <code>.vscode/mcp.json</code> is a convention, not a requirement.</li>
+  <li>Use strict JSON: no comments or trailing commas. Windows backslashes inside JSON strings must be escaped (<code>"C:\\tools\\server.js"</code>); forward slashes avoid this escaping.</li>
+  <li>SPL supports the documented VS Code configuration subset, not every VS Code setting. Interactive <code>inputs</code>, <code>${input:...}</code>, other variable forms, <code>envFile</code> and other unsupported server fields are rejected explicitly.</li>
+</ul>
+
+<h3 id="mcp-usage">Validate, run and restrict access</h3>
+<p>With a script and config in the current directory:</p>
 <pre><code class="language-bash">
-spl script.spl --mcp .vscode/mcp.json
+spl script.spl --mcp mcp.json --check
+spl script.spl --mcp mcp.json
 </code></pre>
-<p>Supported transports: <code>stdio</code> (default; <code>command</code>, optional <code>args</code>, <code>env</code>, <code>cwd</code>), <code>http</code> and <code>sse</code> (<code>url</code>, optional <code>headers</code>). Optional <code>tools</code> restricts exposed tool names (<code>["*"]</code> or omitted means all; <code>[]</code> disables the server), and <code>timeout</code> is a positive number of milliseconds.</p>
-<p>The config filename is relative to the invoking directory. Server working directories default to <code>--cwd</code>, and relative server <code>cwd</code> values resolve against it. <code>${workspaceFolder}</code> expands to <code>--cwd</code>; <code>${env:NAME}</code> expands environment variables in string fields. Interactive VS Code <code>inputs</code>, other variable forms and unsupported server fields are rejected explicitly. JSON comments and trailing commas are not supported.</p>
+<p><code>--check</code> validates script syntax, JSON structure, settings and variable expansion without starting MCP servers or making LLM calls. It does not verify credentials, endpoint reachability, executable availability or tool names.</p>
+<p>Use server names from the JSON keys to limit tool access:</p>
+<pre><code class="language-spl">
+restrict mcp 'socialtoai' {
+    let news = think 'Use the configured socialtoai MCP tools to summarize current news.'
+}
+</code></pre>
+<p><code>restrict mcp 'socialtoai/tool_name'</code> allows just one tool; replace <code>tool_name</code> with an actual tool exposed by that server. A <code>tools</code> list in the config uses unqualified names such as <code>"search"</code>, not <code>"socialtoai/search"</code>.</p>
 <p>Only load trusted configurations: they can launch local programs or connect to remote services. Server names and <code>server/tool</code> selectors in <a href="restrictions.html#mcp"><code>restrict mcp</code></a> are case-sensitive. Without an MCP restriction all configured tools are allowed; no unconfigured MCP server is approved.</p>
 
 <h2 id="store">Variable store</h2>

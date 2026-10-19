@@ -2,7 +2,7 @@
 # spl examples/mcp.spl --mcp <your-mcp.json> --cwd <project>
 # MCP servers are trusted services; scopes limit calls, not their internal I/O.
 
-restrict '.', exec 'git', mcp 'docs/search' {
-    let summary = think 'Use docs/search to find the project setup instructions and summarize them.'
+restrict './pudding', mcp 'socialtoai/search' {
+    let summary = think 'Use socialtoai/search to find current news about pudding. And dump to /pudding foler'
     success summary
 }
