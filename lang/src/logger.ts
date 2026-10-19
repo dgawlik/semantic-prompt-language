@@ -29,4 +29,9 @@ export class Logger {
     debug(msg: string): void {
         this.emit('debug', 'debug', msg);
     }
+
+    /** LLM transcripts are visible at every non-silent level, without labeling them as errors. */
+    llm(msg: string): void {
+        this.emit('error', 'llm', msg);
+    }
 }

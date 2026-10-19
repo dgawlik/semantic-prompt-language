@@ -74,7 +74,7 @@ spl logout         # removes the credentials saved by `spl login`
 ```
 
 * stdout: the value of `success` or a top-level `return` (strings raw, everything else as JSON) or the failure payload.
-* stderr: logs, including model and reasoning effort of every LLM call.
+* stderr: logs, including full LLM requests and raw responses at every non-silent log level (`error`, `info`, `debug`). Model and reasoning effort are included at `info` and `debug`. Prompts and responses may contain sensitive data; use `--silent` to suppress logs.
 * Exit code: `0` success, `1` uncaught failure, `2` syntax/usage error.
 
 `spl login` does nothing if the runtime is already authenticated (an earlier login, a Copilot CLI / `gh` login or

@@ -14,7 +14,7 @@ restrict exec 'npm' {
             while attempt < 3 and not green {
                 let attempt += 1
                 try {
-                    shell{command='npm test'} 'Reply with OK'
+                    shell{command='npm test'} 'Run from lang directory. Reply with OK'
                     let green = True
                 } except err {
                     log("tests failing (round {attempt}): {err.status_code}")

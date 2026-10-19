@@ -507,12 +507,12 @@ class Interpreter {
             tools: new ToolHost(this.restrictions, this.cwd),
             pinned: c.pinned,
         };
-        logger.debug(`llm request (${c.kind}):\n${req.prompt}`);
+        logger.llm(`llm request (${c.kind}):\n${req.prompt}`);
         const started = Date.now();
         try {
             const res = await backend.call(req);
             logger.info(`llm ${c.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
-            logger.debug(`llm response:\n${res.text}`);
+            logger.llm(`llm response:\n${res.text}`);
             return res.text.trim();
         } catch (e) {
             if (e instanceof Failure) throw e;

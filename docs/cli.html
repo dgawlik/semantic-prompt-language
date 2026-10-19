@@ -67,10 +67,11 @@ spl logout
 <div class="table-wrap"><table>
 <thead><tr><th>Level</th><th>Shows</th></tr></thead>
 <tbody>
-<tr><td><code>error</code></td><td>Errors only (for example a variable store that could not be saved).</td></tr>
-<tr><td><code>info</code> (default)</td><td>Warnings, one line per LLM call with its effective parameters and duration, <code>think{show=True}</code> reasoning, <code>log()</code> messages.</td></tr>
-<tr><td><code>debug</code></td><td>Everything above plus the full assembled prompt and the raw response of every call, tool invocations, caught failures and active restrictions.</td></tr>
+<tr><td><code>error</code></td><td>Errors (for example a variable store that could not be saved), plus the full assembled prompt and raw response of every LLM call.</td></tr>
+<tr><td><code>info</code> (default)</td><td>Everything above plus warnings, one line per LLM call with its effective parameters and duration, <code>think{show=True}</code> reasoning, <code>log()</code> messages.</td></tr>
+<tr><td><code>debug</code></td><td>Everything above plus tool invocations, caught failures and active restrictions.</td></tr>
 </tbody></table></div>
+<p>LLM requests and responses use the <code>[llm]</code> tag at every non-silent level. They may contain sensitive data; use <code>--silent</code> to suppress all logs.</p>
 <pre><code class="language-bash">
 spl script.spl --silent                    # result only
 spl script.spl --log-level debug 2&gt; run.log   # keep the full transcript, pipe the result

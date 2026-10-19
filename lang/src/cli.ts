@@ -20,6 +20,7 @@ Usage: spl <script.spl> [options]
 
 Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
+                          All levels include full LLM requests and responses.
   --silent                suppress all logs; only the result is printed
   --model <id>            model override (takes precedence over @{model=...})
   --store <file.json>     persist top-level variables in a JSON file

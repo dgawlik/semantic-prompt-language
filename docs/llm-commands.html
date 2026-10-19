@@ -163,7 +163,7 @@ and write it to the file.'''
   <li>For <code>fmt='object'</code>: an instruction to reply with ONLY valid JSON.</li>
   <li>Your prompt.</li>
 </ol>
-<p>Run with <code>--log-level debug</code> to see the exact text of every request and response on stderr.</p>
+<p>Every non-silent log level (<code>error</code>, <code>info</code>, <code>debug</code>) includes the exact text of every request and response on stderr with the <code>[llm]</code> tag. These logs may contain sensitive data; use <code>--silent</code> to suppress them.</p>
 
 </main>
 <script src="assets/search-index.js"></script>
