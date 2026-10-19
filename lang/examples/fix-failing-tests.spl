@@ -3,28 +3,30 @@
 #
 #   spl examples/fix-failing-tests.spl --cwd <your npm project>
 #
-# Guard rails: only `npm` may be executed, files are limited to the project, and tests are off limits.
-# Every `npm test` run costs one LLM call (the tool output is passed through your instructions).
+# Raw test runs do not call the model. The repair agent is restricted to the project and npm.
+# Avoiding test edits is prompt guidance, not a filesystem write prohibition.
 
 let attempt = 0
 let green = False
 
 
-forbid 'editing or deleting test files, or weakening assertions' {
-    while attempt < 3 and not green {
-        let attempt += 1
-        try {
-            shell{command='cd lang && npm test'} 'Reply with OK'
-            let green = True
-        } except err {
-            log("tests failing (round {attempt}): {err.status_code}")
-            think{level='medium'} '''
+restrict '.', exec 'npm' {
+    avoid 'editing or deleting test files, or weakening assertions' {
+        while attempt < 3 and not green {
+            attempt += 1
+            try {
+                shell('npm test')
+                green = True
+            } except err {
+                log("tests failing (round {attempt}): {err.status_code}")
+                agent{reasoning='medium'} '''
 The test run failed with this output:
 {err.reason}
 
 Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.'''
+                }
+            }
         }
-    }
 }
 
 assert green 'tests are still failing after 3 rounds'

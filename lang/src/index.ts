@@ -3,6 +3,7 @@ export { run, type RunOptions, type RunResult } from './interpreter.js';
 export { Failure, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
 export { Logger, type LogLevel } from './logger.js';
 export { CopilotBackend } from './copilot.js';
+export { RecordingBackend, ReplayBackend } from './recording.js';
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError } from './auth.js';
 export { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';

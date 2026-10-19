@@ -42,11 +42,11 @@
   function span(cls, text) { return '<span class="t-' + cls + '">' + esc(text) + "</span>"; }
 
   /* ---------- syntax highlighting ---------- */
-  var KEYWORDS = "let if elif else for in while def return try except assert fail success enforce forbid restrict break continue pass and or not fs net exec mcp".split(" ");
+  var KEYWORDS = "let if elif else for in while def return try except assert fail success instruct avoid restrict break continue pass and or not fs net exec mcp".split(" ");
   var TOOLS = "read_file write_file web_fetch web_search shell".split(" ");
   var CONSTS = ["True", "False", "None"];
   var BUILTINS = "len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log".split(" ");
-  var MODS = "len fmt level show path content url command model".split(" ");
+  var MODS = "len fmt reasoning show schema repairs model".split(" ");
 
   function highlightString(src, i) {
     var raw = src[i] === "r" && /['"]/.test(src[i + 1] || "");
@@ -101,7 +101,7 @@
       if ((m = /^[A-Za-z_]\w*/.exec(src.slice(i, i + 80)))) {
         var w = m[0], after = src.slice(i + w.length, i + w.length + 2);
         var cls = null;
-        if (w === "think") cls = "llm";
+        if (w === "think" || w === "agent") cls = "llm";
         else if (TOOLS.indexOf(w) >= 0) cls = "tool";
         else if (KEYWORDS.indexOf(w) >= 0) cls = "keyword";
         else if (CONSTS.indexOf(w) >= 0) cls = "const";
@@ -235,7 +235,7 @@
     var header = el("header", { "class": "site-header" });
     header.innerHTML =
       '<button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="drawer">' + ICON_MENU + "</button>" +
-      '<a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">?</span><span>SPL</span><small>v0.1</small></a>' +
+      '<a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">?</span><span>SPL</span><small>v0.3</small></a>' +
       '<nav class="header-nav" aria-label="Primary">' +
       [["getting-started", "Get started"], ["language", "Language"], ["cli", "Reference"], ["examples", "Examples"]].map(function (l) {
         var cur = FLAT.filter(function (p) { return p.id === l[0]; })[0];

@@ -7,27 +7,43 @@
 
 let notes = ''
 
-forbid 'suggesting purely stylistic changes' {
-    let notes = think{level='high'} '''
-List the files in ./src (use a plain command such as `dir src`, no chaining or redirection).
+avoid 'suggesting purely stylistic changes' {
+    restrict './src', exec 'git' {
+        let notes = agent{reasoning='high'} '''
+List source files with `git ls-files src`.
 Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 List each finding with its location, why it matters and a suggested fix.'''
+    }
 }
 
 
-let review = ?{fmt='object'} '''
-Convert this review into JSON:
-{{"findings": [{{"severity": "low"|"medium"|"high", "title": str, "location": str, "fix": str}}]}}
-Use an empty list when there are no findings.
-
-{notes}'''
+let Review = {
+    'type': 'object',
+    'properties': {
+        'findings': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'severity': {'type': 'string', 'enum': ['low', 'medium', 'high']},
+                    'title': {'type': 'string'}, 'location': {'type': 'string'}, 'fix': {'type': 'string'},
+                },
+                'required': ['severity', 'title', 'location', 'fix'],
+                'additionalProperties': False,
+            },
+        },
+    },
+    'required': ['findings'],
+    'additionalProperties': False,
+}
+let review = ?{schema=Review, repairs=2} 'Convert this review into structured findings, using an empty list when there are none: {notes}'
 
 let lines = ["# Review of repository", '']
 let high = 0
 for f in review.findings {
     assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
     if f.severity == 'high' {
-        let high += 1
+        high += 1
     }
     lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
     lines.append("  - Fix: {f.fix}")
@@ -36,7 +52,7 @@ lines.append('')
 lines.append("{len(review.findings)} finding(s), {high} high severity")
 
 restrict './reports' {
-    write_file{path='./reports/review.md', content='\n'.join(lines)} 'Confirm that the report was written'
+    write_file('./reports/review.md', '\n'.join(lines))
 }
 
 if high > 0 {

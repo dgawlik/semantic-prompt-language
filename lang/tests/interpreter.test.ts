@@ -61,7 +61,7 @@ def fact(n) {
 def counter() {
     let cell = [0]
     def add(x) {
-        let cell[0] += x
+        cell[0] += x
         return cell[0]
     }
     add(1)
@@ -74,7 +74,7 @@ for i in range(10) {
     acc.append(i)
 }
 let n = 0
-while n < 3 { let n += 1 }
+while n < 3 { n += 1 }
 success {'fact': fact(5), 'counter': counter(), 'acc': acc, 'n': n}
 `);
         expect(value(result)).toEqual({ fact: 120, counter: 3, acc: [1, 3, 5, 7], n: 3 });
@@ -84,10 +84,10 @@ success {'fact': fact(5), 'counter': counter(), 'acc': acc, 'n': n}
         const { result } = await exec(`
 let l = [10, 20, 30]
 let d = {'a': {'b': 1}}
-let l[0] = 11
-let l[-1] += 1
-let d.a.b += 5
-let d['c'] = 'x'
+l[0] = 11
+l[-1] += 1
+d.a.b += 5
+d['c'] = 'x'
 success [l, d, l[1:], 'hello'[1:3], 'hello'[-1], d.a.b, len(d)]
 `);
         expect(value(result)).toEqual([[11, 20, 31], { a: { b: 6 }, c: 'x' }, [20, 31], 'el', 'o', 6, 2]);
@@ -108,7 +108,7 @@ success [
     it('keeps __proto__ keys harmless', async () => {
         const { result } = await exec(`
 let d = {}
-let d['__proto__'] = {'polluted': True}
+d['__proto__'] = {'polluted': True}
 let e = {}
 success [e.get('polluted', 'clean'), len(d)]
 `);
@@ -117,10 +117,10 @@ success [e.get('polluted', 'clean'), len(d)]
 
     it('reports undefined names', async () => {
         expect(failure((await exec(`success y`)).result).reason).toMatch(/not defined/);
-        expect(failure((await exec(`let z += 1`)).result).reason).toMatch(/not defined/);
+        expect(failure((await exec(`z += 1`)).result).reason).toMatch(/declare a local/);
     });
 
-    it('lets a nested block shadow a variable without touching the outer one', async () => {
+    it('shares function-scoped bindings across nested grouping blocks', async () => {
         const { result } = await exec(`
 let color = 'Blue'
 let seen = []
@@ -136,12 +136,12 @@ let seen = []
 seen.append(color)
 success seen
 `);
-        expect(value(result)).toEqual(['Red', 'Green', 'Red', 'Blue']);
+        expect(value(result)).toEqual(['Red', 'Green', 'Green', 'Green']);
     });
 
-    it('does not leak variables declared in a nested block', async () => {
+    it('keeps variables declared in a grouping block visible', async () => {
         const { result } = await exec(`{ let inner = 1 }\nsuccess inner`);
-        expect(failure(result).reason).toMatch(/not defined/);
+        expect(value(result)).toBe(1);
     });
 
     it('lets function parameters and locals shadow outer variables', async () => {
@@ -156,21 +156,21 @@ success [f('inner'), x]
         expect(value(result)).toEqual(['inner!', 'outer']);
     });
 
-    it('updates the outer variable from enforce, forbid, restrict, if, loop and try bodies', async () => {
+    it('updates the outer variable from instruct, avoid, restrict, if, loop and try bodies', async () => {
         fs.mkdirSync(path.join(dir, 'out'));
         const { result } = await exec(`
 let color = None
 let n = 0
-enforce 'be brief' {
-    forbid 'swearing' {
+instruct 'be brief' {
+    avoid 'swearing' {
         restrict './out' {
             let color = 'blue'
         }
     }
 }
-if True { let n += 1 }
-for i in range(2) { let n += 1 }
-try { let n += 10 } except e { pass }
+if True { n += 1 }
+for i in range(2) { n += 1 }
+try { n += 10 } except e { pass }
 success [color, n]
 `);
         expect(value(result)).toEqual(['blue', 13]);
@@ -180,12 +180,12 @@ success [color, n]
         const { result } = await exec(`
 let r = 0
 try {
-    enforce 'x' {
+    instruct 'x' {
         let r = 1
         fail 'f'
     }
 } except e {
-    let r += 5
+    r += 5
 }
 success r
 `);
@@ -197,7 +197,7 @@ success r
 def find(items) {
     for x in items {
         {
-            enforce 'irrelevant' {
+            instruct 'irrelevant' {
                 try {
                     if x > 2 { return x }
                 } except e { pass }
@@ -220,11 +220,9 @@ success [find([1, 2, 3, 4]), find([1])]
         expect(bare.result).toEqual({ status: 'success', value: null, hasValue: false });
     });
 
-    it('rejects modifications that do not start with let', () => {
-        expect(() => parse(`let x = 1\nx = 2`)).toThrow(/variables are modified with 'let'/);
-        expect(() => parse(`let x = 1\nx += 2`)).toThrow(/variables are modified with 'let'/);
-        expect(() => parse(`let d = {}\nd.k = 2`)).toThrow(/variables are modified with 'let'/);
-        expect(() => parse(`let d = {}\nd['k'] = 2`)).toThrow(/variables are modified with 'let'/);
+    it('accepts assignment to declared locals and collection members', () => {
+        expect(() => parse(`let x = 1\nx = 2\nx += 2`)).not.toThrow();
+        expect(() => parse(`let d = {}\nd.k = 2\nd['k'] = 3`)).not.toThrow();
     });
 
     it('turns runtime errors into catchable failures', async () => {
@@ -292,18 +290,18 @@ describe('restrict enforcement', () => {
     it('blocks explicit tool calls outside the folder', async () => {
         fs.mkdirSync(path.join(dir, 'out'));
         fs.writeFileSync(path.join(dir, 'secret.txt'), 'secret');
-        const bad = await exec(`restrict './out' { let a = read_file{path='./secret.txt'} 'x' }`);
+        const bad = await exec(`restrict './out' { let a = read_file('./secret.txt') }`);
         expect(failure(bad.result)).toMatchObject({ status_code: 'restriction_violation', line: 1 });
     });
 
     it('cannot escape through .. and nested restrictions only narrow', async () => {
         fs.mkdirSync(path.join(dir, 'a', 'b'), { recursive: true });
         fs.writeFileSync(path.join(dir, 'a', 'x.txt'), 'x');
-        const dotdot = await exec(`restrict './a/b' { let v = read_file{path='./a/b/../x.txt'} 'x' }`);
+        const dotdot = await exec(`restrict './a/b' { let v = read_file('./a/b/../x.txt') }`);
         expect(failure(dotdot.result).status_code).toBe('restriction_violation');
-        const widen = await exec(`restrict './a/b' { restrict './a' { let v = read_file{path='./a/x.txt'} 'x' } }`);
+        const widen = await exec(`restrict './a/b' { restrict './a' { let v = read_file('./a/x.txt') } }`);
         expect(failure(widen.result).status_code).toBe('restriction_violation');
-        const narrow = await exec(`restrict './a' { restrict './a/b' { let v = read_file{path='./a/x.txt'} 'x' } }`);
+        const narrow = await exec(`restrict './a' { restrict './a/b' { let v = read_file('./a/x.txt') } }`);
         expect(failure(narrow.result).status_code).toBe('restriction_violation');
         const fine = await exec(`restrict './a' { restrict './a/b' { restrict './a' { let v = 1 } } }`);
         expect(fine.result.status).toBe('success');
@@ -314,7 +312,7 @@ describe('restrict enforcement', () => {
         fs.mkdirSync(path.join(dir, 'outside'));
         fs.writeFileSync(path.join(dir, 'outside', 'secret.txt'), 'secret');
         fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, 'out', 'link'), 'junction');
-        const r = await exec(`restrict './out' { let v = read_file{path='./out/link/secret.txt'} 'x' }`);
+        const r = await exec(`restrict './out' { let v = read_file('./out/link/secret.txt') }`);
         expect(failure(r.result).status_code).toBe('restriction_violation');
     });
 
@@ -324,49 +322,49 @@ describe('restrict enforcement', () => {
         // a junction to an existing folder is followed; a file symlink needs privileges on Windows, so use a junction to a missing dir
         const missing = path.join(dir, 'outside', 'not-yet');
         fs.symlinkSync(missing, path.join(dir, 'out', 'dangling'), 'junction');
-        const r = await exec(`restrict './out' { let v = write_file{path='./out/dangling/x.txt', content='x'} 'x' }`);
+        const r = await exec(`restrict './out' { let v = write_file('./out/dangling/x.txt', 'x') }`);
         expect(failure(r.result).status_code).toBe('restriction_violation');
         expect(fs.existsSync(path.join(missing, 'x.txt'))).toBe(false);
     });
 
     it('blocks path-qualified executables inside restrict exec', async () => {
-        const r = await exec(`restrict exec 'git' { let v = shell{command='./evil/git status'} 'x' }`);
+        const r = await exec(`restrict exec 'git' { let v = shell('./evil/git status') }`);
         expect(failure(r.result).reason).toMatch(/without a path/);
     });
 
     it('blocks network and exec for explicit tools', async () => {
-        const net = await exec(`restrict net 'api.example.com' { let v = web_fetch{url='https://evil.example.org/x'} 'x' }`);
+        const net = await exec(`restrict net 'api.example.com' { let v = web_fetch('https://evil.example.org/x') }`);
         expect(failure(net.result).status_code).toBe('restriction_violation');
-        const exe = await exec(`restrict exec 'npm,git' { let v = shell{command='curl http://x'} 'x' }`);
+        const exe = await exec(`restrict exec 'npm,git' { let v = shell('curl http://x') }`);
         expect(failure(exe.result).status_code).toBe('restriction_violation');
-        const chain = await exec(`restrict exec 'git' { let v = shell{command='git status && curl x'} 'x' }`);
+        const chain = await exec(`restrict exec 'git' { let v = shell('git status && curl x') }`);
         expect(failure(chain.result).status_code).toBe('restriction_violation');
         expect(failure(chain.result).reason).toMatch(/executable 'curl' blocked/);
         const echoBackend = { async call(req: any) { return { text: req.prompt, effective: {} }; }, async close() {} };
-        const allowedChain = await exec(`restrict exec 'node' { let v = shell{command='node -e "process.stdout.write(String(4))" && node -e "process.stdout.write(String(2))"'} 'x'\nsuccess v }`, { backend: echoBackend as any });
+        const allowedChain = await exec(`restrict exec 'node' { let v = shell('node -e "process.stdout.write(String(4))" && node -e "process.stdout.write(String(2))"')\nsuccess v }`, { backend: echoBackend as any });
         expect(value(allowedChain.result)).toContain('42');
-        const pipe = await exec(`restrict '.' { let v = shell{command='node -e "process.stdout.write(String(7*6))"'} 'x'\nsuccess v }`, { backend: echoBackend as any });
+        const pipe = await exec(`restrict '.' { let v = shell('node -e "process.stdout.write(String(7*6))"')\nsuccess v }`, { backend: echoBackend as any });
         expect(value(pipe.result)).toContain('42');
     });
 
     it('blocks web_search outside the allowed hosts', async () => {
-        const r = await exec(`restrict net 'api.example.com' { let v = web_search{query='spl'} 'x' }`);
+        const r = await exec(`restrict net 'api.example.com' { let v = web_search('spl') }`);
         expect(failure(r.result).status_code).toBe('restriction_violation');
     });
 
     it('reports tool errors as tool_error and allows catching restriction violations', async () => {
-        const missing = await exec(`let v = read_file{path='./nope.txt'} 'x'`);
+        const missing = await exec(`let v = read_file('./nope.txt')`);
         expect(failure(missing.result).status_code).toBe('tool_error');
-        const caught = await exec(`restrict './out' { try { let v = read_file{path='./nope.txt'} 'x' } except e { success e.status_code } }`);
+        const caught = await exec(`restrict './out' { try { let v = read_file('./nope.txt') } except e { success e.status_code } }`);
         expect(value(caught.result)).toBe('restriction_violation');
     });
 
     it('write_file refuses paths outside the folder', async () => {
-        const bad = await exec(`restrict './out' { let r = write_file{path='./evil.txt', content='x'} 'Confirm' }`);
+        const bad = await exec(`restrict './out' { let r = write_file('./evil.txt', 'x') }`);
         expect(failure(bad.result).status_code).toBe('restriction_violation');
         expect(fs.existsSync(path.join(dir, 'evil.txt'))).toBe(false);
-        const unpinned = await exec(`restrict './out' { let r = write_file{path='./evil.txt'} 'Write a haiku' }`);
-        expect(failure(unpinned.result).status_code).toBe('restriction_violation');
+        const missingContent = await exec(`write_file('./evil.txt')`);
+        expect(failure(missingContent.result).status_code).toBe('runtime_error');
     });
 
     it('rejects malformed restrict arguments', async () => {
@@ -380,7 +378,7 @@ describe('variable store', () => {
         const file = path.join(dir, 'store.json');
         await exec(`let counter = 1\nlet data = {'a': [1, 2]}\ndef f() { return 1 }`, { store: new JsonFileStore(file) });
         expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ counter: 1, data: { a: [1, 2] } });
-        const second = await exec(`let counter += 1\nsuccess counter`, { store: new JsonFileStore(file) });
+        const second = await exec(`counter += 1\nsuccess counter`, { store: new JsonFileStore(file) });
         expect(value(second.result)).toBe(2);
         expect(JSON.parse(fs.readFileSync(file, 'utf8')).counter).toBe(2);
     });

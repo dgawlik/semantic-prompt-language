@@ -15,7 +15,7 @@
 
 <div class="eyebrow">The language</div>
 <h1>Restrictions</h1>
-<p class="lead"><code>restrict</code> narrows what a block &mdash; and the LLM tools it invokes &mdash; may do. Without it, everything is allowed: a script has the full permissions of the user running the interpreter.</p>
+<p class="lead"><code>restrict</code> narrows raw tools and explicit agent actions. Outside restrictions they are allow-by-default. Generation has no tools at all, and replay further restricts execution to local reads and recorded generation.</p>
 
 <h2 id="forms">The four forms</h2>
 <div class="table-wrap"><table>
@@ -28,22 +28,22 @@
 </tbody></table></div>
 <pre><code class="language-spl">
 restrict './out' {
-    think 'Run the report and write it to ./out/report.md'
+    agent 'Run the report and write it to ./out/report.md'
 }
 
 restrict net 'news.ycombinator.com' {
-    let page = web_fetch{url='https://news.ycombinator.com'} 'List the headlines'
+    let page = web_fetch('https://news.ycombinator.com')
 }
 
 restrict exec 'git' {
-    let diff = shell{command='git diff --staged'} 'Summarize the diff'
+    let diff = shell('git diff --staged')
 }
 </code></pre>
 <p>The argument is an expression evaluating to a comma-separated string (<code>'npm,git'</code>) or a list of strings. An empty list is an error.</p>
 <p>Combine clauses with commas. Each clause defaults to <code>fs</code> if its kind is omitted. All clauses apply together; repeated kinds intersect just like nested blocks. Commas inside strings or lists remain part of that clause's allowlist.</p>
 <pre><code class="language-spl">
 restrict './src', net 'example.com', exec 'git', mcp 'docs/search' {
-    let review = think 'Inspect the source and use docs/search for reference material'
+    let review = agent 'Inspect the source and use docs/search for reference material'
 }
 </code></pre>
 
@@ -54,15 +54,28 @@ restrict './src', net 'example.com', exec 'git', mcp 'docs/search' {
 </div>
 <p>A blocked call raises a <code>restriction_violation</code> failure. It is catchable with <code>try/except</code>:</p>
 <pre><code class="language-spl" data-file="web-digest.spl">
+# Summarize a web page with network access limited to a single host,
+# and prove the sandbox holds by catching a blocked request.
+
 restrict net 'news.ycombinator.com' {
+    let page = web_fetch('https://news.ycombinator.com')
+    let headlines = ? '''
+From this HTML list the 10 top stories as a Markdown bullet list: "- title (domain)".
+Reply with ONLY the list.
+{page}'''
+
+    let themes = ?{len='paragraph'} 'What themes run through these headlines?\n{headlines}'
+
     try {
-        web_fetch{url='https://example.org'} 'Return the page'
+        web_fetch('https://example.org')
         fail 'the request to a second host should have been blocked'
     } except err {
         assert err.status_code == 'restriction_violation' "unexpected failure: {err.reason}"
         log("blocked as expected: {err.reason}")
     }
 }
+
+success "{headlines}\n\n{themes}"
 </code></pre>
 
 <h2 id="nesting">Nesting</h2>
@@ -71,7 +84,7 @@ restrict net 'news.ycombinator.com' {
 restrict exec 'npm' {
     restrict '.' {                       # fs + exec both active
         restrict './src' {               # fs narrowed to ./src (still inside '.')
-            shell{command='npm test'} 'Reply with OK'
+            shell('npm test')
         }
     }
 }
@@ -110,8 +123,9 @@ restrict exec 'npm' {
 <div class="table-wrap"><table>
 <thead><tr><th>Caller</th><th>Checked?</th></tr></thead>
 <tbody>
-<tr><td>Explicit tool call in a script (<code>read_file{…}</code>, <code>shell{…}</code>, …)</td><td><span class="pill ok">yes</span></td></tr>
-<tr><td>Tool calls the model makes during <code>?</code> / <code>think</code> / tool commands</td><td><span class="pill ok">yes</span></td></tr>
+<tr><td>Raw function calls (<code>read_file(...)</code>, <code>shell(...)</code>)</td><td><span class="pill ok">yes</span></td></tr>
+<tr><td>Tool calls during explicit <code>agent</code> operations</td><td><span class="pill ok">yes</span></td></tr>
+<tr><td>Generation (<code>?</code> / <code>think</code>)</td><td>No tools exposed; permission attempts abort the call.</td></tr>
 <tr><td>MCP tools from <code>--mcp</code></td><td><span class="pill ok">configuration and MCP scope checked</span></td></tr>
 <tr><td>Any other Copilot permission request</td><td><span class="pill danger">rejected</span></td></tr>
 <tr><td>Plain SPL code (arithmetic, <code>log</code>, variables)</td><td>nothing to restrict</td></tr>
@@ -120,7 +134,7 @@ restrict exec 'npm' {
 <div class="callout">
   <span class="ico">🔮</span>
   <div class="body"><span class="title">Future direction</span>
-  <p>A deny-by-default permission model is a possible future change. The MVP is allow-by-default.</p></div>
+  <p>Raw tools and agents remain allow-by-default; a global deny-by-default mode is not implemented. Shell command inspection and trusted MCP services are not OS sandboxes.</p></div>
 </div>
 
 </main>

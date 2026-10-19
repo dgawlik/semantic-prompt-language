@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import type { ToolName } from './ast.js';
 import { Failure } from './errors.js';
 import type { Restrictions } from './restrict.js';
@@ -248,9 +249,12 @@ export class ToolHost {
     constructor(
         private readonly restrictions: Restrictions,
         private readonly cwd: string,
+        private readonly replay = false,
+        private readonly raw = false,
     ) {}
 
     async invoke(name: ToolName, params: Record<string, unknown>): Promise<string> {
+        if (this.replay && name !== 'read_file') throw new Failure('restriction_violation', `replay blocks ${name}; only local reads and recorded generation are allowed`);
         switch (name) {
             case 'read_file': return this.readFile(needString(name, params, 'path'));
             case 'write_file': {
@@ -267,7 +271,8 @@ export class ToolHost {
     private async readFile(p: string): Promise<string> {
         const canonical = this.restrictions.checkPath(p, 'read');
         try {
-            return truncate(await fs.readFile(canonical, 'utf8'));
+            const text = await fs.readFile(canonical, 'utf8');
+            return this.raw ? text : truncate(text);
         } catch (e) {
             throw new Failure('tool_error', `read_file '${p}': ${(e as Error).message}`);
         }
@@ -297,7 +302,14 @@ export class ToolHost {
                 current = this.restrictions.checkUrl(new URL(res.headers.get('location')!, current).href);
                 continue;
             }
-            const body = truncate(await res.text());
+            let text: string;
+            try {
+                text = await res.text();
+            } catch (e) {
+                if (!(e instanceof Error)) throw e;
+                throw new Failure('tool_error', `web_fetch '${current.href}': ${e.message}`);
+            }
+            const body = this.raw ? text : truncate(text);
             if (!res.ok) throw new Failure('tool_error', `web_fetch '${current.href}': HTTP ${res.status}\n${body}`);
             return body;
         }
@@ -406,11 +418,14 @@ export class ToolHost {
         return new Promise((resolve, reject) => {
             const child = spawn(command, opts.args ?? [], { cwd: this.cwd, shell: opts.shell, windowsHide: true });
             let out = '';
-            const collect = (d: Buffer) => {
-                if (out.length < MAX_TEXT * 2) out += d.toString('utf8');
+            const collect = (text: string) => {
+                if (this.raw || out.length < MAX_TEXT * 2) out += text;
             };
-            child.stdout.on('data', collect);
-            child.stderr.on('data', collect);
+            for (const stream of [child.stdout, child.stderr]) {
+                const decoder = new StringDecoder('utf8');
+                stream.on('data', (data: Buffer) => collect(decoder.write(data)));
+                stream.on('end', () => collect(decoder.end()));
+            }
             const timer = setTimeout(() => child.kill(), SHELL_TIMEOUT_MS);
             child.on('error', (e) => {
                 clearTimeout(timer);
@@ -418,7 +433,7 @@ export class ToolHost {
             });
             child.on('close', (code, signal) => {
                 clearTimeout(timer);
-                const text = truncate(out);
+                const text = this.raw ? out : truncate(out);
                 if (code === 0) resolve(text);
                 else reject(new Failure('tool_error', `shell: ${signal ? `terminated by ${signal}` : `exit code ${code}`}\n${text}`));
             });

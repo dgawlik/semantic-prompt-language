@@ -1,17 +1,16 @@
 
 # Translate a document into several languages, one file each, without leaving the project folder.
-# The LLM reads the source and writes each output itself (the output path is pinned by the script).
+# The script reads once and writes exact model responses; generation has no tools.
 
 let locales = {'de': 'German', 'pl': 'Polish', 'ja': 'Japanese'}
 let written = []
 
 restrict '.' {
-    enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
+    let source = read_file('./examples/data/product-update.md')
+    instruct 'Keep Markdown formatting, URLs and code identifiers untranslated' {
         for code, language in items(locales) {
-            think{level='medium'} '''
-Read ./examples/data/product-update.md, translate it to {language}, and write the translation to the file.'''
-            write_file{path="./out/translations/product-update.{code}.md"} '''
-Read ./examples/data/product-update.md, translate it to {language}, and write the translation to the file.'''
+            let translation = ?{reasoning='medium'} 'Translate this document to {language}: {source}'
+            write_file("./out/translations/product-update.{code}.md", translation)
             written.append("./out/translations/product-update.{code}.md")
         }
     }

@@ -9,17 +9,17 @@ def fib(n) {
 let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
 
 # deliberate before answering
-let why = think{level='high'} 'Why is {joke.setup} funny?'
+let why = think{reasoning='high'} 'Why is {joke.setup} funny?'
 
-# rules for every call inside the block
+# Prompt guidance for calls inside the block (not runtime validation).
 let hi = None
-enforce 'Answer in English' {
-    forbid 'profanity' { let hi = ?'Say hi' }
+instruct 'Answer in English' {
+    avoid 'profanity' { let hi = ?'Say hi' }
 }
 
-# the model may only touch ./out
+# Raw I/O does not call the model.
 restrict './out' {
-    write_file{path='./out/a.txt', content='{fib(10)}'} 'Confirm'
+    write_file('./out/a.txt', '{fib(10)}')
 }
 
 try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }

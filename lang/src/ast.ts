@@ -17,18 +17,11 @@ export type Expr =
     | { t: 'member'; obj: Expr; name: string }
     | { t: 'index'; obj: Expr; index: Expr }
     | { t: 'slice'; obj: Expr; lo?: Expr; hi?: Expr }
-    | { t: 'ask'; mods: AskMods; prompt: Expr }
-    | { t: 'think'; mods: ThinkMods; prompt: Expr }
-    | { t: 'tool'; tool: ToolName; params: Record<string, Expr>; instructions: Expr };
+    | { t: 'ask' | 'think' | 'agent'; mods: Record<string, Expr>; prompt: Expr };
 
 export interface AskMods {
     len?: 'word' | 'sentence' | 'paragraph' | 'long';
     fmt?: 'text' | 'object';
-}
-
-export interface ThinkMods {
-    level?: 'low' | 'medium' | 'high';
-    show?: boolean;
 }
 
 export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'web_search' | 'shell';
@@ -45,7 +38,8 @@ interface Base {
 
 export type Stmt = Base &
     (
-        | { t: 'let'; target: AssignTarget; op: '=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%='; value: Expr }
+        | { t: 'let'; name: string; value: Expr }
+        | { t: 'assign'; target: AssignTarget; op: '=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%='; value: Expr }
         | { t: 'block'; body: Stmt[] }
         | { t: 'expr'; e: Expr }
         | { t: 'if'; branches: { cond: Expr; body: Stmt[] }[]; orelse?: Stmt[] }
@@ -60,7 +54,7 @@ export type Stmt = Base &
         | { t: 'assert'; cond: Expr; message?: Expr }
         | { t: 'fail'; reason: Expr }
         | { t: 'success'; value?: Expr }
-        | { t: 'constraint'; kind: 'enforce' | 'forbid'; text: Expr; body: Stmt[] }
+        | { t: 'constraint'; kind: 'instruct' | 'avoid'; text: Expr; body: Stmt[] }
         | { t: 'restrict'; clauses: { kind: RestrictKind; arg: Expr }[]; body: Stmt[] }
     );
 

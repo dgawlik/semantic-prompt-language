@@ -15,32 +15,39 @@
 
 <div class="eyebrow">Guides</div>
 <h1>Examples</h1>
-<p class="lead">Working scripts from <code>lang/examples/</code>, with snippets matching their current executable code. Most run from <code>lang/</code>; the test-repair example runs from the repository root. <code>--cwd &lt;dir&gt;</code> controls relative file paths and tool working directories, not the script filename.</p>
-<p>Authenticate with <code>spl login</code> before running LLM calls. Some examples select a model with <code>@{model=...}</code>; use <code>--model &lt;id&gt;</code> to override it if needed. The example test suite checks every script's syntax and runs <code>triage-issues</code> on Copilot when authenticated; it does not execute every workflow.</p>
+<p class="lead">Working scripts from <code>lang/examples/</code>, synchronized with their executable sources. Most run from <code>lang/</code>; test repair runs against the npm project selected by <code>--cwd</code>. That option controls relative I/O and tool directories, not the script filename.</p>
+<p>Authenticate before live generation or agents. Use <code>--model &lt;id&gt;</code> to override an unavailable example model. Default tests check every example and documentation snippet offline, including scripted triage and invoice runs. Authenticated Copilot tests require explicit <code>SPL_LIVE_TESTS=1</code>.</p>
 
 <div class="table-wrap"><table>
 <thead><tr><th>Script</th><th>Shows</th></tr></thead>
 <tbody>
 <tr><td><a href="#commit-message"><code>commit-message.spl</code></a></td><td><code>shell</code> under <code>restrict exec 'git'</code>, validation helper, retry loop</td></tr>
-<tr><td><a href="#mcp"><code>mcp.spl</code></a></td><td>SocialToAI search via <code>--mcp</code>, combined filesystem/MCP restrictions</td></tr>
-<tr><td><a href="#triage-issues"><code>triage-issues.spl</code></a></td><td><code>fmt='object'</code> + <code>assert</code> validation with feedback retries, aggregation, summary</td></tr>
+<tr><td><a href="#mcp"><code>mcp.spl</code></a></td><td>Explicit agent using a configured docs/search MCP tool</td></tr>
+<tr><td><a href="#triage-issues"><code>triage-issues.spl</code></a></td><td>Schema-validated classification, bounded generation repair, aggregation</td></tr>
 <tr><td><a href="#extract-invoice"><code>extract-invoice.spl</code></a></td><td>Structured extraction cross-checked with arithmetic before it is accepted</td></tr>
 <tr><td><a href="#code-review"><code>code-review.spl</code></a></td><td>Three-file review, structured findings, restricted report write, <code>fail</code> as a CI gate</td></tr>
-<tr><td><a href="#release-notes"><code>release-notes.spl</code></a></td><td>Nested <code>forbid</code>/<code>enforce</code>, git history to a file inside <code>./out</code></td></tr>
+<tr><td><a href="#release-notes"><code>release-notes.spl</code></a></td><td>Nested <code>avoid</code>/<code>instruct</code>, git history to a file inside <code>./out</code></td></tr>
 <tr><td><a href="#web-digest"><code>web-digest.spl</code></a></td><td><code>restrict net</code>, <code>web_fetch</code>, catching a blocked second host</td></tr>
-<tr><td><a href="#fix-failing-tests"><code>fix-failing-tests.spl</code></a></td><td>Agent loop: <code>cd lang &amp;&amp; npm test</code>, repair the source, retry up to three times</td></tr>
-<tr><td><a href="#translate-docs"><code>translate-docs.spl</code></a></td><td><code>think</code> followed by an LLM-written file with a pinned path, dict iteration</td></tr>
+<tr><td><a href="#fix-failing-tests"><code>fix-failing-tests.spl</code></a></td><td>Raw npm test plus explicit repair agent, up to three rounds</td></tr>
+<tr><td><a href="#translate-docs"><code>translate-docs.spl</code></a></td><td>Read once, generate translations, write exact output to script-chosen paths</td></tr>
 <tr><td><a href="#journal"><code>journal.spl</code></a></td><td>State across runs with <code>--store</code></td></tr>
 <tr><td><a href="#tours"><code>basics</code>, <code>hi</code>, <code>live</code>, <code>restrict-live</code>, <code>tools-live</code></a></td><td>Small feature tours</td></tr>
 </tbody></table></div>
 
 <h2 id="commit-message">Commit message</h2>
-<p>Draft a Conventional Commit message for the staged changes. The model may only run <code>git</code>; the result is validated deterministically and retried until it passes.</p>
+<p>Read the staged diff with raw <code>shell</code>, restricted to git. Generation itself has no tools. A deterministic validator permits at most three message attempts; it never reruns the shell command.</p>
 <pre><code class="language-bash">
 cd your-repo &amp;&amp; git add -p
 spl path/to/commit-message.spl
 </code></pre>
 <pre><code class="language-spl" data-file="commit-message.spl">
+# Draft a Conventional Commit message for the staged changes.
+#
+#   cd your-repo &amp;&amp; git add -p
+#   spl path/to/commit-message.spl
+#
+# The script reads the diff with git once; tool-free generation gets at most three attempts.
+
 let TYPES = ['feat', 'fix', 'docs', 'refactor', 'test', 'chore', 'perf']
 
 def is_valid(msg) {
@@ -55,13 +62,16 @@ let msg = ''
 let attempt = 0
 
 restrict exec 'git' {
-    forbid 'wrapping the message in quotes or code fences' {
+    let diff = shell('git diff --staged')
+    assert len(diff.strip()) &gt; 0 'nothing is staged'
+    avoid 'wrapping the message in quotes or code fences' {
         while attempt &lt; 3 {
-            let attempt += 1
-            let msg = shell{command='git diff --staged'} '''
+            attempt += 1
+            let msg = ? '''
 Write a Conventional Commit message for this diff: a subject line of at most 72 characters
 ("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
-Reply with ONLY the message. If the diff is empty reply exactly NO_CHANGES.'''
+Reply with ONLY the message.
+{diff}'''
             if msg == 'NO_CHANGES' {
                 fail 'nothing is staged'
             }
@@ -80,10 +90,23 @@ success msg
 <p>The model proposes; <code>is_valid()</code> decides. The loop gives it three tries, and the final <code>assert</code> makes sure a script never succeeds with an invalid message.</p></div></div>
 
 <h2 id="triage-issues">Triage issues</h2>
-<p>Classify a batch of issues into labels and priorities. LLM output is treated as untrusted input: deterministic code checks it and asks again, telling the model why it was rejected.</p>
+<p>Classify issues against a strict schema with enum labels/priorities and required reason text. Up to two repairs correct format/schema errors, without retrying transport errors. This generation-only example supports offline record/replay.</p>
 <pre><code class="language-spl" data-file="triage-issues.spl">
+# Triage a batch of issues into labels and priorities, with validated JSON and retries.
+# Schema repairs retry generation only; transport errors are not retried.
+
 let LABELS = ['bug', 'feature', 'question', 'docs']
 let PRIORITIES = ['low', 'medium', 'high']
+let Triage = {
+    'type': 'object',
+    'properties': {
+        'label': {'type': 'string', 'enum': LABELS},
+        'priority': {'type': 'string', 'enum': PRIORITIES},
+        'reason': {'type': 'string', 'minLength': 1},
+    },
+    'required': ['label', 'priority', 'reason'],
+    'additionalProperties': False,
+}
 
 let issues = [
     {'id': 101, 'title': 'App crashes on startup', 'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
@@ -93,24 +116,12 @@ let issues = [
 ]
 
 def triage(issue) {
-    let problem = ''
-    for attempt in range(3) {
-        try {
-            let r = ?{fmt='object'} '''
-Classify this GitHub issue. {problem}
+    let r = ?{schema=Triage, reasoning='low', repairs=2} '''
+Classify this GitHub issue.
 Title: {issue['title']}
 Body: {issue['body']}
-
-Reply as JSON: {{"label": one of {LABELS}, "priority": one of {PRIORITIES}, "reason": "one short sentence"}}'''
-            assert r.label in LABELS "label must be one of {LABELS}"
-            assert r.priority in PRIORITIES "priority must be one of {PRIORITIES}"
-            return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
-        } except err {
-            let problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
-            log("issue {issue['id']}: attempt {attempt + 1} failed: {err.reason}")
-        }
-    }
-    fail "could not triage issue {issue['id']}"
+Give a one-sentence reason.'''
+    return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
 }
 
 let results = []
@@ -119,9 +130,9 @@ for issue in issues {
     let t = triage(issue)
     results.append(t)
     if t['label'] in counts {
-        let counts[t['label']] += 1
+        counts[t['label']] += 1
     } else {
-        let counts[t['label']] = 1
+        counts[t['label']] = 1
     }
 }
 
@@ -137,8 +148,11 @@ success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summ
 </code></pre>
 
 <h2 id="extract-invoice">Extract an invoice</h2>
-<p>Extract structured data from messy text and cross-check it with plain arithmetic. If the numbers do not add up, the rejection reason is fed back to the model for another try.</p>
+<p>Validate invoice shape with a nested schema and bounded repair, then independently check arithmetic with assertions. A business-rule failure is not automatically repaired.</p>
 <pre><code class="language-spl" data-file="extract-invoice.spl">
+# Extract structured data from messy text and cross-check it with plain arithmetic.
+# Schemas validate shape; ordinary assertions validate the business rules.
+
 let document = '''
 ACME Industrial Supplies GmbH            Invoice No. INV-2026-0042
 Date: 2026-03-14                          Currency: EUR
@@ -150,67 +164,91 @@ Date: 2026-03-14                          Currency: EUR
 Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
 '''
 
-let feedback = ''
-let invoice = None
-
-for attempt in range(3) {
-    if invoice != None {
-        break
-    }
-    try {
-        let r = ?{fmt='object'} '''
-Extract the invoice below. {feedback}
-Reply as JSON: {{"vendor": str, "number": str, "date": "YYYY-MM-DD", "currency": str,
-"lines": [{{"description": str, "quantity": number, "unit_price": number}}], "subtotal": number, "total": number}}
-
-{document}'''
-        assert type(r.lines) == 'list' and len(r.lines) &gt; 0 'lines must be a non-empty list'
-        let computed = 0
-        for line in r.lines {
-            let computed += line.quantity * line.unit_price
-        }
-        assert abs(computed - r.subtotal) &lt; 0.01 "lines add up to {round(computed, 2)} but subtotal is {r.subtotal}"
-        assert r.total &gt;= r.subtotal "total {r.total} is smaller than subtotal {r.subtotal}"
-        let invoice = r
-    } except err {
-        let feedback = "Your previous extraction was rejected: {err.reason}. Re-read the document and fix it."
-        log("attempt {attempt + 1} rejected: {err.reason}")
-    }
+let Invoice = {
+    'type': 'object',
+    'properties': {
+        'vendor': {'type': 'string'}, 'number': {'type': 'string'},
+        'date': {'type': 'string'}, 'currency': {'type': 'string'},
+        'lines': {
+            'type': 'array', 'minItems': 1,
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'description': {'type': 'string'},
+                    'quantity': {'type': 'integer', 'minimum': 1},
+                    'unit_price': {'type': 'number', 'minimum': 0},
+                },
+                'required': ['description', 'quantity', 'unit_price'],
+                'additionalProperties': False,
+            },
+        },
+        'subtotal': {'type': 'number'}, 'total': {'type': 'number'},
+    },
+    'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'total'],
+    'additionalProperties': False,
 }
-
-assert invoice != None 'extraction kept failing validation'
+let invoice = ?{schema=Invoice, reasoning='high', repairs=2} 'Extract this invoice: {document}'
+let computed = 0
+for line in invoice.lines {
+    computed += line.quantity * line.unit_price
+}
+assert abs(computed - invoice.subtotal) &lt; 0.01 "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
+assert invoice.total &gt;= invoice.subtotal 'total is smaller than subtotal'
 success invoice
 </code></pre>
 
 <h2 id="code-review">Code review as a CI gate</h2>
-<p>A two-stage review using <code>gpt-5.6-luna</code>: list <code>./src</code>, review the three files most likely to contain security or correctness bugs, then structure the findings. The review scope is prompt guidance, not a filesystem restriction. Only the report write is restricted to <code>./reports</code>. High-severity findings produce exit code 1 as a CI gate.</p>
+<p>An explicit agent inspects source under filesystem and git restrictions, then tool-free generation structures its findings. The report write is restricted to <code>./reports</code>, and high-severity findings fail the CI gate. A request to only review is guidance, not a read-only filesystem capability.</p>
 <pre><code class="language-bash">
 spl examples/code-review.spl --cwd &lt;project&gt;
 </code></pre>
 <pre><code class="language-spl" data-file="code-review.spl">
 @{model='gpt-5.6-luna'}
+# Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
+#
+# Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd &lt;project&gt;
+# Exit code is 1 (failure payload on stdout) when high-severity findings exist.
+# The review phase may only touch ./src; the report is written under ./reports.
+
 let notes = ''
 
-forbid 'suggesting purely stylistic changes' {
-    let notes = think{level='high'} '''
-List the files in ./src (use a plain command such as `dir src`, no chaining or redirection).
+avoid 'suggesting purely stylistic changes' {
+    restrict './src', exec 'git' {
+        let notes = agent{reasoning='high'} '''
+List source files with `git ls-files src`.
 Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 List each finding with its location, why it matters and a suggested fix.'''
+    }
 }
 
-let review = ?{fmt='object'} '''
-Convert this review into JSON:
-{{"findings": [{{"severity": "low"|"medium"|"high", "title": str, "location": str, "fix": str}}]}}
-Use an empty list when there are no findings.
 
-{notes}'''
+let Review = {
+    'type': 'object',
+    'properties': {
+        'findings': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'severity': {'type': 'string', 'enum': ['low', 'medium', 'high']},
+                    'title': {'type': 'string'}, 'location': {'type': 'string'}, 'fix': {'type': 'string'},
+                },
+                'required': ['severity', 'title', 'location', 'fix'],
+                'additionalProperties': False,
+            },
+        },
+    },
+    'required': ['findings'],
+    'additionalProperties': False,
+}
+let review = ?{schema=Review, repairs=2} 'Convert this review into structured findings, using an empty list when there are none: {notes}'
 
 let lines = ["# Review of repository", '']
 let high = 0
 for f in review.findings {
     assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
     if f.severity == 'high' {
-        let high += 1
+        high += 1
     }
     lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
     lines.append("  - Fix: {f.fix}")
@@ -219,7 +257,7 @@ lines.append('')
 lines.append("{len(review.findings)} finding(s), {high} high severity")
 
 restrict './reports' {
-    write_file{path='./reports/review.md', content='\n'.join(lines)} 'Confirm that the report was written'
+    write_file('./reports/review.md', '\n'.join(lines))
 }
 
 if high &gt; 0 {
@@ -231,14 +269,19 @@ success '\n'.join(lines)
 <h2 id="release-notes">Release notes</h2>
 <p>Generate release notes from recent git history and save them to <code>./out/RELEASE_NOTES.md</code>. The history-reading phase restricts executable names to <code>git</code>; the separate file-writing phase restricts filesystem access to <code>./out</code>. Note how rules and restrictions nest.</p>
 <pre><code class="language-spl" data-file="release-notes.spl">
+# Generate release notes from recent git history and save them to ./out/RELEASE_NOTES.md.
+# Raw git reads precede tool-free generation; the final write is restricted to ./out.
+
 let notes = ''
 
 restrict exec 'git' {
-    forbid 'inventing changes that are not in the commit list' {
-        enforce 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
-            let notes = shell{command='git log --oneline -n 40'} '''
+    avoid 'inventing changes that are not in the commit list' {
+        instruct 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
+            let commits = shell('git log --oneline -n 40')
+            let notes = ? '''
 Write release notes for end users from these commits (one per line: hash and subject).
-Rewrite technical subjects into clear user-facing sentences and drop merge/chore noise.'''
+Rewrite technical subjects into clear user-facing sentences and drop merge/chore noise.
+{commits}'''
         }
     }
 }
@@ -246,7 +289,7 @@ Rewrite technical subjects into clear user-facing sentences and drop merge/chore
 assert len(notes) &gt; 20 'release notes are suspiciously short'
 
 restrict './out' {
-    write_file{path='./out/RELEASE_NOTES.md', content=notes} 'Confirm that the file was written'
+    write_file('./out/RELEASE_NOTES.md', notes)
 }
 success notes
 </code></pre>
@@ -254,15 +297,20 @@ success notes
 <h2 id="web-digest">Web digest</h2>
 <p>Summarize a web page with network access limited to a single host &mdash; and prove the sandbox holds by catching a blocked request to a second host.</p>
 <pre><code class="language-spl" data-file="web-digest.spl">
+# Summarize a web page with network access limited to a single host,
+# and prove the sandbox holds by catching a blocked request.
+
 restrict net 'news.ycombinator.com' {
-    let headlines = web_fetch{url='https://news.ycombinator.com'} '''
+    let page = web_fetch('https://news.ycombinator.com')
+    let headlines = ? '''
 From this HTML list the 10 top stories as a Markdown bullet list: "- title (domain)".
-Reply with ONLY the list.'''
+Reply with ONLY the list.
+{page}'''
 
     let themes = ?{len='paragraph'} 'What themes run through these headlines?\n{headlines}'
 
     try {
-        web_fetch{url='https://example.org'} 'Return the page'
+        web_fetch('https://example.org')
         fail 'the request to a second host should have been blocked'
     } except err {
         assert err.status_code == 'restriction_violation' "unexpected failure: {err.reason}"
@@ -274,30 +322,40 @@ success "{headlines}\n\n{themes}"
 </code></pre>
 
 <h2 id="fix-failing-tests">Fix failing tests</h2>
-<p>An agent loop using <code>mai-code-1.1-flash</code>: run this repository's language suite, let the model repair the source, and retry up to three times. Run from the repository root because the command is <code>cd lang &amp;&amp; npm test</code>. The prohibition on changing tests is an LLM rule; this example has no filesystem or executable <code>restrict</code> scopes. It can modify source files, so run it on a worktree you are prepared to review.</p>
+<p>Run raw <code>npm test</code> in the project selected by <code>--cwd</code>, invoke an explicit repair agent after a failure, and repeat up to three rounds. Files are restricted to the project and executable names to npm. Avoiding test edits is guidance, not a filesystem write prohibition. This workflow intentionally performs actions and is not record/replay-compatible; review its changes.</p>
 <pre><code class="language-bash">
 spl lang/examples/fix-failing-tests.spl --cwd .
 </code></pre>
 <pre><code class="language-spl" data-file="fix-failing-tests.spl">
 @{model='mai-code-1.1-flash'}
+# Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).
+#
+#   spl examples/fix-failing-tests.spl --cwd &lt;your npm project&gt;
+#
+# Raw test runs do not call the model. The repair agent is restricted to the project and npm.
+# Avoiding test edits is prompt guidance, not a filesystem write prohibition.
+
 let attempt = 0
 let green = False
 
-forbid 'editing or deleting test files, or weakening assertions' {
-    while attempt &lt; 3 and not green {
-        let attempt += 1
-        try {
-            shell{command='cd lang &amp;&amp; npm test'} 'Reply with OK'
-            let green = True
-        } except err {
-            log("tests failing (round {attempt}): {err.status_code}")
-            think{level='medium'} '''
+
+restrict '.', exec 'npm' {
+    avoid 'editing or deleting test files, or weakening assertions' {
+        while attempt &lt; 3 and not green {
+            attempt += 1
+            try {
+                shell('npm test')
+                green = True
+            } except err {
+                log("tests failing (round {attempt}): {err.status_code}")
+                agent{reasoning='medium'} '''
 The test run failed with this output:
 {err.reason}
 
 Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.'''
+                }
+            }
         }
-    }
 }
 
 assert green 'tests are still failing after 3 rounds'
@@ -307,33 +365,40 @@ success "tests pass after {attempt} run(s)"
 <p>A failing <code>npm test</code> is a <code>tool_error</code> whose <code>reason</code> contains the test output. Catching it turns the failure into the prompt for the next step.</p></div></div>
 
 <h2 id="mcp">Search with MCP</h2>
-<p>Configure a <code>socialtoai</code> MCP server exposing <code>search</code> using the <a href="cli.html#mcp-http">HTTP configuration example</a>. Set its authorization environment variable, then run from <code>lang/</code> with your config file. The script combines the <code>./pudding</code> filesystem scope with the exact <code>socialtoai/search</code> tool selector. Paths are relative to <code>--cwd</code>. MCP services are trusted; scopes limit calls, not their internal I/O.</p>
+<p>Configure a trusted MCP server named <code>docs</code> exposing <code>search</code>, then run this explicit agent with <code>--mcp</code>. The exact <code>docs/search</code> selector narrows MCP access. Services are trusted; scopes limit calls, not their internal I/O. Generation-only calls never start MCP servers.</p>
 <pre><code class="language-bash">
 spl examples/mcp.spl --mcp mcp/mcp.json
 </code></pre>
 <pre><code class="language-spl" data-file="mcp.spl">
-restrict './pudding', mcp 'socialtoai/search' {
-    let summary = think 'Use socialtoai/search to find current news about pudding. And dump to /pudding foler'
+# Configure a docs MCP server exposing search, then run:
+# spl examples/mcp.spl --mcp &lt;your-mcp.json&gt; --cwd &lt;project&gt;
+# MCP servers are trusted services; scopes limit calls, not their internal I/O.
+
+restrict mcp 'docs/search' {
+    let summary = agent 'Use docs/search to find the documentation for this project and summarize it.'
     success summary
 }
 </code></pre>
 
 <h2 id="translate-docs">Translate docs</h2>
-<p>Iterate over German, Polish and Japanese within the project filesystem scope. Each iteration runs a <code>think</code> translation step, then a <code>write_file</code> step whose output path is pinned under <code>./out/translations</code>. Run from <code>lang/</code> so <code>./examples/data/product-update.md</code> resolves correctly. The preliminary <code>think</code> prompt also asks the model to write a file without naming a destination; unlike the following write, its destination is not pinned.</p>
+<p>Read the document once, generate German, Polish, and Japanese translations without tools, and write each exact response to a script-chosen path. Run from <code>lang/</code> so the source document resolves correctly. No model is responsible for choosing or confirming the output path.</p>
 <pre><code class="language-bash">
 spl examples/translate-docs.spl
 </code></pre>
 <pre><code class="language-spl" data-file="translate-docs.spl">
+
+# Translate a document into several languages, one file each, without leaving the project folder.
+# The script reads once and writes exact model responses; generation has no tools.
+
 let locales = {'de': 'German', 'pl': 'Polish', 'ja': 'Japanese'}
 let written = []
 
 restrict '.' {
-    enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
+    let source = read_file('./examples/data/product-update.md')
+    instruct 'Keep Markdown formatting, URLs and code identifiers untranslated' {
         for code, language in items(locales) {
-            think{level='medium'} '''
-Read ./examples/data/product-update.md, translate it to {language}, and write the translation to the file.'''
-            write_file{path="./out/translations/product-update.{code}.md"} '''
-Read ./examples/data/product-update.md, translate it to {language}, and write the translation to the file.'''
+            let translation = ?{reasoning='medium'} 'Translate this document to {language}: {source}'
+            write_file("./out/translations/product-update.{code}.md", translation)
             written.append("./out/translations/product-update.{code}.md")
         }
     }
@@ -348,6 +413,12 @@ success written
 spl examples/journal.spl --store journal.json
 </code></pre>
 <pre><code class="language-spl" data-file="journal.spl">
+# A rolling journal that remembers previous runs through the variable store:
+#
+#   spl examples/journal.spl --store journal.json
+#
+# Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.
+
 try {
     runs
 } except first_run {
@@ -357,9 +428,10 @@ try {
     let history = []
 }
 
-let runs += 1
+runs += 1
 
-let todays = read_file{path='./examples/data/notes.txt'} 'Summarize these notes in one sentence'
+let notes = read_file('./examples/data/notes.txt')
+let todays = ?{len='sentence'} 'Summarize these notes: {notes}'
 history.append({'run': runs, 'summary': todays})
 if len(history) &gt; 5 {
     let history = history[1:]
@@ -401,8 +473,8 @@ let joke = ?{len='sentence', fmt='object'} 'A joke about programmers as {{"setup
 log("setup: {joke['setup']}")
 
 # Scoped constraints
-enforce 'Answer in English' {
-    forbid 'Mentioning the word cat' {
+instruct 'Answer in English' {
+    avoid 'Mentioning the word cat' {
         let animal = ?{len='paragraph'} 'Funny story involving a pet animal'
     }
 }
@@ -431,17 +503,17 @@ def fib(n) {
 let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
 
 # deliberate before answering
-let why = think{level='high'} 'Why is {joke.setup} funny?'
+let why = think{reasoning='high'} 'Why is {joke.setup} funny?'
 
-# rules for every call inside the block
+# Prompt guidance for calls inside the block (not runtime validation).
 let hi = None
-enforce 'Answer in English' {
-    forbid 'profanity' { let hi = ?'Say hi' }
+instruct 'Answer in English' {
+    avoid 'profanity' { let hi = ?'Say hi' }
 }
 
-# the model may only touch ./out
+# Raw I/O does not call the model.
 restrict './out' {
-    write_file{path='./out/a.txt', content='{fib(10)}'} 'Confirm'
+    write_file('./out/a.txt', '{fib(10)}')
 }
 
 try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
@@ -450,7 +522,7 @@ success {'joke': joke, 'why': why, 'hi': hi}
 
 <h3 id="live-tours">Live tours</h3>
 <ul>
-  <li><code>live.spl</code> &mdash; a quick smoke test of <code>?</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>enforce</code> and <code>assert</code> against the real model.</li>
+  <li><code>live.spl</code> &mdash; a quick smoke test of <code>?</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>instruct</code> and <code>assert</code> against the real model.</li>
   <li><code>tools-live.spl</code> &mdash; <code>read_file</code>, <code>write_file</code> and <code>think{show=True}</code> inside <code>restrict './sandbox'</code>. Run it after <code>mkdir sandbox; echo hello world &gt; sandbox/note.txt</code>.</li>
   <li><code>restrict-live.spl</code> &mdash; asks the model to read <code>secret.txt</code> outside the sandbox and shows the runtime blocking it, returning a <code>restriction_violation</code> payload.</li>
 </ul>

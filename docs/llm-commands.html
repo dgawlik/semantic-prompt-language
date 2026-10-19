@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="The LLM commands document: ask, think, enforce/forbid and the five built-in tools.">
+<meta name="description" content="SPL generation, explicit agents, validated JSON outputs, bounded repairs, and raw tools.">
 <title>LLM commands - SPL</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/style.css">
@@ -12,159 +12,107 @@
 </head>
 <body data-page="llm-commands">
 <main id="page">
-
 <div class="eyebrow">The language</div>
-<h1>LLM commands</h1>
-<p class="lead">Commands are the non-deterministic part of SPL. Each one is an <em>expression</em> that sends a prompt to the model (or runs a tool first) and evaluates to the answer, so you can assign it, test it, or pass it to a function.</p>
+<h1>Generation, agents &amp; tools</h1>
+<p class="lead">Exact I/O, model generation, and model-directed actions are different operations. SPL makes the boundary explicit so validation and retries cannot silently repeat external actions.</p>
 
+<h2 id="ask">Generation: <code>?</code></h2>
+<p><code>?</code> generates a value without runtime tools, built-in Copilot tools, or MCP access. It is a prefix operator: <code>?'a' + b</code> means <code>(?'a') + b</code>. Pass external information explicitly:</p>
+<pre><code class="language-spl">
+let notes = read_file('notes.txt')
+let summary = ?{len='sentence'} 'Summarize these notes: {notes}'
+success summary
+</code></pre>
+<p>Each call starts a fresh session; previous answers are not implicit conversation history. Generated text is trimmed; raw tool output is not.</p>
+
+<h2 id="modifiers">Composable modifiers</h2>
+<p><code>?</code>, <code>think</code>, and <code>agent</code> share these modifiers. Braces are optional. Values are expressions evaluated once; names must be known and unique. Invalid names are syntax errors; invalid values are catchable runtime errors before the model call.</p>
 <div class="table-wrap"><table>
-<thead><tr><th>Command</th><th>Purpose</th><th>Modifiers</th></tr></thead>
+<thead><tr><th>Modifier</th><th>Values</th><th>Meaning</th></tr></thead>
 <tbody>
-<tr><td><a href="#ask"><code>?</code></a></td><td>Ask the model a question.</td><td><code>len</code>, <code>fmt</code></td></tr>
-<tr><td><a href="#think"><code>think</code></a></td><td>Ask the model to deliberate first.</td><td><code>level</code>, <code>show</code></td></tr>
-<tr><td><a href="#constraints"><code>enforce</code> / <code>forbid</code></a></td><td>Scoped rules prepended to every call in a block.</td><td>&mdash;</td></tr>
-<tr><td><a href="#tools"><code>read_file</code> <code>write_file</code> <code>web_fetch</code> <code>web_search</code> <code>shell</code></a></td><td>Run a runtime tool, then let the model process its output.</td><td><code>path</code>, <code>content</code>, <code>url</code>, <code>query</code>, <code>command</code></td></tr>
+<tr><td><code>len</code></td><td><code>'word'</code>, <code>'sentence'</code>, <code>'paragraph'</code>, <code>'long'</code></td><td>Prompt hint, not a hard length limit.</td></tr>
+<tr><td><code>fmt</code></td><td><code>'text'</code>, <code>'json'</code>, <code>'object'</code></td><td>Text by default; JSON when a schema is supplied.</td></tr>
+<tr><td><code>reasoning</code></td><td><code>'low'</code>, <code>'medium'</code>, <code>'high'</code></td><td>Requested model reasoning effort. Unsupported effort logs a warning and uses the model default.</td></tr>
+<tr><td><code>show</code></td><td><code>True</code>, <code>False</code> (default)</td><td>Log available model reasoning at info level.</td></tr>
+<tr><td><code>schema</code></td><td>JSON Schema dict or boolean</td><td>Validate the result; implies JSON output.</td></tr>
+<tr><td><code>repairs</code></td><td>Integer <code>0..5</code>, default <code>0</code></td><td>Additional generation attempts for format/schema errors only. Agents require zero.</td></tr>
+<tr><td><code>model</code></td><td>Nonempty string</td><td>Per-call model; CLI override wins, then this modifier, then the header, then the SDK default.</td></tr>
 </tbody></table></div>
 
-<h2 id="modifiers">Operational modifiers</h2>
-<p>Every command has sensible defaults and the braces are optional: <code>?'q'</code>, <code>think 'q'</code> and <code>read_file 'what to do'</code> all run as they are. A brace list of <em>modifiers</em> directly after the command name overrides its mode:</p>
+<h2 id="schema">Validated structured output</h2>
 <pre><code class="language-spl">
-think{level='high'} 'What is the meaning of life'
+let Contract = {
+    'type': 'object',
+    'properties': {
+        'label': {'type': 'string', 'enum': ['bug', 'feature']},
+        'confidence': {'type': 'number', 'minimum': 0, 'maximum': 1},
+    },
+    'required': ['label', 'confidence'],
+    'additionalProperties': False,
+}
+let issue = 'The application crashes at startup.'
+let result = ?{schema=Contract, reasoning='high', repairs=2} 'Classify this issue: {issue}'
+assert result.confidence >= 0.5 'classification needs manual review'
+success result
 </code></pre>
-<ul>
-  <li>Names and values are validated by the parser against a fixed schema per command. <strong>Unknown modifiers or values are a syntax error</strong>, not silently ignored. Each modifier may appear at most once.</li>
-  <li>String values are quoted and lowercase (<code>level='high'</code>); booleans use Python spelling (<code>show=True</code>).</li>
-</ul>
+<p>Schemas use synchronous JSON Schema draft-07 with Ajv strict mode. Types, enums, nested properties, required fields, arrays, numeric/string limits, and standard synchronous composition are supported. Unknown keywords, invalid schemas, unresolved remote references, and asynchronous schemas fail before generation. There is no coercion, default insertion, or removal of extra fields. Custom formats/plugins are not installed.</p>
+<p>A mismatch raises <code>validation_failed</code> with field paths, for example <code>lines[2].quantity: must be number</code>. Missing fields and additional properties also identify the offending path. Schemas validate structure; ordinary <code>assert</code> statements validate business rules.</p>
 
-<h2 id="ask">Ask: <code>?</code></h2>
-<p><code>?</code> is a <strong>prefix operator</strong> at unary precedence. The operand is the prompt &mdash; a postfix expression, so <code>?'a' + b</code> means <code>(?'a') + b</code> and <code>-?'n'</code> means <code>-(?'n')</code>.</p>
+<h3 id="fmt-object">Strict JSON formats</h3>
+<p><code>fmt='json'</code> accepts any JSON value, including scalars and null. <code>fmt='object'</code> requires a dict or list. Neither extracts JSON from prose or Markdown fences: malformed output raises <code>invalid_format</code>. A schema cannot be combined with <code>fmt='text'</code>.</p>
+
+<h3 id="repairs">Bounded repair, not action retry</h3>
+<p><code>repairs=2</code> permits at most three model calls: the initial call plus two corrections. Only <code>invalid_format</code> and <code>validation_failed</code> trigger correction. The next prompt contains the prior answer and validation errors. Prompt/modifier expressions are not reevaluated. Authentication, timeout, transport, tool, and restriction errors are not repaired; assertions outside the call are not repaired either.</p>
+<p>Generation has no tools, so repair cannot repeat writes or commands. Agents reject nonzero repairs, even when they also validate their final answer against a schema.</p>
+
+<h2 id="think">Think shorthand</h2>
+<p><code>think</code> is generation-only shorthand with default medium reasoning. It accepts exactly the same modifiers as <code>?</code>, so reasoning and structured output no longer require two separate calls.</p>
 <pre><code class="language-spl">
-let capital = ?'What is the capital of France?'
-let response = ?{len='sentence', fmt='object'} 'A joke about programmers'
-let firstName = response.setup
+let Contract = {'type': 'integer'}
+success think{schema=Contract, reasoning='low'} 'What is 6 times 7?'
 </code></pre>
 
-<div class="table-wrap"><table>
-<thead><tr><th>Modifier</th><th>Values</th><th>Effect</th></tr></thead>
-<tbody>
-<tr><td><code>len</code></td><td><code>'word'</code> <code>'sentence'</code> <code>'paragraph'</code> <code>'long'</code></td><td>A hint prepended to the query: <em>“Answer with a single word.”</em>, <em>“Answer in a single sentence.”</em>, <em>“Answer in a single paragraph.”</em>, <em>“Give a long, detailed answer.”</em> A suggestion to the model, not a hard limit.</td></tr>
-<tr><td><code>fmt</code></td><td><code>'text'</code> (default) <code>'object'</code></td><td><code>'object'</code> asks for JSON <em>and the runtime validates and parses it</em> into a dict or list.</td></tr>
-</tbody></table></div>
-
-<h3 id="fmt-object">Structured output with <code>fmt='object'</code></h3>
-<p>The parser accepts a bare JSON object or array, JSON wrapped in a Markdown code fence, or JSON embedded in surrounding prose. Scalars, or anything unparseable, raise a failure with <code>status_code='invalid_format'</code>, which you can catch and retry (see <a href="failures.html#retry">retry patterns</a>).</p>
+<h2 id="agent">Explicit agents</h2>
+<p><code>agent</code> enables model-directed runtime tools and configured MCP tools. It defaults to medium reasoning. Restrict its capabilities deliberately; raw tools and agents are allow-by-default outside restrictions.</p>
 <pre><code class="language-spl">
-let r = ?{fmt='object'} '''
-Classify this issue as JSON: {{"label": "bug"|"feature", "priority": "low"|"high"}}
-Title: {title}'''
-assert r.label in ['bug', 'feature'] 'unexpected label'
+restrict './src', exec 'git', mcp 'docs/search' {
+    let review = agent{reasoning='high'} 'Inspect source files and consult docs/search'
+}
+success review
 </code></pre>
-<div class="callout tip">
-  <span class="ico">💡</span>
-  <div class="body"><span class="title">Escaping JSON templates</span>
-  <p>Inside a prompt, double the braces of a JSON template: <code>{{"a": 1}}</code> produces <code>{"a": 1}</code>. Single braces are interpolation.</p></div>
-</div>
+<p>Only agents expose tools to Copilot. Any permission request during generation is rejected and aborts the call. Agent tools still use the runtime restriction checks; unconfigured MCP servers and other Copilot tools are not approved. Agent actions are not transactional. Agents cannot be recorded or replayed.</p>
 
-<h2 id="think">Think: <code>think</code></h2>
-<p>Tells the model to deliberate about the problem before answering, and lets you choose how hard.</p>
+<h2 id="constraints">Prompt guidance: instruct &amp; avoid</h2>
 <pre><code class="language-spl">
-let diagnosis = think{level='low', show=True} 'Why are tests not passing'
-</code></pre>
-<div class="table-wrap"><table>
-<thead><tr><th>Modifier</th><th>Values</th><th>Effect</th></tr></thead>
-<tbody>
-<tr><td><code>level</code></td><td><code>'low'</code> <code>'medium'</code> <code>'high'</code></td><td>Mapped to the Copilot SDK <em>reasoning effort</em>. If the selected model does not support it, a warning is logged and the model default is used.</td></tr>
-<tr><td><code>show</code></td><td><code>True</code> <code>False</code> (default)</td><td>When <code>True</code>, the model's reasoning stream is written to the log (stderr).</td></tr>
-</tbody></table></div>
-<p>A common idiom is a two-stage pipeline &mdash; <em>think</em> in prose, then <em>structure</em> the result with a cheap <code>?{fmt='object'}</code> call. See <a href="examples.html#code-review">code-review</a>.</p>
-
-<h2 id="constraints">Enforce &amp; forbid</h2>
-<p><code>enforce</code> and <code>forbid</code> take a rule and a block. The rule is in force for every LLM call inside the block, including nested blocks and functions called from it. The runtime keeps the active rules on a stack and prepends them to each query.</p>
-<pre><code class="language-spl">
-enforce 'Answer in English' {
-    forbid 'mentioning the word cat' {
-        let animal = ?{len='word'} 'Name a pet animal'
+instruct 'Answer in English' {
+    avoid 'jokes' {
+        let answer = ?{len='sentence'} 'Explain recursion'
     }
 }
-log(animal)    # enforce/forbid blocks share the enclosing scope, so the result is visible here
+success answer
 </code></pre>
-<p>Both rules above are sent as:</p>
-<pre class="plain"><code>Rules you must follow strictly:
-- You MUST: Answer in English
-- You MUST NOT: mentioning the word cat</code></pre>
-<div class="callout warn">
-  <span class="ico">⚠️</span>
-  <div class="body"><span class="title">Guidance, not enforcement</span>
-  <p>Constraints are instructions to the model; the runtime cannot verify that the answer obeys them. Use <code>assert</code> for anything that must hold. Hard guarantees about <em>actions</em> come from <a href="restrictions.html">restrict</a>.</p></div>
-</div>
+<p>Guidance applies dynamically to calls made inside the block, including called functions, and unwinds afterward. All blocks share the current function/script variable scope, so <code>answer</code> remains visible.</p>
+<div class="callout warn"><div class="body"><span class="title">Guidance is not validation</span>
+<p><code>instruct</code>, <code>avoid</code>, and <code>len</code> influence a prompt; they do not verify compliance. Use schemas and assertions for output guarantees, and <a href="restrictions.html">restrict</a> for runtime action checks.</p></div></div>
 
-<h2 id="tools">Tool calls</h2>
-<p>A tool call has the form <code>tool{param=value} 'instructions'</code>, and the braces are optional: <code>read_file 'Read notes.txt and summarize it'</code>. In the MVP the tools are a <strong>fixed built-in set</strong>; user-defined tools and MCP servers are out of scope.</p>
-
+<h2 id="tools">Exact raw tools</h2>
 <div class="table-wrap"><table>
-<thead><tr><th>Tool</th><th>Parameters (all optional)</th><th>Purpose</th><th>Governed by</th></tr></thead>
+<thead><tr><th>Function</th><th>Result</th><th>Restriction</th></tr></thead>
 <tbody>
-<tr><td><code>read_file</code></td><td><code>path</code></td><td>Read a file</td><td><code>restrict fs</code></td></tr>
-<tr><td><code>write_file</code></td><td><code>path</code>, <code>content</code></td><td>Create or modify a file</td><td><code>restrict fs</code></td></tr>
-<tr><td><code>web_fetch</code></td><td><code>url</code></td><td>Fetch a URL (http/https)</td><td><code>restrict net</code></td></tr>
-<tr><td><code>web_search</code></td><td><code>query</code></td><td>Search the web (DuckDuckGo): title, URL and snippet of the top results</td><td><code>restrict net</code> (host <code>html.duckduckgo.com</code>)</td></tr>
-<tr><td><code>shell</code></td><td><code>command</code></td><td>Run a shell command</td><td><code>restrict exec</code></td></tr>
+<tr><td><code>read_file(path)</code></td><td>Exact UTF-8 contents</td><td>fs</td></tr>
+<tr><td><code>write_file(path, content)</code></td><td>Write confirmation text</td><td>fs</td></tr>
+<tr><td><code>web_fetch(url)</code></td><td>HTTP response body text</td><td>net</td></tr>
+<tr><td><code>web_search(query)</code></td><td>Search result text</td><td>net</td></tr>
+<tr><td><code>shell(command)</code></td><td>Combined stdout/stderr; nonzero exit raises tool_error</td><td>exec, plus inspected fs/net arguments</td></tr>
 </tbody></table></div>
-
-<h3 id="tool-flow">How a tool call runs</h3>
-<p>Which side calls the tool depends on what the script supplies. When <strong>every</strong> parameter the tool needs is given (<code>path</code> for <code>read_file</code>, <code>path</code> and <code>content</code> for <code>write_file</code>, <code>url</code>, <code>query</code>, <code>command</code>), the runtime runs it:</p>
-<div class="pipeline">
-  <div class="node"><b>1 &middot; Run</b>The runtime executes the tool with your parameters after checking restrictions.</div>
-  <span class="arrow">→</span>
-  <div class="node"><b>2 &middot; Wrap</b>The output goes into the prompt inside <code>&lt;tool_output&gt;</code> markers, followed by your instructions.</div>
-  <span class="arrow">→</span>
-  <div class="node"><b>3 &middot; Answer</b>The model's reply is the value of the expression.</div>
-</div>
-<p>When a needed parameter is missing, the <strong>model calls the tool itself</strong> from your instructions, and the parameters you did give stay fixed (the model cannot change them). Restrictions apply to its call exactly as to yours.</p>
+<p>Arguments are positional, required strings. These functions never invoke a model, never ask it to fill missing arguments, and do not truncate raw results. Agent-facing tool text may be truncated with an explicit marker. Network and shell operations retain their normal external variability; raw means no model interpretation.</p>
 <pre><code class="language-spl">
-let readme = read_file{path='./README.md'} 'Return the file content'   # runtime reads the file
-let notes = read_file 'Read ./notes.txt and summarize it'              # model reads the file
-let log_text = shell{command='git log --oneline -n 40'} 'Summarize these commits'
-let page = web_fetch{url='https://example.com'} 'List the headings'
-let news = web_search{query='latest Node.js LTS version'} 'Which version is it?'
+let diff = shell('git diff --staged')
+let message = ? 'Draft a commit message from this diff: {diff}'
+write_file('commit-message.txt', message)
+success message
 </code></pre>
-<p>Parameters <code>path</code>, <code>url</code>, <code>query</code> and <code>command</code> must evaluate to strings. Tool output is truncated at 200,000 characters.</p>
-
-<h3 id="write-file">write_file: two modes</h3>
-<div class="compare">
-  <div>
-    <h4>With <code>content</code> <span class="pill">deterministic</span></h4>
-    <p>The script supplies the bytes; the runtime writes them; the model only confirms.</p>
-<pre><code class="language-spl">
-write_file{path='./out/a.txt', content=notes} 'Confirm it was written'
-</code></pre>
-  </div>
-  <div>
-    <h4>Without <code>content</code> <span class="pill warn">LLM writes</span></h4>
-    <p>The model produces the content and writes the file itself &mdash; but the <strong>path is pinned</strong> by the script.</p>
-<pre><code class="language-spl">
-write_file{path="./out/{code}.md"} '''
-Translate ./in.md to {language}
-and write it to the file.'''
-</code></pre>
-  </div>
-</div>
-
-<h3 id="llm-tools">Tools the model may use</h3>
-<p>Inside any <code>?</code>, <code>think</code> or tool call, the model itself may use these same five tools, plus MCP tools loaded with <a href="cli.html#mcp"><code>--mcp</code></a>. Calls are checked against active <code>restrict</code> scopes, including <code>restrict mcp 'server/tool'</code>. Any other Copilot permission request is rejected.</p>
-
-<h2 id="prompt-assembly">How the final prompt is built</h2>
-<p>Before each call the runtime assembles sections in a fixed order, separated by blank lines:</p>
-<ol>
-  <li><strong>Rules</strong> from active <code>enforce</code> / <code>forbid</code> blocks.</li>
-  <li><strong>Active restrictions</strong>, described in plain language.</li>
-  <li>For <code>think</code>: <em>“Think carefully about the problem before giving the final answer.”</em></li>
-  <li>The <code>len</code> hint.</li>
-  <li>For <code>fmt='object'</code>: an instruction to reply with ONLY valid JSON.</li>
-  <li>Your prompt.</li>
-</ol>
-<p>Every non-silent log level (<code>error</code>, <code>info</code>, <code>debug</code>) includes the exact text of every request and response on stderr with the <code>[llm]</code> tag. These logs may contain sensitive data; use <code>--silent</code> to suppress them.</p>
-
+<p>Split side effects from generation when using <a href="cli.html#record-replay">record/replay</a>: replay permits local reads but blocks writes, network, shell, agents, and persistent stores.</p>
 </main>
 <script src="assets/search-index.js"></script>
 <script src="assets/site.js"></script>

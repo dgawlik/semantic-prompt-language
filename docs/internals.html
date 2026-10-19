@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Architecture of the SPL interpreter: modules, execution model, backends, extension points and tests.">
+<meta name="description" content="SPL interpreter architecture, generation contracts, record/replay, and embedding.">
 <title>Architecture - SPL</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/style.css">
@@ -12,129 +12,81 @@
 </head>
 <body data-page="internals">
 <main id="page">
-
 <div class="eyebrow">Guides</div>
 <h1>Architecture</h1>
-<p class="lead">How the interpreter in <code>lang/src</code> is put together &mdash; useful if you want to embed it, add a backend or contribute.</p>
+<p class="lead">A small tree-walking interpreter with explicit boundaries between raw I/O, generation, and agent actions.</p>
 
 <h2 id="pipeline">Execution pipeline</h2>
-<div class="pipeline">
-  <div class="node"><b>lexer.ts</b>Source to tokens, with string parts and interpolation expressions.</div>
-  <span class="arrow">→</span>
-  <div class="node"><b>parser.ts</b>Recursive descent to the typed AST. All strict checks happen here.</div>
-  <span class="arrow">→</span>
-  <div class="node"><b>interpreter.ts</b>Tree-walking evaluator with scopes, constraints and restrictions.</div>
-  <span class="arrow">→</span>
-  <div class="node"><b>llm.ts</b>Prompt assembly and <code>fmt='object'</code> parsing.</div>
-  <span class="arrow">→</span>
-  <div class="node"><b>backend</b><code>copilot.ts</code>; tools run through <code>tools.ts</code>.</div>
-</div>
+<p>The lexer produces positioned tokens and string interpolation parts. The recursive-descent parser produces a typed AST and rejects invalid structure and unknown/duplicate modifier names. The interpreter evaluates modifier expressions, validates configuration, and runs the selected operation.</p>
+<ul>
+<li>Raw function call: evaluate arguments, check restrictions, run ToolHost, return exact output.</li>
+<li>Generation: evaluate prompt/options once, assemble guidance and schema, call a tool-free backend session, parse/validate output, optionally repair.</li>
+<li>Agent: create a session exposing runtime/configured MCP tools under the current restrictions; validate the final answer if requested, but never automatically retry actions.</li>
+</ul>
 
 <h2 id="modules">Modules</h2>
 <div class="table-wrap"><table>
-<thead><tr><th>File</th><th>Responsibility</th></tr></thead>
+<thead><tr><th>Source</th><th>Responsibility</th></tr></thead>
 <tbody>
-<tr><td><code>cli.ts</code></td><td>Argument parsing, file loading, backend/store selection, result printing and exit codes.</td></tr>
-<tr><td><code>lexer.ts</code></td><td>Tokenizer. Strings become parts (<code>text</code> or <code>expr</code>); raw strings and brace escapes handled here.</td></tr>
-<tr><td><code>parser.ts</code></td><td>Parser and strict validation of modifiers, loop-only <code>break</code>, <code>let</code>-only modification, directives.</td></tr>
-<tr><td><code>ast.ts</code></td><td>AST types: <code>Program</code>, <code>Stmt</code>, <code>Expr</code>, <code>AskMods</code>, <code>ThinkMods</code>, <code>ToolName</code>, <code>RestrictKind</code>.</td></tr>
-<tr><td><code>mcp.ts</code></td><td>VS Code-shaped MCP config loading, variable expansion, validation and per-session server/tool filtering.</td></tr>
-<tr><td><code>interpreter.ts</code></td><td>Evaluation. Holds the constraint stack and the active restrictions; locates failures at the offending source line.</td></tr>
-<tr><td><code>values.ts</code></td><td>Value model, truthiness, equality and ordering, <code>str()</code>, JSON conversion. Dicts are built without touching the prototype chain.</td></tr>
-<tr><td><code>builtins.ts</code></td><td>Built-in functions and string/list/dict methods.</td></tr>
-<tr><td><code>llm.ts</code></td><td><code>LlmBackend</code> interface, <code>buildPrompt()</code>, <code>parseObjectResponse()</code>.</td></tr>
-<tr><td><code>copilot.ts</code></td><td>Copilot SDK backend: sessions, tool registration, permission decisions, reasoning effort.</td></tr>
-<tr><td><code>tools.ts</code></td><td><code>ToolHost</code>: <code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>, <code>shell</code>, with restriction checks, truncation and timeouts.</td></tr>
-<tr><td><code>auth.ts</code></td><td><code>spl login</code> / <code>spl logout</code>: GitHub device flow, saved token (<code>~/.spl/credentials.json</code>), auth status via the Copilot runtime.</td></tr>
-<tr><td><code>restrict.ts</code></td><td>Canonical paths, host and executable normalization, <code>Restrictions</code> (immutable snapshots, intersection semantics) and LLM guidance text.</td></tr>
-<tr><td><code>store.ts</code></td><td><code>VariableStore</code>, in-memory and JSON-file stores, custom store loader.</td></tr>
-<tr><td><code>errors.ts</code></td><td><code>Failure</code>, <code>SuccessSignal</code>, <code>SplSyntaxError</code>, status codes.</td></tr>
-<tr><td><code>logger.ts</code></td><td>Level-filtered logger writing to stderr.</td></tr>
+<tr><td><code>lexer.ts / parser.ts / ast.ts</code></td><td>Tokenization, syntax validation, typed statements and expressions.</td></tr>
+<tr><td><code>interpreter.ts</code></td><td>Function-scoped bindings, control flow, raw built-ins, generation options, repair, scoped guidance/restrictions, source locations.</td></tr>
+<tr><td><code>values.ts / builtins.ts</code></td><td>Value model, conversions, ordinary functions and collection methods.</td></tr>
+<tr><td><code>llm.ts</code></td><td>Backend contract, prompt construction, strict JSON parsing.</td></tr>
+<tr><td><code>schema.ts</code></td><td>Strict synchronous draft-07 schema compilation and field-path validation errors.</td></tr>
+<tr><td><code>copilot.ts</code></td><td>Fresh SDK sessions, model/effort checks, agent-only tool exposure, permission enforcement.</td></tr>
+<tr><td><code>recording.ts</code></td><td>Versioned generation-only JSONL recordings and exact sequential replay.</td></tr>
+<tr><td><code>tools.ts / restrict.ts</code></td><td>File, network, search, shell, path canonicalization, allowlists, and intersecting restrictions.</td></tr>
+<tr><td><code>mcp.ts / auth.ts</code></td><td>MCP configuration/filtering and Copilot device authentication.</td></tr>
+<tr><td><code>cli.ts / store.ts / logger.ts / errors.ts</code></td><td>CLI lifecycle, opt-in variable persistence, logs, failures and termination.</td></tr>
 </tbody></table></div>
 
 <h2 id="execution-model">Execution model</h2>
-<ul>
-  <li><strong>Environments.</strong> A chain of variable maps. The global map is seeded from the store. Each user-function call creates a child map whose parent is the function's closure, and each bare <code>{ }</code> block a child map of the current one; <code>let</code> always writes to the innermost map. All other blocks reuse the current map.</li>
-  <li><strong>Control signals.</strong> <code>break</code>, <code>continue</code> and <code>return</code> propagate as values from block execution, not as exceptions; a <code>return</code> that reaches the top level ends the script.</li>
-  <li><strong>Failures.</strong> A <code>Failure</code> exception carries a status code and reason; it is stamped with the source line the first time it passes a statement. <code>try</code> restores the constraint stack, restriction stack and call depth before running the handler.</li>
-  <li><strong><code>success</code>.</strong> Implemented as a <code>SuccessSignal</code> that unwinds to the top level.</li>
-  <li><strong>Persistence.</strong> The store is loaded before the first statement and saved in a <code>finally</code> block, so state is kept even after a failure. Functions are excluded.</li>
-  <li><strong>Recursion.</strong> User-function calls are capped (default depth 200).</li>
-</ul>
+<p>Each function call creates a child environment linked to its lexical closure. All other blocks reuse that environment. <code>let</code> declares/redeclares locally; name assignment requires a local binding and cannot rebind an enclosing variable. Collection mutation can share state. There is no declaration hoisting: names become local when execution binds them.</p>
+<p>Guidance and restrictions are execution context, not captured capabilities: a function called inside a policy block uses the caller's currently active policies. Policies unwind on return, success, or failure. Functions have a default recursion cap of 200.</p>
+<p>Failures receive the innermost statement location once. Return/break/continue propagate as control signals; success ends the entire script. Opt-in stores save globals even after script failure, but replay forbids stores and skips saving.</p>
 
-<h2 id="llm-call">Anatomy of an LLM call</h2>
-<ol class="steps">
-  <li><strong>Evaluate</strong> the prompt (interpolation happens here, deterministically) and, for tools, the parameters.</li>
-  <li><strong>Pre-run the tool</strong> (explicit tool commands only, and only when the script supplied every parameter the tool needs) through <code>ToolHost</code>, which checks the active restrictions first. Otherwise the model calls the tool with the supplied parameters pinned.</li>
-  <li><strong>Build the request</strong>: assembled prompt, model, reasoning effort, a snapshot of the restrictions and a <code>ToolHost</code> for the model's own tool calls.</li>
-  <li><strong>Call the backend.</strong> The Copilot backend opens a session, registers the five tools (overriding built-ins), and exposes configured MCP tools narrowed by the active scopes. Permissions approve only runtime and enabled MCP tools; a <code>restriction_violation</code> aborts the session and is re-raised as a script failure.</li>
-  <li><strong>Post-process.</strong> The answer is trimmed; with <code>fmt='object'</code> it is parsed into a value or raises <code>invalid_format</code>. The effective parameters are logged.</li>
+<h2 id="llm-call">Generation and repair lifecycle</h2>
+<ol>
+<li>Evaluate modifiers once and reject invalid values/combinations.</li>
+<li>Compile the schema before invoking the backend.</li>
+<li>Evaluate the prompt once; assemble guidance, restriction context, hints, and schema.</li>
+<li>Call a fresh generation session with no available tools or MCP servers.</li>
+<li>Parse strict JSON and validate the schema. Only format/schema failures may use the bounded repair budget.</li>
 </ol>
+<p>Agents use the same final-output validation but reject repairs. Custom backends must honor <code>req.kind</code>: only <code>agent</code> may invoke <code>req.tools</code> or other configured tools. The bundled Copilot backend enforces this through both tool exposure and permission callbacks.</p>
 
 <h2 id="embedding">Embedding</h2>
-<p>The package exports a small programmatic API from <code>dist/index.js</code>:</p>
 <pre><code class="language-js" data-file="embed.mjs">
-import { parse, run, Logger, CopilotBackend, MemoryStore } from 'spl-lang';
+import { parse, run, Logger, CopilotBackend } from 'spl-lang';
 
 const logger = new Logger('silent');
-const program = parse("let x = ?'hello'\nsuccess x");
-const result = await run(program, {
-  backend: new CopilotBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 }),
-  logger,
-  store: new MemoryStore(),
-  cwd: process.cwd(),
+const backend = new CopilotBackend({
+  logger, cwd: process.cwd(), timeoutMs: 300_000,
 });
-
-if (result.status === 'success') console.log(result.value);
-else console.error(result.failure);    // { status, reason, command, line, status_code }
+try {
+  const result = await run(parse("success ?'Hello'"), {
+    backend, logger, cwd: process.cwd(),
+  });
+  if (result.status === 'success') console.log(result.value);
+  else console.error(result.failure);
+} finally {
+  await backend.close();
+}
 </code></pre>
-<div class="table-wrap"><table>
-<thead><tr><th>Export</th><th>Purpose</th></tr></thead>
-<tbody>
-<tr><td><code>parse(source)</code></td><td>Returns a <code>Program</code>; throws <code>SplSyntaxError</code> (with <code>line</code>, <code>col</code>).</td></tr>
-<tr><td><code>run(program, options)</code></td><td>Returns <code>{ status: 'success', value, hasValue }</code> or <code>{ status: 'failure', failure }</code>.</td></tr>
-<tr><td><code>RunOptions</code></td><td><code>backend</code>, <code>logger</code>, <code>store?</code>, <code>cwd?</code>, <code>model?</code>, <code>maxCallDepth?</code>.</td></tr>
-<tr><td><code>CopilotBackend</code></td><td>The backend (GitHub Copilot SDK).</td></tr>
-<tr><td><code>login</code>, <code>logout</code>, <code>authStatus</code></td><td>Copilot authentication used by <code>spl login</code> / <code>spl logout</code>.</td></tr>
-<tr><td><code>JsonFileStore</code>, <code>MemoryStore</code>, <code>loadStoreModule</code></td><td>Variable stores.</td></tr>
-</tbody></table></div>
+<p><code>run</code> returns success with <code>value</code> and <code>hasValue</code>, or failure with its payload. Options include backend, logger, cwd, optional store, model override, and maximum call depth. Other exports include authentication helpers, variable stores, MCP configuration helpers, and related TypeScript types.</p>
+
+<h2 id="recording">Recording and replay</h2>
+<p>Wrap a live backend with <code>new RecordingBackend(backend, file)</code>, or use <code>new ReplayBackend(file)</code> without constructing a live backend. Close either backend after use; replay checks for unused entries on close. Do not publish a successful result until that check completes.</p>
+<p>Records contain raw backend responses, not just parsed values, so replay re-exercises parsing, schema checks, repair prompts, and deterministic code. Matching includes ordered assembled prompts, call kind, requested model, reasoning effort, and show-reasoning. Recordings do not capture transport errors or agent actions.</p>
+<p>The backend's <code>mode</code> identifies record/replay execution to the interpreter. Replay rejects agent calls, persistent stores, and all raw tools except local reads. No Copilot client or MCP server is started. This is generation regression testing, not workflow/action replay.</p>
 
 <h2 id="extending">Extension points</h2>
 <h3 id="backend-interface">Custom backend</h3>
-<p>Implement <code>LlmBackend</code> to target another model provider:</p>
-<pre><code class="language-js">
-class MyBackend {
-  async call(req) {
-    // req.prompt is fully assembled; req.restrictions / req.tools must be honoured for tool use
-    return { text: '...', effective: { backend: 'mine' } };
-  }
-  async close() {}
-}
-</code></pre>
-<h3 id="live-testing">Testing scripts</h3>
-<p>There is no mock backend: scripts that need an LLM are tested directly on GitHub Copilot. <code>tests/live.ts</code> wraps the real <code>CopilotBackend</code> in a recorder, so a test runs against the real service and can still assert on the assembled prompts (<code>backend.calls[i].prompt</code>). Keep assertions about structure, not wording. Live tests are skipped when the runtime is not authenticated (<code>spl login</code>). Tests that must not reach an LLM use the <code>NoLlm</code> backend from <code>tests/helpers.ts</code>, which fails on any call.</p>
-
-<h2 id="tests">Test suite</h2>
-<div class="table-wrap"><table>
-<thead><tr><th>File</th><th>Covers</th></tr></thead>
-<tbody>
-<tr><td><code>tests/parser.test.ts</code></td><td>Grammar, strict modifier validation, scoping and <code>let</code> syntax, syntax errors.</td></tr>
-<tr><td><code>tests/interpreter.test.ts</code></td><td>Deterministic language, scoping, <code>return</code>, failures, restrict enforcement, variable store (no LLM).</td></tr>
-<tr><td><code>tests/permissions.test.ts</code></td><td>The Copilot permission layer (hard enforcement) and network restrictions.</td></tr>
-<tr><td><code>tests/tools.test.ts</code></td><td>Parsing of <code>web_search</code> results.</td></tr>
-<tr><td><code>tests/live.test.ts</code></td><td>LLM commands and tools on the real Copilot service.</td></tr>
-<tr><td><code>tests/examples.test.ts</code></td><td>Example syntax; <code>triage-issues</code> on Copilot.</td></tr>
-<tr><td><code>tests/cli.test.ts</code></td><td>Flags, streams, exit codes, <code>login</code>/<code>logout</code>.</td></tr>
-</tbody></table></div>
-<p><code>npm test</code> builds, then runs <a href="https://vitest.dev">vitest</a>.</p>
-
-<h2 id="stack">Tech stack</h2>
-<ul>
-  <li>TypeScript (ESM) targeting Node 20+.</li>
-  <li><code>@github/copilot-sdk</code> as the only runtime dependency.</li>
-  <li>Runnable with <code>npx</code> without a prior global install.</li>
-</ul>
-
+<p>Implement <code>LlmBackend.call(req)</code> returning text, optional reasoning, and effective-parameter metadata, plus <code>close()</code>. The request carries the operation kind, assembled prompt, requested model/effort, reasoning display flag, restriction snapshot, and ToolHost. Backend exceptions become script-level <code>llm_error</code>; runtime Failure values retain their category.</p>
+<h3 id="variable-store">Custom store</h3>
+<p>Implement synchronous <code>load()</code> and <code>save(vars)</code>, exported through a module factory. Stores are independent of model recordings and are forbidden in replay mode.</p>
+<h3 id="tests">Validation</h3>
+<p>The default suite is offline, using scripted backends and temporary files. Set <code>SPL_LIVE_TESTS=1</code> explicitly to enable authenticated Copilot checks. Editor scope tests and documentation snippet tests cover the public language surfaces.</p>
 </main>
 <script src="assets/search-index.js"></script>
 <script src="assets/site.js"></script>

@@ -2,51 +2,30 @@ import { describe, expect, it } from 'vitest';
 import { SplSyntaxError } from '../src/errors.js';
 import { parse } from '../src/parser.js';
 
-const bad = (src: string, message: RegExp) => {
-    try {
-        parse(src);
-    } catch (e) {
-        expect(e).toBeInstanceOf(SplSyntaxError);
-        expect((e as SplSyntaxError).message).toMatch(message);
-        return;
-    }
-    throw new Error(`expected a syntax error for: ${src}`);
+const bad = (source: string, message: RegExp) => {
+    expect(() => parse(source)).toThrow(SplSyntaxError);
+    expect(() => parse(source)).toThrow(message);
 };
 
 describe('parser: accepted syntax', () => {
-    it('parses the PRD examples', () => {
-        const src = `
-@{model='gpt-terra-6'}
-let response = ?{len='sentence', fmt='object'} 'A joke about programmers'
-let firstName = response.firstName
-think{level='low', show=True} 'Why are tests not passing'
-think{level='high'} 'What is the meaning of life'
-enforce 'Users favorite color is red' {
-    let color = ?'What is my favorite color?'
-}
-forbid 'swearing' { let x = ?'hi' }
-restrict './target/out' {
-    think 'Run tests and write to tests.log'
-}
-restrict net 'api.example.com' { let a = ?'x' }
-restrict exec 'npm,git' { let a = ?'x' }
-let readme = read_file{path='./README.md'} 'Return the file content'
-try {
-    let r = ?{fmt='object'} 'A joke about programmers'
-} except err {
-    let r = {'setup': 'none', 'punchline': err.reason}
-}
-assert 1==2 'Abnormal'
-fail 'Mysterious reason'
-success response
-`;
-        const p = parse(src);
-        expect(p.directives.model).toBe('gpt-terra-6');
-        expect(p.body.length).toBeGreaterThan(10);
+    it('composes generation options and explicit agents', () => {
+        parse(`
+@{model='test-model'}
+let Contract = {'type': 'object'}
+let response = ?{schema=Contract, reasoning='high', repairs=2, model='other'} 'Extract'
+let diagnosis = think{fmt='json', show=True} 'Diagnose'
+instruct 'Answer in English' { avoid 'jokes' { let result = ?'Hi' } }
+restrict './out', exec 'git', mcp 'docs/search' { agent 'Write the report' }
+let text = read_file('input.txt')
+write_file('output.txt', text)
+let output = shell('git status')
+let page = web_fetch('https://example.com')
+let hits = web_search('SPL')
+success response`);
     });
 
-    it('supports control flow, functions and expressions', () => {
-        const p = parse(`
+    it('supports control flow, expressions, declarations and assignments', () => {
+        const program = parse(`
 def f(a, b) { return a + b }
 let x = f(1, 2) * 3 ** 2 // 4 % 5
 if x > 1 and not x == 3 { pass } elif x in [1,2] { pass }
@@ -55,89 +34,64 @@ for i, v in enumerate(['a']) { continue }
 while False { break }
 let s = 'a{x + 1}b'[1:2]
 let t = x if x else None
-let x += 1
-let d['k'] = 2
-let d.k = 3
+x += 1
+d['k'] = 2
+d.k = 3
 let multi = {
     'a': 1,
     'b': [1, 2,
           3],
-}
-`);
-        expect(p.body.length).toBeGreaterThan(8);
+}`);
+        expect(program.body.filter(s => s.t === 'assign')).toHaveLength(3);
     });
 
-    it('accepts tools with partial or no parameters and web_search', () => {
-        parse(`read_file{path='x'} 'y'\nread_file{} 'y'\nread_file 'y'\nwrite_file{path='a'} 'haiku'\nweb_search{query='spl'} 'top hit'\nweb_search 'news'\nshell 'list files'`);
-    });
-
-    it('parses combined restrictions and preserves values containing commas', () => {
-        const stmt = parse(`restrict './src', net 'example.com', exec 'npm,git', mcp ['docs/search', 'issues'] { pass }`).body[0];
-        expect(stmt).toMatchObject({
-            t: 'restrict',
-            clauses: [
-                { kind: 'fs', arg: { t: 'str', parts: ['./src'] } },
-                { kind: 'net', arg: { t: 'str', parts: ['example.com'] } },
-                { kind: 'exec', arg: { t: 'str', parts: ['npm,git'] } },
-                { kind: 'mcp', arg: { t: 'list' } },
-            ],
+    it('parses combined restrictions and preserves commas in values', () => {
+        expect(parse(`restrict './src', net 'example.com', exec 'npm,git', mcp ['docs/search', 'issues'] { pass }`).body[0]).toMatchObject({
+            t: 'restrict', clauses: [{ kind: 'fs' }, { kind: 'net' }, { kind: 'exec' }, { kind: 'mcp' }],
         });
         parse(`restrict fs './a',\n './b', mcp 'docs/*' { pass }`);
         bad(`restrict './src', { pass }`, /expected|unexpected/);
     });
 
-    it('parses ? as a prefix operator at unary precedence', () => {
-        const p = parse(`let a = ?'x' + 'y'\nlet b = -?{len='word'} 'n'\nlet c = not ?'q'`);
-        const first = p.body[0] as { value: { t: string; l: { t: string } } };
-        expect(first.value.t).toBe('binary');
-        expect(first.value.l.t).toBe('ask');
-        expect((p.body[1] as { value: { t: string; e: { t: string } } }).value).toMatchObject({ t: 'unary', e: { t: 'ask' } });
+    it('retains prefix operator precedence', () => {
+        const program = parse(`let a = ?'x' + 'y'\nlet b = -?{len='word'} 'n'\nlet c = not ?'q'`);
+        expect(program.body[0]).toMatchObject({ value: { t: 'binary', l: { t: 'ask' } } });
+        expect(program.body[1]).toMatchObject({ value: { t: 'unary', e: { t: 'ask' } } });
     });
 
-    it('parses scope blocks, nested shadowing and top-level return', () => {
-        const p = parse(`let color = 'Blue'\n{\n    let color = 'Red'\n    log(color)\n}\nreturn color`);
-        expect(p.body.map((s) => s.t)).toEqual(['let', 'block', 'return']);
+    it('accepts grouping blocks, top-level return and next-line else/except', () => {
+        parse(`let color = 'Blue'\n{ let color = 'Red' }\nreturn color`);
+        parse(`if True { pass }\nelse { pass }\ntry { pass }\nexcept e { pass }`);
+        parse(`for i in [1] { { return i } }\nrestrict './x' { instruct 'a' { return } }`);
     });
 
-    it('accepts break and continue only in loops, but return anywhere', () => {
-        parse(`if True { return 1 }\nfor i in [1] { { return i } }\nrestrict './x' { enforce 'a' { return } }`);
-    });
-
-    it('accepts else/except on the next line', () => {
-        parse(`if True {\n pass\n}\nelse {\n pass\n}\ntry {\n pass\n}\nexcept e {\n pass\n}`);
-    });
-
-    it('treats escapes and raw strings', () => {
+    it('treats escapes, raw strings and multiline interpolation', () => {
         parse(`let a = 'a\\n{{b}}'\nlet b = r'{no} \\interp'\nlet c = '''multi\nline {a}'''`);
     });
 });
 
 describe('parser: strict syntax errors', () => {
-    it('rejects unknown modifiers and values', () => {
-        bad(`let a = ?{verbose=True} 'x'`, /unknown modifier 'verbose'/);
-        bad(`let a = ?{len='huge'} 'x'`, /invalid value 'huge'/);
-        bad(`let a = ?{len=True} 'x'`, /invalid value True/);
-        bad(`think{level='extreme'} 'x'`, /invalid value 'extreme'/);
-        bad(`think{show='yes'} 'x'`, /invalid value 'yes'/);
-        bad(`think{fmt='object'} 'x'`, /unknown modifier 'fmt' for 'think'/);
-        bad(`let a = ?{len='word', len='word'} 'x'`, /duplicate modifier/);
+    it('rejects unknown or duplicate modifiers, but allows expression values', () => {
+        bad(`?{verbose=True} 'x'`, /unknown modifier/);
+        bad(`think{level='high'} 'x'`, /unknown modifier/);
+        bad(`?{len='word', len='word'} 'x'`, /duplicate modifier/);
+        parse(`?{len=chosen_length, schema=make_schema(), repairs=1+1} 'x'`);
     });
 
-    it('rejects bad tool calls', () => {
-        bad(`read_file{file='x'} 'y'`, /unknown parameter 'file'/);
-        bad(`read_file{path='a', path='b'} 'y'`, /duplicate parameter/);
-        bad(`web_search{url='x'} 'y'`, /unknown parameter 'url'/);
-        bad(`shell{command='ls'}`, /requires a prompt/);
-        bad(`read_file`, /requires a prompt/);
+    it('rejects removed tool-command and constraint syntax', () => {
+        bad(`read_file{path='a'} 'Read'`, /end of statement/);
+        bad(`read_file 'Read a'`, /end of statement/);
+        bad(`enforce 'English' { pass }`, /was removed; use 'instruct'/);
+        bad(`forbid 'jokes' { pass }`, /was removed; use 'avoid'/);
     });
 
-    it('rejects modifications without let and the removed postfix form', () => {
-        bad(`x = 1`, /modified with 'let'/);
-        bad(`x += 1`, /modified with 'let'/);
-        bad(`d.k = 1`, /modified with 'let'/);
-        bad(`let x`, /expected '=' after the target/);
+    it('allows only name declarations and valid assignment targets', () => {
+        bad(`let x`, /expected '='/);
         bad(`let 1 = 2`, /expected a variable name/);
-        bad(`let f() = 2`, /invalid assignment target/);
+        bad(`let f() = 2`, /expected '='/);
+        bad(`let d.k = 2`, /expected '='/);
+        bad(`let x += 1`, /expected '='/);
+        bad(`f() = 2`, /invalid assignment target/);
         bad(`'x' ?`, /end of statement/);
     });
 
@@ -165,7 +119,7 @@ describe('parser: strict syntax errors', () => {
         try {
             parse(`let a = 1\nlet b = ?{x=1} 'q'`);
         } catch (e) {
-            expect((e as SplSyntaxError).line).toBe(2);
+            expect(e).toMatchObject({ line: 2 });
             return;
         }
         throw new Error('expected error');

@@ -1,191 +1,91 @@
-# spl-lang: Semantic Prompt Language interpreter
+# spl-lang 0.3
 
-A Python-like language where LLM calls are part of the syntax. Everything outside LLM calls is deterministic; LLM
-calls go through the GitHub Copilot SDK. See [../LANG-PRD.md](../LANG-PRD.md) for the full spec,
-[docs/syntax.ebnf](docs/syntax.ebnf) for the grammar and the [documentation site](../docs/index.html) (open it in a
-browser, or publish `docs/` with GitHub Pages) for guides and reference.
+The Semantic Prompt Language interpreter. Requires Node.js 20+.
 
-## Run
+See the [project guide](../README.md), [language specification](../LANG-PRD.md),
+[EBNF](docs/syntax.ebnf), and [documentation site](../docs/index.html).
 
-```
-npm install && npm run build
-node dist/cli.js login                                   # once: authenticate with GitHub Copilot
-node dist/cli.js examples/live.spl
-npx file:./lang examples/live.spl                        # npx from a checkout (or `npx spl-lang` once published)
-```
+## Run from a checkout
 
-Requires Node 20+ and an authenticated GitHub Copilot.
-
-```
-spl <script.spl> [--log-level error|info|debug] [--silent] [--model <id>]
-                 [--store <file.json> | --store-module <module>]
-                 [--timeout <s>] [--cwd <dir>] [--mcp <file.json>] [--check]
-spl login          # GitHub device flow: prints a code, you confirm it in the browser
-spl logout         # removes the credentials saved by `spl login`
+```sh
+npm install
+node dist/cli.js login
+node dist/cli.js examples/hi.spl
 ```
 
-* stdout: the value of `success` or a top-level `return` (strings raw, everything else as JSON) or the failure payload.
-* stderr: logs, including full LLM requests and raw responses (`[llm]`) and executed statement traces with line numbers (`[deterministic]`) at every non-silent log level (`error`, `info`, `debug`). Model and reasoning effort are included at `info` and `debug`. Logs may contain sensitive data; use `--silent` to suppress them.
-* Exit code: `0` success, `1` uncaught failure, `2` syntax/usage error.
+`npm install` runs the TypeScript build. Installed packages expose `spl` and `spl-lang`.
+Authentication is needed only for live generation and explicit agents; raw tools and replay
+work without Copilot. Existing Copilot/CLI credentials and supported GitHub token environment
+variables are reused. `spl login` otherwise runs device authentication and saves credentials
+under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved credentials.
 
-`spl login` does nothing if the runtime is already authenticated (an earlier login, a Copilot CLI / `gh` login or
-`COPILOT_GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_TOKEN`). Otherwise it runs the device flow and saves the token to
-`~/.spl/credentials.json` (override the folder with `SPL_HOME`); scripts use that token automatically. A script that
-needs an LLM and finds no credentials fails with `llm_error` and tells you to run `spl login`.
+## Language contract
 
-## Language at a glance
+- **Exact tools:** `read_file(path)`, `write_file(path, content)`, `web_fetch(url)`,
+  `web_search(query)`, `shell(command)` never call a model.
+- **Generation:** `?` and `think` have no tools or MCP access.
+- **Agency:** `agent` explicitly enables model-directed runtime and configured MCP tools.
+- **Validation:** expression-valued `schema` uses strict synchronous JSON Schema draft-07;
+  `fmt='json'` accepts any JSON value, `fmt='object'` requires an object/array.
+  Prose and code fences are not silently extracted.
+- **Repairs:** `repairs=0..5` retries only malformed/invalid generation, not transport errors
+  or external actions. Agents require `repairs=0`. Use `assert` for business rules.
+- **Guidance:** `instruct`, `avoid`, and `len` influence prompts, not runtime guarantees.
+- **Capabilities:** nested `restrict fs/net/exec/mcp` clauses intersect. Shell command
+  inspection is best effort; MCP servers are trusted services, not OS-sandboxed.
+- **Bindings:** `let` declares/redeclares function/script locals; `x = ...` and `x += ...`
+  update existing locals. Every block shares that scope. Enclosing names are readable but
+  cannot be rebound by a function; shared collections remain mutable.
 
-```
-@{model='gpt-5.5'}
+Common generation modifiers are `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`,
+and `model`. Values are evaluated once, then validated before calling the model.
+`think` and `agent` default to medium reasoning; `?` uses the model default.
+CLI `--model` overrides per-call `model`, which overrides the header directive.
 
-def fib(n) {
-    if n < 2 { return n }
-    return fib(n - 1) + fib(n - 2)
-}
+## Record/replay
 
-let joke = ?{len='sentence', fmt='object'} 'A joke about programmers'   # JSON validated and parsed
-let why  = think{level='high', show=True} 'Why is {joke.setup} funny?'
-
-let color = None
-enforce 'Answer in English' {
-    forbid 'profanity' { let color = ?{len='word'} 'Your favorite color?' }   # results leave the block
-}
-
-{                                                      # a bare block is a nested scope
-    let color = 'Red'                                  # shadows the outer variable
-    log(color)
-}
-
-restrict './out' {                                    # also: restrict net 'host,..' / restrict exec 'git,npm'
-    let f = write_file{path='./out/a.txt', content='{fib(10)}'} 'Confirm'
-}
-
-try { assert fib(5) == 4 'wrong' } except err { log(err.reason) }
-success {'joke': joke, 'why': why, 'color': color}
+```sh
+node dist/cli.js examples/triage-issues.spl --record triage.jsonl
+node dist/cli.js examples/triage-issues.spl --replay triage.jsonl --silent
 ```
 
-Decisions worth knowing (the PRD leaves them open):
+Record creates a new file and rejects agents. Replay performs exact, ordered request matching
+without starting Copilot/MCP. Local reads are permitted; writes, shell, network, agents,
+and persistent stores are blocked. Recordings include prompts and raw responses and must
+be protected like logs. Mismatched, missing, or unused entries fail explicitly.
 
-* **Blocks use braces**, statements end at a newline.
-* **Every modification of a variable starts with `let`**: `let x = 1`, `let x += 1`, `let d['k'] = 2`, `let d.k = 3`.
-  A bare `x = 1` is a syntax error.
-* **Scoping.** `let NAME = ...` binds in the current scope. Bare `{ ... }` blocks and function bodies open a new scope,
-  so `let` there shadows an outer variable and the outer one is untouched. `if`/`elif`/`else`, `for`, `while`,
-  `try`/`except`, `enforce`, `forbid` and `restrict` bodies share the enclosing scope, so `let` inside them updates the
-  enclosing variable: this is how the answer of an LLM call leaves an `enforce`/`forbid`/`restrict` block. A function
-  cannot rebind its caller's variables (use a list or dict to share state); names are read through all enclosing scopes.
-* **`return` exits immediately** from any scope: the innermost function, or the whole script when used at the top level
-  (like `success`). `break`/`continue` still belong to loops.
-* **`?` is a prefix operator**: `?'a' + b` is `(?'a') + b`, `-?'n'` is `-(?'n')`.
-* **LLM commands have defaults and braces are optional**: `?'q'`, `think 'q'` (level `medium`), and tools without
-  parameters, e.g. `read_file 'Read notes.txt and summarize it'`.
-* **Every string interpolates `{expr}`**. Write `{{`/`}}` or `\{`/`\}` for literal braces, or use a raw string
-  `r'{"a": 1}'`. Values are substituted as is: strings raw, `True`/`False`/`None`, lists and dicts as JSON.
-* Tool calls (`read_file`, `write_file`, `web_fetch`, `web_search`, `shell`): when the script supplies every parameter
-  the tool needs, the runtime runs it first (restriction-checked), and the output plus your instructions go to the LLM
-  whose answer is the value. When a parameter is missing (`read_file 'summarize notes.txt'`,
-  `write_file{path='a.txt'} 'write a haiku'`, `web_search 'latest Node.js LTS'`) the LLM calls the tool itself with the
-  parameters you gave kept fixed. `web_search` queries DuckDuckGo and counts as network access for `restrict net`.
-* Builtins: `len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys
-  values items json_parse json_stringify log`, plus Python-style string/list/dict methods. `log(...)` writes to stderr.
-* Unknown modifiers/values, `break` outside loops, `try` without `except`, a modification without `let`, etc. are
-  syntax errors (exit code 2).
+## CLI
 
-## Restrictions
-
-Two layers: the LLM is told about active restrictions in the prompt, and the runtime enforces them. The LLM only gets
-the five runtime tools (`read_file`, `write_file`, `web_fetch`, `web_search`, `shell`) plus configured MCP tools; every call is checked against
-the active `restrict` scopes and any other Copilot permission request is rejected. A violation raises a
-`restriction_violation` failure (catchable with `try/except`).
-
-* Paths are canonicalized (symlinks resolved, `..` removed) relative to `--cwd` before the check.
-* `net` matches exact hosts (and `*.example.com` wildcards); redirects are re-checked on every hop. `web_search`
-  needs `html.duckduckgo.com` to be allowed.
-* `exec` matches the executable name. Executables in pipelines and chains are checked against `restrict exec`,
-  and path-like and URL arguments and redirection targets are checked against `fs`/`net`. This is best effort for
-  programs that touch files or the network on their own.
-* Nested restrictions of one kind intersect and can never widen.
-* Clauses can be combined: `restrict './src', net 'example.com', exec 'git', mcp 'docs/search' { ... }`.
-  Repeating a kind intersects its clauses, just like nesting.
-* `mcp` allows configured servers (`'docs'` or `'docs/*'`) or individual tools (`'docs/search'`).
-  Selectors are case-sensitive; nested scopes cannot widen the configuration's tool allowlist.
-
-On Windows, `dir` switches such as `/s`, `/b` and `/a:-d` are recognized as options,
-not filesystem paths. Paths and redirection targets remain subject to filesystem restrictions.
-
-## MCP tools
-
-Pass `--mcp .vscode/mcp.json` to load MCP servers in VS Code's JSON format:
-
-See the [MCP configuration reference](../docs/cli.html#mcp) for HTTP/SSE and stdio examples,
-all supported fields, authentication, variable expansion and validation commands.
-Remote servers must explicitly set `"type": "http"` or `"type": "sse"`; omitting it defaults to stdio.
-
-```json
-{
-  "servers": {
-    "docs": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["${workspaceFolder}/tools/docs-server.js"],
-      "tools": ["search"]
-    }
-  }
-}
+```text
+spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
+               [--store file.json | --store-module module]
+               [--record file.jsonl | --replay file.jsonl]
+               [--log-level error|info|debug] [--silent] [--check]
 ```
 
-The LLM can call these tools during `?`, `think`, and tool-backed calls. Stdio servers support `command`,
-`args`, `env`, and `cwd`; `http`/`sse` servers use `url` and optional `headers`. All support optional `tools`
-(`["*"]` or omitted means all, `[]` disables the server) and `timeout` in milliseconds.
-`${workspaceFolder}` expands to `--cwd`; `${env:NAME}` expands environment variables. Server working
-directories default to `--cwd`; relative server `cwd` values resolve against it. The config filename is
-relative to the invoking directory. `--check` also validates this config without starting servers.
-Interactive `inputs`, unsupported fields/variables, JSON comments and trailing commas are rejected.
+Results are printed on stdout, logs on stderr. Full prompts/responses and statement traces
+appear at every non-silent log level. Exit codes are `0` success, `1` script failure,
+`2` syntax/usage error, and `70` internal error. `--check` does not execute modifier expressions
+or compile schemas. See [CLI and MCP configuration](../docs/cli.html).
 
-Only configured, scope-allowed MCP tools are exposed and approved. Trust your MCP servers: `restrict mcp`
-controls tool access, not a server's internal filesystem/network operations. Other restriction kinds do
-not sandbox MCP server processes or their configured connections.
+## Tests and embedding
 
-## Reproducibility
-
-Control flow, arithmetic and interpolation are deterministic. The Copilot SDK has no `temperature` or `seed` setting,
-so the language has none either. `think` levels map to the SDK reasoning effort; if the selected model does not support
-it a warning is logged and the model default is used. Guard against variance with `assert` and `fmt='object'`.
-
-## Variable store
-
-`--store vars.json` loads top-level variables from the file at start and writes them back at exit (also on failure).
-`--store-module ./mystore.mjs` plugs in your own store: export `createStore()` returning `{ load(): Record, save(vars) }`.
-
-## Examples
-
-All in [examples/](examples). Most run from `lang/`; `fix-failing-tests.spl` runs from the
-repository root because it executes `cd lang && npm test`. `--cwd <dir>` controls relative tool paths and working
-directories, not the script filename. The example syntax is checked by `tests/examples.test.ts`;
-`triage-issues` is also run on Copilot there when authenticated. See the [examples guide](../docs/examples.html)
-for the current scripts, model selections and run instructions.
-
-| Script | Shows |
-|--------|-------|
-| `commit-message.spl` | `shell` under `restrict exec 'git'`, validation helper, retry loop |
-| `mcp.spl` | SocialToAI search via `--mcp`, combined `./pudding` filesystem and `socialtoai/search` restrictions |
-| `triage-issues.spl` | `fmt='object'` + `assert` validation with feedback retries, aggregation, summary |
-| `extract-invoice.spl` | structured extraction cross-checked with arithmetic before it is accepted |
-| `code-review.spl` | three-file review with `gpt-5.6-luna`, structured findings, restricted report write, CI gate |
-| `release-notes.spl` | nested `forbid`/`enforce`, git history to a file inside `./out` |
-| `web-digest.spl` | `restrict net`, `web_fetch`, catching a blocked second host |
-| `fix-failing-tests.spl` | `mai-code-1.1-flash` repair loop running `cd lang && npm test`, up to three rounds |
-| `translate-docs.spl` | translation with `think` followed by `write_file` without `content` (output path pinned), dict iteration |
-| `journal.spl` | state across runs with `--store` |
-| `basics.spl`, `hi.spl`, `live.spl`, `restrict-live.spl`, `tools-live.spl` | small feature tours requiring Copilot |
-
-## Develop
-
-```
-npm test          # builds, then runs parser, interpreter, restriction and CLI tests, plus live tests on Copilot
+```sh
+npm test
 ```
 
-The live tests (`tests/live.test.ts`, one example in `tests/examples.test.ts`) call the real GitHub Copilot service and
-are skipped automatically when the runtime is not authenticated: run `spl login` first to include them.
+The default suite is offline. In PowerShell, opt into authenticated live checks with
+`$env:SPL_LIVE_TESTS='1'; npm test`, then remove the environment variable.
 
-The VS Code extension (syntax highlighting, snippets) lives in `../vscode`.
+The package exports `parse`, `run`, `Logger`, `CopilotBackend`, `RecordingBackend`,
+`ReplayBackend`, variable stores, authentication helpers, and related types.
+Call `close()` on the backend after running; replay also checks for unused entries there.
+Custom backends must honor the request kind: only `agent` may execute tools.
+See [embedding](../docs/internals.html#embedding).
+
+## Migration
+
+0.3 intentionally removes `enforce`/`forbid`, `think{level=...}`, tool-command syntax,
+and `let` before compound/member/index assignments. Use `instruct`/`avoid`,
+`reasoning`, ordinary raw functions, and explicit agents instead.
+Bare blocks no longer create scopes. See the [migration table](../README.md#breaking-changes-in-03).

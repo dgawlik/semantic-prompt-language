@@ -5,6 +5,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
+const examplesDir = path.resolve(dir, '..', 'lang', 'examples');
+const examples = new Set(fs.readdirSync(examplesDir).filter((file) => file.endsWith('.spl')));
+const escapeCode = (source) => source.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Keep complete executable examples and the published grammar synchronized with their sources.
+for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.html'))) {
+  const target = path.join(dir, file);
+  const original = fs.readFileSync(target, 'utf8');
+  let html = original.replace(/(<code class="language-spl" data-file="([^"]+)">)[\s\S]*?(<\/code>)/g, (block, open, name, close) => {
+    const source = name === 'quickstart.spl' ? 'hi.spl' : name;
+    if (!examples.has(source)) return block;
+    return `${open}\n${escapeCode(fs.readFileSync(path.join(examplesDir, source), 'utf8').trimEnd())}\n${close}`;
+  });
+  if (file === 'grammar.html') {
+    html = html.replace(/(<code class="language-ebnf">)[\s\S]*?(<\/code>)/, (_block, open, close) =>
+      `${open}\n${escapeCode(fs.readFileSync(path.resolve(examplesDir, '..', 'docs', 'syntax.ebnf'), 'utf8').trimEnd())}\n${close}`);
+  }
+  if (html !== original) fs.writeFileSync(target, html);
+}
+
 const strip = (s) =>
   s
     .replace(/<[^>]+>/g, '')

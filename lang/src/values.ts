@@ -19,7 +19,7 @@ export interface UserFunction {
 export interface BuiltinFunction {
     __fn: 'builtin';
     name: string;
-    call: (args: Value[]) => Value;
+    call: (args: Value[]) => Value | Promise<Value>;
 }
 
 export type FunctionValue = UserFunction | BuiltinFunction;

@@ -4,14 +4,15 @@ import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 import { CopilotBackend } from './copilot.js';
 import { AuthError, login, logout } from './auth.js';
-import { SplSyntaxError } from './errors.js';
-import type { LlmBackend } from './llm.js';
+import { Failure, SplSyntaxError } from './errors.js';
+import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
 import { parse } from './parser.js';
-import { run } from './interpreter.js';
+import { run, type RunResult } from './interpreter.js';
 import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
 import { toJson } from './values.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
+import { RecordingBackend, ReplayBackend } from './recording.js';
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
@@ -28,6 +29,8 @@ Options:
   --store <file.json>     persist top-level variables in a JSON file
   --store-module <path>   custom variable store: module exporting createStore() -> { load(), save(vars) }
   --timeout <seconds>     per LLM call timeout (default: 300)
+  --record <file.jsonl>   record generation responses (new file; no agents)
+  --replay <file.jsonl>   offline generation replay; only local reads allowed
   --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
   --check                 validate script syntax and any --mcp config without executing
   -v, --version           print version
@@ -82,6 +85,8 @@ async function main(): Promise<number> {
                 store: { type: 'string' },
                 'store-module': { type: 'string' },
                 timeout: { type: 'string' },
+                record: { type: 'string' },
+                replay: { type: 'string' },
                 cwd: { type: 'string' },
                 check: { type: 'boolean' },
                 version: { type: 'boolean', short: 'v' },
@@ -113,6 +118,8 @@ async function main(): Promise<number> {
     const timeoutSec = Number(values.timeout ?? 300);
     if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) usageError('--timeout must be a positive number');
     if (values.store && values['store-module']) usageError('--store and --store-module are mutually exclusive');
+    if (values.record && values.replay) usageError('--record and --replay are mutually exclusive');
+    if (values.replay && (values.store || values['store-module'])) usageError('--replay cannot use a persistent variable store');
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
     const file = positionals[0];
@@ -148,21 +155,38 @@ async function main(): Promise<number> {
         return usageError((e as Error).message);
     }
 
-    const backend: LlmBackend = new CopilotBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers });
+    let backend: LlmBackend;
     try {
-        const result = await run(program, { backend, logger, store, cwd, model: values.model });
-        if (result.status === 'failure') {
-            process.stdout.write(JSON.stringify(result.failure, null, 4) + '\n');
-            return 1;
+        if (values.replay) backend = new ReplayBackend(values.replay);
+        else {
+            backend = new CopilotBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers });
+            if (values.record) backend = new RecordingBackend(backend, values.record);
         }
-        if (result.hasValue) {
-            const v = result.value;
-            process.stdout.write((typeof v === 'string' ? v : JSON.stringify(toJson(v), null, 2)) + '\n');
-        }
-        return 0;
-    } finally {
-        await backend.close();
+    } catch (e) {
+        if (!(e instanceof Error)) throw e;
+        return usageError(`cannot open recording: ${e.message}`);
     }
+    let result: RunResult | undefined;
+    try {
+        result = await run(program, { backend, logger, store: values.replay ? undefined : store, cwd, model: values.model });
+    } finally {
+        try {
+            await backend.close();
+        } catch (e) {
+            if (!(e instanceof LlmError)) throw e;
+            logger.error(e.message);
+            if (result?.status !== 'failure') result = { status: 'failure', failure: new Failure('llm_error', e.message).payload() };
+        }
+    }
+    if (result.status === 'failure') {
+        process.stdout.write(JSON.stringify(result.failure, null, 4) + '\n');
+        return 1;
+    }
+    if (result.hasValue) {
+        const v = result.value;
+        process.stdout.write((typeof v === 'string' ? v : JSON.stringify(toJson(v), null, 2)) + '\n');
+    }
+    return 0;
 }
 
 main().then(

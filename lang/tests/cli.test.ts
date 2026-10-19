@@ -66,10 +66,10 @@ describe('cli', () => {
     });
 
     it('reports syntax errors on stderr with exit code 2', () => {
-        const r = spl(`let a = ?{len='huge'} 'x'`);
+        const r = spl(`let a = ?{unknown='huge'} 'x'`);
         expect(r.code).toBe(2);
         expect(r.out).toBe('');
-        expect(r.err).toMatch(/s\.spl:1:\d+: syntax error: invalid value 'huge'/);
+        expect(r.err).toMatch(/s\.spl:1:\d+: syntax error: unknown modifier/);
     });
 
     it('--check only parses', () => {
@@ -77,10 +77,39 @@ describe('cli', () => {
         expect(spl(`fail`, '--check').code).toBe(2);
     });
 
+    it('validates expression-valued modifiers at runtime without contacting the model', () => {
+        const r = spl(`success ?{len='huge'} 'x'`, '--silent');
+        expect(r.code).toBe(1);
+        expect(JSON.parse(r.out)).toMatchObject({ status_code: 'runtime_error', reason: expect.stringContaining('len must be') });
+    });
+
+    it('replays generation offline and blocks external actions', () => {
+        const file = path.join(dir, 'responses.jsonl');
+        fs.writeFileSync(file, [
+            JSON.stringify({ format: 'spl-generation', version: 1 }),
+            JSON.stringify({
+                request: JSON.stringify({ kind: 'ask', prompt: 'question', model: null, reasoningEffort: null, showReasoning: false }),
+                response: { text: 'offline answer', effective: { model: 'test' } },
+            }),
+            '',
+        ].join('\n'));
+        expect(spl(`success ?'question'`, '--replay', file, '--silent')).toEqual({ code: 0, out: 'offline answer\n', err: '' });
+        expect(spl(`success ?'changed'`, '--replay', file, '--silent').code).not.toBe(0);
+        const empty = path.join(dir, 'empty.jsonl');
+        fs.writeFileSync(empty, '{"format":"spl-generation","version":1}\n');
+        const denied = spl(`write_file('blocked.txt', 'x')`, '--replay', empty, '--silent');
+        expect(denied.code).toBe(1);
+        expect(JSON.parse(denied.out).status_code).toBe('restriction_violation');
+        expect(fs.existsSync(path.join(dir, 'blocked.txt'))).toBe(false);
+        expect(spl(`success 1`, '--record', file, '--silent').code).toBe(2);
+        expect(spl(`success 1`, '--record', file, '--replay', file).code).toBe(2);
+        expect(spl(`success 1`, '--replay', file, '--store', path.join(dir, 'vars.json')).code).toBe(2);
+    });
+
     it('persists variables with --store', () => {
         const store = path.join(dir, 'vars.json');
         spl(`let n = 41`, '--store', store);
-        expect(spl(`let n += 1\nsuccess n`, '--store', store).out).toBe('42\n');
+        expect(spl(`n += 1\nsuccess n`, '--store', store).out).toBe('42\n');
     });
 
     it('supports a pluggable store module', () => {

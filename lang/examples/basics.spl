@@ -19,8 +19,8 @@ let joke = ?{len='sentence', fmt='object'} 'A joke about programmers as {{"setup
 log("setup: {joke['setup']}")
 
 # Scoped constraints
-enforce 'Answer in English' {
-    forbid 'Mentioning the word cat' {
+instruct 'Answer in English' {
+    avoid 'Mentioning the word cat' {
         let animal = ?{len='paragraph'} 'Funny story involving a pet animal'
     }
 }

@@ -1,8 +1,18 @@
 # Triage a batch of issues into labels and priorities, with validated JSON and retries.
-# Pattern: LLM output is untrusted input; deterministic code checks it and asks again on failure.
+# Schema repairs retry generation only; transport errors are not retried.
 
 let LABELS = ['bug', 'feature', 'question', 'docs']
 let PRIORITIES = ['low', 'medium', 'high']
+let Triage = {
+    'type': 'object',
+    'properties': {
+        'label': {'type': 'string', 'enum': LABELS},
+        'priority': {'type': 'string', 'enum': PRIORITIES},
+        'reason': {'type': 'string', 'minLength': 1},
+    },
+    'required': ['label', 'priority', 'reason'],
+    'additionalProperties': False,
+}
 
 let issues = [
     {'id': 101, 'title': 'App crashes on startup', 'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
@@ -12,24 +22,12 @@ let issues = [
 ]
 
 def triage(issue) {
-    let problem = ''
-    for attempt in range(3) {
-        try {
-            let r = ?{fmt='object'} '''
-Classify this GitHub issue. {problem}
+    let r = ?{schema=Triage, reasoning='low', repairs=2} '''
+Classify this GitHub issue.
 Title: {issue['title']}
 Body: {issue['body']}
-
-Reply as JSON: {{"label": one of {LABELS}, "priority": one of {PRIORITIES}, "reason": "one short sentence"}}'''
-            assert r.label in LABELS "label must be one of {LABELS}"
-            assert r.priority in PRIORITIES "priority must be one of {PRIORITIES}"
-            return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
-        } except err {
-            let problem = "Your previous answer was rejected ({err.reason}). Follow the format exactly."
-            log("issue {issue['id']}: attempt {attempt + 1} failed: {err.reason}")
-        }
-    }
-    fail "could not triage issue {issue['id']}"
+Give a one-sentence reason.'''
+    return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
 }
 
 let results = []
@@ -38,9 +36,9 @@ for issue in issues {
     let t = triage(issue)
     results.append(t)
     if t['label'] in counts {
-        let counts[t['label']] += 1
+        counts[t['label']] += 1
     } else {
-        let counts[t['label']] = 1
+        counts[t['label']] = 1
     }
 }
 

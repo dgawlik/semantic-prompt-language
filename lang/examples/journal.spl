@@ -13,9 +13,10 @@ try {
     let history = []
 }
 
-let runs += 1
+runs += 1
 
-let todays = read_file{path='./examples/data/notes.txt'} 'Summarize these notes in one sentence'
+let notes = read_file('./examples/data/notes.txt')
+let todays = ?{len='sentence'} 'Summarize these notes: {notes}'
 history.append({'run': runs, 'summary': todays})
 if len(history) > 5 {
     let history = history[1:]

@@ -8,7 +8,7 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
     it.each([
         ['ask', `?'Ask prompt'`],
         ['think', `think 'Think prompt'`],
-        ['tool', `read_file 'Tool prompt'`],
+        ['agent', `agent 'Agent prompt'`],
     ])('logs the full %s request and raw response unless silent', async (kind, expression) => {
         const lines: string[] = [];
         const requests: LlmRequest[] = [];
@@ -20,13 +20,13 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
             },
             async close() {},
         };
-        const result = await run(parse(`enforce 'Be precise' { success ${expression} }`), {
+        const result = await run(parse(`instruct 'Be precise' { success ${expression} }`), {
             backend, logger: new Logger(level, (line) => lines.push(line)), cwd: process.cwd(),
         });
 
         expect(result).toMatchObject({ status: 'success', value: text.trim() });
         expect(requests).toHaveLength(1);
-        expect(requests[0].prompt).toContain('You MUST: Be precise');
+        expect(requests[0].prompt).toContain('Follow: Be precise');
         if (level === 'silent') {
             expect(lines).toEqual([]);
         } else {
@@ -60,7 +60,7 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
         const lines: string[] = [];
         const result = await run(parse(`let n = 0
 for i in [1, 2] {
-    let n += i
+    n += i
 }
 if False {
     fail 'unreachable'
@@ -73,8 +73,8 @@ success n`), {
         expect(lines).toEqual(level === 'silent' ? [] : [
             '[deterministic] line 1 (let): let n = 0',
             '[deterministic] line 2 (for): for i in [1, 2] {',
-            '[deterministic] line 3 (let): let n += i',
-            '[deterministic] line 3 (let): let n += i',
+            '[deterministic] line 3 (assign): n += i',
+            '[deterministic] line 3 (assign): n += i',
             '[deterministic] line 5 (if): if False {',
             '[deterministic] line 8 (success): success n',
         ]);

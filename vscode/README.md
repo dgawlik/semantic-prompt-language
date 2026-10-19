@@ -8,23 +8,25 @@ this repository).
 * **Highlighting** for the whole language: keywords, `let`/`def` declarations, numbers, comments, the `@{model=...}`
   directive, and strings with `{expr}` interpolation, `{{ }}` and `\{ \}` brace escapes, raw `r'...'` strings and
   triple-quoted strings. Illegal escapes and stray `}` in strings are flagged with the `invalid` scope.
-* **LLM commands**: `?` (prefix operator) and `think` and the tools `read_file`, `write_file`, `web_fetch`, `web_search`,
-  `shell`, including their modifiers (`len`, `fmt`, `level`, `show`, `path`, `content`, `url`, `query`, `command`).
-* **Scopes and failures**: `enforce`, `forbid`, `restrict [fs|net|exec|mcp]` (including comma-separated clauses), `try`/`except`, `assert`, `fail`, `success`.
+* **Generation and agency**: generation-only `?` and `think`, explicit `agent`, and expression-valued modifiers
+  (`len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`). Raw tools are ordinary function calls.
+* **Guidance and failures**: `instruct`, `avoid`, `restrict [fs|net|exec|mcp]` (including comma-separated clauses), `try`/`except`, `assert`, `fail`, `success`.
 * **Snippets** (type the prefix): `def`, `if`, `ifelse`, `for`, `while`, `let`, `ask`, `askobj`, `think`, `try`,
-  `retry`, `enforce`, `forbid`, `restrict`, `restrictnet`, `restrictexec`, `restrictmcp`, `restrictmulti`, `read_file`, `write_file`, `web_fetch`,
+  `askschema`, `retry` (bounded schema repair), `agent`, `instruct`, `avoid`, `restrict`, `restrictnet`, `restrictexec`, `restrictmcp`, `restrictmulti`, `read_file`, `write_file`, `web_fetch`,
   `web_search`, `shell`, `assert`, `fail`, `success`, `model`.
 * **Editing**: `#` line comments (Ctrl+/), bracket matching and auto-closing for `{}` `[]` `()` and quotes
   (including `'''`), auto-indent after `{`, `#region` / `#endregion` folding.
 
-The grammar is purely lexical (TextMate); semantic checks such as unknown modifiers come from `spl --check`.
+The grammar is purely lexical (TextMate). Unknown/duplicate modifier names are checked by `spl --check`;
+expression values and schemas are validated at runtime. All blocks now share their function/script scope.
+`let` declares/redeclares names; compound and member/index assignments do not use `let`.
 
 ## Install
 
 ```
 npm install
-npm run package                                  # creates spl-lang-vscode-0.1.0.vsix
-code --install-extension spl-lang-vscode-0.1.0.vsix
+npm run package                                  # creates spl-lang-vscode-0.3.0.vsix
+code --install-extension spl-lang-vscode-0.3.0.vsix
 ```
 
 For development open this folder in VS Code and press F5 (Extension Development Host).

@@ -1,254 +1,160 @@
-
-
-# Semantic Prompt Language
-
-The scope of this project is a Python-like language that allows natural language prompts that call LLMs directly
-from the syntax. The audience is developers who want to automate tasks and write ordinary programs more concisely
-with the help of AI.
-
-## Key tenets
-
-1. **Best-effort reproducibility.** Everything outside LLM calls (control flow, arithmetic, string interpolation,
-   variable handling) is fully deterministic. For LLM calls the runtime reduces variance on a best-effort basis:
-   it sets `temperature=0` and a fixed `seed` when the selected model/SDK supports them, and records the effective
-   parameters in the logs. Identical LLM output is **not guaranteed**; scripts should use `assert` and `fmt`
-   validation to guard against variance.
-2. **Least privilege through explicit restriction.** The MVP is allow-by-default: a script has the full
-   permissions of the user running the interpreter. Authors narrow permissions with scoped `restrict` blocks, and
-   the runtime enforces them (it does not merely ask the LLM to comply). A deny-by-default permission model is a
-   possible future change.
-
-### Non-goals
-
-* Bit-for-bit reproducible LLM output (no record/replay or response cache in the MVP).
-* Being a full Python implementation; only a reasonable subset is supported.
-
-## MVP scope
-
-* Working parser and runtime with strict syntax checking
-* GitHub Copilot SDK integration
-* EBNF syntax document
-* VS Code syntax-highlighting extension
-* Command-line interpreter
-
-## The language
-
-### Variables
-
-They are declared with
-
-```
-let variable1 = ...
-```
-
-and are mutable during the execution of the script. They can be interpolated in either plain text or LLM commands and
-are substituted as is. They are stored in a JSON file store that is pluggable from the CLI.
-
-### Commands
-
-#### Operational modifiers
-
-All commands have defaults, but allow to override their mode with operational modifiers. For example
-
-```
-think{level='high'} 'What is the meaning of life'
-```
-
-Modifier values follow these rules:
-
-* Names and values are validated by the parser against a fixed schema per command. Unknown modifiers or values are
-  a syntax error, not silently ignored.
-* String values are quoted and lowercase (`level='high'`, `len='sentence'`, `fmt='object'`).
-* Booleans use Python spelling (`show=True`).
-* Directive values in the script header are quoted too (`@{model='gpt-terra-6'}`).
-
-| Command | Modifier | Allowed values |
-|---------|----------|----------------|
-| `think` | `level` | `'low'`, `'medium'`, `'high'` |
-| `think` | `show` | `True`, `False` |
-| `?` | `len` | `'word'`, `'sentence'`, `'paragraph'`, `'long'` (provisional) |
-| `?` | `fmt` | `'text'`, `'object'` |
-
-
-#### LLM call
-
-An LLM call is invoked via `?`. It allows overriding length and format.
-
-```
-let response = ?{len='sentence', fmt='object'} 'A joke about programmers'
-```
-
-`len` is a suggestion to the LLM that the runtime prepends to the query during the call. Likewise `fmt='object'`
-guides the LLM to generate a JSON response; moreover the runtime validates the JSON structure and parses it
-(an invalid response raises a failure with `status_code='invalid_format'`).
-
-The parsed object can then be used:
-
-```
-let firstName = response.firstName
-```
-
-#### Enforce/Forbid
-
-Enforce and forbid have scopes. They are in force only inside the provided block.
-
-Example:
-
-```
-enforce 'Users favorite color is red' {
-    let color = ?'What is my favorite color?'
-}
-```
-
-The runtime tracks on a stack which enforce/forbid statements are in scope and prepends their constraints to the
-LLM query.
-
-
-#### Think
-
-Tells the LLM to deliberate about the problem and allows adjusting its thinking level.
-
-```
-think{level='low', show=True} 'Why are tests not passing'
-```
-
-
-#### Restrict
-
-`restrict` narrows what the script and the LLM tools it invokes may do inside its block. Without `restrict`,
-everything is allowed (allow-by-default). There are three resource kinds:
-
-| Form | Effect |
-|------|--------|
-| `restrict './target/out' { ... }` | Reads and writes are allowed only inside the folder. Same as `restrict fs`. |
-| `restrict net 'api.example.com' { ... }` | Network access is allowed only to the listed hosts. |
-| `restrict exec 'npm,git' { ... }` | Shell commands are allowed only for the listed executables. |
-
-```
-restrict './target/out' {
-    think 'Run tests and write to tests.log'
-}
-```
-
-Enforcement has two layers:
-
-1. **Guidance:** the runtime tells the LLM about the active restrictions in the prompt.
-2. **Hard enforcement:** the runtime intercepts every tool call (file, network, exec) made by the LLM and blocks
-   any that violate the active restrictions. A blocked call returns a `failure` payload (see "Handling failure").
-
-Rules:
-
-* Restrictions are scoped to the block and can be nested. Nested restrictions of the same kind can only narrow
-  the allowed set (the effective set is the intersection), never widen it.
-* Paths are resolved to absolute, canonical paths before checking, so `..` and symlinks cannot escape the folder.
-
-
-#### Tool calls
-
-A tool call has the form `let variableName = <tool>{param=value} 'instructions'`. In the MVP the tools are a
-**fixed built-in set** exposed through the Copilot SDK; user-defined tools and MCP servers are out of scope.
-
-| Tool | Purpose | Governed by |
-|------|---------|-------------|
-| `read_file` | Read a file | `restrict fs` |
-| `write_file` | Create or modify a file | `restrict fs` |
-| `web_fetch` | Fetch a URL | `restrict net` |
-| `shell` | Run a shell command | `restrict exec` |
-
-```
-let readme = read_file{path='./README.md'} 'Return the file content'
-```
-
-Every tool call, whether made explicitly by the script or by the LLM during a `think`/`?` command, goes through the
-same runtime interception and is checked against the active `restrict` scopes. The tool list is provisional and
-should be finalized against what the Copilot SDK exposes.
-
-
-
-### Deterministic part of the language
-
-The language introduces non-determinism through the commands above because they are handled as LLM calls.
-But these commands return mostly plain text results or JSON values that are stored in variables.
-
-The rest of the language operates on these variables in a purely deterministic way with Python-like syntax.
-This includes `if`/`elif`/`else`, `for`, `while`, functions, function calls, indexing, boolean and arithmetic
-expressions, string interpolation (even in the commands) and other things that are part of a reasonable subset of
-Python.
-
-
-### Handling failure
-
-A failure (failed LLM call, invalid `fmt` output, blocked tool call, failed `assert`, `fail`, runtime error)
-**stops the script immediately** unless it is caught with `try/except`. All failures share the same JSON payload:
-
-```json
-{
-    "status": "failure",
-    "reason": "reason",
-    "command": "source line as plain text",
-    "line": 12,
-    "status_code": "assertion_failed"
-}
-```
-
-`status_code` is one of (provisional): `assertion_failed`, `explicit_failure`, `invalid_format`,
-`restriction_violation`, `llm_error`, `tool_error`, `runtime_error`.
-
-Failures can be handled with `try/except`; the caught payload is bound to the given name:
-
-```
-try {
-    let response = ?{fmt='object'} 'A joke about programmers'
-} except err {
-    let response = {'setup': 'none', 'punchline': err.reason}
-}
-```
-
-There are 3 special commands that control when the program stops:
-
-```
-assert 1==2 'Abnormal'
-```
-Raises a failure with `status_code='assertion_failed'` when the condition is false.
-
-```
-fail 'Mysterious reason'
-```
-Raises a failure with `status_code='explicit_failure'`.
-
-```
-success result
-```
-Stops the script successfully; `result` is the value printed to stdout and returned by the interpreter.
-
-An uncaught failure prints the payload to stdout and exits with a non-zero exit code; success exits with 0.
-
-## Logging
-
-The runtime is a CLI interpreter with a tunable logging level. It runs the script file until completion.
-
-* Logs are written to **stderr**; the script result (the value of `success`, or the failure payload) is written to
-  **stdout**, so the result can be piped safely.
-* `--log-level <level>` sets verbosity (`error`, `info`, `debug`; provisional).
-* `--silent` suppresses all logs; only the result is printed.
-* Logs record, for each LLM call, the effective model and parameters (including `temperature` and `seed`).
-* Exit code: `0` on success, non-zero on an uncaught failure.
-
-
-## Models and thinking level
-
-The script file allows special directives at the top.
-
-```
-@{model='gpt-terra-6'}
-```
-
-More directives may be added in the future.
-
-The `think` command's `level` is mapped to the corresponding reasoning-effort setting of the Copilot SDK API.
-If the selected model does not support that setting, the runtime logs a warning and continues with the model default.
-
-## Tech stack
-
-The project is written in TypeScript with the GitHub Copilot SDK. The interpreter must be runnable with `npx`
-(without a prior global install).
+# Semantic Prompt Language: 0.3 specification
+
+SPL is a small Python-like language for AI workflows. Braces delimit blocks; statements
+end at newlines or semicolons. The [EBNF](lang/docs/syntax.ebnf) specifies the syntax.
+This version intentionally breaks 0.2 syntax; see the [migration guide](README.md#breaking-changes-in-03).
+
+## Goals and boundaries
+
+1. Deterministic control flow and data manipulation; model outputs are nondeterministic.
+2. Explicit separation of exact I/O, generation, and model-directed actions.
+3. Runtime validation of model output before the program consumes it.
+4. Bounded generation repair without repeating external actions.
+5. Offline generation regression tests through exact record/replay.
+6. Guidance must not be described as a runtime guarantee.
+
+Not goals: full Python compatibility, classes, a static type system, general workflow
+caching, transactional external actions, an OS sandbox, or bit-for-bit reproducible live output.
+The Copilot SDK does not expose temperature/seed controls used by this runtime.
+
+## Bindings
+
+`let name = expression` declares or redeclares a binding in the current function/script.
+`name = expression` and compound assignments require an existing binding in that local scope.
+Functions can read lexical enclosing scopes but cannot rebind their callers' variables.
+There is no implicit nonlocal assignment.
+
+All blocks, including bare grouping blocks, share their enclosing function/script scope.
+Only function calls introduce a new local scope. Parameters, loop variables, function
+definitions, and caught-failure names create local bindings.
+List/dict members remain mutable and can be shared across function boundaries.
+
+Values: None, bool, number, string, list, string-keyed dict, and functions.
+Python-style operators, comparisons, short-circuiting, indexing, slicing, methods,
+closures, recursion, loops, and conditionals form the deterministic subset.
+Strings interpolate `{expression}`; `{{`/`}}`, escaped braces, and raw strings provide literal braces.
+
+## Exact tools
+
+The following are ordinary positional built-in functions, not language keywords:
+
+| Function | Result |
+|---|---|
+| `read_file(path)` | Exact UTF-8 file text |
+| `write_file(path, content)` | Write confirmation text |
+| `web_fetch(url)` | HTTP response body text |
+| `web_search(query)` | Search result text |
+| `shell(command)` | Combined stdout/stderr; nonzero exit raises `tool_error` |
+
+All arguments are required strings. No tool invokes a model.
+Tools use the active restrictions and paths relative to `--cwd`.
+Network responses can vary externally; "exact" means no model interpretation.
+Shell timeout is 120 seconds; HTTP timeout is 30 seconds; redirects are limited to five.
+Agent-facing tool results may be truncated with an explicit marker; raw I/O is not truncated.
+
+## Generation and agency
+
+`? prompt` is a prefix expression at unary precedence. `think prompt` is generation
+with medium reasoning by default. Both have no runtime, built-in Copilot, or MCP tools,
+and unexpected permission requests abort the call.
+
+`agent prompt` explicitly enables model-directed runtime and configured MCP tools.
+Agents default to medium reasoning. Actions remain subject to active restrictions;
+agents are not automatically retried.
+
+All three accept a brace modifier list. Names are unique and checked at parse time;
+values are arbitrary expressions, evaluated once and checked at runtime before a call.
+
+| Modifier | Contract |
+|---|---|
+| `len` | `word`, `sentence`, `paragraph`, `long`; prompt hint only |
+| `fmt` | `text` (default), `json` (any JSON value), `object` (object/array) |
+| `reasoning` | `low`, `medium`, `high`; model support is best effort with warnings |
+| `show` | Boolean, default False; stream available model reasoning to info logs |
+| `schema` | Strict synchronous JSON Schema draft-07 object/boolean; implies json format |
+| `repairs` | Integer 0..5; additional generation attempts, default 0 |
+| `model` | Nonempty model identifier |
+
+Model precedence: CLI override > per-call modifier > header `@{model='...'}` > SDK default.
+Every call uses a fresh session; context must be passed explicitly through values.
+
+### Structured output and repairs
+
+JSON parsing is strict: no extraction from prose or Markdown fences.
+Schema compilation uses Ajv strict mode, without coercion, defaults, or deleting extra fields.
+Invalid schemas and configuration combinations are `runtime_error` before model invocation.
+Asynchronous schemas and unresolved external references are not supported.
+
+Malformed JSON raises `invalid_format`. Schema mismatch raises `validation_failed`
+with field paths, including missing fields and array indices.
+`schema` cannot be combined with `fmt='text'`. Repairs require JSON output.
+
+Repair runs only for `invalid_format` and `validation_failed`, giving the model its previous
+answer and validation errors. The prompt and modifier expressions are not reevaluated.
+The maximum number of model calls is `1 + repairs`. Transport/model/tool/restriction errors
+are not repaired. Agents require `repairs=0`.
+Business rules are explicit `assert` statements outside schema repair.
+
+## Guidance and restrictions
+
+`instruct text { ... }` and `avoid text { ... }` prepend scoped response guidance.
+They apply dynamically to calls in the block and called functions; nested guidance combines
+and unwinds on exit. They do not verify compliance.
+
+`restrict [fs|net|exec|mcp] expression { ... }` checks actions at runtime.
+The default kind is fs. Arguments are comma-separated strings or nonempty string lists.
+Clauses can be combined, and nested/repeated clauses of one kind intersect.
+
+- fs canonicalizes relative paths, `..`, and symlinks before checking containment.
+- net checks exact hosts or wildcard subdomains, including every redirect hop.
+- exec checks executable names, chains, pipelines, path-like arguments, and redirections.
+  This is best effort, not an OS sandbox for programs with their own I/O.
+- mcp checks configured server/tool selectors; configuration allowlists cannot be widened.
+  MCP servers are trusted services; these scopes do not sandbox server-internal I/O.
+
+Raw tools and agents are allow-by-default outside restrictions. Generation has no tools
+regardless of scopes. Permission requests for tools outside the runtime/configuration are rejected.
+
+## Failures and termination
+
+`assert condition [message]` raises `assertion_failed`, `fail reason` raises
+`explicit_failure`, and `try { ... } except name { ... }` binds the caught failure payload.
+All script failures have `status`, `reason`, `command`, `line`, and `status_code`.
+Other categories: `invalid_format`, `validation_failed`, `restriction_violation`,
+`llm_error`, `tool_error`, `runtime_error`.
+
+`return` immediately exits the innermost function or the script at top level.
+`success [value]` immediately ends the script, even from a function.
+`break`/`continue` require a lexically enclosing loop in the same function.
+Syntax errors are detected before execution and are not catchable.
+
+## Persistence and record/replay
+
+Variable stores are opt-in. They seed script locals and save nonfunction globals on exit,
+even after a script failure. This is not transactionality or a record of completed actions.
+
+`--record file.jsonl` writes a new generation recording and refuses an existing path.
+`--replay file.jsonl` reads it without starting Copilot or MCP servers.
+The JSONL header is `{"format":"spl-generation","version":1}`.
+Each subsequent line contains a serialized request key and raw backend response.
+
+Request keys include call kind, assembled prompt, requested model, reasoning effort,
+and show-reasoning flag. Calls match exactly and in order, including repair attempts.
+Mismatches, exhausted recordings, and unused entries are explicit failures.
+Recordings capture successful backend responses, not transport errors.
+
+Agents are rejected in record and replay modes. Replay permits local reads only:
+writes, shell, network, and persistent stores are blocked before execution.
+It never replays external side effects and is not a general workflow cache.
+Recordings and logs contain sensitive prompt/response content and require appropriate handling.
+
+## CLI, documentation, and validation
+
+stdout carries the script result or failure payload; stderr carries logs.
+Exit codes: 0 success, 1 script failure, 2 syntax/usage, 70 internal error.
+`--check` validates syntax and supplied MCP configuration, not runtime expressions/schemas.
+Non-silent levels include full model transcripts and executed-statement traces.
+
+Changes must stay consistent across parser/runtime, EBNF, examples, site reference,
+READMEs, editor highlighting/snippets, and offline tests.
+Tests are offline by default; authenticated live tests require `SPL_LIVE_TESTS=1`.

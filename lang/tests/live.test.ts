@@ -2,13 +2,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { run, type RunResult } from '../src/interpreter.js';
+import { run } from '../src/interpreter.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
 import { LIVE_TIMEOUT, RecordingCopilot, live } from './live.js';
-
-// These tests talk to the real GitHub Copilot service (authenticate once with `spl login`).
-// Assertions are deliberately loose: they check structure and behavior, not exact wording.
 
 let dir: string;
 let backend: RecordingCopilot;
@@ -20,140 +17,38 @@ afterEach(async () => {
     await backend.close();
     fs.rmSync(dir, { recursive: true, force: true });
 });
+const exec = (source: string) => run(parse(source), { backend, logger: new Logger('silent'), cwd: dir });
 
-const exec = (src: string) => run(parse(src), { backend, logger: new Logger('silent'), cwd: dir });
+describe.skipIf(!live)('generation and explicit agents on Copilot', () => {
+    it('generates text without tools', async () => {
+        expect(await exec(`success ?{len='word'} 'Name the color of a ripe banana'`)).toMatchObject({ status: 'success', value: expect.any(String) });
+        expect(backend.calls[0].kind).toBe('ask');
+    }, LIVE_TIMEOUT);
 
-const value = (r: RunResult) => {
-    if (r.status !== 'success') throw new Error(`expected success, got ${JSON.stringify(r.failure)}`);
-    return r.value;
-};
-const failure = (r: RunResult) => {
-    if (r.status !== 'failure') throw new Error('expected failure');
-    return r.failure;
-};
+    it('combines reasoning and schema-validated output', async () => {
+        const result = await exec(`success ?{reasoning='low', schema={'type':'object','properties':{'answer':{'type':'number'}},'required':['answer'],'additionalProperties':False}, repairs=1} 'What is 6 times 7?'`);
+        expect(result).toMatchObject({ status: 'success', value: { answer: 42 } });
+        expect(backend.calls[0].reasoningEffort).toBe('low');
+    }, LIVE_TIMEOUT * 2);
 
-describe.skipIf(!live)('LLM commands on Copilot', () => {
-    const t = LIVE_TIMEOUT;
+    it('supports think shorthand with the same modifiers', async () => {
+        expect(await exec(`success think{reasoning='low', fmt='json'} 'What is 2+2? Reply with a JSON number'`)).toMatchObject({ status: 'success', value: 4 });
+    }, LIVE_TIMEOUT);
 
-    it('answers with length hints and without braces', async () => {
-        const result = await exec(`let a = ?{len='word'} 'Name the color of a ripe banana'\nlet b = ?'Say hello'\nsuccess [a, b]`);
-        const [a, b] = value(result) as string[];
-        expect(a.trim().split(/\s+/).length).toBeLessThanOrEqual(2);
-        expect(b.length).toBeGreaterThan(0);
-        expect(backend.calls[0].prompt).toBe('Answer with a single word.\n\nName the color of a ripe banana');
-        expect(backend.calls[1].prompt).toBe('Say hello');
-    }, t);
+    it('keeps raw file and shell operations independent of the model', async () => {
+        const result = await exec(`write_file('file.txt', 'exact\\n')\nlet output = shell('node -e "process.stdout.write(String(42))"')\nsuccess [read_file('file.txt'), output]`);
+        expect(result).toMatchObject({ status: 'success', value: ['exact\n', '42'] });
+        expect(backend.calls).toHaveLength(0);
+    });
 
-    it('parses fmt=object responses', async () => {
-        const result = await exec(`let r = ?{fmt='object'} 'Reply with a JSON object with the string fields setup and punchline'\nsuccess keys(r)`);
-        expect(value(result)).toEqual(expect.arrayContaining(['setup', 'punchline']));
-        expect(backend.calls[0].prompt).toContain('valid JSON');
-    }, t);
+    it('lets an explicit agent read through the runtime tools', async () => {
+        fs.writeFileSync(path.join(dir, 'note.txt'), 'The magic word is PINEAPPLE.');
+        const result = await exec(`restrict '.' { success agent 'Read note.txt and return the magic word only' }`);
+        expect(result).toMatchObject({ status: 'success', value: expect.stringContaining('PINEAPPLE') });
+        expect(backend.calls[0].kind).toBe('agent');
+    }, LIVE_TIMEOUT);
 
-    it('maps think levels and defaults', async () => {
-        const result = await exec(`success [think{level='low'} 'What is 2+2? Reply with the digit only', think 'What is 3+3? Reply with the digit only']`);
-        const [a, b] = value(result) as string[];
-        expect(a).toContain('4');
-        expect(b).toContain('6');
-        expect(backend.calls[0]).toMatchObject({ kind: 'think', reasoningEffort: 'low', showReasoning: false });
-        expect(backend.calls[1]).toMatchObject({ kind: 'think', reasoningEffort: 'medium' });
-    }, t);
-
-    it('tracks enforce/forbid scopes and passes results out of them', async () => {
-        const result = await exec(`
-let color = None
-let later = None
-enforce 'be polite' {
-    forbid 'jokes' {
-        let color = ?{len='word'} 'Name a primary color'
-    }
-    let later = ?{len='word'} 'Name another primary color'
-}
-let last = ?{len='word'} 'Name a secondary color'
-success [color, later, last]
-`);
-        const [color, later, last] = value(result) as string[];
-        expect([color, later, last].every((s) => s.length > 0)).toBe(true);
-        expect(backend.calls[0].prompt).toContain('You MUST: be polite');
-        expect(backend.calls[0].prompt).toContain('You MUST NOT: jokes');
-        expect(backend.calls[1].prompt).toContain('You MUST: be polite');
-        expect(backend.calls[1].prompt).not.toContain('jokes');
-        expect(backend.calls[2].prompt).not.toContain('be polite');
-    }, t * 2);
-
-    it('tells the LLM about active restrictions', async () => {
-        await exec(`restrict './out' { let a = ?{len='word'} 'Say OK' }`);
-        expect(backend.calls[0].prompt).toContain('File system: you may read and write only inside');
-    }, t);
-});
-
-describe.skipIf(!live)('tools on Copilot', () => {
-    const t = LIVE_TIMEOUT;
-
-    it('tool calls use the default medium reasoning effort', async () => {
-        fs.writeFileSync(path.join(dir, 'f.txt'), 'The magic word is PINEAPPLE.');
-        await exec(`success read_file{path='f.txt'} 'Reply with the magic word only'`);
-        expect(backend.calls[0]).toMatchObject({ kind: 'tool', reasoningEffort: 'medium' });
-    }, t);
-
-    it('rejects an unknown model instead of silently using the default', async () => {
-        const result = await run(parse(`@{model='no-such-model'}\nlet a = ?'hi'`), { backend, logger: new Logger('silent'), cwd: dir });
-        expect(failure(result)).toMatchObject({ status_code: 'llm_error' });
-        expect(failure(result).reason).toMatch(/unknown model 'no-such-model'/);
-    }, t);
-
-    it('read_file with a path feeds the content to the instructions', async () => {
-        fs.writeFileSync(path.join(dir, 'f.txt'), 'The magic word is PINEAPPLE.');
-        const result = await exec(`success read_file{path='f.txt'} 'Reply with the magic word only'`);
-        expect(String(value(result)).toUpperCase()).toContain('PINEAPPLE');
-        expect(backend.calls[0].kind).toBe('tool');
-        expect(backend.calls[0].prompt).toContain('Instructions: Reply with the magic word only');
-        expect(backend.calls[0].pinned).toBeUndefined();
-    }, t);
-
-    it('read_file without parameters lets the LLM call the tool', async () => {
-        fs.writeFileSync(path.join(dir, 'notes.txt'), 'The magic word is PINEAPPLE.');
-        const result = await exec(`success read_file 'Read the file notes.txt and reply with the magic word only'`);
-        expect(String(value(result)).toUpperCase()).toContain('PINEAPPLE');
-        expect(backend.calls[0].pinned).toEqual({ tool: 'read_file', params: {} });
-    }, t);
-
-    it('write_file without content pins the path and lets the LLM write', async () => {
-        await exec(`let r = write_file{path='out.txt'} 'Write the single word PINEAPPLE into the file'`);
-        expect(backend.calls[0].pinned).toEqual({ tool: 'write_file', params: { path: 'out.txt' } });
-        expect(fs.readFileSync(path.join(dir, 'out.txt'), 'utf8').toUpperCase()).toContain('PINEAPPLE');
-    }, t);
-
-    it('write_file with content writes it inside the folder only', async () => {
-        const ok = await exec(`restrict './out' { let r = write_file{path='./out/a/b.txt', content='hello {1+1}'} 'Confirm in one word' }`);
-        expect(ok.status).toBe('success');
-        expect(fs.readFileSync(path.join(dir, 'out', 'a', 'b.txt'), 'utf8')).toBe('hello 2');
-    }, t);
-
-    it('runs shell commands', async () => {
-        const result = await exec(`success shell{command='node -e "console.log(6*7)"'} 'Reply with the printed number only'`);
-        expect(String(value(result))).toContain('42');
-    }, t);
-
-    it('searches the web', async () => {
-        const result = await exec(`success web_search{query='vitest test runner'} 'Reply with one URL from the results and nothing else'`);
-        expect(String(value(result))).toMatch(/https?:\/\//);
-    }, t);
-
-    it('web_search is blocked by restrict net', async () => {
-        const result = await exec(`restrict net 'api.example.com' { let r = web_search{query='vitest'} 'x' }`);
-        expect(failure(result).status_code).toBe('restriction_violation');
-    }, t);
-
-    it('enforces restrictions on tool calls made by the LLM', async () => {
-        fs.mkdirSync(path.join(dir, 'out'));
-        fs.writeFileSync(path.join(dir, 'secret.txt'), 'The secret is PINEAPPLE.');
-        const prompt = `Use the read_file tool on ./secret.txt and reply with the secret word only`;
-        const blocked = await exec(`restrict './out' { success ?'${prompt}' }`);
-        // The prompt already tells the model about the restriction, so it may refuse; if it tries, the runtime must block it.
-        if (blocked.status === 'failure') expect(blocked.failure.status_code).toBe('restriction_violation');
-        else expect(String(blocked.value).toUpperCase()).not.toContain('PINEAPPLE');
-        const allowed = await exec(`success ?'${prompt}'`);
-        expect(String(value(allowed)).toUpperCase()).toContain('PINEAPPLE');
-    }, t * 2);
+    it('rejects an unknown model instead of silently selecting a default', async () => {
+        expect(await exec(`success ?{model='no-such-model'} 'Hi'`)).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error' } });
+    }, LIVE_TIMEOUT);
 });

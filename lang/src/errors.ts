@@ -2,6 +2,7 @@ export type StatusCode =
     | 'assertion_failed'
     | 'explicit_failure'
     | 'invalid_format'
+    | 'validation_failed'
     | 'restriction_violation'
     | 'llm_error'
     | 'tool_error'

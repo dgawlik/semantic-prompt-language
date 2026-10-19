@@ -1,5 +1,4 @@
 import type {
-    AskMods,
     AssignTarget,
     Directives,
     Expr,
@@ -7,43 +6,17 @@ import type {
     RestrictKind,
     Stmt,
     StrPart,
-    ThinkMods,
-    ToolName,
 } from './ast.js';
 import { SplSyntaxError } from './errors.js';
 import { tokenize, type StringPart, type Token } from './lexer.js';
 
-export const TOOL_NAMES: readonly ToolName[] = ['read_file', 'write_file', 'web_fetch', 'web_search', 'shell'];
-
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
-    'success', 'enforce', 'forbid', 'restrict', 'think', 'break', 'continue', 'pass', 'and', 'or', 'not',
-    'True', 'False', 'None', ...TOOL_NAMES,
+    'success', 'instruct', 'avoid', 'restrict', 'think', 'agent', 'break', 'continue', 'pass', 'and', 'or', 'not',
+    'True', 'False', 'None',
 ]);
 
-/** Fixed modifier schema per command; anything else is a syntax error. */
-export const MODIFIER_SCHEMA: Record<'?' | 'think', Record<string, readonly (string | boolean)[]>> = {
-    '?': {
-        len: ['word', 'sentence', 'paragraph', 'long'],
-        fmt: ['text', 'object'],
-    },
-    think: {
-        level: ['low', 'medium', 'high'],
-        show: [true, false],
-    },
-};
-
-/**
- * Tool parameter schema: the allowed names, and the `required` ones that let the runtime run the tool itself.
- * Every parameter is optional in a script; the LLM supplies the missing required ones when it calls the tool.
- */
-export const TOOL_SCHEMA: Record<ToolName, { params: string[]; required: string[] }> = {
-    read_file: { params: ['path'], required: ['path'] },
-    write_file: { params: ['path', 'content'], required: ['path', 'content'] },
-    web_fetch: { params: ['url'], required: ['url'] },
-    web_search: { params: ['query'], required: ['query'] },
-    shell: { params: ['command'], required: ['command'] },
-};
+export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'show', 'schema', 'repairs', 'model'] as const;
 
 const DIRECTIVE_SCHEMA: Record<string, 'string'> = { model: 'string' };
 
@@ -280,14 +253,17 @@ class Parser {
                     this.next();
                     return { t: 'success', line, value: this.atStatementEnd() ? undefined : this.parseExpr() };
                 }
-                case 'enforce':
-                case 'forbid': {
-                    const kind = t.value as 'enforce' | 'forbid';
+                case 'instruct':
+                case 'avoid': {
+                    const kind = t.value;
                     this.next();
                     const text = this.parseExpr();
                     return { t: 'constraint', line, kind, text, body: this.parseBlock() };
                 }
                 case 'restrict': return this.parseRestrict();
+                case 'enforce':
+                case 'forbid':
+                    this.fail(`'${t.value}' was removed; use '${t.value === 'enforce' ? 'instruct' : 'avoid'}' for prompt guidance, or assert/schema for validation`);
                 default:
                     break;
             }
@@ -299,16 +275,9 @@ class Parser {
     private parseLet(): Stmt {
         const line = this.tok.line;
         this.next();
-        const startTok = this.tok;
-        if (startTok.type === 'name' && KEYWORDS.has(startTok.value)) {
-            this.fail(`'${startTok.value}' is a reserved word and cannot be used as a variable name`);
-        }
-        if (startTok.type !== 'name') this.fail(`expected a variable name but found ${this.describe(startTok)}`);
-        const target = this.toTarget(this.parsePostfix(), startTok);
-        const opTok = this.tok;
-        if (opTok.type !== 'op' || !ASSIGN_OPS.has(opTok.value)) this.fail(`expected '=' after the target of 'let' but found ${this.describe(opTok)}`);
-        this.next();
-        return { t: 'let', line, target, op: (opTok as { value: string }).value as '=', value: this.parseExpr() };
+        const name = this.expectIdent('a variable name');
+        this.expectOp('=');
+        return { t: 'let', line, name, value: this.parseExpr() };
     }
 
     private parseIf(): Stmt {
@@ -385,11 +354,14 @@ class Parser {
     }
 
     private parseSimpleStatement(): Stmt {
-        const line = this.tok.line;
+        const start = this.tok;
+        const line = start.line;
         const e = this.parseExpr();
         const t = this.tok;
         if (t.type === 'op' && ASSIGN_OPS.has(t.value)) {
-            this.fail(`variables are modified with 'let' (write 'let <target> ${t.value} ...')`, t);
+            const target = this.toTarget(e, start);
+            this.next();
+            return { t: 'assign', line, target, op: t.value as Extract<Stmt, { t: 'assign' }>['op'], value: this.parseExpr() };
         }
         return { t: 'expr', line, e };
     }
@@ -490,7 +462,7 @@ class Parser {
         }
         if (this.isOp('?')) {
             this.next();
-            const mods = this.isOp('{') ? (this.parseMods('?') as AskMods) : {};
+            const mods = this.isOp('{') ? this.parseMods('?') : {};
             return { t: 'ask', mods, prompt: this.parsePrompt('?') };
         }
         return this.parsePower();
@@ -612,17 +584,12 @@ class Parser {
             case 'True': this.next(); return { t: 'bool', v: true };
             case 'False': this.next(); return { t: 'bool', v: false };
             case 'None': this.next(); return { t: 'none' };
-            case 'think': {
+            case 'think':
+            case 'agent': {
                 this.next();
-                const mods = this.isOp('{') ? (this.parseMods('think') as ThinkMods) : {};
-                return { t: 'think', mods, prompt: this.parsePrompt('think') };
+                const mods = this.isOp('{') ? this.parseMods(t.value) : {};
+                return { t: t.value, mods, prompt: this.parsePrompt(t.value) };
             }
-            case 'read_file':
-            case 'write_file':
-            case 'web_fetch':
-            case 'web_search':
-            case 'shell':
-                return this.parseToolCall(t.value);
             default:
                 if (KEYWORDS.has(t.value)) this.fail(`unexpected keyword '${t.value}'`);
                 this.next();
@@ -635,31 +602,21 @@ class Parser {
         return this.parsePostfix();
     }
 
-    private parseMods(cmd: '?' | 'think'): Record<string, string | boolean> {
-        const schema = MODIFIER_SCHEMA[cmd];
+    private parseMods(cmd: '?' | 'think' | 'agent'): Record<string, Expr> {
         this.expectOp('{');
         this.skipNl();
-        const out: Record<string, string | boolean> = {};
+        const out: Record<string, Expr> = {};
         while (!this.isOp('}')) {
             const nameTok = this.tok;
             if (nameTok.type !== 'name') this.fail('expected a modifier name');
             const name = (nameTok as { value: string }).value;
             this.next();
-            if (!(name in schema)) {
-                this.fail(`unknown modifier '${name}' for '${cmd}' (allowed: ${Object.keys(schema).join(', ')})`, nameTok);
+            if (!MODIFIER_NAMES.some((allowed) => allowed === name)) {
+                this.fail(`unknown modifier '${name}' for '${cmd}' (allowed: ${MODIFIER_NAMES.join(', ')})`, nameTok);
             }
             if (name in out) this.fail(`duplicate modifier '${name}'`, nameTok);
             this.expectOp('=');
-            const valTok = this.tok;
-            let value: string | boolean;
-            if (valTok.type === 'str') value = this.parseLiteralString(`modifier '${name}'`);
-            else if (this.isName('True') || this.isName('False')) value = (this.next() as { value: string }).value === 'True';
-            else return this.fail(`modifier '${name}' requires a quoted string or True/False`);
-            if (!schema[name].includes(value)) {
-                const allowed = schema[name].map((v) => (typeof v === 'string' ? `'${v}'` : v ? 'True' : 'False'));
-                this.fail(`invalid value ${typeof value === 'string' ? `'${value}'` : value ? 'True' : 'False'} for modifier '${name}' (allowed: ${allowed.join(', ')})`, valTok);
-            }
-            out[name] = value;
+            out[name] = this.parseExpr();
             this.skipNl();
             if (this.isOp(',')) {
                 this.next();
@@ -670,37 +627,6 @@ class Parser {
         }
         this.next();
         return out;
-    }
-
-    private parseToolCall(tool: ToolName): Expr {
-        this.next();
-        const schema = TOOL_SCHEMA[tool];
-        const params: Record<string, Expr> = {};
-        if (this.isOp('{')) {
-            this.next();
-            this.skipNl();
-            while (!this.isOp('}')) {
-                const nameTok = this.tok;
-                if (nameTok.type !== 'name') this.fail('expected a parameter name');
-                const name = (nameTok as { value: string }).value;
-                this.next();
-                if (!schema.params.includes(name)) {
-                    this.fail(`unknown parameter '${name}' for '${tool}' (allowed: ${schema.params.join(', ')})`, nameTok);
-                }
-                if (name in params) this.fail(`duplicate parameter '${name}'`, nameTok);
-                this.expectOp('=');
-                params[name] = this.parseExpr();
-                this.skipNl();
-                if (this.isOp(',')) {
-                    this.next();
-                    this.skipNl();
-                } else if (!this.isOp('}')) {
-                    this.fail("expected ',' or '}' in tool parameters");
-                }
-            }
-            this.next();
-        }
-        return { t: 'tool', tool, params, instructions: this.parsePrompt(tool) };
     }
 
     private convertParts(parts: StringPart[]): StrPart[] {

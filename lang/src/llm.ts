@@ -1,4 +1,4 @@
-import type { AskMods, ToolName } from './ast.js';
+import type { AskMods } from './ast.js';
 import { Failure } from './errors.js';
 import type { Restrictions } from './restrict.js';
 import type { ToolHost } from './tools.js';
@@ -7,12 +7,12 @@ import { fromJson, isDict, isList, type Value } from './values.js';
 export type ReasoningLevel = 'low' | 'medium' | 'high';
 
 export interface Constraint {
-    kind: 'enforce' | 'forbid';
+    kind: 'instruct' | 'avoid';
     text: string;
 }
 
 export interface LlmRequest {
-    kind: 'ask' | 'think' | 'tool';
+    kind: 'ask' | 'think' | 'agent';
     /** The fully assembled query: constraints, restriction guidance and hints are already prepended. */
     prompt: string;
     model?: string;
@@ -20,8 +20,6 @@ export interface LlmRequest {
     showReasoning: boolean;
     restrictions: Restrictions;
     tools: ToolHost;
-    /** For tools the script left parameters out of: the LLM calls the tool itself, these params are fixed by the script. */
-    pinned?: { tool: ToolName; params: Record<string, string> };
 }
 
 export interface LlmResponse {
@@ -32,6 +30,7 @@ export interface LlmResponse {
 }
 
 export interface LlmBackend {
+    readonly mode?: 'record' | 'replay';
     call(req: LlmRequest): Promise<LlmResponse>;
     close(): Promise<void>;
 }
@@ -46,8 +45,7 @@ const LEN_HINTS: Record<NonNullable<AskMods['len']>, string> = {
     long: 'Give a long, detailed answer.',
 };
 
-const FMT_OBJECT_HINT =
-    'Respond with ONLY a valid JSON value (an object unless the task clearly asks for a list). No prose, no markdown, no code fences.';
+const JSON_HINT = 'Respond with ONLY valid JSON. No prose, no markdown, no code fences.';
 
 export function buildPrompt(opts: {
     prompt: string;
@@ -59,37 +57,29 @@ export function buildPrompt(opts: {
     const sections: string[] = [];
     if (opts.constraints.length) {
         sections.push(
-            'Rules you must follow strictly:\n' +
-                opts.constraints.map((c) => `- You ${c.kind === 'enforce' ? 'MUST' : 'MUST NOT'}: ${c.text}`).join('\n'),
+            'Response guidance (not runtime validation):\n' +
+                opts.constraints.map((c) => `- ${c.kind === 'instruct' ? 'Follow' : 'Avoid'}: ${c.text}`).join('\n'),
         );
     }
     const guidance = opts.restrictions.guidance();
     if (guidance.length) sections.push(`Active restrictions (enforced by the runtime):\n${guidance.map((g) => `- ${g}`).join('\n')}`);
     if (opts.thinking) sections.push('Think carefully about the problem before giving the final answer.');
     if (opts.mods?.len) sections.push(LEN_HINTS[opts.mods.len]);
-    if (opts.mods?.fmt === 'object') sections.push(FMT_OBJECT_HINT);
+    if (opts.mods?.fmt === 'object') sections.push(`${JSON_HINT} Return an object or array.`);
     sections.push(opts.prompt);
     return sections.join('\n\n');
 }
 
-/** Parses an `fmt='object'` response; anything that is not a JSON object or array is `invalid_format`. */
-export function parseObjectResponse(text: string): Value {
-    const candidates: string[] = [text.trim()];
-    const fenced = /^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```$/.exec(text.trim());
-    if (fenced) candidates.push(fenced[1].trim());
-    const open = text.search(/[{[]/);
-    const close = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
-    if (open >= 0 && close > open) candidates.push(text.slice(open, close + 1));
-
-    let lastError = 'empty response';
-    for (const c of candidates) {
-        try {
-            const v = fromJson(JSON.parse(c));
-            if (isDict(v) || isList(v)) return v;
-            lastError = 'response is JSON but not an object or array';
-        } catch (e) {
-            lastError = (e as Error).message;
-        }
+export function parseJsonResponse(text: string, objectOnly = false): Value {
+    let value: Value;
+    try {
+        value = fromJson(JSON.parse(text));
+    } catch (e) {
+        if (!(e instanceof SyntaxError)) throw e;
+        throw new Failure('invalid_format', `LLM response is not valid JSON: ${e.message}`);
     }
-    throw new Failure('invalid_format', `LLM response is not valid JSON: ${lastError}`);
+    if (objectOnly && !isDict(value) && !isList(value)) {
+        throw new Failure('invalid_format', 'LLM response must be a JSON object or array');
+    }
+    return value;
 }

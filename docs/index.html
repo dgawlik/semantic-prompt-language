@@ -15,13 +15,13 @@
 
 <section class="hero">
   <div class="badges">
-    <span class="badge"><b>v0.1</b> MVP</span>
+    <span class="badge"><b>v0.3</b> Explicit workflows</span>
     <span class="badge">TypeScript</span>
     <span class="badge">Node 20+</span>
     <span class="badge">GitHub Copilot SDK</span>
   </div>
   <h1>Write programs where <span class="grad-text">prompts are syntax.</span></h1>
-  <p class="lead">SPL is a Python-like language with LLM calls built into the grammar. Everything outside the model call is plain, deterministic code &mdash; loops, arithmetic, validation, retries &mdash; and every tool the model touches is checked by the runtime.</p>
+  <p class="lead">SPL is a small Python-like language for reliable AI workflows: exact raw tools, schema-validated generation, and explicit agents. Bounded repair and offline replay contain model variance without silently repeating external actions.</p>
   <div class="btn-row">
     <a class="btn primary" href="getting-started.html">Get started &rarr;</a>
     <a class="btn" href="language.html">Read the language guide</a>
@@ -41,17 +41,17 @@ def fib(n) {
 let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
 
 # deliberate before answering
-let why = think{level='high'} 'Why is {joke.setup} funny?'
+let why = think{reasoning='high'} 'Why is {joke.setup} funny?'
 
-# rules for every call inside the block
+# Prompt guidance for calls inside the block (not runtime validation).
 let hi = None
-enforce 'Answer in English' {
-    forbid 'profanity' { let hi = ?'Say hi' }
+instruct 'Answer in English' {
+    avoid 'profanity' { let hi = ?'Say hi' }
 }
 
-# the model may only touch ./out
+# Raw I/O does not call the model.
 restrict './out' {
-    write_file{path='./out/a.txt', content='{fib(10)}'} 'Confirm'
+    write_file('./out/a.txt', '{fib(10)}')
 }
 
 try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
@@ -65,7 +65,7 @@ success {'joke': joke, 'why': why, 'hi': hi}
   <div class="card"><div class="ico">🧠</div><h3>Prompts are expressions</h3><p><code>?'…'</code> and <code>think '…'</code> return values you can store, test and pass to functions. Strings interpolate <code>{expr}</code> everywhere.</p></div>
   <div class="card"><div class="ico">🧱</div><h3>Deterministic everywhere else</h3><p>Control flow, arithmetic, interpolation and variables never touch the model. Only the LLM commands introduce variance.</p></div>
   <div class="card"><div class="ico">🔒</div><h3>Least privilege, enforced</h3><p><code>restrict</code> scopes narrow files, hosts and executables. The runtime blocks violations &mdash; it doesn't just ask nicely.</p></div>
-  <div class="card"><div class="ico">✅</div><h3>Untrusted output, validated</h3><p><code>fmt='object'</code> parses JSON for you; <code>assert</code> and <code>try/except</code> turn bad answers into retries.</p></div>
+  <div class="card"><div class="ico">✅</div><h3>Untrusted output, validated</h3><p><code>schema</code> checks shape with field-path errors; bounded <code>repairs</code> correct generation only. Assertions check business rules.</p></div>
   <div class="card"><div class="ico">⚡</div><h3>Runs with <code>npx</code></h3><p>One command-line interpreter, <code>spl login</code> for GitHub Copilot credentials, a pluggable variable store.</p></div>
   <div class="card"><div class="ico">🎨</div><h3>Editor support</h3><p>A VS Code extension ships highlighting, snippets and bracket handling for <code>.spl</code> files.</p></div>
 </div>
@@ -73,9 +73,9 @@ success {'joke': joke, 'why': why, 'hi': hi}
 <h2 id="tenets">Design tenets</h2>
 <div class="compare">
   <div class="callout tip"><span class="ico">🎯</span><div class="body"><span class="title">Best-effort reproducibility</span>
-  <p>Control flow, arithmetic and interpolation are fully deterministic. For LLM calls reproducibility is best effort (the Copilot SDK has no temperature or seed setting). Identical output is <strong>not</strong> guaranteed &mdash; guard with <code>assert</code> and <code>fmt</code>.</p></div></div>
+  <p>Control flow and interpolation are deterministic; live model output is not. Schemas and assertions validate answers, while exact generation record/replay supports offline regression tests.</p></div></div>
   <div class="callout warn"><span class="ico">🛡️</span><div class="body"><span class="title">Least privilege by restriction</span>
-  <p>The MVP is allow-by-default: a script has the permissions of the user running it. Authors narrow permissions with scoped <code>restrict</code> blocks, enforced by the runtime on every tool call.</p></div></div>
+  <p>Generation has no tools. Explicit agents and raw tools remain allow-by-default; narrow actions with runtime-checked <code>restrict</code> blocks. Shell and MCP are not OS sandboxes.</p></div></div>
 </div>
 
 <h2 id="how-it-works">How a run works</h2>
@@ -95,15 +95,15 @@ success {'joke': joke, 'why': why, 'hi': hi}
 <div class="grid">
   <a class="card" href="getting-started.html"><div class="ico">🚀</div><h3>Getting started</h3><p>Install, run your first script offline, then against Copilot.</p><span class="more">Open →</span></a>
   <a class="card" href="language.html"><div class="ico">📘</div><h3>Language basics</h3><p>Variables, strings, operators, control flow and functions.</p><span class="more">Open →</span></a>
-  <a class="card" href="llm-commands.html"><div class="ico">💬</div><h3>LLM commands</h3><p><code>?</code>, <code>think</code>, <code>enforce</code>/<code>forbid</code> and the five tools.</p><span class="more">Open →</span></a>
+  <a class="card" href="llm-commands.html"><div class="ico">💬</div><h3>Generation &amp; agents</h3><p>Tool-free generation, explicit agents, schemas, repairs, guidance, and exact tools.</p><span class="more">Open →</span></a>
   <a class="card" href="restrictions.html"><div class="ico">🔐</div><h3>Restrictions</h3><p>Sandbox files, network and executables per block.</p><span class="more">Open →</span></a>
   <a class="card" href="failures.html"><div class="ico">🧯</div><h3>Failures &amp; errors</h3><p>Payloads, status codes, <code>try/except</code>, exit codes.</p><span class="more">Open →</span></a>
-  <a class="card" href="examples.html"><div class="ico">🧪</div><h3>Examples</h3><p>Thirteen ready-to-run scripts: commit messages, triage, CI gates.</p><span class="more">Open →</span></a>
+  <a class="card" href="examples.html"><div class="ico">🧪</div><h3>Examples</h3><p>Commit messages, schema-validated extraction, triage, agents, and CI gates.</p><span class="more">Open →</span></a>
 </div>
 
 <h2 id="non-goals">Non-goals</h2>
 <ul>
-  <li>Bit-for-bit reproducible LLM output (no record/replay or response cache in the MVP).</li>
+  <li>Bit-for-bit reproducible live model output, a general workflow cache, or transactional external actions.</li>
   <li>Being a full Python implementation &mdash; only a reasonable subset is supported.</li>
 </ul>
 

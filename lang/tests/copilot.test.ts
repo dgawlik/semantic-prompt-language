@@ -49,7 +49,7 @@ it('aborts and surfaces an MCP restriction violation even if the model returns a
     });
     try {
         await expect(backend.call({
-            kind: 'think', prompt: 'Only search', restrictions, showReasoning: false,
+            kind: 'agent', prompt: 'Only search', restrictions, showReasoning: false,
             tools: new ToolHost(restrictions, cwd),
         })).rejects.toMatchObject({ statusCode: 'restriction_violation' });
         expect(sdk.abort).toHaveBeenCalledOnce();
@@ -71,7 +71,7 @@ it('wires MCP configuration and source-qualified tool filters into SDK sessions'
     });
     try {
         const response = await backend.call({
-            kind: 'ask', prompt: 'Search docs', restrictions, showReasoning: false,
+            kind: 'agent', prompt: 'Search docs', restrictions, showReasoning: false,
             tools: new ToolHost(restrictions, cwd),
         });
         expect(response.text).toBe('MCP result');
@@ -88,4 +88,34 @@ it('wires MCP configuration and source-qualified tool filters into SDK sessions'
         await backend.close();
     }
     expect(sdk.stop).toHaveBeenCalledOnce();
+});
+
+it.each(['ask', 'think'] as const)('never exposes tools or starts MCP servers during %s', async (kind) => {
+    const cwd = process.cwd();
+    const restrictions = new Restrictions(cwd);
+    const backend = new CopilotBackend({
+        cwd, timeoutMs: 1000, logger: new Logger('silent'),
+        mcpServers: { docs: { command: 'must-not-start' } },
+    });
+    try {
+        await backend.call({ kind, prompt: 'Generate', restrictions, showReasoning: false, tools: new ToolHost(restrictions, cwd) });
+        expect(sdk.configs[0]).toMatchObject({ tools: [], availableTools: [], mcpServers: {} });
+    } finally {
+        await backend.close();
+    }
+});
+
+it('aborts an attempted tool permission request during generation', async () => {
+    const cwd = process.cwd();
+    const restrictions = new Restrictions(cwd);
+    sdk.permission = { kind: 'mcp', serverName: 'docs', toolName: 'search', readOnly: true, toolTitle: 'Search' };
+    const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
+    try {
+        await expect(backend.call({
+            kind: 'ask', prompt: 'Generate', restrictions, showReasoning: false, tools: new ToolHost(restrictions, cwd),
+        })).rejects.toMatchObject({ statusCode: 'restriction_violation' });
+        expect(sdk.abort).toHaveBeenCalledOnce();
+    } finally {
+        await backend.close();
+    }
 });

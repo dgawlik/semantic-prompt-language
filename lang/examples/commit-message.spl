@@ -3,7 +3,7 @@
 #   cd your-repo && git add -p
 #   spl path/to/commit-message.spl
 #
-# The LLM may only run `git`; the result is validated deterministically and retried with feedback.
+# The script reads the diff with git once; tool-free generation gets at most three attempts.
 
 let TYPES = ['feat', 'fix', 'docs', 'refactor', 'test', 'chore', 'perf']
 
@@ -19,13 +19,16 @@ let msg = ''
 let attempt = 0
 
 restrict exec 'git' {
-    forbid 'wrapping the message in quotes or code fences' {
+    let diff = shell('git diff --staged')
+    assert len(diff.strip()) > 0 'nothing is staged'
+    avoid 'wrapping the message in quotes or code fences' {
         while attempt < 3 {
-            let attempt += 1
-            let msg = shell{command='git diff --staged'} '''
+            attempt += 1
+            let msg = ? '''
 Write a Conventional Commit message for this diff: a subject line of at most 72 characters
 ("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
-Reply with ONLY the message. If the diff is empty reply exactly NO_CHANGES.'''
+Reply with ONLY the message.
+{diff}'''
             if msg == 'NO_CHANGES' {
                 fail 'nothing is staged'
             }

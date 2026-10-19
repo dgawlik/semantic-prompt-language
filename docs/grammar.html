@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="The complete SPL grammar in EBNF, with reserved words and lexical rules.">
+<meta name="description" content="The SPL 0.3 grammar: declarations, assignment, generation, agents, and raw functions.">
 <title>Grammar (EBNF) - SPL</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/style.css">
@@ -12,135 +12,98 @@
 </head>
 <body data-page="grammar">
 <main id="page">
-
 <div class="eyebrow">Reference</div>
 <h1>Grammar (EBNF)</h1>
-<p class="lead">The authoritative syntax definition, as shipped in <code>lang/docs/syntax.ebnf</code>. The parser is strict: anything outside this grammar is a syntax error reported with exit code 2.</p>
+<p class="lead">SPL 0.3 syntax, synchronized from lang/docs/syntax.ebnf. Modifier names are checked while parsing; expression values and schemas are checked at runtime.</p>
+<h2 id="notation">Notation</h2>
+<p><code>{ x }</code> means repetition, <code>[ x ]</code> means optional, and <code>|</code> separates alternatives. Statements end at a newline, semicolon, closing block, or end of input. Opening block braces must share the keyword's line. Comments begin with <code>#</code>.</p>
+<h2 id="program">Complete grammar</h2>
+<pre><code class="language-ebnf">
+(* SPL 0.3. { x } means repetition; [ x ] means optional.
+   Statements end at newline, ';', '}' or EOF. Newlines inside () and [] are ignored.
+   '#' starts a comment. Opening block braces must be on the keyword's line. *)
 
-<div class="callout">
-  <span class="ico">📖</span>
-  <div class="body"><span class="title">Notation</span>
-  <p>ISO-style. <code>{ x }</code> = zero or more, <code>[ x ]</code> = optional, <code>( )</code> = grouping, <code>|</code> = alternative. Statements are separated by newlines or <code>;</code>. Newlines are insignificant inside <code>( )</code> and <code>[ ]</code>. <code>#</code> starts a comment that runs to the end of the line.</p></div>
-</div>
+program        = { directive , separator } , { statement , separator } ;
+separator      = NL | ";" | end_of_block | EOF ;
+directive      = "@" , "{" , "model" , "=" , plain_string , [ "," ] , "}" ;
+block          = "{" , { statement , separator } , "}" ;
 
-<h2 id="program">Program &amp; statements</h2>
-<pre><code class="language-ebnf" data-file="syntax.ebnf">
-program        = { directive , NL } , { statement , ( NL | ";" ) } ;
-directive      = "@" , "{" , directive_item , { "," , directive_item } , "}" ;
-directive_item = "model" , "=" , plain_string ;           (* only allowed before the first statement *)
-
-block          = "{" , { statement , ( NL | ";" ) } , "}" ;   (* '{' must be on the same line as its keyword; as a statement it is a nested scope *)
-
-statement      = let_stmt | if_stmt | for_stmt | while_stmt | def_stmt | block
-               | "return" , [ expr ]          (* anywhere: ends the function, or the script when at the top level *)
-               | "break" | "continue" | "pass" (* break/continue only inside loops *)
-               | try_stmt | assert_stmt | fail_stmt | success_stmt
-               | constraint_stmt | restrict_stmt | expr ;
-
-(* Every modification of a variable starts with 'let'; a bare  x = 1  is a syntax error.
-   Scoping: 'let NAME = ...' binds in the current scope. A bare block { ... }, a function body and its parameters
-   open a new scope, so 'let' there shadows an outer variable. if/elif/else, for, while, try/except, enforce, forbid
-   and restrict bodies do NOT open a scope: 'let' inside them updates the enclosing variable, which is how results
-   of LLM commands leave an enforce/forbid/restrict block. Reading a name searches the scopes outwards.
-   Compound forms (let x += 1) read the visible value and bind the result in the current scope. *)
-let_stmt       = "let" , target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
-target         = NAME | postfix "." NAME | postfix "[" expr "]" ;
-
-if_stmt        = "if" , expr , block , { NL* "elif" , expr , block } , [ NL* "else" , block ] ;
+statement      = declaration | assignment | if_stmt | for_stmt | while_stmt
+               | def_stmt | try_stmt | guidance_stmt | restrict_stmt | block
+               | "return" , [ expr ] | "success" , [ expr ]
+               | "assert" , expr , [ expr ] | "fail" , expr
+               | "break" | "continue" | "pass" | expr ;
+declaration    = "let" , NAME , "=" , expr ;
+assignment     = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
+target         = NAME | postfix , "." , NAME | postfix , "[" , expr , "]" ;
+if_stmt        = "if" , expr , block , { NL* , "elif" , expr , block } , [ NL* , "else" , block ] ;
 for_stmt       = "for" , NAME , { "," , NAME } , "in" , expr , block ;
 while_stmt     = "while" , expr , block ;
-def_stmt       = "def" , NAME , "(" , [ NAME , { "," , NAME } ] , ")" , block ;
+def_stmt       = "def" , NAME , "(" , [ NAME , { "," , NAME } , [ "," ] ] , ")" , block ;
 try_stmt       = "try" , block , NL* , "except" , NAME , block ;
+guidance_stmt  = ( "instruct" | "avoid" ) , expr , block ;
+restrict_stmt  = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
+restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;
 
-assert_stmt    = "assert" , expr , [ expr ] ;              (* optional message *)
-fail_stmt      = "fail" , expr ;
-success_stmt   = "success" , [ expr ] ;
+(* let declares/redeclares in the current function or script. All blocks share that scope.
+   Name assignment requires a declared local; it cannot rebind an enclosing function/script.
+   Functions read lexical enclosing scopes; collection mutations can share state.
+   Loop variables and caught failure names are local bindings.
+   return exits the innermost function, or the script at top level.
+   success exits the script, including when used in a function. *)
 
-constraint_stmt = ( "enforce" | "forbid" ) , expr , block ;
-restrict_stmt   = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
-restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;  (* default kind: fs; clauses intersect *)
-</code></pre>
-
-<h2 id="expressions">Expressions</h2>
-<p>Listed from lowest to highest precedence.</p>
-<pre><code class="language-ebnf">
 expr           = or_expr , [ "if" , or_expr , "else" , expr ] ;
 or_expr        = and_expr , { "or" , and_expr } ;
 and_expr       = not_expr , { "and" , not_expr } ;
 not_expr       = "not" , not_expr | comparison ;
-comparison     = sum , { ( "==" | "!=" | "&lt;" | "&lt;=" | "&gt;" | "&gt;=" | "in" | "not" "in" ) , sum } ;
+comparison     = sum , { ( "==" | "!=" | "&lt;" | "&lt;=" | "&gt;" | "&gt;=" | "in" | "not" , "in" ) , sum } ;
 sum            = term , { ( "+" | "-" ) , term } ;
 term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
-unary          = ( "-" | "+" ) , unary | llm_call | power ;
+unary          = ( "-" | "+" ) , unary | "?" , [ modifiers ] , postfix | power ;
 power          = postfix , [ "**" , unary ] ;
 postfix        = primary , { call | index | slice | member } ;
-call           = "(" , [ expr , { "," , expr } ] , ")" ;
+call           = "(" , [ expr , { "," , expr } , [ "," ] ] , ")" ;
 index          = "[" , expr , "]" ;
 slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
 member         = "." , NAME ;
-
 primary        = NUMBER | string | "True" | "False" | "None" | NAME
                | "(" , expr , ")" | list | dict
-               | think_call | tool_call ;
+               | ( "think" | "agent" ) , [ modifiers ] , postfix ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
-</code></pre>
+modifiers      = "{" , [ modifier , { "," , modifier } , [ "," ] ] , "}" ;
+modifier       = ( "len" | "fmt" | "reasoning" | "show" | "schema" | "repairs" | "model" ) , "=" , expr ;
 
-<h2 id="llm-grammar">LLM commands</h2>
-<pre><code class="language-ebnf">
-(* LLM commands. '?' is a prefix operator (see 'unary'). The prompt operand is a postfix expression,
-   so  ?'a' + b  is  (?'a') + b  and  -?'n'  is  -(?'n').
-   Every modifier and parameter is optional: ?'q', think 'q' and read_file 'what to do' run with defaults. *)
-llm_call       = "?" , [ ask_mods ] , postfix ;
-think_call     = "think" , [ think_mods ] , postfix ;
-tool_call      = tool_name , [ tool_params ] , postfix ;    (* the last operand holds the instructions *)
+(* Unknown/duplicate modifier names are syntax errors. Values are expressions, validated at runtime:
+   len: word/sentence/paragraph/long (guidance only)
+   fmt: text/json/object; schema implies json unless fmt is explicit
+   reasoning: low/medium/high; think and agent default to medium
+   show: True/False; schema: synchronous strict JSON Schema draft-07 object or boolean
+   repairs: integer 0..5 (additional generation attempts, default 0); agents require 0
+   model: non-empty string; CLI override &gt; per-call model &gt; header &gt; SDK default
+   Generation (? and think) has no tools. agent explicitly enables restricted runtime/MCP tools.
+   Raw tools are ordinary positional functions: read_file(path), write_file(path, content),
+   web_fetch(url), web_search(query), shell(command). They never invoke a model.
+   instruct/avoid are prompt guidance; schema/assert validate data; restrict checks actions. *)
 
-ask_mods       = "{" , ask_mod , { "," , ask_mod } , "}" ;
-ask_mod        = "len" , "=" , ( "'word'" | "'sentence'" | "'paragraph'" | "'long'" )
-               | "fmt" , "=" , ( "'text'" | "'object'" ) ;
-think_mods     = "{" , think_mod , { "," , think_mod } , "}" ;
-think_mod      = "level" , "=" , ( "'low'" | "'medium'" | "'high'" )
-               | "show" , "=" , ( "True" | "False" ) ;      (* each modifier at most once *)
-
-tool_name      = "read_file" | "write_file" | "web_fetch" | "web_search" | "shell" ;
-tool_params    = "{" , [ tool_param , { "," , tool_param } ] , "}" ;
-(* When every parameter the tool needs is given, the runtime runs the tool and passes its output to the instructions.
-   When one is missing, the LLM calls the tool itself; the parameters that were given stay fixed. *)
-tool_param     = "path" , "=" , expr       (* read_file, write_file *)
-               | "content" , "=" , expr    (* write_file; the LLM writes the file when omitted *)
-               | "url" , "=" , expr        (* web_fetch *)
-               | "query" , "=" , expr      (* web_search *)
-               | "command" , "=" , expr ;  (* shell *)
-</code></pre>
-
-<h2 id="lexical">Lexical rules</h2>
-<pre><code class="language-ebnf">
-string         = [ "r" ] , ( "'" | '"' | "'''" | '"""' ) , { char | escape | interpolation } , closing_quote ;
-plain_string   = string without interpolation ;
+string         = [ "r" ] , quote , { char | escape | interpolation } , closing_quote ;
+quote          = "'" | '"' | "'''" | '"""' ;
+plain_string   = string_without_interpolation ;
 escape         = "\" , ( "n" | "t" | "r" | "0" | "\" | "'" | '"' | "{" | "}" ) ;
-interpolation  = "{" , expr , "}" ;        (* "{{" and "}}" are literal braces; raw strings (r'...') have no escapes or interpolation *)
+interpolation  = "{" , expr , "}" ;
 NUMBER         = digit+ , [ "." , digit+ ] , [ ( "e" | "E" ) , [ "+" | "-" ] , digit+ ] ;
-NAME           = ( letter | "_" ) , { letter | digit | "_" } ;   (* not a reserved word *)
+NAME           = ( letter | "_" ) , { letter | digit | "_" } ;
 NL             = newline ;
+
+(* "{{"/"}}" are literal braces; raw strings have no interpolation or escapes.
+   Reserved words: let if elif else for in while def return try except assert fail success
+   instruct avoid restrict think agent break continue pass and or not True False None.
+   Removed syntax: enforce/forbid, think{level=...}, tool{param=...} 'instructions',
+   let x += ... and let d.key = ... . *)
 </code></pre>
-
-<h2 id="reserved">Reserved words</h2>
-<p>These cannot be used as variable, function or parameter names:</p>
-<div class="table-wrap"><table>
-<thead><tr><th>Group</th><th>Words</th></tr></thead>
-<tbody>
-<tr><td>Declarations &amp; flow</td><td><code>let</code> <code>def</code> <code>return</code> <code>if</code> <code>elif</code> <code>else</code> <code>for</code> <code>in</code> <code>while</code> <code>break</code> <code>continue</code> <code>pass</code></td></tr>
-<tr><td>Failure handling</td><td><code>try</code> <code>except</code> <code>assert</code> <code>fail</code> <code>success</code></td></tr>
-<tr><td>Scopes</td><td><code>enforce</code> <code>forbid</code> <code>restrict</code></td></tr>
-<tr><td>LLM &amp; tools</td><td><code>think</code> <code>read_file</code> <code>write_file</code> <code>web_fetch</code> <code>web_search</code> <code>shell</code></td></tr>
-<tr><td>Operators &amp; literals</td><td><code>and</code> <code>or</code> <code>not</code> <code>True</code> <code>False</code> <code>None</code></td></tr>
-</tbody></table></div>
-<div class="callout">
-  <span class="ico">ℹ️</span>
-  <div class="body"><span class="title">Contextual words</span>
-  <p><code>fs</code>, <code>net</code>, <code>exec</code> and <code>mcp</code> have special meaning at the start of a <code>restrict</code> clause (after the keyword or a separating comma); modifier names (<code>len</code>, <code>fmt</code>, <code>level</code>, <code>show</code>, <code>path</code>, <code>content</code>, <code>url</code>, <code>query</code>, <code>command</code>) only inside a modifier list.</p></div>
-</div>
-
+<h2 id="semantics">Syntax versus semantics</h2>
+<p><code>let</code> binds names; assignment updates existing locals. All blocks share their function/script scope. Raw tools are ordinary function calls, not reserved command syntax. Generation and explicit agents share expression-valued modifiers. See <a href="language.html">language basics</a> and <a href="llm-commands.html">generation contracts</a> for runtime rules.</p>
+<p>Run <code>node docs/build-search-index.mjs</code> from the repository root after updating the grammar or executable examples to refresh their site copies and the search index.</p>
 </main>
 <script src="assets/search-index.js"></script>
 <script src="assets/site.js"></script>

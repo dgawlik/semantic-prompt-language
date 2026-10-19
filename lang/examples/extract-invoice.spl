@@ -1,5 +1,5 @@
 # Extract structured data from messy text and cross-check it with plain arithmetic.
-# If the numbers do not add up, the rejection reason is fed back to the LLM for another try.
+# Schemas validate shape; ordinary assertions validate the business rules.
 
 let document = '''
 ACME Industrial Supplies GmbH            Invoice No. INV-2026-0042
@@ -12,33 +12,34 @@ Date: 2026-03-14                          Currency: EUR
 Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
 '''
 
-let feedback = ''
-let invoice = None
-
-for attempt in range(3) {
-    if invoice != None {
-        break
-    }
-    try {
-        let r = ?{fmt='object'} '''
-Extract the invoice below. {feedback}
-Reply as JSON: {{"vendor": str, "number": str, "date": "YYYY-MM-DD", "currency": str,
-"lines": [{{"description": str, "quantity": number, "unit_price": number}}], "subtotal": number, "total": number}}
-
-{document}'''
-        assert type(r.lines) == 'list' and len(r.lines) > 0 'lines must be a non-empty list'
-        let computed = 0
-        for line in r.lines {
-            let computed += line.quantity * line.unit_price
-        }
-        assert abs(computed - r.subtotal) < 0.01 "lines add up to {round(computed, 2)} but subtotal is {r.subtotal}"
-        assert r.total >= r.subtotal "total {r.total} is smaller than subtotal {r.subtotal}"
-        let invoice = r
-    } except err {
-        let feedback = "Your previous extraction was rejected: {err.reason}. Re-read the document and fix it."
-        log("attempt {attempt + 1} rejected: {err.reason}")
-    }
+let Invoice = {
+    'type': 'object',
+    'properties': {
+        'vendor': {'type': 'string'}, 'number': {'type': 'string'},
+        'date': {'type': 'string'}, 'currency': {'type': 'string'},
+        'lines': {
+            'type': 'array', 'minItems': 1,
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'description': {'type': 'string'},
+                    'quantity': {'type': 'integer', 'minimum': 1},
+                    'unit_price': {'type': 'number', 'minimum': 0},
+                },
+                'required': ['description', 'quantity', 'unit_price'],
+                'additionalProperties': False,
+            },
+        },
+        'subtotal': {'type': 'number'}, 'total': {'type': 'number'},
+    },
+    'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'total'],
+    'additionalProperties': False,
 }
-
-assert invoice != None 'extraction kept failing validation'
+let invoice = ?{schema=Invoice, reasoning='high', repairs=2} 'Extract this invoice: {document}'
+let computed = 0
+for line in invoice.lines {
+    computed += line.quantity * line.unit_price
+}
+assert abs(computed - invoice.subtotal) < 0.01 "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
+assert invoice.total >= invoice.subtotal 'total is smaller than subtotal'
 success invoice

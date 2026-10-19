@@ -49,6 +49,12 @@ export class CopilotBackend implements LlmBackend {
         return this.client;
     }
 
+    private denyGenerationPermission(block: (failure: Failure) => void): PermissionRequestResult {
+        const failure = new Failure('restriction_violation', 'generation cannot use tools; use an explicit agent operation');
+        block(failure);
+        return { kind: 'reject', feedback: failure.reason };
+    }
+
     private listModels(client: CopilotClient): Promise<ModelInfo[] | undefined> {
         this.models ??= client.listModels().catch((e: Error) => {
             this.opts.logger.debug(`could not list models: ${e.message}`);
@@ -91,7 +97,8 @@ export class CopilotBackend implements LlmBackend {
             void session?.abort().catch(() => undefined);
         };
 
-        const tools: Tool[] = TOOL_NAMES.map((name) => {
+        const agent = req.kind === 'agent';
+        const tools: Tool[] = (agent ? TOOL_NAMES : []).map((name) => {
             const spec = TOOL_SPECS[name];
             return defineTool(name, {
                 description: spec.description,
@@ -99,7 +106,6 @@ export class CopilotBackend implements LlmBackend {
                 parameters: { type: 'object', properties: spec.properties, required: spec.required, additionalProperties: false },
                 handler: async (args: unknown) => {
                     const params: Record<string, unknown> = { ...(args as Record<string, unknown>) };
-                    if (req.pinned?.tool === name) Object.assign(params, req.pinned.params);
                     try {
                         return await req.tools.invoke(name, params);
                     } catch (e) {
@@ -114,16 +120,16 @@ export class CopilotBackend implements LlmBackend {
             });
         });
 
-        const mcpServers = filterMcpServers(this.opts.mcpServers ?? {}, req.restrictions);
+        const mcpServers = agent ? filterMcpServers(this.opts.mcpServers ?? {}, req.restrictions) : {};
         const baseConfig = {
             model: req.model,
             tools,
-            availableTools: [...TOOL_NAMES, ...Object.keys(mcpServers).map((name) => `mcp:${name}-*`)],
+            availableTools: [...(agent ? TOOL_NAMES : []), ...Object.keys(mcpServers).map((name) => `mcp:${name}-*`)],
             mcpServers,
             systemMessage: { mode: 'append' as const, content: SYSTEM_MESSAGE },
             workingDirectory: this.opts.cwd,
             onPermissionRequest: (r: PermissionRequest): PermissionRequestResult =>
-                decidePermission(r, req.restrictions, block, mcpServers),
+                agent ? decidePermission(r, req.restrictions, block, mcpServers) : this.denyGenerationPermission(block),
         };
 
         try {

@@ -22,8 +22,8 @@ export class RecordingCopilot implements LlmBackend {
     }
 }
 
-/** True when the Copilot runtime is authenticated (run `spl login` once); live tests are skipped otherwise. */
-export const live: boolean = await authStatus()
+/** Live tests require explicit opt-in as well as authentication. */
+export const live: boolean = process.env.SPL_LIVE_TESTS === '1' && await authStatus()
     .then((s) => s.isAuthenticated)
     .catch(() => false);
 

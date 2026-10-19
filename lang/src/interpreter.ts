@@ -1,7 +1,8 @@
 import type { AssignTarget, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
 import { callMethod, iterate, makeBuiltins } from './builtins.js';
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
-import { LlmError, buildPrompt, parseObjectResponse, type Constraint, type LlmBackend, type LlmRequest } from './llm.js';
+import { LlmError, buildPrompt, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest } from './llm.js';
+import { compileSchema } from './schema.js';
 import type { Logger } from './logger.js';
 import { Restrictions, makeRestriction } from './restrict.js';
 import { MemoryStore, type VariableStore } from './store.js';
@@ -17,6 +18,7 @@ import {
     runtimeError,
     setKey,
     str,
+    toJson,
     truthy,
     typeName,
     type Env,
@@ -66,11 +68,17 @@ class Interpreter {
         this.maxDepth = opts.maxCallDepth ?? 200;
         this.restrictions = new Restrictions(this.cwd);
         this.builtins = makeBuiltins({ log: (m) => opts.logger.info(`log: ${m}`) });
+        for (const tool of Object.keys(TOOL_SPECS) as ToolName[]) {
+            this.builtins.set(tool, { __fn: 'builtin', name: tool, call: (args) => this.callTool(tool, args) });
+        }
     }
 
     async run(): Promise<RunResult> {
         const { logger } = this.opts;
         try {
+            if (this.opts.backend.mode === 'replay' && this.opts.store) {
+                throw new Failure('restriction_violation', 'replay does not allow a persistent variable store');
+            }
             for (const [k, v] of Object.entries(this.store.load())) this.globals.vars.set(k, v);
             const signal = await this.execBlock(this.program.body, this.globals);
             if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
@@ -85,9 +93,11 @@ class Interpreter {
             throw e;
         } finally {
             try {
-                const snapshot: Record<string, Value> = {};
-                for (const [k, v] of this.globals.vars) if (!isFunction(v)) snapshot[k] = v;
-                this.store.save(snapshot);
+                if (this.opts.backend.mode !== 'replay') {
+                    const snapshot: Record<string, Value> = {};
+                    for (const [k, v] of this.globals.vars) if (!isFunction(v)) snapshot[k] = v;
+                    this.store.save(snapshot);
+                }
             } catch (e) {
                 logger.error(`could not save variable store: ${(e as Error).message}`);
             }
@@ -131,10 +141,13 @@ class Interpreter {
     private async execStmtInner(s: Stmt, env: Env): Promise<Signal | undefined> {
         switch (s.t) {
             case 'let':
-                await this.execLet(s.target, s.op, s.value, env);
+                env.vars.set(s.name, await this.eval(s.value, env));
+                return;
+            case 'assign':
+                await this.execAssign(s.target, s.op, s.value, env);
                 return;
             case 'block':
-                return this.execBlock(s.body, { vars: new Map(), parent: env });
+                return this.execBlock(s.body, env);
             case 'expr':
                 await this.eval(s.e, env);
                 return;
@@ -237,13 +250,13 @@ class Interpreter {
         vars.forEach((v, i) => env.vars.set(v, item[i]));
     }
 
-    private async execLet(target: AssignTarget, op: string, valueExpr: Expr, env: Env): Promise<void> {
+    private async execAssign(target: AssignTarget, op: string, valueExpr: Expr, env: Env): Promise<void> {
         const compute = async (current: () => Value): Promise<Value> => {
             const rhs = await this.eval(valueExpr, env);
             return op === '=' ? rhs : this.binary(op.slice(0, -1), current(), rhs);
         };
         if (target.t === 'name') {
-            // Binds in the current scope, which is what lets a nested block shadow an outer variable.
+            if (!env.vars.has(target.name)) throw runtimeError(`cannot assign '${target.name}': declare a local with let first`);
             env.vars.set(target.name, await compute(() => this.lookup(target.name, env)));
             return;
         }
@@ -332,21 +345,10 @@ class Interpreter {
                 const hi = e.hi ? await this.eval(e.hi, env) : undefined;
                 return this.slice(obj, lo, hi);
             }
-            case 'ask': {
-                const prompt = str(await this.eval(e.prompt, env));
-                const text = await this.callLlm({ kind: 'ask', prompt, mods: e.mods });
-                return e.mods.fmt === 'object' ? parseObjectResponse(text) : text;
-            }
-            case 'think': {
-                const prompt = str(await this.eval(e.prompt, env));
-                return this.callLlm({
-                    kind: 'think',
-                    prompt,
-                    effort: e.mods.level ?? 'medium',
-                    show: e.mods.show ?? false,
-                });
-            }
-            case 'tool': return this.evalTool(e.tool, e.params, e.instructions, env);
+            case 'ask':
+            case 'think':
+            case 'agent':
+                return this.evalGeneration(e.t, e.mods, e.prompt, env);
         }
     }
 
@@ -485,36 +487,13 @@ class Interpreter {
 
     // ---- LLM and tools -------------------------------------------------
 
-    private async callLlm(c: {
-        kind: 'ask' | 'think' | 'tool';
-        prompt: string;
-        mods?: { len?: 'word' | 'sentence' | 'paragraph' | 'long'; fmt?: 'text' | 'object' };
-        effort?: 'low' | 'medium' | 'high';
-        show?: boolean;
-        pinned?: LlmRequest['pinned'];
-    }): Promise<string> {
+    private async callLlm(req: LlmRequest): Promise<string> {
         const { logger, backend } = this.opts;
-        const req: LlmRequest = {
-            kind: c.kind,
-            prompt: buildPrompt({
-                prompt: c.prompt,
-                mods: c.mods,
-                thinking: c.kind === 'think',
-                constraints: this.constraints,
-                restrictions: this.restrictions,
-            }),
-            model: this.model,
-            reasoningEffort: c.effort ?? (c.kind === 'tool' ? 'medium' : undefined),
-            showReasoning: c.show ?? false,
-            restrictions: this.restrictions,
-            tools: new ToolHost(this.restrictions, this.cwd),
-            pinned: c.pinned,
-        };
-        logger.llm(`llm request (${c.kind}):\n${req.prompt}`);
+        logger.llm(`llm request (${req.kind}):\n${req.prompt}`);
         const started = Date.now();
         try {
             const res = await backend.call(req);
-            logger.info(`llm ${c.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
+            logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
             logger.llm(`llm response:\n${res.text}`);
             return res.text.trim();
         } catch (e) {
@@ -524,32 +503,62 @@ class Interpreter {
         }
     }
 
-    private async evalTool(tool: ToolName, paramExprs: Record<string, Expr>, instrExpr: Expr, env: Env): Promise<Value> {
+    private async callTool(tool: ToolName, args: Value[]): Promise<Value> {
+        const names = TOOL_SPECS[tool].required;
+        if (args.length !== names.length) throw runtimeError(`${tool}() takes ${names.length} argument(s) but ${args.length} were given`);
         const params: Record<string, string> = {};
-        for (const [k, ex] of Object.entries(paramExprs)) {
-            const v = await this.eval(ex, env);
-            if (k !== 'content' && typeof v !== 'string') throw runtimeError(`${tool}: parameter '${k}' must be a string, got ${typeName(v)}`);
-            params[k] = str(v);
-        }
-        const instructions = str(await this.eval(instrExpr, env));
-        const host = new ToolHost(this.restrictions, this.cwd);
-
-        // When the script leaves a required parameter out, the LLM calls the tool itself with the fixed ones pinned.
-        if (TOOL_SPECS[tool].required.some((p) => !(p in params))) {
-            if (tool === 'write_file' && params.path !== undefined) this.restrictions.checkPath(params.path, 'write');
-            const fixed = Object.keys(params).length ? ` with these fixed parameters (set by the script): ${JSON.stringify(params)}` : '';
-            return this.callLlm({
-                kind: 'tool',
-                prompt: `Use the ${tool} tool${fixed}. Instructions: ${instructions}`,
-                pinned: { tool, params },
-            });
-        }
-
-        const output = await host.invoke(tool, params);
-        this.opts.logger.debug(`tool ${tool} ${JSON.stringify(params)} -> ${output.length} chars`);
-        return this.callLlm({
-            kind: 'tool',
-            prompt: `The tool \`${tool}\` was run with parameters ${JSON.stringify(params)}. Its output is between the markers.\n<tool_output>\n${output}\n</tool_output>\n\nInstructions: ${instructions}`,
+        names.forEach((name, i) => {
+            if (typeof args[i] !== 'string') throw runtimeError(`${tool}(): ${name} must be a string`);
+            params[name] = args[i];
         });
+        return new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay', true).invoke(tool, params);
+    }
+
+    private async evalGeneration(kind: LlmRequest['kind'], mods: Record<string, Expr>, promptExpr: Expr, env: Env): Promise<Value> {
+        if (kind === 'agent' && this.opts.backend.mode) {
+            throw new Failure('restriction_violation', 'agents cannot run in record/replay mode; record generation-only workflows');
+        }
+        const options: Record<string, Value> = {};
+        for (const [name, expr] of Object.entries(mods)) setKey(options, name, await this.eval(expr, env));
+        const { len, reasoning = kind === 'ask' ? undefined : 'medium', show = false, repairs = 0, model } = options;
+        const fmt = options.fmt ?? ('schema' in options ? 'json' : 'text');
+        if (len !== undefined && len !== 'word' && len !== 'sentence' && len !== 'paragraph' && len !== 'long') throw runtimeError('len must be word, sentence, paragraph, or long');
+        if (fmt !== 'text' && fmt !== 'json' && fmt !== 'object') throw runtimeError('fmt must be text, json, or object');
+        if (reasoning !== undefined && reasoning !== 'low' && reasoning !== 'medium' && reasoning !== 'high') throw runtimeError('reasoning must be low, medium, or high');
+        if (typeof show !== 'boolean') throw runtimeError('show must be True or False');
+        if (model !== undefined && (typeof model !== 'string' || !model.trim())) throw runtimeError('model must be a non-empty string');
+        if (typeof repairs !== 'number' || !Number.isInteger(repairs) || repairs < 0 || repairs > 5) throw runtimeError('repairs must be an integer from 0 to 5');
+        if (kind === 'agent' && repairs !== 0) throw runtimeError('agents cannot use repairs: external actions must not be retried automatically');
+        if (fmt === 'text' && ('schema' in options || repairs !== 0)) throw runtimeError('schema and repairs require JSON output');
+        const validate = 'schema' in options ? compileSchema(options.schema) : undefined;
+        let prompt = buildPrompt({
+            prompt: str(await this.eval(promptExpr, env)),
+            mods: { len, fmt: fmt === 'object' ? 'object' : undefined },
+            thinking: reasoning !== undefined,
+            constraints: this.constraints,
+            restrictions: this.restrictions,
+        });
+        if (fmt === 'json') prompt += '\n\nReturn ONLY valid JSON, without prose or code fences.';
+        if (validate) prompt += `\n\nThe result must satisfy this JSON Schema:\n${JSON.stringify(toJson(options.schema))}`;
+        const basePrompt = prompt;
+        for (let attempt = 0; ; attempt++) {
+            const text = await this.callLlm({
+                kind, prompt,
+                model: this.opts.model ?? model ?? this.model,
+                reasoningEffort: reasoning,
+                showReasoning: show,
+                restrictions: this.restrictions,
+                tools: new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay'),
+            });
+            try {
+                const value = fmt === 'text' ? text : parseJsonResponse(text, fmt === 'object');
+                validate?.(value);
+                return value;
+            } catch (e) {
+                if (!(e instanceof Failure) || (e.statusCode !== 'invalid_format' && e.statusCode !== 'validation_failed') || attempt >= repairs) throw e;
+                this.opts.logger.info(`repair ${attempt + 1}/${repairs}: ${e.reason}`);
+                prompt = `${basePrompt}\n\nPrevious response:\n${text}\n\nValidation failed: ${e.reason}\nReturn a corrected JSON value.`;
+            }
+        }
     }
 }

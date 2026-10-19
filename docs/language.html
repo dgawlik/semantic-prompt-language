@@ -15,18 +15,18 @@
 
 <div class="eyebrow">The language</div>
 <h1>Language basics</h1>
-<p class="lead">The deterministic half of SPL: a Python-flavoured language with braces. Nothing on this page calls a model &mdash; given the same inputs it always produces the same results.</p>
+<p class="lead">The deterministic core of SPL: Python-flavoured expressions, braces, function-scoped variables, and explicit assignment. Model calls are distinct expressions, not implicit behavior of ordinary functions.</p>
 
 <div class="callout">
   <span class="ico">📌</span>
   <div class="body"><span class="title">Design decisions at a glance</span>
   <ul>
     <li><strong>Blocks use braces</strong>; the opening <code>{</code> must be on the same line as its keyword. Statements end at a newline (or <code>;</code>).</li>
-    <li><strong>Every modification of a variable starts with <code>let</code></strong>: <code>let x = 1</code>, <code>let x += 1</code>, <code>let d['k'] = 2</code>. A bare <code>x = …</code> is a syntax error.</li>
-    <li><strong>Scoping:</strong> bare <code>{ … }</code> blocks and functions open a scope where <code>let</code> shadows outer variables; <code>if</code>, loops, <code>try</code>, <code>enforce</code>, <code>forbid</code> and <code>restrict</code> blocks do not, so results flow out of them. See <a href="#scope">Scope</a>.</li>
+    <li><strong><code>let</code> declares/redeclares a local</strong>; <code>x = …</code> and <code>x += …</code> update an existing local. Collection assignment uses <code>d['k'] = 2</code>, without <code>let</code>.</li>
+    <li><strong>Function scoping:</strong> every block shares its function/script scope. Only function calls create a new local scope. See <a href="#scope">Scope</a>.</li>
     <li><strong><code>return</code> exits immediately</strong> from any scope &mdash; the function, or the whole script at the top level.</li>
     <li><strong>Every string interpolates</strong> <code>{expr}</code>.</li>
-    <li>Strict parsing: unknown modifiers or values, <code>break</code> outside loops, a modification without <code>let</code>, and <code>try</code> without <code>except</code> are syntax errors (exit code 2).</li>
+    <li>Unknown/duplicate modifier names, <code>break</code> outside loops, and <code>try</code> without <code>except</code> are syntax errors. Modifier values are expressions validated at runtime.</li>
   </ul></div>
 </div>
 
@@ -40,34 +40,34 @@ log(greeting)           # an expression statement
 </code></pre>
 
 <h3 id="directives">Directives</h3>
-<p>The only directive in the MVP is <code>model</code>. Its value must be a plain string (no interpolation). The <code>--model</code> CLI option takes precedence over the directive.</p>
+<p>The header directive is <code>model</code>, whose value must be a plain string without interpolation. Precedence is CLI <code>--model</code>, per-call <code>model</code>, header, then SDK default.</p>
 
 <h2 id="variables">Variables</h2>
-<p><code>let</code> declares a variable <em>and</em> is how you change it: every modification starts with <code>let</code>, including compound operators (<code>+= -= *= /= //= %=</code>) and member or item targets. A bare <code>x = 5</code> is a syntax error. Reading an unknown name is a runtime error.</p>
+<p><code>let name = expression</code> declares or redeclares a local. Assignment and compound operators (<code>+= -= *= /= //= %=</code>) update existing locals; they do not use <code>let</code>. Member/item targets also omit <code>let</code>. Unknown reads and assignment to an undeclared local are catchable runtime errors.</p>
 <pre><code class="language-spl">
 let count = 0
-let count += 1             # same as: let count = count + 1
-total = 5                  # syntax error: variables are modified with 'let'
+count += 1                # same as: count = count + 1
+count = 5                 # assignment to an existing local
 
 let user = {'name': 'Ada'}
-let user.name = 'Grace'    # member assignment
-let user['age'] = 36       # item assignment
+user.name = 'Grace'    # member assignment
+user['age'] = 36       # item assignment
 </code></pre>
 
 <h3 id="scope">Scope</h3>
-<p><code>let name = …</code> binds in the <em>current scope</em>. Two constructs open a new scope: a bare <code>{ … }</code> block and a function body (with its parameters). A <code>let</code> there <strong>shadows</strong> an outer variable of the same name and leaves it untouched; the shadow disappears at the closing brace.</p>
+<p><code>let name = …</code> binds in the current function or script. Every other block shares that scope, including a bare grouping block. Redeclaring a name in such a block updates the same binding, and newly declared names remain visible afterward. There is no hoisting: a local appears when execution binds it.</p>
 <pre><code class="language-spl">
 let color = 'Blue'
 {
     let color = 'Red'
     log(color)             # Red
 }
-log(color)                 # Blue
+log(color)                 # Red: braces do not introduce a scope
 </code></pre>
-<p><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>try</code>/<code>except</code>, <code>enforce</code>, <code>forbid</code> and <code>restrict</code> blocks do <strong>not</strong> open a scope: a <code>let</code> inside them updates the enclosing variable. That is what lets the answer of an LLM call leave a constraint block:</p>
+<p>Conditionals, loops, exception handlers, and guidance/restriction blocks all follow the same rule. Loop variables and caught failure names are local bindings too. Results remain visible after the block:</p>
 <pre><code class="language-spl">
 let color = None
-enforce 'Your favorite color is blue' {
+instruct 'Your favorite color is blue' {
     let color = ?{len='word'} 'What is your favorite color?'
 }
 log(color)                 # the answer
@@ -79,10 +79,10 @@ try {
 }
 log(response)              # visible here, whichever branch ran
 </code></pre>
-<p>Functions are closures that can <em>read</em> outer variables, but a <code>let</code> inside a function always binds locally. To share mutable state with a caller, mutate a list or dict (<code>let cell[0] += 1</code>).</p>
+<p>Functions can read lexical enclosing variables. A <code>let</code> inside a function declares/redeclares locally and can shadow an enclosing name. Name assignment cannot rebind an enclosing variable: declare a local first. To share mutable state, mutate a list or dict (<code>cell[0] += 1</code>).</p>
 
 <h3 id="persistence">Persistence</h3>
-<p>Top-level variables can be saved between runs with the variable store (<code>--store</code>). See <a href="cli.html#store">CLI &amp; runtime</a>.</p>
+<p>Top-level variables can be saved between runs with opt-in <code>--store</code>, even after a script failure. Persistence is not a transaction or an action log and is forbidden during replay. See <a href="cli.html#store">CLI &amp; runtime</a>.</p>
 
 <h2 id="types">Types &amp; values</h2>
 <div class="table-wrap"><table>
@@ -177,7 +177,7 @@ for code, language in items({'de': 'German', 'pl': 'Polish'}) {
 
 let tries = 0
 while tries &lt; 3 {
-    let tries += 1
+    tries += 1
     if tries == 2 { continue }
 }
 </code></pre>

@@ -15,7 +15,7 @@
 
 <div class="eyebrow">Introduction</div>
 <h1>Getting started</h1>
-<p class="lead">From a fresh checkout to a running script in a few minutes. Syntax checks work offline; running LLM commands needs a one-time <code>spl login</code>.</p>
+<p class="lead">Start with exact raw tools, add schema-validated generation, and opt into agents only when the model should choose actions. Syntax checks, raw tools, and recorded replay need no Copilot login.</p>
 
 <h2 id="requirements">Requirements</h2>
 <ul>
@@ -62,13 +62,15 @@ npx file:./lang examples/live.spl
 <h2 id="hello">Write a script</h2>
 <p>Create <code>hello.spl</code>:</p>
 <pre><code class="language-spl" data-file="hello.spl">
-# Ask for structured data, validate it, then use it like any other value
-let user = ?{fmt='object'} 'Invent a fictional user as {{"name": str, "age": number}}'
-
-assert type(user.age) == 'number' 'age must be a number'
-
-let greeting = ?{len='sentence'} 'Write a greeting for {user.name}, who is {user.age}.'
-success greeting
+let User = {
+    'type': 'object',
+    'properties': {'name': {'type': 'string'}, 'age': {'type': 'integer', 'minimum': 0}},
+    'required': ['name', 'age'],
+    'additionalProperties': False,
+}
+let user = ?{schema=User, reasoning='low', repairs=2} 'Invent a fictional adult user'
+assert user.age >= 18 'expected an adult'
+success user
 </code></pre>
 <pre><code class="language-bash">
 node dist/cli.js hello.spl --model gpt-5.5    # run with a model override
@@ -90,6 +92,26 @@ node dist/cli.js hello.spl --model gpt-5.5    # run with a model override
 <tr><td><code>70</code></td><td>Internal interpreter error.</td></tr>
 </tbody></table></div>
 
+<h2 id="record-replay">Replay generation offline</h2>
+<pre><code class="language-bash">
+node dist/cli.js hello.spl --record hello.jsonl
+node dist/cli.js hello.spl --replay hello.jsonl --silent
+</code></pre>
+<p>The second run needs no model credentials. Requests must match exactly and in order. Replay permits local reads but blocks writes, shell, network, agents, and stores. Recordings contain prompts and raw responses; protect them as sensitive data. See <a href="cli.html#record-replay">record/replay</a>.</p>
+
+<h2 id="migration">Breaking changes in 0.3</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Old</th><th>New</th></tr></thead>
+<tbody>
+<tr><td><code>read_file{path='a.txt'} 'Return it'</code></td><td><code>read_file('a.txt')</code>; interpret the result with a separate generation call.</td></tr>
+<tr><td>Tools with missing parameters</td><td>Required positional arguments, or explicit <code>agent '...'</code> for model-selected actions.</td></tr>
+<tr><td><code>enforce</code> / <code>forbid</code></td><td><code>instruct</code> / <code>avoid</code>: prompt guidance only.</td></tr>
+<tr><td><code>think{level='high'}</code></td><td><code>?{reasoning='high'}</code> or <code>think{reasoning='high'}</code>.</td></tr>
+<tr><td><code>let x += 1</code>, <code>let d.key = 2</code></td><td><code>x += 1</code>, <code>d.key = 2</code>; let is for name declarations/redeclarations.</td></tr>
+<tr><td>Bare blocks introduce scopes</td><td>All blocks share the function/script scope; functions cannot rebind enclosing locals.</td></tr>
+<tr><td>Modifier values checked by parsing</td><td>Values are expressions checked at runtime; unknown/duplicate names remain syntax errors.</td></tr>
+</tbody></table></div>
+
 <h2 id="repo-tour">Repository tour</h2>
 <div class="table-wrap"><table>
 <thead><tr><th>Path</th><th>Contents</th></tr></thead>
@@ -103,8 +125,9 @@ node dist/cli.js hello.spl --model gpt-5.5    # run with a model override
 <h2 id="tests">Run the tests</h2>
 <pre><code class="language-bash">
 cd lang
-npm test     # builds, then runs parser, interpreter, restriction and CLI tests, plus live tests on Copilot (skipped without a login)
+npm test     # builds and runs the offline suite; no model calls by default
 </code></pre>
+<p>For authenticated live checks, explicitly set <code>SPL_LIVE_TESTS=1</code>. In PowerShell: <code>$env:SPL_LIVE_TESTS='1'; npm test</code>, then remove the environment variable. Documentation snippets and example syntax are checked offline.</p>
 
 </main>
 <script src="assets/search-index.js"></script>

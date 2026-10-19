@@ -25,6 +25,10 @@
 
 <h2 id="functions">Functions</h2>
 
+<h3 id="raw-tools">Raw tools: no model round-trip</h3>
+<p><code>read_file(path)</code>, <code>write_file(path, content)</code>, <code>web_fetch(url)</code>, <code>web_search(query)</code>, and <code>shell(command)</code> are ordinary positional functions with required string arguments. They use active restrictions, return raw text (write returns confirmation), and never invoke a model. Shell returns combined stdout/stderr or raises <code>tool_error</code> on nonzero exit. Raw results are not truncated. See <a href="llm-commands.html#tools">tool contracts</a>.</p>
+<p>Use a separate generation expression to interpret output. Use explicit <code>agent</code> when the model should choose actions. Replay permits only <code>read_file</code>; all other raw tools are blocked.</p>
+
 <h3 id="conversion">Types &amp; conversion</h3>
 <div class="table-wrap"><table>
 <thead><tr><th>Signature</th><th>Description</th></tr></thead>
@@ -126,7 +130,7 @@
 <pre><code class="language-spl">
 let counts = {}
 for t in results {
-    if t['label'] in counts { let counts[t['label']] += 1 } else { let counts[t['label']] = 1 }
+    if t['label'] in counts { counts[t['label']] += 1 } else { counts[t['label']] = 1 }
 }
 
 let lines = []
