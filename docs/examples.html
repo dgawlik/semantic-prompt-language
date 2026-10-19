@@ -26,7 +26,7 @@
 <tr><td><a href="#triage-issues"><code>triage-issues.spl</code></a></td><td>Schema-validated classification, bounded generation repair, aggregation</td></tr>
 <tr><td><a href="#extract-invoice"><code>extract-invoice.spl</code></a></td><td>Structured extraction cross-checked with arithmetic before it is accepted</td></tr>
 <tr><td><a href="#code-review"><code>code-review.spl</code></a></td><td>Three-file review, structured findings, restricted report write, <code>fail</code> as a CI gate</td></tr>
-<tr><td><a href="#release-notes"><code>release-notes.spl</code></a></td><td>Nested <code>avoid</code>/<code>instruct</code>, git history to a file inside <code>./out</code></td></tr>
+<tr><td><a href="#release-notes"><code>release-notes.spl</code></a></td><td>Nested <code>forbid</code>/<code>enforce</code>, git history to a file inside <code>./out</code></td></tr>
 <tr><td><a href="#web-digest"><code>web-digest.spl</code></a></td><td><code>restrict net</code>, <code>web_fetch</code>, catching a blocked second host</td></tr>
 <tr><td><a href="#fix-failing-tests"><code>fix-failing-tests.spl</code></a></td><td>Raw npm test plus explicit repair agent, up to three rounds</td></tr>
 <tr><td><a href="#translate-docs"><code>translate-docs.spl</code></a></td><td>Read once, generate translations, write exact output to script-chosen paths</td></tr>
@@ -64,7 +64,7 @@ let attempt = 0
 restrict exec 'git' {
     let diff = shell('git diff --staged')
     assert len(diff.strip()) &gt; 0 'nothing is staged'
-    avoid 'wrapping the message in quotes or code fences' {
+    forbid 'wrapping the message in quotes or code fences' {
         while attempt &lt; 3 {
             attempt += 1
             let msg = ? '''
@@ -212,7 +212,7 @@ spl examples/code-review.spl --cwd &lt;project&gt;
 
 let notes = ''
 
-avoid 'suggesting purely stylistic changes' {
+forbid 'suggesting purely stylistic changes' {
     restrict './src', exec 'git' {
         let notes = agent{reasoning='high'} '''
 List source files with `git ls-files src`.
@@ -275,8 +275,8 @@ success '\n'.join(lines)
 let notes = ''
 
 restrict exec 'git' {
-    avoid 'inventing changes that are not in the commit list' {
-        instruct 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
+    forbid 'inventing changes that are not in the commit list' {
+        enforce 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
             let commits = shell('git log --oneline -n 40')
             let notes = ? '''
 Write release notes for end users from these commits (one per line: hash and subject).
@@ -340,7 +340,7 @@ let green = False
 
 
 restrict '.', exec 'npm' {
-    avoid 'editing or deleting test files, or weakening assertions' {
+    forbid 'editing or deleting test files, or weakening assertions' {
         while attempt &lt; 3 and not green {
             attempt += 1
             try {
@@ -395,7 +395,7 @@ let written = []
 
 restrict '.' {
     let source = read_file('./examples/data/product-update.md')
-    instruct 'Keep Markdown formatting, URLs and code identifiers untranslated' {
+    enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
         for code, language in items(locales) {
             let translation = ?{reasoning='medium'} 'Translate this document to {language}: {source}'
             write_file("./out/translations/product-update.{code}.md", translation)
@@ -473,8 +473,8 @@ let joke = ?{len='sentence', fmt='object'} 'A joke about programmers as {{"setup
 log("setup: {joke['setup']}")
 
 # Scoped constraints
-instruct 'Answer in English' {
-    avoid 'Mentioning the word cat' {
+enforce 'Answer in English' {
+    forbid 'Mentioning the word cat' {
         let animal = ?{len='paragraph'} 'Funny story involving a pet animal'
     }
 }
@@ -507,8 +507,8 @@ let why = think{reasoning='high'} 'Why is {joke.setup} funny?'
 
 # Prompt guidance for calls inside the block (not runtime validation).
 let hi = None
-instruct 'Answer in English' {
-    avoid 'profanity' { let hi = ?'Say hi' }
+enforce 'Answer in English' {
+    forbid 'profanity' { let hi = ?'Say hi' }
 }
 
 # Raw I/O does not call the model.
@@ -522,7 +522,7 @@ success {'joke': joke, 'why': why, 'hi': hi}
 
 <h3 id="live-tours">Live tours</h3>
 <ul>
-  <li><code>live.spl</code> &mdash; a quick smoke test of <code>?</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>instruct</code> and <code>assert</code> against the real model.</li>
+  <li><code>live.spl</code> &mdash; a quick smoke test of <code>?</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>enforce</code>/<code>forbid</code> and <code>assert</code> against the real model.</li>
   <li><code>tools-live.spl</code> &mdash; <code>read_file</code>, <code>write_file</code> and <code>think{show=True}</code> inside <code>restrict './sandbox'</code>. Run it after <code>mkdir sandbox; echo hello world &gt; sandbox/note.txt</code>.</li>
   <li><code>restrict-live.spl</code> &mdash; asks the model to read <code>secret.txt</code> outside the sandbox and shows the runtime blocking it, returning a <code>restriction_violation</code> payload.</li>
 </ul>

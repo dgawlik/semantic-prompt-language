@@ -8,11 +8,11 @@ const bad = (source: string, message: RegExp) => {
 };
 
 describe('parser: accepted syntax', () => {
-    it('accepts enforce/forbid and normalizes them to the same guidance as instruct/avoid', () => {
-        const restored = parse(`enforce 'English' { forbid 'jokes' { let answer = ?'Hi' } }`);
-        const aliases = parse(`instruct 'English' { avoid 'jokes' { let answer = ?'Hi' } }`);
-        expect(restored.body).toEqual(aliases.body);
-        parse(`enforce 'English' { avoid 'jokes' { pass } }\ninstruct 'Brief' { forbid 'rudeness' { pass } }`);
+    it('uses enforce/forbid for positive and negative scoped guidance', () => {
+        const program = parse(`enforce 'English' { forbid 'jokes' { let answer = ?'Hi' } }`);
+        expect(program.body[0]).toMatchObject({
+            t: 'constraint', kind: 'enforce', body: [{ t: 'constraint', kind: 'forbid' }],
+        });
     });
 
     it('composes generation options and explicit agents', () => {
@@ -21,7 +21,7 @@ describe('parser: accepted syntax', () => {
 let Contract = {'type': 'object'}
 let response = ?{schema=Contract, reasoning='high', repairs=2, model='other'} 'Extract'
 let diagnosis = think{fmt='json', show=True} 'Diagnose'
-instruct 'Answer in English' { avoid 'jokes' { let result = ?'Hi' } }
+enforce 'Answer in English' { forbid 'jokes' { let result = ?'Hi' } }
 restrict './out', exec 'git', mcp 'docs/search' { agent 'Write the report' }
 let text = read_file('input.txt')
 write_file('output.txt', text)
@@ -69,7 +69,7 @@ let multi = {
     it('accepts grouping blocks, top-level return and next-line else/except', () => {
         parse(`let color = 'Blue'\n{ let color = 'Red' }\nreturn color`);
         parse(`if True { pass }\nelse { pass }\ntry { pass }\nexcept e { pass }`);
-        parse(`for i in [1] { { return i } }\nrestrict './x' { instruct 'a' { return } }`);
+        parse(`for i in [1] { { return i } }\nrestrict './x' { enforce 'a' { return } }`);
     });
 
     it('treats escapes, raw strings and multiline interpolation', () => {
@@ -88,6 +88,11 @@ describe('parser: strict syntax errors', () => {
     it('rejects removed tool-command syntax', () => {
         bad(`read_file{path='a'} 'Read'`, /end of statement/);
         bad(`read_file 'Read a'`, /end of statement/);
+    });
+
+    it('points obsolete guidance spellings to enforce/forbid', () => {
+        bad(`instruct 'English' { pass }`, /use 'enforce' instead of 'instruct'/);
+        bad(`avoid 'jokes' { pass }`, /use 'forbid' instead of 'avoid'/);
     });
 
     it('allows only name declarations and valid assignment targets', () => {

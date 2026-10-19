@@ -29,14 +29,14 @@
 #   ^^^^^ support.function.tool.spl
     web_fetch('https://a.com')
 #   ^^^^^^^^^ support.function.tool.spl
-    instruct 'be nice' { pass }
-#   ^^^^^^^^ keyword.control.constraint.spl
-    avoid 'rude' { pass }
-#   ^^^^^ keyword.control.constraint.spl
     enforce 'be nice' { pass }
 #   ^^^^^^^ keyword.control.constraint.spl
     forbid 'rude' { pass }
 #   ^^^^^^ keyword.control.constraint.spl
+    instruct 'not a keyword'
+#   ^^^^^^^^ - keyword.control.constraint.spl
+    avoid 'not a keyword'
+#   ^^^^^ - keyword.control.constraint.spl
     restrict './out' { pass }
 #   ^^^^^^^^ keyword.control.restrict.spl
     restrict net 'a.com' { pass }

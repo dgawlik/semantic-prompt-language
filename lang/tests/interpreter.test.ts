@@ -156,13 +156,13 @@ success [f('inner'), x]
         expect(value(result)).toEqual(['inner!', 'outer']);
     });
 
-    it('updates the outer variable from instruct, avoid, restrict, if, loop and try bodies', async () => {
+    it('updates the outer variable from enforce, forbid, restrict, if, loop and try bodies', async () => {
         fs.mkdirSync(path.join(dir, 'out'));
         const { result } = await exec(`
 let color = None
 let n = 0
-instruct 'be brief' {
-    avoid 'swearing' {
+enforce 'be brief' {
+    forbid 'swearing' {
         restrict './out' {
             let color = 'blue'
         }
@@ -180,7 +180,7 @@ success [color, n]
         const { result } = await exec(`
 let r = 0
 try {
-    instruct 'x' {
+    enforce 'x' {
         let r = 1
         fail 'f'
     }
@@ -197,7 +197,7 @@ success r
 def find(items) {
     for x in items {
         {
-            instruct 'irrelevant' {
+            enforce 'irrelevant' {
                 try {
                     if x > 2 { return x }
                 } except e { pass }

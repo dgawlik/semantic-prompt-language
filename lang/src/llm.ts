@@ -7,7 +7,7 @@ import { fromJson, isDict, isList, type Value } from './values.js';
 export type ReasoningLevel = 'low' | 'medium' | 'high';
 
 export interface Constraint {
-    kind: 'instruct' | 'avoid';
+    kind: 'enforce' | 'forbid';
     text: string;
 }
 
@@ -58,7 +58,7 @@ export function buildPrompt(opts: {
     if (opts.constraints.length) {
         sections.push(
             'Response guidance (not runtime validation):\n' +
-                opts.constraints.map((c) => `- ${c.kind === 'instruct' ? 'Follow' : 'Avoid'}: ${c.text}`).join('\n'),
+                opts.constraints.map((c) => `- ${c.kind === 'enforce' ? 'Follow' : 'Avoid'}: ${c.text}`).join('\n'),
         );
     }
     const guidance = opts.restrictions.guidance();

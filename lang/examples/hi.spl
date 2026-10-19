@@ -13,8 +13,8 @@ let why = think{reasoning='high'} 'Why is {joke.setup} funny?'
 
 # Prompt guidance for calls inside the block (not runtime validation).
 let hi = None
-instruct 'Answer in English' {
-    avoid 'profanity' { let hi = ?'Say hi' }
+enforce 'Answer in English' {
+    forbid 'profanity' { let hi = ?'Say hi' }
 }
 
 # Raw I/O does not call the model.

@@ -21,7 +21,7 @@ let attempt = 0
 restrict exec 'git' {
     let diff = shell('git diff --staged')
     assert len(diff.strip()) > 0 'nothing is staged'
-    avoid 'wrapping the message in quotes or code fences' {
+    forbid 'wrapping the message in quotes or code fences' {
         while attempt < 3 {
             attempt += 1
             let msg = ? '''

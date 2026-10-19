@@ -12,7 +12,7 @@ import { tokenize, type StringPart, type Token } from './lexer.js';
 
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
-    'success', 'enforce', 'forbid', 'instruct', 'avoid', 'restrict', 'think', 'agent', 'break', 'continue', 'pass', 'and', 'or', 'not',
+    'success', 'enforce', 'forbid', 'restrict', 'think', 'agent', 'break', 'continue', 'pass', 'and', 'or', 'not',
     'True', 'False', 'None',
 ]);
 
@@ -254,15 +254,16 @@ class Parser {
                     return { t: 'success', line, value: this.atStatementEnd() ? undefined : this.parseExpr() };
                 }
                 case 'enforce':
-                case 'forbid':
-                case 'instruct':
-                case 'avoid': {
-                    const kind = t.value === 'enforce' || t.value === 'instruct' ? 'instruct' : 'avoid';
+                case 'forbid': {
+                    const kind = t.value;
                     this.next();
                     const text = this.parseExpr();
                     return { t: 'constraint', line, kind, text, body: this.parseBlock() };
                 }
                 case 'restrict': return this.parseRestrict();
+                case 'instruct':
+                case 'avoid':
+                    this.fail(`use '${t.value === 'instruct' ? 'enforce' : 'forbid'}' instead of '${t.value}' for scoped prompt guidance`);
                 default:
                     break;
             }

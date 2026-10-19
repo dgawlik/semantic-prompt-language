@@ -30,8 +30,7 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
   Prose and code fences are not silently extracted.
 - **Repairs:** `repairs=0..5` retries only malformed/invalid generation, not transport errors
   or external actions. Agents require `repairs=0`. Use `assert` for business rules.
-- **Guidance:** `enforce`/`forbid` (also spelled `instruct`/`avoid`) and `len` influence
-  prompts, not runtime guarantees.
+- **Guidance:** `enforce`/`forbid` and `len` influence prompts, not runtime guarantees.
 - **Capabilities:** nested `restrict fs/net/exec/mcp` clauses intersect. Shell command
   inspection is best effort; MCP servers are trusted services, not OS-sandboxed.
 - **Bindings:** `let` declares/redeclares function/script locals; `x = ...` and `x += ...`
@@ -86,7 +85,7 @@ See [embedding](../docs/internals.html#embedding).
 
 ## Migration
 
-`enforce` and `forbid` remain supported; `instruct` and `avoid` are equivalent aliases.
+Use `enforce` and `forbid` for scoped prompt guidance; `instruct` and `avoid` are not accepted.
 0.3 removes `think{level=...}`, tool-command syntax, and `let` before
 compound/member/index assignments. Use `reasoning`, ordinary raw functions, and explicit agents instead.
 Bare blocks no longer create scopes. See the [migration table](../README.md#breaking-changes-in-03).

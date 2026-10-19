@@ -7,7 +7,7 @@
 
 let notes = ''
 
-avoid 'suggesting purely stylistic changes' {
+forbid 'suggesting purely stylistic changes' {
     restrict './src', exec 'git' {
         let notes = agent{reasoning='high'} '''
 List source files with `git ls-files src`.

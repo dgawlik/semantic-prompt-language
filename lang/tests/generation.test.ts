@@ -139,7 +139,7 @@ success [result, count[0]]
 
     it('keeps guidance separate from validation and makes agent calls explicit', async () => {
         const { backend, calls } = scripted('contrary', 'done');
-        expect(await exec(`instruct 'Be polite' { avoid 'jokes' { let x = ?'Hi' } }\nsuccess agent 'Do the task'`, backend)).toMatchObject({ status: 'success', value: 'done' });
+        expect(await exec(`enforce 'Be polite' { forbid 'jokes' { let x = ?'Hi' } }\nsuccess agent 'Do the task'`, backend)).toMatchObject({ status: 'success', value: 'done' });
         expect(calls[0].prompt).toContain('Follow: Be polite');
         expect(calls[0].prompt).toContain('Avoid: jokes');
         expect(calls[1]).toMatchObject({ kind: 'agent' });
@@ -164,12 +164,12 @@ success [inside, outside]
         expect(calls[1].prompt).not.toContain('jokes');
     });
 
-    it('unwinds mixed old and new guidance spellings after a caught failure', async () => {
+    it('unwinds nested enforce/forbid guidance after a caught failure', async () => {
         const { backend, calls } = scripted('inside', 'after');
         const result = await exec(`
 try {
     enforce 'Be polite' {
-        avoid 'profanity' {
+        forbid 'profanity' {
             let answer = ?'inside'
             fail 'expected'
         }

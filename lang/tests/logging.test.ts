@@ -20,7 +20,7 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
             },
             async close() {},
         };
-        const result = await run(parse(`instruct 'Be precise' { success ${expression} }`), {
+        const result = await run(parse(`enforce 'Be precise' { success ${expression} }`), {
             backend, logger: new Logger(level, (line) => lines.push(line)), cwd: process.cwd(),
         });
 

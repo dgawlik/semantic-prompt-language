@@ -7,7 +7,7 @@ let written = []
 
 restrict '.' {
     let source = read_file('./examples/data/product-update.md')
-    instruct 'Keep Markdown formatting, URLs and code identifiers untranslated' {
+    enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
         for code, language in items(locales) {
             let translation = ?{reasoning='medium'} 'Translate this document to {language}: {source}'
             write_file("./out/translations/product-update.{code}.md", translation)

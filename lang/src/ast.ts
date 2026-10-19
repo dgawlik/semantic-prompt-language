@@ -54,7 +54,7 @@ export type Stmt = Base &
         | { t: 'assert'; cond: Expr; message?: Expr }
         | { t: 'fail'; reason: Expr }
         | { t: 'success'; value?: Expr }
-        | { t: 'constraint'; kind: 'instruct' | 'avoid'; text: Expr; body: Stmt[] }
+        | { t: 'constraint'; kind: 'enforce' | 'forbid'; text: Expr; body: Stmt[] }
         | { t: 'restrict'; clauses: { kind: RestrictKind; arg: Expr }[]; body: Stmt[] }
     );
 

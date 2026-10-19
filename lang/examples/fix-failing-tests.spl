@@ -11,7 +11,7 @@ let green = False
 
 
 restrict '.', exec 'npm' {
-    avoid 'editing or deleting test files, or weakening assertions' {
+    forbid 'editing or deleting test files, or weakening assertions' {
         while attempt < 3 and not green {
             attempt += 1
             try {

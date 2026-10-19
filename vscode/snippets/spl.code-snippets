@@ -69,16 +69,6 @@
     "body": ["forbid '${1:guidance}' {", "\t$0", "}"],
     "description": "Scoped negative prompt guidance, not runtime enforcement"
   },
-  "Instruct": {
-    "prefix": "instruct",
-    "body": ["instruct '${1:guidance}' {", "\t$0", "}"],
-    "description": "Scoped prompt guidance, not runtime validation"
-  },
-  "Avoid": {
-    "prefix": "avoid",
-    "body": ["avoid '${1:guidance}' {", "\t$0", "}"],
-    "description": "Scoped negative prompt guidance, not runtime enforcement"
-  },
   "Restrict folder": {
     "prefix": "restrict",
     "body": ["restrict '${1:./folder}' {", "\t$0", "}"],
