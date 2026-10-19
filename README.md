@@ -150,9 +150,9 @@ the active `restrict` scopes and any other Copilot permission request is rejecte
 * Paths are canonicalized (symlinks resolved, `..` removed) relative to `--cwd` before the check.
 * `net` matches exact hosts (and `*.example.com` wildcards); redirects are re-checked on every hop. `web_search`
   needs `html.duckduckgo.com` to be allowed.
-* `exec` matches the executable name. While any restriction is active, `shell` accepts only simple commands (no
-  `&|;<>` redirects, substitution or chaining) so the check is exact; path-like and URL arguments are also checked
-  against `fs`/`net`. This is best effort for programs that touch files or the network on their own.
+* `exec` matches the executable name. Executables in pipelines and chains are checked against `restrict exec`,
+  and path-like and URL arguments and redirection targets are checked against `fs`/`net`. This is best effort for
+  programs that touch files or the network on their own.
 * Nested restrictions of one kind intersect and can never widen.
 
 ## Reproducibility

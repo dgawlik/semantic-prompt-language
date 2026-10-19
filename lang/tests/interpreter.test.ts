@@ -340,7 +340,13 @@ describe('restrict enforcement', () => {
         const exe = await exec(`restrict exec 'npm,git' { let v = shell{command='curl http://x'} 'x' }`);
         expect(failure(exe.result).status_code).toBe('restriction_violation');
         const chain = await exec(`restrict exec 'git' { let v = shell{command='git status && curl x'} 'x' }`);
-        expect(failure(chain.result).reason).toMatch(/chaining/);
+        expect(failure(chain.result).status_code).toBe('restriction_violation');
+        expect(failure(chain.result).reason).toMatch(/executable 'curl' blocked/);
+        const echoBackend = { async call(req: any) { return { text: req.prompt, effective: {} }; }, async close() {} };
+        const allowedChain = await exec(`restrict exec 'node' { let v = shell{command='node -e "process.stdout.write(String(4))" && node -e "process.stdout.write(String(2))"'} 'x'\nsuccess v }`, { backend: echoBackend as any });
+        expect(value(allowedChain.result)).toContain('42');
+        const pipe = await exec(`restrict '.' { let v = shell{command='node -e "process.stdout.write(String(7*6))"'} 'x'\nsuccess v }`, { backend: echoBackend as any });
+        expect(value(pipe.result)).toContain('42');
     });
 
     it('blocks web_search outside the allowed hosts', async () => {

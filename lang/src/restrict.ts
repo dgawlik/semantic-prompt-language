@@ -145,7 +145,7 @@ export class Restrictions {
         return this.list.map((r) => {
             if (r.kind === 'fs') return `File system: you may read and write only inside: ${r.values.join(', ')}. Any other path will be blocked.`;
             if (r.kind === 'net') return `Network: you may only access these hosts: ${r.values.join(', ')}. Any other host will be blocked.`;
-            return `Shell: you may only run these executables: ${r.values.join(', ')}, one simple command at a time (no pipes, redirects or chaining). Anything else will be blocked.`;
+            return `Shell: you may only run these executables: ${r.values.join(', ')}. Anything else will be blocked.`;
         });
     }
 }

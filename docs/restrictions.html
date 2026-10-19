@@ -86,7 +86,7 @@ restrict exec 'npm' {
 <ul>
   <li><code>exec</code> matches the executable <em>name</em>. On Windows <code>.exe</code>, <code>.cmd</code>, <code>.bat</code> and <code>.com</code> suffixes are ignored.</li>
   <li>Inside a <code>restrict exec</code> block, commands must be named <em>without a path</em> (<code>git</code>, not <code>/usr/bin/git</code>).</li>
-  <li>While <strong>any</strong> restriction is active, <code>shell</code> accepts only simple commands: no <code>&amp; | ; &lt; &gt;</code>, redirects, substitution, chaining or embedded double quotes, so the check is exact. Path-like and URL arguments are also checked against the active <code>fs</code>/<code>net</code> scopes.</li>
+  <li>Shell commands in pipelines and chains are checked against active restrictions: executables are checked against <code>restrict exec</code>, and path-like/URL arguments and redirection targets are checked against active <code>fs</code> and <code>net</code> scopes.</li>
 </ul>
 <div class="callout warn">
   <span class="ico">⚠️</span>

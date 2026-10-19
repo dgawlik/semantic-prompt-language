@@ -10,9 +10,6 @@ const SHELL_TIMEOUT_MS = 120_000;
 const FETCH_TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 5;
 
-/** Characters that let a command chain, redirect or substitute; rejected while any restriction is active. */
-const SHELL_META = /[&|;<>`$()\r\n^%!]/;
-
 export interface ToolSpec {
     name: ToolName;
     description: string;
@@ -91,6 +88,105 @@ export function splitCommand(command: string): string[] {
     if (quote) throw new Failure('restriction_violation', 'shell command rejected: unterminated quote');
     if (inToken) args.push(cur);
     return args;
+}
+
+function findMatchingParen(str: string, openIndex: number): number {
+    let depth = 0;
+    for (let i = openIndex; i < str.length; i++) {
+        if (str[i] === '(') depth++;
+        else if (str[i] === ')') {
+            depth--;
+            if (depth === 0) return i;
+        }
+    }
+    return -1;
+}
+
+/** Splits a command string by chain/pipeline separators (&&, ||, |, ;, &, \n) outside quotes. */
+export function splitChainedCommands(command: string): string[] {
+    const subcmds: string[] = [];
+    let cur = '';
+    let quote: string | undefined;
+    for (let i = 0; i < command.length; i++) {
+        const ch = command[i];
+        if (quote) {
+            if (ch === quote) quote = undefined;
+            cur += ch;
+        } else if (ch === '"' || ch === "'") {
+            quote = ch;
+            cur += ch;
+        } else if (ch === '\n' || ch === ';') {
+            if (cur.trim()) subcmds.push(cur.trim());
+            cur = '';
+        } else if (ch === '&' && command[i + 1] === '&') {
+            if (cur.trim()) subcmds.push(cur.trim());
+            cur = '';
+            i++;
+        } else if (ch === '|' && command[i + 1] === '|') {
+            if (cur.trim()) subcmds.push(cur.trim());
+            cur = '';
+            i++;
+        } else if (ch === '|') {
+            if (cur.trim()) subcmds.push(cur.trim());
+            cur = '';
+        } else if (ch === '&') {
+            const prevNonSpace = cur.trimEnd().slice(-1);
+            if (prevNonSpace === '>') {
+                cur += ch;
+            } else {
+                if (cur.trim()) subcmds.push(cur.trim());
+                cur = '';
+            }
+        } else {
+            cur += ch;
+        }
+    }
+    if (quote) throw new Failure('restriction_violation', 'shell command rejected: unterminated quote');
+    if (cur.trim()) subcmds.push(cur.trim());
+    return subcmds;
+}
+
+/** Finds nested $(...) or `...` command substitutions outside single quotes. */
+export function extractSubstitutions(command: string): string[] {
+    const subs: string[] = [];
+    let quote: string | undefined;
+    for (let i = 0; i < command.length; i++) {
+        const ch = command[i];
+        if (quote === "'") {
+            if (ch === "'") quote = undefined;
+        } else if (quote === '"') {
+            if (ch === '"') {
+                quote = undefined;
+            } else if (ch === '`') {
+                const end = command.indexOf('`', i + 1);
+                if (end !== -1) {
+                    subs.push(command.slice(i + 1, end));
+                    i = end;
+                }
+            } else if (ch === '$' && command[i + 1] === '(') {
+                const end = findMatchingParen(command, i + 1);
+                if (end !== -1) {
+                    subs.push(command.slice(i + 2, end));
+                    i = end;
+                }
+            }
+        } else if (ch === "'" || ch === '"') {
+            quote = ch;
+        } else if (ch === '`') {
+            const end = command.indexOf('`', i + 1);
+            if (end !== -1) {
+                subs.push(command.slice(i + 1, end));
+                i = end;
+            }
+        } else if (ch === '$' && command[i + 1] === '(') {
+            const end = findMatchingParen(command, i + 1);
+            if (end !== -1) {
+                subs.push(command.slice(i + 2, end));
+                i = end;
+            }
+        }
+    }
+    return subs;
 }
 
 const SEARCH_ENDPOINT = 'https://html.duckduckgo.com/html/';
@@ -223,16 +319,67 @@ export class ToolHost {
     }
 
     private async shell(command: string): Promise<string> {
-        if (!this.restrictions.active) return this.run(command, { shell: true });
-
-        // With any restriction active only plain commands are accepted, so the checks below are exact.
-        if (SHELL_META.test(command)) {
-            throw new Failure('restriction_violation', 'shell command rejected: chaining, redirection and substitution are not allowed inside a restrict block');
+        if (!command || command.trim() === '') throw new Failure('tool_error', 'shell: empty command');
+        if (this.restrictions.active) {
+            this.checkCommandRestrictions(command);
         }
-        const argv = splitCommand(command);
-        if (argv.length === 0) throw new Failure('tool_error', 'shell: empty command');
-        this.restrictions.checkExec(argv[0]);
-        for (const arg of argv.slice(1)) {
+        return this.run(command, { shell: true });
+    }
+
+    private checkCommandRestrictions(command: string): void {
+        const subcmds = splitChainedCommands(command);
+        if (subcmds.length === 0) throw new Failure('tool_error', 'shell: empty command');
+        for (const sub of subcmds) {
+            this.checkSubcommand(sub);
+        }
+        for (const sub of extractSubstitutions(command)) {
+            this.checkCommandRestrictions(sub);
+        }
+    }
+
+    private checkSubcommand(subcmd: string): void {
+        const argv = splitCommand(subcmd);
+        if (argv.length === 0) return;
+
+        let execIdx = 0;
+        while (execIdx < argv.length && /^[a-zA-Z_][a-zA-Z0-9_]*=/.test(argv[execIdx])) {
+            execIdx++;
+        }
+        if (execIdx >= argv.length) return;
+
+        const exe = argv[execIdx].replace(/^[()]+/, '').replace(/[()]+$/, '');
+        if (exe) this.restrictions.checkExec(exe);
+
+        for (let i = execIdx + 1; i < argv.length; i++) {
+            const arg = argv[i];
+            if (arg === '>' || arg === '>>' || arg === '1>' || arg === '2>') {
+                const target = argv[++i];
+                if (target && !target.startsWith('&') && this.restrictions.has('fs')) {
+                    this.restrictions.checkPath(target, 'write');
+                }
+                continue;
+            }
+            if (arg === '<' || arg === '0<') {
+                const target = argv[++i];
+                if (target && this.restrictions.has('fs')) {
+                    this.restrictions.checkPath(target, 'read');
+                }
+                continue;
+            }
+            if (/^[0-9]?>+/.test(arg)) {
+                const target = arg.replace(/^[0-9]?>+/, '');
+                if (target && !target.startsWith('&') && this.restrictions.has('fs')) {
+                    this.restrictions.checkPath(target, 'write');
+                }
+                continue;
+            }
+            if (/^[0-9]?<+/.test(arg)) {
+                const target = arg.replace(/^[0-9]?<+/, '');
+                if (target && this.restrictions.has('fs')) {
+                    this.restrictions.checkPath(target, 'read');
+                }
+                continue;
+            }
             const value = arg.startsWith('-') && arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : arg;
             if (looksLikeUrl(value)) {
                 if (this.restrictions.has('net')) this.restrictions.checkHost(new URL(value).hostname.toLowerCase());
@@ -240,14 +387,6 @@ export class ToolHost {
                 this.restrictions.checkPath(value, 'read');
             }
         }
-        if (argv.some((a) => a.includes('"'))) {
-            throw new Failure('restriction_violation', 'shell command rejected: embedded double quotes are not allowed inside a restrict block');
-        }
-        if (process.platform === 'win32') {
-            // .cmd shims (npm, ...) need a shell on Windows; metacharacters were already rejected.
-            return this.run(argv.map((a) => (/\s/.test(a) || a === '' ? `"${a}"` : a)).join(' '), { shell: true });
-        }
-        return this.run(argv[0], { shell: false, args: argv.slice(1) });
     }
 
     private run(command: string, opts: { shell: boolean; args?: string[] }): Promise<string> {

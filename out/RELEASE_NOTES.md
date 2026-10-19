@@ -1,12 +1,12 @@
 ## Features
-- Added example projects to help you get started (88d8aa5).
-- Added a set of improvements and new capabilities (6b94170, 38f39b1).
+- Added logging of LLM requests and responses.
+- Revamped the language implementation.
+- Added examples.
 
 ## Fixes
-- Fixed bug #01 (539e50f).
-- Fixed bug #02 (fbb4297).
-- Made a small fix (334b253).
+- Fixed issues in the examples (three rounds of corrections).
+- Fixed several bugs, including two numbered bug fixes and a small fix.
 
 ## Other
-- Updated the documentation and README (9bc33b5, 92b771b, c62941b).
-- Initial project setup (1eb2a70).
+- Updated the documentation and README.
+- Made initial project setup and general changes.
