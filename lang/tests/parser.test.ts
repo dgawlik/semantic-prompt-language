@@ -71,6 +71,21 @@ let multi = {
         parse(`read_file{path='x'} 'y'\nread_file{} 'y'\nread_file 'y'\nwrite_file{path='a'} 'haiku'\nweb_search{query='spl'} 'top hit'\nweb_search 'news'\nshell 'list files'`);
     });
 
+    it('parses combined restrictions and preserves values containing commas', () => {
+        const stmt = parse(`restrict './src', net 'example.com', exec 'npm,git', mcp ['docs/search', 'issues'] { pass }`).body[0];
+        expect(stmt).toMatchObject({
+            t: 'restrict',
+            clauses: [
+                { kind: 'fs', arg: { t: 'str', parts: ['./src'] } },
+                { kind: 'net', arg: { t: 'str', parts: ['example.com'] } },
+                { kind: 'exec', arg: { t: 'str', parts: ['npm,git'] } },
+                { kind: 'mcp', arg: { t: 'list' } },
+            ],
+        });
+        parse(`restrict fs './a',\n './b', mcp 'docs/*' { pass }`);
+        bad(`restrict './src', { pass }`, /expected|unexpected/);
+    });
+
     it('parses ? as a prefix operator at unary precedence', () => {
         const p = parse(`let a = ?'x' + 'y'\nlet b = -?{len='word'} 'n'\nlet c = not ?'q'`);
         const first = p.body[0] as { value: { t: string; l: { t: string } } };

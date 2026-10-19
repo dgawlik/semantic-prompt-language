@@ -30,7 +30,7 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
         if (level === 'silent') {
             expect(lines).toEqual([]);
         } else {
-            expect(lines[0]).toBe(`[llm] llm request (${kind}):\n${requests[0].prompt}`);
+            expect(lines).toContain(`[llm] llm request (${kind}):\n${requests[0].prompt}`);
             expect(lines.at(-1)).toBe(`[llm] llm response:\n${text}`);
             expect(lines.some((line) => line.startsWith('[info] llm '))).toBe(level !== 'error');
         }
@@ -50,10 +50,34 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
         if (level === 'silent') {
             expect(lines).toEqual([]);
         } else {
-            expect(lines[0]).toBe('[llm] llm request (ask):\nFailing prompt');
-            expect(lines[1]).toContain('[error] llm_error: backend unavailable');
-            expect(lines).toHaveLength(2);
+            expect(lines).toContain('[llm] llm request (ask):\nFailing prompt');
+            expect(lines.at(-1)).toContain('[error] llm_error: backend unavailable');
+            expect(lines.some((line) => line.startsWith('[llm] llm response:'))).toBe(false);
         }
+    });
+
+    it('traces only executed deterministic statements, including loop iterations', async () => {
+        const lines: string[] = [];
+        const result = await run(parse(`let n = 0
+for i in [1, 2] {
+    let n += i
+}
+if False {
+    fail 'unreachable'
+}
+success n`), {
+            backend: { async call() { throw new Error('unexpected LLM call'); }, async close() {} },
+            logger: new Logger(level, (line) => lines.push(line)), cwd: process.cwd(),
+        });
+        expect(result).toMatchObject({ status: 'success', value: 3 });
+        expect(lines).toEqual(level === 'silent' ? [] : [
+            '[deterministic] line 1 (let): let n = 0',
+            '[deterministic] line 2 (for): for i in [1, 2] {',
+            '[deterministic] line 3 (let): let n += i',
+            '[deterministic] line 3 (let): let n += i',
+            '[deterministic] line 5 (if): if False {',
+            '[deterministic] line 8 (success): success n',
+        ]);
     });
 });
 

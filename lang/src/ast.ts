@@ -32,7 +32,7 @@ export interface ThinkMods {
 }
 
 export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'web_search' | 'shell';
-export type RestrictKind = 'fs' | 'net' | 'exec';
+export type RestrictKind = 'fs' | 'net' | 'exec' | 'mcp';
 
 export type AssignTarget =
     | { t: 'name'; name: string }
@@ -61,7 +61,7 @@ export type Stmt = Base &
         | { t: 'fail'; reason: Expr }
         | { t: 'success'; value?: Expr }
         | { t: 'constraint'; kind: 'enforce' | 'forbid'; text: Expr; body: Stmt[] }
-        | { t: 'restrict'; kind: RestrictKind; arg: Expr; body: Stmt[] }
+        | { t: 'restrict'; clauses: { kind: RestrictKind; arg: Expr }[]; body: Stmt[] }
     );
 
 export interface Directives {

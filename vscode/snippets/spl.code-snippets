@@ -89,6 +89,16 @@
     "body": ["restrict exec '${1:git,npm}' {", "\t$0", "}"],
     "description": "Limit shell commands to executables"
   },
+  "Restrict MCP": {
+    "prefix": "restrictmcp",
+    "body": ["restrict mcp '${1:docs/search}' {", "\t$0", "}"],
+    "description": "Limit configured MCP servers or tools"
+  },
+  "Combined restrictions": {
+    "prefix": "restrictmulti",
+    "body": ["restrict '${1:./src}', exec '${2:git}', mcp '${3:docs/search}' {", "\t$0", "}"],
+    "description": "Combine filesystem, executable and MCP restrictions"
+  },
   "Read file": {
     "prefix": "read_file",
     "body": ["let ${1:content} = read_file{path='${2:./file}'} '${0:Return the file content}'"],

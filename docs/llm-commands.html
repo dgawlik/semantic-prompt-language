@@ -151,7 +151,7 @@ and write it to the file.'''
 </div>
 
 <h3 id="llm-tools">Tools the model may use</h3>
-<p>Inside any <code>?</code>, <code>think</code> or tool call, the model itself may use these same five tools. Every call it makes goes through the same interception and is checked against the active <code>restrict</code> scopes. Any other Copilot permission request is rejected.</p>
+<p>Inside any <code>?</code>, <code>think</code> or tool call, the model itself may use these same five tools, plus MCP tools loaded with <a href="cli.html#mcp"><code>--mcp</code></a>. Calls are checked against active <code>restrict</code> scopes, including <code>restrict mcp 'server/tool'</code>. Any other Copilot permission request is rejected.</p>
 
 <h2 id="prompt-assembly">How the final prompt is built</h2>
 <p>Before each call the runtime assembles sections in a fixed order, separated by blank lines:</p>

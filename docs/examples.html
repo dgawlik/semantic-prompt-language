@@ -21,6 +21,7 @@
 <thead><tr><th>Script</th><th>Shows</th></tr></thead>
 <tbody>
 <tr><td><a href="#commit-message"><code>commit-message.spl</code></a></td><td><code>shell</code> under <code>restrict exec 'git'</code>, validation helper, retry loop</td></tr>
+<tr><td><a href="#mcp"><code>mcp.spl</code></a></td><td>MCP search via <code>--mcp</code>, combined restrictions</td></tr>
 <tr><td><a href="#triage-issues"><code>triage-issues.spl</code></a></td><td><code>fmt='object'</code> + <code>assert</code> validation with feedback retries, aggregation, summary</td></tr>
 <tr><td><a href="#extract-invoice"><code>extract-invoice.spl</code></a></td><td>Structured extraction cross-checked with arithmetic before it is accepted</td></tr>
 <tr><td><a href="#code-review"><code>code-review.spl</code></a></td><td><code>think</code> then structure, <code>restrict</code> on read and on write, <code>fail</code> as a CI gate</td></tr>
@@ -307,6 +308,15 @@ success "tests pass after {attempt} run(s)"
 </code></pre>
 <div class="callout"><span class="ico">🔑</span><div class="body"><span class="title">Pattern: failure as input</span>
 <p>A failing <code>npm test</code> is a <code>tool_error</code> whose <code>reason</code> contains the test output. Catching it turns the failure into the prompt for the next step.</p></div></div>
+
+<h2 id="mcp">Search with MCP</h2>
+<p>Configure a <code>docs</code> MCP server exposing <code>search</code> in a <a href="cli.html#mcp">VS Code-shaped JSON file</a>, then run <code>spl examples/mcp.spl --mcp your-mcp.json --cwd your-project</code>. MCP services are trusted; scopes limit tool access, not their internal I/O.</p>
+<pre><code class="language-spl" data-file="mcp.spl">
+restrict '.', exec 'git', mcp 'docs/search' {
+    let summary = think 'Use docs/search to find the project setup instructions and summarize them.'
+    success summary
+}
+</code></pre>
 
 <h2 id="translate-docs">Translate docs</h2>
 <p>Translate a document into several languages, one file each, without leaving the project folder. The model reads the source and writes each output itself &mdash; the output path is pinned by the script.</p>

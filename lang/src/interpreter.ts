@@ -117,6 +117,7 @@ class Interpreter {
 
     private async execStmt(s: Stmt, env: Env): Promise<Signal | undefined> {
         try {
+            this.opts.logger.deterministic(`line ${s.line} (${s.t}): ${this.program.lines[s.line - 1]?.trim() ?? ''}`);
             return await this.execStmtInner(s, env);
         } catch (e) {
             if (e instanceof Failure) throw e.locate(s.line, this.program.lines[s.line - 1]?.trim() ?? '');
@@ -210,11 +211,13 @@ class Interpreter {
                 }
             }
             case 'restrict': {
-                const restriction = makeRestriction(s.kind, await this.eval(s.arg, env), this.cwd);
                 const saved = this.restrictions;
-                this.restrictions = saved.with(restriction);
-                this.opts.logger.debug(`restrict ${s.kind}: ${restriction.values.join(', ')}`);
                 try {
+                    for (const clause of s.clauses) {
+                        const restriction = makeRestriction(clause.kind, await this.eval(clause.arg, env), this.cwd);
+                        this.restrictions = this.restrictions.with(restriction);
+                        this.opts.logger.debug(`restrict ${clause.kind}: ${restriction.values.join(', ')}`);
+                    }
                     return await this.execBlock(s.body, env);
                 } finally {
                     this.restrictions = saved;

@@ -38,6 +38,7 @@
 <tr><td><code>lexer.ts</code></td><td>Tokenizer. Strings become parts (<code>text</code> or <code>expr</code>); raw strings and brace escapes handled here.</td></tr>
 <tr><td><code>parser.ts</code></td><td>Parser and strict validation of modifiers, loop-only <code>break</code>, <code>let</code>-only modification, directives.</td></tr>
 <tr><td><code>ast.ts</code></td><td>AST types: <code>Program</code>, <code>Stmt</code>, <code>Expr</code>, <code>AskMods</code>, <code>ThinkMods</code>, <code>ToolName</code>, <code>RestrictKind</code>.</td></tr>
+<tr><td><code>mcp.ts</code></td><td>VS Code-shaped MCP config loading, variable expansion, validation and per-session server/tool filtering.</td></tr>
 <tr><td><code>interpreter.ts</code></td><td>Evaluation. Holds the constraint stack and the active restrictions; locates failures at the offending source line.</td></tr>
 <tr><td><code>values.ts</code></td><td>Value model, truthiness, equality and ordering, <code>str()</code>, JSON conversion. Dicts are built without touching the prototype chain.</td></tr>
 <tr><td><code>builtins.ts</code></td><td>Built-in functions and string/list/dict methods.</td></tr>
@@ -66,7 +67,7 @@
   <li><strong>Evaluate</strong> the prompt (interpolation happens here, deterministically) and, for tools, the parameters.</li>
   <li><strong>Pre-run the tool</strong> (explicit tool commands only, and only when the script supplied every parameter the tool needs) through <code>ToolHost</code>, which checks the active restrictions first. Otherwise the model calls the tool with the supplied parameters pinned.</li>
   <li><strong>Build the request</strong>: assembled prompt, model, reasoning effort, a snapshot of the restrictions and a <code>ToolHost</code> for the model's own tool calls.</li>
-  <li><strong>Call the backend.</strong> The Copilot backend opens a session, registers the five tools (overriding built-ins), and approves only those; a <code>restriction_violation</code> aborts the session and is re-raised as a script failure.</li>
+  <li><strong>Call the backend.</strong> The Copilot backend opens a session, registers the five tools (overriding built-ins), and exposes configured MCP tools narrowed by the active scopes. Permissions approve only runtime and enabled MCP tools; a <code>restriction_violation</code> aborts the session and is re-raised as a script failure.</li>
   <li><strong>Post-process.</strong> The answer is trimmed; with <code>fmt='object'</code> it is parsed into a value or raises <code>invalid_format</code>. The effective parameters are logged.</li>
 </ol>
 

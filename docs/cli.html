@@ -21,7 +21,7 @@
 <pre><code class="language-bash">
 spl &lt;script.spl&gt; [--log-level error|info|debug] [--silent] [--model &lt;id&gt;]
                  [--store &lt;file.json&gt; | --store-module &lt;module&gt;]
-                 [--timeout &lt;s&gt;] [--cwd &lt;dir&gt;] [--check]
+                 [--timeout &lt;s&gt;] [--cwd &lt;dir&gt;] [--mcp &lt;file.json&gt;] [--check]
 spl login
 spl logout
 </code></pre>
@@ -34,11 +34,12 @@ spl logout
 <tr><td><code>--log-level &lt;level&gt;</code></td><td><code>info</code></td><td><code>error</code>, <code>info</code> or <code>debug</code>. Logs go to stderr.</td></tr>
 <tr><td><code>--silent</code></td><td>off</td><td>Suppress all logs; only the result is printed.</td></tr>
 <tr><td><code>--model &lt;id&gt;</code></td><td>SDK default</td><td>Model override. Takes precedence over <code>@{model=…}</code>.</td></tr>
+<tr><td><code>--mcp &lt;file.json&gt;</code></td><td>none</td><td>MCP servers in VS Code <code>mcp.json</code> format; see <a href="#mcp">MCP configuration</a>.</td></tr>
 <tr><td><code>--store &lt;file.json&gt;</code></td><td>&mdash;</td><td>Persist top-level variables in a JSON file.</td></tr>
 <tr><td><code>--store-module &lt;path&gt;</code></td><td>&mdash;</td><td>Custom store module exporting <code>createStore()</code>. Mutually exclusive with <code>--store</code>.</td></tr>
 <tr><td><code>--timeout &lt;seconds&gt;</code></td><td><code>300</code></td><td>Per-LLM-call timeout.</td></tr>
 <tr><td><code>--cwd &lt;dir&gt;</code></td><td>current dir</td><td>Base directory for relative paths, <code>restrict</code> checks, and the working directory of tools and the model.</td></tr>
-<tr><td><code>--check</code></td><td>off</td><td>Parse the script and exit &mdash; syntax check only.</td></tr>
+<tr><td><code>--check</code></td><td>off</td><td>Parse the script and validate any <code>--mcp</code> config without starting servers or making LLM calls.</td></tr>
 <tr><td><code>-v</code>, <code>--version</code></td><td>&mdash;</td><td>Print the version.</td></tr>
 <tr><td><code>-h</code>, <code>--help</code></td><td>&mdash;</td><td>Print usage.</td></tr>
 </tbody></table></div>
@@ -67,15 +68,38 @@ spl logout
 <div class="table-wrap"><table>
 <thead><tr><th>Level</th><th>Shows</th></tr></thead>
 <tbody>
-<tr><td><code>error</code></td><td>Errors (for example a variable store that could not be saved), plus the full assembled prompt and raw response of every LLM call.</td></tr>
+<tr><td><code>error</code></td><td>Errors (for example a variable store that could not be saved), the full assembled prompt and raw response of every LLM call, and deterministic statement traces.</td></tr>
 <tr><td><code>info</code> (default)</td><td>Everything above plus warnings, one line per LLM call with its effective parameters and duration, <code>think{show=True}</code> reasoning, <code>log()</code> messages.</td></tr>
 <tr><td><code>debug</code></td><td>Everything above plus tool invocations, caught failures and active restrictions.</td></tr>
 </tbody></table></div>
 <p>LLM requests and responses use the <code>[llm]</code> tag at every non-silent level. They may contain sensitive data; use <code>--silent</code> to suppress all logs.</p>
+<p>Each executed SPL statement is traced to stderr under <code>[deterministic]</code>, with its line number, statement kind and source line, at every non-silent level. Loop bodies are traced for each iteration; skipped branches are not traced. This records control flow, including statements wrapping LLM calls, not intermediate expression values.</p>
 <pre><code class="language-bash">
 spl script.spl --silent                    # result only
 spl script.spl --log-level debug 2&gt; run.log   # keep the full transcript, pipe the result
 </code></pre>
+
+<h2 id="mcp">MCP configuration</h2>
+<p>Pass a JSON file using the VS Code <code>mcp.json</code> shape. MCP tools are available during <code>?</code>, <code>think</code> and tool-backed LLM calls; no separate SPL MCP call syntax is needed.</p>
+<pre><code class="language-json">
+{
+  "servers": {
+    "docs": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/tools/docs-server.js"],
+      "env": { "TOKEN": "${env:DOCS_TOKEN}" },
+      "tools": ["search"]
+    }
+  }
+}
+</code></pre>
+<pre><code class="language-bash">
+spl script.spl --mcp .vscode/mcp.json
+</code></pre>
+<p>Supported transports: <code>stdio</code> (default; <code>command</code>, optional <code>args</code>, <code>env</code>, <code>cwd</code>), <code>http</code> and <code>sse</code> (<code>url</code>, optional <code>headers</code>). Optional <code>tools</code> restricts exposed tool names (<code>["*"]</code> or omitted means all; <code>[]</code> disables the server), and <code>timeout</code> is a positive number of milliseconds.</p>
+<p>The config filename is relative to the invoking directory. Server working directories default to <code>--cwd</code>, and relative server <code>cwd</code> values resolve against it. <code>${workspaceFolder}</code> expands to <code>--cwd</code>; <code>${env:NAME}</code> expands environment variables in string fields. Interactive VS Code <code>inputs</code>, other variable forms and unsupported server fields are rejected explicitly. JSON comments and trailing commas are not supported.</p>
+<p>Only load trusted configurations: they can launch local programs or connect to remote services. Server names and <code>server/tool</code> selectors in <a href="restrictions.html#mcp"><code>restrict mcp</code></a> are case-sensitive. Without an MCP restriction all configured tools are allowed; no unconfigured MCP server is approved.</p>
 
 <h2 id="store">Variable store</h2>
 <p>Scripts can keep state between runs. <code>--store vars.json</code> loads top-level variables from the file at start and writes them back at exit &mdash; <strong>also on failure</strong>. Functions are not persisted. The file must contain a JSON object; writes are atomic (temp file + rename).</p>
@@ -112,7 +136,7 @@ spl login
 <p>A script that needs an LLM without credentials fails with <code>llm_error</code> and asks you to run <code>spl login</code>. Scripts that never call an LLM (and <code>--check</code>) need no login.</p>
 
 <h2 id="backends">Backend</h2>
-<p>Each LLM call opens a fresh session through the <a href="https://github.com/features/copilot">GitHub Copilot SDK</a> with a system message that frames the model as the execution engine of a script, exposing exactly five tools &mdash; <code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>, <code>shell</code> &mdash; implemented by the SPL runtime so that restrictions apply. Any other permission request is denied. There is no offline backend: tests run against Copilot itself.</p>
+<p>Each LLM call opens a fresh session through the <a href="https://github.com/features/copilot">GitHub Copilot SDK</a> with a system message that frames the model as the execution engine of a script, exposing the five runtime tools &mdash; <code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>, <code>shell</code> &mdash; plus any MCP tools enabled by the configuration and current scope. Any other permission request is denied.</p>
 
 <h2 id="reproducibility">Reproducibility</h2>
 <p>Control flow, arithmetic and interpolation are deterministic. For LLM calls reproducibility is <strong>best effort</strong>:</p>

@@ -174,7 +174,7 @@
           }
         },
         {
-          "match": "\\b(restrict)(?:\\s+(fs|net|exec)\\b)?",
+          "match": "\\b(restrict)(?:\\s+(fs|net|exec|mcp)\\b)?",
           "captures": {
             "1": { "name": "keyword.control.restrict.spl" },
             "2": { "name": "storage.modifier.restrict-kind.spl" }
@@ -185,6 +185,7 @@
 
     "keywords": {
       "patterns": [
+        { "name": "storage.modifier.restrict-kind.spl", "match": "(?<=,)\\s*\\b(?:fs|net|exec|mcp)\\b(?=\\s+(?:['\"\\[]))" },
         { "name": "keyword.control.exception.spl", "match": "\\b(?:try|except)\\b" },
         { "name": "keyword.control.flow.spl", "match": "\\b(?:if|elif|else|for|while|break|continue|return|pass)\\b" },
         { "name": "keyword.control.result.spl", "match": "\\b(?:assert|fail|success)\\b" },

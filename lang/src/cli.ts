@@ -11,6 +11,7 @@ import { parse } from './parser.js';
 import { run } from './interpreter.js';
 import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
 import { toJson } from './values.js';
+import { loadMcpConfig, type McpServers } from './mcp.js';
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
@@ -20,14 +21,15 @@ Usage: spl <script.spl> [options]
 
 Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
-                          All levels include full LLM requests and responses.
+                          All levels include LLM transcripts and [deterministic] statement traces.
   --silent                suppress all logs; only the result is printed
   --model <id>            model override (takes precedence over @{model=...})
+  --mcp <file.json>       MCP servers in VS Code mcp.json format
   --store <file.json>     persist top-level variables in a JSON file
   --store-module <path>   custom variable store: module exporting createStore() -> { load(), save(vars) }
   --timeout <seconds>     per LLM call timeout (default: 300)
   --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
-  --check                 parse the script and exit
+  --check                 validate script syntax and any --mcp config without executing
   -v, --version           print version
   -h, --help              print this help
 
@@ -76,6 +78,7 @@ async function main(): Promise<number> {
                 'log-level': { type: 'string' },
                 silent: { type: 'boolean' },
                 model: { type: 'string' },
+                mcp: { type: 'string' },
                 store: { type: 'string' },
                 'store-module': { type: 'string' },
                 timeout: { type: 'string' },
@@ -130,6 +133,12 @@ async function main(): Promise<number> {
         }
         throw e;
     }
+    let mcpServers: McpServers | undefined;
+    try {
+        mcpServers = values.mcp ? loadMcpConfig(values.mcp, cwd) : undefined;
+    } catch (e) {
+        return usageError((e as Error).message);
+    }
     if (values.check) return 0;
 
     let store: VariableStore;
@@ -139,7 +148,7 @@ async function main(): Promise<number> {
         return usageError((e as Error).message);
     }
 
-    const backend: LlmBackend = new CopilotBackend({ logger, cwd, timeoutMs: timeoutSec * 1000 });
+    const backend: LlmBackend = new CopilotBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers });
     try {
         const result = await run(program, { backend, logger, store, cwd, model: values.model });
         if (result.status === 'failure') {

@@ -10,9 +10,9 @@ this repository).
   triple-quoted strings. Illegal escapes and stray `}` in strings are flagged with the `invalid` scope.
 * **LLM commands**: `?` (prefix operator) and `think` and the tools `read_file`, `write_file`, `web_fetch`, `web_search`,
   `shell`, including their modifiers (`len`, `fmt`, `level`, `show`, `path`, `content`, `url`, `query`, `command`).
-* **Scopes and failures**: `enforce`, `forbid`, `restrict [fs|net|exec]`, `try`/`except`, `assert`, `fail`, `success`.
+* **Scopes and failures**: `enforce`, `forbid`, `restrict [fs|net|exec|mcp]` (including comma-separated clauses), `try`/`except`, `assert`, `fail`, `success`.
 * **Snippets** (type the prefix): `def`, `if`, `ifelse`, `for`, `while`, `let`, `ask`, `askobj`, `think`, `try`,
-  `retry`, `enforce`, `forbid`, `restrict`, `restrictnet`, `restrictexec`, `read_file`, `write_file`, `web_fetch`,
+  `retry`, `enforce`, `forbid`, `restrict`, `restrictnet`, `restrictexec`, `restrictmcp`, `restrictmulti`, `read_file`, `write_file`, `web_fetch`,
   `web_search`, `shell`, `assert`, `fail`, `success`, `model`.
 * **Editing**: `#` line comments (Ctrl+/), bracket matching and auto-closing for `{}` `[]` `()` and quotes
   (including `'''`), auto-indent after `{`, `#region` / `#endregion` folding.

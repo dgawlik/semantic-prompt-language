@@ -35,7 +35,8 @@ fail_stmt      = "fail" , expr ;
 success_stmt   = "success" , [ expr ] ;
 
 constraint_stmt = ( "enforce" | "forbid" ) , expr , block ;
-restrict_stmt   = "restrict" , [ "fs" | "net" | "exec" ] , expr , block ;  (* default kind: fs *)
+restrict_stmt   = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
+restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;  (* default kind: fs; clauses intersect *)
 
 (* Expressions, lowest to highest precedence *)
 expr           = or_expr , [ "if" , or_expr , "else" , expr ] ;

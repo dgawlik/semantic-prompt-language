@@ -1,0 +1,8 @@
+# Configure a docs MCP server exposing search, then run:
+# spl examples/mcp.spl --mcp <your-mcp.json> --cwd <project>
+# MCP servers are trusted services; scopes limit calls, not their internal I/O.
+
+restrict '.', exec 'git', mcp 'docs/search' {
+    let summary = think 'Use docs/search to find the project setup instructions and summarize them.'
+    success summary
+}

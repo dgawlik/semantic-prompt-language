@@ -368,14 +368,20 @@ class Parser {
     private parseRestrict(): Stmt {
         const line = this.tok.line;
         this.next();
-        let kind: RestrictKind = 'fs';
-        const t = this.tok;
-        if (t.type === 'name' && (t.value === 'fs' || t.value === 'net' || t.value === 'exec')) {
-            kind = t.value;
+        const clauses: { kind: RestrictKind; arg: Expr }[] = [];
+        for (;;) {
+            let kind: RestrictKind = 'fs';
+            const t = this.tok;
+            if (t.type === 'name' && (t.value === 'fs' || t.value === 'net' || t.value === 'exec' || t.value === 'mcp')) {
+                kind = t.value;
+                this.next();
+            }
+            clauses.push({ kind, arg: this.parseExpr() });
+            if (!this.isOp(',')) break;
             this.next();
+            this.skipNl();
         }
-        const arg = this.parseExpr();
-        return { t: 'restrict', line, kind, arg, body: this.parseBlock() };
+        return { t: 'restrict', line, clauses, body: this.parseBlock() };
     }
 
     private parseSimpleStatement(): Stmt {

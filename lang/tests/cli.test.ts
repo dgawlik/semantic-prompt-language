@@ -54,7 +54,9 @@ describe('cli', () => {
     });
 
     it('--log-level error hides info logs', () => {
-        expect(spl(`log('hi')\nsuccess 1`, '--log-level', 'error').err).toBe('');
+        const r = spl(`log('hi')\nsuccess 1`, '--log-level', 'error');
+        expect(r.err).not.toContain('[info]');
+        expect(r.err).toContain('[deterministic] line 2 (success): success 1');
     });
 
     it('prints the failure payload to stdout and exits non-zero', () => {
@@ -115,5 +117,17 @@ describe('cli', () => {
         expect(help).toContain('spl logout');
         expect(help).not.toContain('--backend');
         expect(help).not.toContain('--seed');
+        expect(help).toContain('--mcp <file.json>');
+    });
+
+    it('validates --mcp without starting servers, including with --check', () => {
+        const file = path.join(dir, 'mcp.json');
+        fs.writeFileSync(file, JSON.stringify({ servers: { docs: { type: 'stdio', command: 'nonexistent-test-server' } } }));
+        const r = spl(`success 42`, '--mcp', file, '--silent');
+        expect(r).toEqual({ code: 0, out: '42\n', err: '' });
+        expect(spl(`success 42`, '--mcp', file, '--check').code).toBe(0);
+        fs.writeFileSync(file, '{"servers":{"docs":{"type":"http","url":42}}}');
+        expect(spl(`success 42`, '--mcp', file, '--check')).toMatchObject({ code: 2, out: '' });
+        expect(spl(`success 42`, '--mcp', path.join(dir, 'missing.json')).err).toContain('MCP config');
     });
 });

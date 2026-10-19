@@ -7,11 +7,12 @@ import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse, type Reas
 import type { Logger } from './logger.js';
 import type { Restrictions } from './restrict.js';
 import { TOOL_SPECS } from './tools.js';
+import { configuredMcpTool, filterMcpServers, type McpServers } from './mcp.js';
 
 const SYSTEM_MESSAGE = [
     'You are the execution engine of an automated script. Your reply is stored in a variable and used by the program.',
     'Reply with exactly what was asked for: no preamble, no sign-off, no commentary.',
-    'Use the provided tools (read_file, write_file, web_fetch, web_search, shell) only when the task needs them. No other tools exist.',
+    'Use the provided runtime tools and configured MCP tools only when the task needs them.',
 ].join(' ');
 
 const TOOL_NAMES = Object.keys(TOOL_SPECS) as ToolName[];
@@ -20,6 +21,7 @@ export interface CopilotBackendOptions {
     logger: Logger;
     cwd: string;
     timeoutMs: number;
+    mcpServers?: McpServers;
 }
 
 export class CopilotBackend implements LlmBackend {
@@ -112,14 +114,16 @@ export class CopilotBackend implements LlmBackend {
             });
         });
 
+        const mcpServers = filterMcpServers(this.opts.mcpServers ?? {}, req.restrictions);
         const baseConfig = {
             model: req.model,
             tools,
-            availableTools: TOOL_NAMES as string[],
+            availableTools: [...TOOL_NAMES, ...Object.keys(mcpServers).map((name) => `mcp:${name}-*`)],
+            mcpServers,
             systemMessage: { mode: 'append' as const, content: SYSTEM_MESSAGE },
             workingDirectory: this.opts.cwd,
             onPermissionRequest: (r: PermissionRequest): PermissionRequestResult =>
-                decidePermission(r, req.restrictions, block),
+                decidePermission(r, req.restrictions, block, mcpServers),
         };
 
         try {
@@ -170,15 +174,21 @@ export class CopilotBackend implements LlmBackend {
 }
 
 /**
- * Hard enforcement at the permission layer. Only the five runtime tools are exposed to the model, so any
- * other request is denied; requests that would violate a restriction are additionally reported as violations.
+ * Only runtime tools and explicitly configured MCP tools are approved.
+ * Requests that violate a restriction are additionally reported as violations.
  */
 export function decidePermission(
     r: PermissionRequest,
     restrictions: Restrictions,
     block: (f: Failure) => void,
+    mcpServers: McpServers = {},
 ): PermissionRequestResult {
     try {
+        if (r.kind === 'mcp') {
+            restrictions.checkMcp(r.serverName, r.toolName);
+            if (configuredMcpTool(mcpServers, r.serverName, r.toolName)) return { kind: 'approve-once' };
+            return { kind: 'reject', feedback: 'MCP server/tool is not enabled by --mcp configuration.' };
+        }
         if (r.kind === 'custom-tool' && TOOL_NAMES.includes((r as { toolName: ToolName }).toolName)) {
             return { kind: 'approve-once' }; // the tool itself performs the restriction checks
         }
@@ -196,5 +206,5 @@ export function decidePermission(
             return { kind: 'reject', feedback: JSON.stringify(e.payload()) };
         }
     }
-    return { kind: 'reject', feedback: 'Only the read_file, write_file, web_fetch, web_search and shell tools may be used.' };
+    return { kind: 'reject', feedback: 'Only runtime tools and configured MCP tools may be used.' };
 }

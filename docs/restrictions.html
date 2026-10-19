@@ -17,13 +17,14 @@
 <h1>Restrictions</h1>
 <p class="lead"><code>restrict</code> narrows what a block &mdash; and the LLM tools it invokes &mdash; may do. Without it, everything is allowed: a script has the full permissions of the user running the interpreter.</p>
 
-<h2 id="forms">The three forms</h2>
+<h2 id="forms">The four forms</h2>
 <div class="table-wrap"><table>
 <thead><tr><th>Form</th><th>Effect</th></tr></thead>
 <tbody>
 <tr><td><code>restrict './target/out' { … }</code></td><td>Reads and writes are allowed only inside the folder. Same as <code>restrict fs</code>.</td></tr>
 <tr><td><code>restrict net 'api.example.com' { … }</code></td><td>Network access is allowed only to the listed hosts.</td></tr>
 <tr><td><code>restrict exec 'npm,git' { … }</code></td><td>Shell commands are allowed only for the listed executables.</td></tr>
+<tr><td><code>restrict mcp 'docs/search,issues' { … }</code></td><td>Only the named MCP tools or servers may be called. Servers must be configured with <code>--mcp</code>.</td></tr>
 </tbody></table></div>
 <pre><code class="language-spl">
 restrict './out' {
@@ -39,6 +40,12 @@ restrict exec 'git' {
 }
 </code></pre>
 <p>The argument is an expression evaluating to a comma-separated string (<code>'npm,git'</code>) or a list of strings. An empty list is an error.</p>
+<p>Combine clauses with commas. Each clause defaults to <code>fs</code> if its kind is omitted. All clauses apply together; repeated kinds intersect just like nested blocks. Commas inside strings or lists remain part of that clause's allowlist.</p>
+<pre><code class="language-spl">
+restrict './src', net 'example.com', exec 'git', mcp 'docs/search' {
+    let review = think 'Inspect the source and use docs/search for reference material'
+}
+</code></pre>
 
 <h2 id="enforcement">Two layers of enforcement</h2>
 <div class="compare">
@@ -94,12 +101,18 @@ restrict exec 'npm' {
   <p>The runtime can only inspect what it sees on the command line. A program that touches files or the network on its own (a build tool, a package manager) is limited by its executable name, not by what it does internally.</p></div>
 </div>
 
+<h3 id="mcp">MCP servers and tools</h3>
+<p>Load servers with <a href="cli.html#mcp"><code>--mcp</code></a>. A selector such as <code>docs</code> or <code>docs/*</code> allows every configured tool from that server; <code>docs/search</code> allows only its <code>search</code> tool. Names are case-sensitive. Nested scopes intersect, and cannot widen the configuration's optional <code>tools</code> allowlist.</p>
+<p>Disallowed servers and tools are removed before creating each LLM session. Every MCP permission request is checked again before approval; a restriction violation aborts the call like a file or shell violation. Unconfigured MCP servers are always rejected.</p>
+<p>MCP servers are trusted programs or remote services: <code>restrict mcp</code> controls which tools may be called, not their internal I/O. The <code>fs</code>, <code>net</code> and <code>exec</code> clauses do not sandbox an MCP server's implementation or its configured connection.</p>
+
 <h2 id="what-is-guarded">What is covered</h2>
 <div class="table-wrap"><table>
 <thead><tr><th>Caller</th><th>Checked?</th></tr></thead>
 <tbody>
 <tr><td>Explicit tool call in a script (<code>read_file{…}</code>, <code>shell{…}</code>, …)</td><td><span class="pill ok">yes</span></td></tr>
 <tr><td>Tool calls the model makes during <code>?</code> / <code>think</code> / tool commands</td><td><span class="pill ok">yes</span></td></tr>
+<tr><td>MCP tools from <code>--mcp</code></td><td><span class="pill ok">configuration and MCP scope checked</span></td></tr>
 <tr><td>Any other Copilot permission request</td><td><span class="pill danger">rejected</span></td></tr>
 <tr><td>Plain SPL code (arithmetic, <code>log</code>, variables)</td><td>nothing to restrict</td></tr>
 </tbody></table></div>

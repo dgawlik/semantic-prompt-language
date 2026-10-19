@@ -57,7 +57,8 @@ fail_stmt      = "fail" , expr ;
 success_stmt   = "success" , [ expr ] ;
 
 constraint_stmt = ( "enforce" | "forbid" ) , expr , block ;
-restrict_stmt   = "restrict" , [ "fs" | "net" | "exec" ] , expr , block ;  (* default kind: fs *)
+restrict_stmt   = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
+restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;  (* default kind: fs; clauses intersect *)
 </code></pre>
 
 <h2 id="expressions">Expressions</h2>
@@ -137,7 +138,7 @@ NL             = newline ;
 <div class="callout">
   <span class="ico">ℹ️</span>
   <div class="body"><span class="title">Contextual words</span>
-  <p><code>fs</code>, <code>net</code> and <code>exec</code> only have meaning directly after <code>restrict</code>; modifier names (<code>len</code>, <code>fmt</code>, <code>level</code>, <code>show</code>, <code>path</code>, <code>content</code>, <code>url</code>, <code>query</code>, <code>command</code>) only inside a modifier list.</p></div>
+  <p><code>fs</code>, <code>net</code>, <code>exec</code> and <code>mcp</code> have special meaning at the start of a <code>restrict</code> clause (after the keyword or a separating comma); modifier names (<code>len</code>, <code>fmt</code>, <code>level</code>, <code>show</code>, <code>path</code>, <code>content</code>, <code>url</code>, <code>query</code>, <code>command</code>) only inside a modifier list.</p></div>
 </div>
 
 </main>

@@ -34,4 +34,8 @@ export class Logger {
     llm(msg: string): void {
         this.emit('error', 'llm', msg);
     }
+
+    deterministic(msg: string): void {
+        this.emit('error', 'deterministic', msg);
+    }
 }

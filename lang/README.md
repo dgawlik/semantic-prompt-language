@@ -19,13 +19,13 @@ Requires Node 20+ and an authenticated GitHub Copilot.
 ```
 spl <script.spl> [--log-level error|info|debug] [--silent] [--model <id>]
                  [--store <file.json> | --store-module <module>]
-                 [--timeout <s>] [--cwd <dir>] [--check]
+                 [--timeout <s>] [--cwd <dir>] [--mcp <file.json>] [--check]
 spl login          # GitHub device flow: prints a code, you confirm it in the browser
 spl logout         # removes the credentials saved by `spl login`
 ```
 
 * stdout: the value of `success` or a top-level `return` (strings raw, everything else as JSON) or the failure payload.
-* stderr: logs, including full LLM requests and raw responses at every non-silent log level (`error`, `info`, `debug`). Model and reasoning effort are included at `info` and `debug`. Prompts and responses may contain sensitive data; use `--silent` to suppress logs.
+* stderr: logs, including full LLM requests and raw responses (`[llm]`) and executed statement traces with line numbers (`[deterministic]`) at every non-silent log level (`error`, `info`, `debug`). Model and reasoning effort are included at `info` and `debug`. Logs may contain sensitive data; use `--silent` to suppress them.
 * Exit code: `0` success, `1` uncaught failure, `2` syntax/usage error.
 
 `spl login` does nothing if the runtime is already authenticated (an earlier login, a Copilot CLI / `gh` login or
@@ -94,7 +94,7 @@ Decisions worth knowing (the PRD leaves them open):
 ## Restrictions
 
 Two layers: the LLM is told about active restrictions in the prompt, and the runtime enforces them. The LLM only gets
-the five runtime tools (`read_file`, `write_file`, `web_fetch`, `web_search`, `shell`); every call is checked against
+the five runtime tools (`read_file`, `write_file`, `web_fetch`, `web_search`, `shell`) plus configured MCP tools; every call is checked against
 the active `restrict` scopes and any other Copilot permission request is rejected. A violation raises a
 `restriction_violation` failure (catchable with `try/except`).
 
@@ -105,9 +105,42 @@ the active `restrict` scopes and any other Copilot permission request is rejecte
   and path-like and URL arguments and redirection targets are checked against `fs`/`net`. This is best effort for
   programs that touch files or the network on their own.
 * Nested restrictions of one kind intersect and can never widen.
+* Clauses can be combined: `restrict './src', net 'example.com', exec 'git', mcp 'docs/search' { ... }`.
+  Repeating a kind intersects its clauses, just like nesting.
+* `mcp` allows configured servers (`'docs'` or `'docs/*'`) or individual tools (`'docs/search'`).
+  Selectors are case-sensitive; nested scopes cannot widen the configuration's tool allowlist.
 
 On Windows, `dir` switches such as `/s`, `/b` and `/a:-d` are recognized as options,
 not filesystem paths. Paths and redirection targets remain subject to filesystem restrictions.
+
+## MCP tools
+
+Pass `--mcp .vscode/mcp.json` to load MCP servers in VS Code's JSON format:
+
+```json
+{
+  "servers": {
+    "docs": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/tools/docs-server.js"],
+      "tools": ["search"]
+    }
+  }
+}
+```
+
+The LLM can call these tools during `?`, `think`, and tool-backed calls. Stdio servers support `command`,
+`args`, `env`, and `cwd`; `http`/`sse` servers use `url` and optional `headers`. All support optional `tools`
+(`["*"]` or omitted means all, `[]` disables the server) and `timeout` in milliseconds.
+`${workspaceFolder}` expands to `--cwd`; `${env:NAME}` expands environment variables. Server working
+directories default to `--cwd`; relative server `cwd` values resolve against it. The config filename is
+relative to the invoking directory. `--check` also validates this config without starting servers.
+Interactive `inputs`, unsupported fields/variables, JSON comments and trailing commas are rejected.
+
+Only configured, scope-allowed MCP tools are exposed and approved. Trust your MCP servers: `restrict mcp`
+controls tool access, not a server's internal filesystem/network operations. Other restriction kinds do
+not sandbox MCP server processes or their configured connections.
 
 ## Reproducibility
 
@@ -128,6 +161,7 @@ syntax is checked by `tests/examples.test.ts`; `triage-issues` is also run on Co
 | Script | Shows |
 |--------|-------|
 | `commit-message.spl` | `shell` under `restrict exec 'git'`, validation helper, retry loop |
+| `mcp.spl` | MCP search via `--mcp`, combined filesystem/exec/MCP restrictions |
 | `triage-issues.spl` | `fmt='object'` + `assert` validation with feedback retries, aggregation, summary |
 | `extract-invoice.spl` | structured extraction cross-checked with arithmetic before it is accepted |
 | `code-review.spl` | `think` then structure, `restrict` on read and on write, `fail` as a CI gate |

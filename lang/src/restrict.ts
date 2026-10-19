@@ -140,11 +140,31 @@ export class Restrictions {
         }
     }
 
+    checkMcp(server: string, tool: string): void {
+        for (const r of this.list) {
+            if (r.kind === 'mcp' && !r.values.some((v) => v === server || v === `${server}/*` || v === `${server}/${tool}`)) {
+                throw violation(`MCP tool '${server}/${tool}' blocked: allowed MCP servers/tools are ${r.values.join(', ')}`);
+            }
+        }
+    }
+
+    /** Narrows configured tools before the SDK starts servers or advertises their tools. */
+    mcpTools(server: string, configured: readonly string[] = ['*']): string[] {
+        let tools = [...configured];
+        for (const r of this.list) {
+            if (r.kind !== 'mcp' || r.values.includes(server) || r.values.includes(`${server}/*`)) continue;
+            const allowed = r.values.filter((v) => v.startsWith(`${server}/`)).map((v) => v.slice(server.length + 1));
+            tools = tools.includes('*') ? allowed : tools.filter((t) => allowed.includes(t));
+        }
+        return [...new Set(tools)];
+    }
+
     /** Human-readable guidance for the LLM (the first enforcement layer). */
     guidance(): string[] {
         return this.list.map((r) => {
             if (r.kind === 'fs') return `File system: you may read and write only inside: ${r.values.join(', ')}. Any other path will be blocked.`;
             if (r.kind === 'net') return `Network: you may only access these hosts: ${r.values.join(', ')}. Any other host will be blocked.`;
+            if (r.kind === 'mcp') return `MCP: you may only call these servers/tools: ${r.values.join(', ')}. Anything else will be blocked.`;
             return `Shell: you may only run these executables: ${r.values.join(', ')}. Anything else will be blocked.`;
         });
     }
@@ -161,5 +181,11 @@ export function makeRestriction(kind: RestrictKind, raw: unknown, cwd: string): 
 
     if (kind === 'fs') return { kind, values: [...new Set(items.map((i) => canonicalPath(i, cwd)))] };
     if (kind === 'net') return { kind, values: [...new Set(items.map(normalizeHost))] };
+    if (kind === 'mcp') {
+        if (items.some((v) => !/^[A-Za-z0-9_.-]+(?:\/(?:[A-Za-z0-9_.-]+|\*))?$/.test(v))) {
+            throw new Failure('runtime_error', 'restrict mcp expects server names or server/tool selectors');
+        }
+        return { kind, values: [...new Set(items)] };
+    }
     return { kind, values: [...new Set(items.map(normalizeExec))] };
 }
