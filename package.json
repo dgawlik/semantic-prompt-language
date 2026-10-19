@@ -1,4 +1,10 @@
 {
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix ./lang run build",
+    "start": "npm --prefix ./lang start",
+    "test": "npm --prefix ./lang test"
+  },
   "dependencies": {
     "spl-lang": "^0.1.0"
   }

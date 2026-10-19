@@ -1,3 +1,4 @@
+@{model='mai-code-1.1-flash'}
 # Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).
 #
 #   spl examples/fix-failing-tests.spl --cwd <your npm project>
@@ -8,23 +9,20 @@
 let attempt = 0
 let green = False
 
-restrict exec 'npm' {
-    restrict '.' {
-        forbid 'editing or deleting test files, or weakening assertions' {
-            while attempt < 3 and not green {
-                let attempt += 1
-                try {
-                    shell{command='npm test'} 'Run from lang directory. Reply with OK'
-                    let green = True
-                } except err {
-                    log("tests failing (round {attempt}): {err.status_code}")
-                    think{level='medium'} '''
+
+forbid 'editing or deleting test files, or weakening assertions' {
+    while attempt < 3 and not green {
+        let attempt += 1
+        try {
+            shell{command='cd lang && npm test'} 'Reply with OK'
+            let green = True
+        } except err {
+            log("tests failing (round {attempt}): {err.status_code}")
+            think{level='medium'} '''
 The test run failed with this output:
 {err.reason}
 
 Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.'''
-                }
-            }
         }
     }
 }
