@@ -21,15 +21,15 @@ log("setup: {joke['setup']}")
 # Scoped constraints
 enforce 'Answer in English' {
     forbid 'Mentioning the word cat' {
-        let animal = ?{len='word'} 'Name a pet animal'
+        let animal = ?{len='paragraph'} 'Funny story involving a pet animal'
     }
 }
 
 # Failure handling
 try {
-    assert len(nums) == 3 'expected three numbers'
+    assert len(nums) == 8 'expected eight numbers'
 } except err {
     log("caught {err.status_code}: {err.reason}")
 }
 
-success {'fib': nums, 'animal': animal}
+success {'fib': nums, 'animal': animal, 'joke': joke}
