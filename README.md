@@ -155,6 +155,9 @@ the active `restrict` scopes and any other Copilot permission request is rejecte
   programs that touch files or the network on their own.
 * Nested restrictions of one kind intersect and can never widen.
 
+On Windows, `dir` switches such as `/s`, `/b` and `/a:-d` are recognized as options,
+not filesystem paths. Paths and redirection targets remain subject to filesystem restrictions.
+
 ## Reproducibility
 
 Control flow, arithmetic and interpolation are deterministic. The Copilot SDK has no `temperature` or `seed` setting,

@@ -1,14 +1,14 @@
-# Product update: March
+# 製品アップデート：3月
 
-## What's new
+## 新機能
 
-- **Dark mode**: switch themes under *Settings → Appearance*.
-- **Faster exports**: exporting a report to CSV is now up to 3x faster.
-- **API**: the `GET /v2/reports` endpoint now supports the `limit` and `cursor` parameters.
+- **ダークモード**：テーマは *設定 → 外観* で変更できます。
+- **より高速なエクスポート**：レポートのCSV形式へのエクスポートが最大3倍高速になりました。
+- **API**：エンドポイント `GET /v2/reports` が `limit` および `cursor` パラメーターに対応しました。
 
-## Fixes
+## バグ修正
 
-- Fixed a crash when opening very large projects.
-- Corrected the time zone shown in scheduled report e-mails.
+- 非常に大きなプロジェクトを開く際に発生するクラッシュを修正しました。
+- スケジュールされたレポートに関するメールに表示されるタイムゾーンを修正しました。
 
-Questions? Visit https://example.com/help or e-mail support@example.com.
+ご質問はありますか？ https://example.com/help をご覧いただくか、support@example.com までご連絡ください。

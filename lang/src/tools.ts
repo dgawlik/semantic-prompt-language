@@ -235,6 +235,11 @@ export function parseSearchResults(html: string): SearchResult[] {
 const looksLikeUrl = (s: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(s);
 const looksLikePath = (s: string) => /[\\/]/.test(s) || s.startsWith('.') || s.startsWith('~') || /^[a-z]:/i.test(s);
 
+function isDirSwitch(executable: string, arg: string): boolean {
+    return process.platform === 'win32' && executable.toLowerCase() === 'dir'
+        && /^\/(?:-?[bcdlnpqrswx4]|[aot](?::[a-z-]+)?)$/i.test(arg);
+}
+
 /**
  * Executes the built-in tools. Every call is checked against the active restrictions,
  * whether it comes from the script itself or from the LLM.
@@ -321,7 +326,14 @@ export class ToolHost {
     private async shell(command: string): Promise<string> {
         if (!command || command.trim() === '') throw new Failure('tool_error', 'shell: empty command');
         if (this.restrictions.active) {
-            this.checkCommandRestrictions(command);
+            try {
+                this.checkCommandRestrictions(command);
+            } catch (e) {
+                if (e instanceof Failure && e.statusCode === 'restriction_violation') {
+                    throw new Failure('restriction_violation', `${e.reason} (shell command: ${JSON.stringify(command)})`);
+                }
+                throw e;
+            }
         }
         return this.run(command, { shell: true });
     }
@@ -380,6 +392,7 @@ export class ToolHost {
                 }
                 continue;
             }
+            if (isDirSwitch(exe, arg)) continue;
             const value = arg.startsWith('-') && arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : arg;
             if (looksLikeUrl(value)) {
                 if (this.restrictions.has('net')) this.restrictions.checkHost(new URL(value).hostname.toLowerCase());

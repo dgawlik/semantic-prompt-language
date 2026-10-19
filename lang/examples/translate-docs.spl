@@ -1,3 +1,4 @@
+
 # Translate a document into several languages, one file each, without leaving the project folder.
 # The LLM reads the source and writes each output itself (the output path is pinned by the script).
 

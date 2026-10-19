@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { extractSubstitutions, parseSearchResults, splitChainedCommands } from '../src/tools.js';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Restrictions, makeRestriction } from '../src/restrict.js';
+import { ToolHost, extractSubstitutions, parseSearchResults, splitChainedCommands } from '../src/tools.js';
 
 const PAGE = `
 <div class="result results_links results_links_deep web-result ">
@@ -32,6 +36,46 @@ describe('shell command splitting and substitutions', () => {
         expect(splitChainedCommands('cat foo | grep bar')).toEqual(['cat foo', 'grep bar']);
         expect(splitChainedCommands('echo "a && b" ; ls')).toEqual(['echo "a && b"', 'ls']);
         expect(splitChainedCommands('cmd1 2>&1 | cmd2')).toEqual(['cmd1 2>&1', 'cmd2']);
+    });
+
+    describe.skipIf(process.platform !== 'win32')('Windows dir switches under filesystem restrictions', () => {
+        let cwd: string;
+        let host: ToolHost;
+
+        beforeEach(() => {
+            cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'spl-dir-')));
+            fs.mkdirSync(path.join(cwd, 'nested'));
+            fs.writeFileSync(path.join(cwd, 'nested', 'document.md'), 'source');
+            const restrictions = new Restrictions(cwd).with(makeRestriction('fs', '.', cwd));
+            host = new ToolHost(restrictions, cwd);
+        });
+
+        afterEach(() => fs.rmSync(cwd, { recursive: true, force: true }));
+
+        it('allows recursive listing switches instead of interpreting /s as a root path', async () => {
+            const output = await host.invoke('shell', { command: 'dir /s /b /a:-d' });
+            expect(output.trim()).toBe(path.join(cwd, 'nested', 'document.md'));
+        });
+
+        it('allows switches in chained commands', async () => {
+            const output = await host.invoke('shell', { command: 'dir /b && dir /s /b /a:-d' });
+            expect(output).toContain(path.join(cwd, 'nested', 'document.md'));
+        });
+
+        it.each(['dir /s /b ../', 'dir /s /b /outside', 'dir /s /b > ../listing.txt'])(
+            'still rejects paths outside the scope: %s', async (command) => {
+                await expect(host.invoke('shell', { command })).rejects.toMatchObject({
+                    statusCode: 'restriction_violation',
+                    reason: expect.stringContaining(`shell command: ${JSON.stringify(command)}`),
+                });
+            },
+        );
+
+        it('does not treat /s as a switch for file tools', async () => {
+            await expect(host.invoke('read_file', { path: '/s' })).rejects.toMatchObject({
+                statusCode: 'restriction_violation',
+            });
+        });
     });
 
     it('extracts command substitutions', () => {
