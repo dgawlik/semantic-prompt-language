@@ -208,22 +208,25 @@ it a warning is logged and the model default is used. Guard against variance wit
 
 ## Examples
 
-All in [examples/](examples); run from the project root, `--cwd <dir>` points a script at another project. The example
-syntax is checked by `tests/examples.test.ts`; `triage-issues` is also run on Copilot there.
+All in [lang/examples/](lang/examples). Most run from `lang/`; `fix-failing-tests.spl` runs from the
+repository root because it executes `cd lang && npm test`. `--cwd <dir>` controls relative tool paths and working
+directories, not the script filename. The example syntax is checked by `lang/tests/examples.test.ts`;
+`triage-issues` is also run on Copilot there when authenticated. See the [examples guide](docs/examples.html)
+for the current scripts, model selections and run instructions.
 
 | Script | Shows |
 |--------|-------|
 | `commit-message.spl` | `shell` under `restrict exec 'git'`, validation helper, retry loop |
-| `mcp.spl` | MCP search via `--mcp`, combined filesystem/exec/MCP restrictions |
+| `mcp.spl` | SocialToAI search via `--mcp`, combined `./pudding` filesystem and `socialtoai/search` restrictions |
 | `triage-issues.spl` | `fmt='object'` + `assert` validation with feedback retries, aggregation, summary |
 | `extract-invoice.spl` | structured extraction cross-checked with arithmetic before it is accepted |
-| `code-review.spl` | `think` then structure, `restrict` on read and on write, `fail` as a CI gate |
+| `code-review.spl` | three-file review with `gpt-5.6-luna`, structured findings, restricted report write, CI gate |
 | `release-notes.spl` | nested `forbid`/`enforce`, git history to a file inside `./out` |
 | `web-digest.spl` | `restrict net`, `web_fetch`, catching a blocked second host |
-| `fix-failing-tests.spl` | agent loop: run `npm test`, let the LLM fix the source, repeat |
-| `translate-docs.spl` | `write_file` without `content` (LLM writes, path pinned), dict iteration |
+| `fix-failing-tests.spl` | `mai-code-1.1-flash` repair loop running `cd lang && npm test`, up to three rounds |
+| `translate-docs.spl` | translation with `think` followed by `write_file` without `content` (output path pinned), dict iteration |
 | `journal.spl` | state across runs with `--store` |
-| `basics.spl`, `live.spl`, `restrict-live.spl`, `tools-live.spl` | small feature tours |
+| `basics.spl`, `hi.spl`, `live.spl`, `restrict-live.spl`, `tools-live.spl` | small feature tours requiring Copilot |
 
 ## Develop
 

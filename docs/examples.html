@@ -15,22 +15,23 @@
 
 <div class="eyebrow">Guides</div>
 <h1>Examples</h1>
-<p class="lead">Real scripts from <code>lang/examples/</code>. Run them from the <code>lang/</code> folder; <code>--cwd &lt;dir&gt;</code> points a script at another project. The retry logic of <code>triage-issues</code> and <code>extract-invoice</code> is covered by <code>tests/examples.test.ts</code>.</p>
+<p class="lead">Working scripts from <code>lang/examples/</code>, with snippets matching their current executable code. Most run from <code>lang/</code>; the test-repair example runs from the repository root. <code>--cwd &lt;dir&gt;</code> controls relative file paths and tool working directories, not the script filename.</p>
+<p>Authenticate with <code>spl login</code> before running LLM calls. Some examples select a model with <code>@{model=...}</code>; use <code>--model &lt;id&gt;</code> to override it if needed. The example test suite checks every script's syntax and runs <code>triage-issues</code> on Copilot when authenticated; it does not execute every workflow.</p>
 
 <div class="table-wrap"><table>
 <thead><tr><th>Script</th><th>Shows</th></tr></thead>
 <tbody>
 <tr><td><a href="#commit-message"><code>commit-message.spl</code></a></td><td><code>shell</code> under <code>restrict exec 'git'</code>, validation helper, retry loop</td></tr>
-<tr><td><a href="#mcp"><code>mcp.spl</code></a></td><td>MCP search via <code>--mcp</code>, combined restrictions</td></tr>
+<tr><td><a href="#mcp"><code>mcp.spl</code></a></td><td>SocialToAI search via <code>--mcp</code>, combined filesystem/MCP restrictions</td></tr>
 <tr><td><a href="#triage-issues"><code>triage-issues.spl</code></a></td><td><code>fmt='object'</code> + <code>assert</code> validation with feedback retries, aggregation, summary</td></tr>
 <tr><td><a href="#extract-invoice"><code>extract-invoice.spl</code></a></td><td>Structured extraction cross-checked with arithmetic before it is accepted</td></tr>
-<tr><td><a href="#code-review"><code>code-review.spl</code></a></td><td><code>think</code> then structure, <code>restrict</code> on read and on write, <code>fail</code> as a CI gate</td></tr>
+<tr><td><a href="#code-review"><code>code-review.spl</code></a></td><td>Three-file review, structured findings, restricted report write, <code>fail</code> as a CI gate</td></tr>
 <tr><td><a href="#release-notes"><code>release-notes.spl</code></a></td><td>Nested <code>forbid</code>/<code>enforce</code>, git history to a file inside <code>./out</code></td></tr>
 <tr><td><a href="#web-digest"><code>web-digest.spl</code></a></td><td><code>restrict net</code>, <code>web_fetch</code>, catching a blocked second host</td></tr>
-<tr><td><a href="#fix-failing-tests"><code>fix-failing-tests.spl</code></a></td><td>Agent loop: run <code>npm test</code>, let the LLM fix the source, repeat</td></tr>
-<tr><td><a href="#translate-docs"><code>translate-docs.spl</code></a></td><td><code>write_file</code> without <code>content</code> (LLM writes, path pinned), dict iteration</td></tr>
+<tr><td><a href="#fix-failing-tests"><code>fix-failing-tests.spl</code></a></td><td>Agent loop: <code>cd lang &amp;&amp; npm test</code>, repair the source, retry up to three times</td></tr>
+<tr><td><a href="#translate-docs"><code>translate-docs.spl</code></a></td><td><code>think</code> followed by an LLM-written file with a pinned path, dict iteration</td></tr>
 <tr><td><a href="#journal"><code>journal.spl</code></a></td><td>State across runs with <code>--store</code></td></tr>
-<tr><td><a href="#tours"><code>basics</code>, <code>live</code>, <code>restrict-live</code>, <code>tools-live</code></a></td><td>Small feature tours</td></tr>
+<tr><td><a href="#tours"><code>basics</code>, <code>hi</code>, <code>live</code>, <code>restrict-live</code>, <code>tools-live</code></a></td><td>Small feature tours</td></tr>
 </tbody></table></div>
 
 <h2 id="commit-message">Commit message</h2>
@@ -182,20 +183,19 @@ success invoice
 </code></pre>
 
 <h2 id="code-review">Code review as a CI gate</h2>
-<p>A two-stage review: <em>think</em> deeply in prose, then <em>structure</em> the findings. The review phase may only touch <code>./src</code>; the report is written under <code>./reports</code>. Exit code 1 (failure payload on stdout) when high-severity findings exist.</p>
+<p>A two-stage review using <code>gpt-5.6-luna</code>: list <code>./src</code>, review the three files most likely to contain security or correctness bugs, then structure the findings. The review scope is prompt guidance, not a filesystem restriction. Only the report write is restricted to <code>./reports</code>. High-severity findings produce exit code 1 as a CI gate.</p>
 <pre><code class="language-bash">
 spl examples/code-review.spl --cwd &lt;project&gt;
 </code></pre>
 <pre><code class="language-spl" data-file="code-review.spl">
-let target = './src/restrict.ts'
-
+@{model='gpt-5.6-luna'}
 let notes = ''
-restrict './src' {
-    forbid 'suggesting purely stylistic changes' {
-        let notes = think{level='high'} '''
-Read {target} and review it for security problems and correctness bugs.
+
+forbid 'suggesting purely stylistic changes' {
+    let notes = think{level='high'} '''
+List the files in ./src (use a plain command such as `dir src`, no chaining or redirection).
+Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 List each finding with its location, why it matters and a suggested fix.'''
-    }
 }
 
 let review = ?{fmt='object'} '''
@@ -205,7 +205,7 @@ Use an empty list when there are no findings.
 
 {notes}'''
 
-let lines = ["# Review of {target}", '']
+let lines = ["# Review of repository", '']
 let high = 0
 for f in review.findings {
     assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
@@ -229,7 +229,7 @@ success '\n'.join(lines)
 </code></pre>
 
 <h2 id="release-notes">Release notes</h2>
-<p>Generate release notes from recent git history and save them to <code>./out/RELEASE_NOTES.md</code>. The model may only run <code>git</code>; file access is limited to <code>./out</code>. Note how rules and restrictions nest.</p>
+<p>Generate release notes from recent git history and save them to <code>./out/RELEASE_NOTES.md</code>. The history-reading phase restricts executable names to <code>git</code>; the separate file-writing phase restricts filesystem access to <code>./out</code>. Note how rules and restrictions nest.</p>
 <pre><code class="language-spl" data-file="release-notes.spl">
 let notes = ''
 
@@ -274,31 +274,28 @@ success "{headlines}\n\n{themes}"
 </code></pre>
 
 <h2 id="fix-failing-tests">Fix failing tests</h2>
-<p>An agent loop: run the suite, let the model repair the source, repeat (at most three rounds). Only <code>npm</code> may be executed, files are limited to the project, and tests are off limits. Every <code>npm test</code> run costs one LLM call, because tool output is passed through your instructions.</p>
+<p>An agent loop using <code>mai-code-1.1-flash</code>: run this repository's language suite, let the model repair the source, and retry up to three times. Run from the repository root because the command is <code>cd lang &amp;&amp; npm test</code>. The prohibition on changing tests is an LLM rule; this example has no filesystem or executable <code>restrict</code> scopes. It can modify source files, so run it on a worktree you are prepared to review.</p>
 <pre><code class="language-bash">
-spl examples/fix-failing-tests.spl --cwd &lt;your npm project&gt;
+spl lang/examples/fix-failing-tests.spl --cwd .
 </code></pre>
 <pre><code class="language-spl" data-file="fix-failing-tests.spl">
+@{model='mai-code-1.1-flash'}
 let attempt = 0
 let green = False
 
-restrict exec 'npm' {
-    restrict '.' {
-        forbid 'editing or deleting test files, or weakening assertions' {
-            while attempt &lt; 3 and not green {
-                let attempt += 1
-                try {
-                    shell{command='npm test'} 'Reply with OK'
-                    let green = True
-                } except err {
-                    log("tests failing (round {attempt}): {err.status_code}")
-                    think{level='medium'} '''
+forbid 'editing or deleting test files, or weakening assertions' {
+    while attempt &lt; 3 and not green {
+        let attempt += 1
+        try {
+            shell{command='cd lang &amp;&amp; npm test'} 'Reply with OK'
+            let green = True
+        } except err {
+            log("tests failing (round {attempt}): {err.status_code}")
+            think{level='medium'} '''
 The test run failed with this output:
 {err.reason}
 
 Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.'''
-                }
-            }
         }
     }
 }
@@ -310,16 +307,22 @@ success "tests pass after {attempt} run(s)"
 <p>A failing <code>npm test</code> is a <code>tool_error</code> whose <code>reason</code> contains the test output. Catching it turns the failure into the prompt for the next step.</p></div></div>
 
 <h2 id="mcp">Search with MCP</h2>
-<p>Configure a <code>docs</code> MCP server exposing <code>search</code> in a <a href="cli.html#mcp">VS Code-shaped JSON file</a>, then run <code>spl examples/mcp.spl --mcp your-mcp.json --cwd your-project</code>. MCP services are trusted; scopes limit tool access, not their internal I/O.</p>
+<p>Configure a <code>socialtoai</code> MCP server exposing <code>search</code> using the <a href="cli.html#mcp-http">HTTP configuration example</a>. Set its authorization environment variable, then run from <code>lang/</code> with your config file. The script combines the <code>./pudding</code> filesystem scope with the exact <code>socialtoai/search</code> tool selector. Paths are relative to <code>--cwd</code>. MCP services are trusted; scopes limit calls, not their internal I/O.</p>
+<pre><code class="language-bash">
+spl examples/mcp.spl --mcp mcp/mcp.json
+</code></pre>
 <pre><code class="language-spl" data-file="mcp.spl">
-restrict '.', exec 'git', mcp 'docs/search' {
-    let summary = think 'Use docs/search to find the project setup instructions and summarize them.'
+restrict './pudding', mcp 'socialtoai/search' {
+    let summary = think 'Use socialtoai/search to find current news about pudding. And dump to /pudding foler'
     success summary
 }
 </code></pre>
 
 <h2 id="translate-docs">Translate docs</h2>
-<p>Translate a document into several languages, one file each, without leaving the project folder. The model reads the source and writes each output itself &mdash; the output path is pinned by the script.</p>
+<p>Iterate over German, Polish and Japanese within the project filesystem scope. Each iteration runs a <code>think</code> translation step, then a <code>write_file</code> step whose output path is pinned under <code>./out/translations</code>. Run from <code>lang/</code> so <code>./examples/data/product-update.md</code> resolves correctly. The preliminary <code>think</code> prompt also asks the model to write a file without naming a destination; unlike the following write, its destination is not pinned.</p>
+<pre><code class="language-bash">
+spl examples/translate-docs.spl
+</code></pre>
 <pre><code class="language-spl" data-file="translate-docs.spl">
 let locales = {'de': 'German', 'pl': 'Polish', 'ja': 'Japanese'}
 let written = []
@@ -327,6 +330,8 @@ let written = []
 restrict '.' {
     enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
         for code, language in items(locales) {
+            think{level='medium'} '''
+Read ./examples/data/product-update.md, translate it to {language}, and write the translation to the file.'''
             write_file{path="./out/translations/product-update.{code}.md"} '''
 Read ./examples/data/product-update.md, translate it to {language}, and write the translation to the file.'''
             written.append("./out/translations/product-update.{code}.md")
@@ -372,7 +377,8 @@ success {'run': runs, 'today': todays, 'trend': trend}
 
 <h2 id="tours">Feature tours</h2>
 <p>Small scripts that exercise one area each.</p>
-<h3 id="basics">basics.spl &mdash; offline-friendly tour</h3>
+<h3 id="basics">basics.spl &mdash; functions, objects and LLM calls</h3>
+<p>Build a Fibonacci list, request a structured joke and a pet story, and return all three. This tour includes LLM calls and requires authentication.</p>
 <pre><code class="language-spl" data-file="basics.spl">
 @{model='gpt-5.5'}
 
@@ -397,18 +403,49 @@ log("setup: {joke['setup']}")
 # Scoped constraints
 enforce 'Answer in English' {
     forbid 'Mentioning the word cat' {
-        let animal = ?{len='word'} 'Name a pet animal'
+        let animal = ?{len='paragraph'} 'Funny story involving a pet animal'
     }
 }
 
 # Failure handling
 try {
-    assert len(nums) == 3 'expected three numbers'
+    assert len(nums) == 8 'expected eight numbers'
 } except err {
     log("caught {err.status_code}: {err.reason}")
 }
 
-success {'fib': nums, 'animal': animal}
+success {'fib': nums, 'animal': animal, 'joke': joke}
+</code></pre>
+
+<h3 id="hi">hi.spl &mdash; compact end-to-end tour</h3>
+<p>Use <code>gpt-5.5</code> for a structured joke, reasoning and a greeting, then write the deterministic value <code>fib(10)</code> under <code>./out</code>.</p>
+<pre><code class="language-spl" data-file="hi.spl">
+@{model='gpt-5.5'}
+
+def fib(n) {
+    if n &lt; 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+# an LLM call, validated and parsed as JSON
+let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
+
+# deliberate before answering
+let why = think{level='high'} 'Why is {joke.setup} funny?'
+
+# rules for every call inside the block
+let hi = None
+enforce 'Answer in English' {
+    forbid 'profanity' { let hi = ?'Say hi' }
+}
+
+# the model may only touch ./out
+restrict './out' {
+    write_file{path='./out/a.txt', content='{fib(10)}'} 'Confirm'
+}
+
+try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
+success {'joke': joke, 'why': why, 'hi': hi}
 </code></pre>
 
 <h3 id="live-tours">Live tours</h3>
