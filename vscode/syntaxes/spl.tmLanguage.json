@@ -189,7 +189,7 @@
         { "name": "keyword.control.exception.spl", "match": "\\b(?:try|except)\\b" },
         { "name": "keyword.control.flow.spl", "match": "\\b(?:if|elif|else|for|while|break|continue|return|pass)\\b" },
         { "name": "keyword.control.result.spl", "match": "\\b(?:assert|fail|success)\\b" },
-        { "name": "keyword.control.constraint.spl", "match": "\\b(?:instruct|avoid)\\b" },
+        { "name": "keyword.control.constraint.spl", "match": "\\b(?:enforce|forbid|instruct|avoid)\\b" },
         { "name": "keyword.other.think.spl", "match": "\\bthink\\b" },
         { "name": "keyword.other.agent.spl", "match": "\\bagent\\b" },
         { "name": "support.function.tool.spl", "match": "\\b(?:read_file|write_file|web_fetch|web_search|shell)\\b" },

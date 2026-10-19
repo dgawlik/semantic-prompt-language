@@ -12,7 +12,7 @@ import { tokenize, type StringPart, type Token } from './lexer.js';
 
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
-    'success', 'instruct', 'avoid', 'restrict', 'think', 'agent', 'break', 'continue', 'pass', 'and', 'or', 'not',
+    'success', 'enforce', 'forbid', 'instruct', 'avoid', 'restrict', 'think', 'agent', 'break', 'continue', 'pass', 'and', 'or', 'not',
     'True', 'False', 'None',
 ]);
 
@@ -253,17 +253,16 @@ class Parser {
                     this.next();
                     return { t: 'success', line, value: this.atStatementEnd() ? undefined : this.parseExpr() };
                 }
+                case 'enforce':
+                case 'forbid':
                 case 'instruct':
                 case 'avoid': {
-                    const kind = t.value;
+                    const kind = t.value === 'enforce' || t.value === 'instruct' ? 'instruct' : 'avoid';
                     this.next();
                     const text = this.parseExpr();
                     return { t: 'constraint', line, kind, text, body: this.parseBlock() };
                 }
                 case 'restrict': return this.parseRestrict();
-                case 'enforce':
-                case 'forbid':
-                    this.fail(`'${t.value}' was removed; use '${t.value === 'enforce' ? 'instruct' : 'avoid'}' for prompt guidance, or assert/schema for validation`);
                 default:
                     break;
             }

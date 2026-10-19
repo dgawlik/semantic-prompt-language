@@ -82,10 +82,11 @@ success review
 </code></pre>
 <p>Only agents expose tools to Copilot. Any permission request during generation is rejected and aborts the call. Agent tools still use the runtime restriction checks; unconfigured MCP servers and other Copilot tools are not approved. Agent actions are not transactional. Agents cannot be recorded or replayed.</p>
 
-<h2 id="constraints">Prompt guidance: instruct &amp; avoid</h2>
+<h2 id="constraints">Scoped guidance: enforce &amp; forbid</h2>
+<p><code>enforce</code> adds positive guidance and <code>forbid</code> adds negative guidance for every model call inside the block. Both original keywords are supported. <code>instruct</code> and <code>avoid</code> are equivalent aliases and can be mixed with them.</p>
 <pre><code class="language-spl">
-instruct 'Answer in English' {
-    avoid 'jokes' {
+enforce 'Answer in English' {
+    forbid 'jokes' {
         let answer = ?{len='sentence'} 'Explain recursion'
     }
 }
@@ -93,7 +94,7 @@ success answer
 </code></pre>
 <p>Guidance applies dynamically to calls made inside the block, including called functions, and unwinds afterward. All blocks share the current function/script variable scope, so <code>answer</code> remains visible.</p>
 <div class="callout warn"><div class="body"><span class="title">Guidance is not validation</span>
-<p><code>instruct</code>, <code>avoid</code>, and <code>len</code> influence a prompt; they do not verify compliance. Use schemas and assertions for output guarantees, and <a href="restrictions.html">restrict</a> for runtime action checks.</p></div></div>
+<p><code>enforce</code>, <code>forbid</code>, their <code>instruct</code>/<code>avoid</code> aliases, and <code>len</code> influence a prompt; they do not verify compliance. Use schemas and assertions for output guarantees, and <a href="restrictions.html">restrict</a> for runtime action checks.</p></div></div>
 
 <h2 id="tools">Exact raw tools</h2>
 <div class="table-wrap"><table>

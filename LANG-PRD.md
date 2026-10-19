@@ -97,7 +97,9 @@ Business rules are explicit `assert` statements outside schema repair.
 
 ## Guidance and restrictions
 
-`instruct text { ... }` and `avoid text { ... }` prepend scoped response guidance.
+`enforce text { ... }` and `forbid text { ... }` prepend scoped response guidance.
+`instruct` and `avoid` are equivalent positive/negative guidance aliases and may be mixed
+with the original spellings.
 They apply dynamically to calls in the block and called functions; nested guidance combines
 and unwinds on exit. They do not verify compliance.
 

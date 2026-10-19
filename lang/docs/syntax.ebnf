@@ -20,7 +20,7 @@ for_stmt       = "for" , NAME , { "," , NAME } , "in" , expr , block ;
 while_stmt     = "while" , expr , block ;
 def_stmt       = "def" , NAME , "(" , [ NAME , { "," , NAME } , [ "," ] ] , ")" , block ;
 try_stmt       = "try" , block , NL* , "except" , NAME , block ;
-guidance_stmt  = ( "instruct" | "avoid" ) , expr , block ;
+guidance_stmt  = ( "enforce" | "forbid" | "instruct" | "avoid" ) , expr , block ;
 restrict_stmt  = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
 restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;
 
@@ -63,7 +63,8 @@ modifier       = ( "len" | "fmt" | "reasoning" | "show" | "schema" | "repairs" |
    Generation (? and think) has no tools. agent explicitly enables restricted runtime/MCP tools.
    Raw tools are ordinary positional functions: read_file(path), write_file(path, content),
    web_fetch(url), web_search(query), shell(command). They never invoke a model.
-   instruct/avoid are prompt guidance; schema/assert validate data; restrict checks actions. *)
+   enforce/forbid are scoped prompt guidance; instruct/avoid are equivalent aliases.
+   schema/assert validate data; restrict checks actions. *)
 
 string         = [ "r" ] , quote , { char | escape | interpolation } , closing_quote ;
 quote          = "'" | '"' | "'''" | '"""' ;
@@ -76,6 +77,6 @@ NL             = newline ;
 
 (* "{{"/"}}" are literal braces; raw strings have no interpolation or escapes.
    Reserved words: let if elif else for in while def return try except assert fail success
-   instruct avoid restrict think agent break continue pass and or not True False None.
-   Removed syntax: enforce/forbid, think{level=...}, tool{param=...} 'instructions',
+   enforce forbid instruct avoid restrict think agent break continue pass and or not True False None.
+   Removed syntax: think{level=...}, tool{param=...} 'instructions',
    let x += ... and let d.key = ... . *)

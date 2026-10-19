@@ -105,7 +105,7 @@ node dist/cli.js hello.spl --replay hello.jsonl --silent
 <tbody>
 <tr><td><code>read_file{path='a.txt'} 'Return it'</code></td><td><code>read_file('a.txt')</code>; interpret the result with a separate generation call.</td></tr>
 <tr><td>Tools with missing parameters</td><td>Required positional arguments, or explicit <code>agent '...'</code> for model-selected actions.</td></tr>
-<tr><td><code>enforce</code> / <code>forbid</code></td><td><code>instruct</code> / <code>avoid</code>: prompt guidance only.</td></tr>
+<tr><td><code>enforce</code> / <code>forbid</code></td><td>Still supported; <code>instruct</code> / <code>avoid</code> are equivalent guidance aliases.</td></tr>
 <tr><td><code>think{level='high'}</code></td><td><code>?{reasoning='high'}</code> or <code>think{reasoning='high'}</code>.</td></tr>
 <tr><td><code>let x += 1</code>, <code>let d.key = 2</code></td><td><code>x += 1</code>, <code>d.key = 2</code>; let is for name declarations/redeclarations.</td></tr>
 <tr><td>Bare blocks introduce scopes</td><td>All blocks share the function/script scope; functions cannot rebind enclosing locals.</td></tr>

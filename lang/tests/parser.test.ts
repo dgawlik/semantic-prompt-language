@@ -8,6 +8,13 @@ const bad = (source: string, message: RegExp) => {
 };
 
 describe('parser: accepted syntax', () => {
+    it('accepts enforce/forbid and normalizes them to the same guidance as instruct/avoid', () => {
+        const restored = parse(`enforce 'English' { forbid 'jokes' { let answer = ?'Hi' } }`);
+        const aliases = parse(`instruct 'English' { avoid 'jokes' { let answer = ?'Hi' } }`);
+        expect(restored.body).toEqual(aliases.body);
+        parse(`enforce 'English' { avoid 'jokes' { pass } }\ninstruct 'Brief' { forbid 'rudeness' { pass } }`);
+    });
+
     it('composes generation options and explicit agents', () => {
         parse(`
 @{model='test-model'}
@@ -78,11 +85,9 @@ describe('parser: strict syntax errors', () => {
         parse(`?{len=chosen_length, schema=make_schema(), repairs=1+1} 'x'`);
     });
 
-    it('rejects removed tool-command and constraint syntax', () => {
+    it('rejects removed tool-command syntax', () => {
         bad(`read_file{path='a'} 'Read'`, /end of statement/);
         bad(`read_file 'Read a'`, /end of statement/);
-        bad(`enforce 'English' { pass }`, /was removed; use 'instruct'/);
-        bad(`forbid 'jokes' { pass }`, /was removed; use 'avoid'/);
     });
 
     it('allows only name declarations and valid assignment targets', () => {
@@ -103,6 +108,8 @@ describe('parser: strict syntax errors', () => {
         bad(`@{colour='x'}`, /unknown directive/);
         bad(`@{model=x}`, /quoted string/);
         bad(`let if = 1`, /reserved word/);
+        bad(`let enforce = 1`, /reserved word/);
+        bad(`def f(forbid) { pass }`, /reserved word/);
         bad(`let a = 1 2`, /end of statement/);
         bad(`let a = 'unterminated`, /unterminated string/);
         bad(`let a = 'x {1 +} y'`, /interpolation|unexpected/);

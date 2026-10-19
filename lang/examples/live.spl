@@ -2,8 +2,10 @@ let color = ?{len='word'} 'What is the most common color of the sky on a clear d
 let joke = ?{fmt='object'} 'A joke about programmers as JSON with string fields setup and punchline'
 let answer = think{reasoning='low'} 'What is 17 * 23? Reply with just the number'
 
-instruct 'Reply in lowercase only' {
-    let greeting = ?{len='sentence'} 'Greet the user named Ada'
+enforce 'Reply in lowercase only' {
+    forbid 'jokes' {
+        let greeting = ?{len='sentence'} 'Greet the user named Ada'
+    }
 }
 
 assert 'blue' in color.lower() 'unexpected color'

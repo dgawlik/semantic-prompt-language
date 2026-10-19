@@ -58,15 +58,16 @@ success invoice
 ## Guidance is not a guarantee
 
 ```spl
-instruct 'Answer in English' {
-    avoid 'jokes' {
+enforce 'Answer in English' {
+    forbid 'jokes' {
         let answer = ?{len='sentence'} 'Explain recursion'
     }
 }
 success answer
 ```
 
-`instruct`, `avoid`, and `len` are prompt guidance. `schema` and `assert` validate results.
+`enforce` and `forbid` are scoped prompt guidance, with `instruct` and `avoid` as equivalent
+aliases. They and `len` do not verify compliance. `schema` and `assert` validate results.
 `restrict` checks actions, and nested restrictions intersect:
 
 ```spl
@@ -140,7 +141,7 @@ Persistence is opt-in with `--store`; snapshots are saved even after a script fa
 |---|---|
 | `read_file{path='a.txt'} 'Return it'` | `read_file('a.txt')` |
 | Tool command with omitted parameters | Explicit `agent '...'` |
-| `enforce` / `forbid` | `instruct` / `avoid` (guidance only) |
+| `enforce` / `forbid` | Still supported; `instruct` / `avoid` are equivalent guidance aliases |
 | `think{level='high'}` | `?{reasoning='high'}` or `think{reasoning='high'}` |
 | `let x += 1`, `let d.key = 2` | `x += 1`, `d.key = 2` |
 | Bare blocks shadow variables | Every block shares its function/script scope |

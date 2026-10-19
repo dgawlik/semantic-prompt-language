@@ -145,6 +145,45 @@ success [result, count[0]]
         expect(calls[1]).toMatchObject({ kind: 'agent' });
         expect(calls[1].prompt).not.toContain('jokes');
     });
+
+    it.each(['?', 'think', 'agent'])('applies enforce/forbid to %s calls through functions and unwinds afterward', async (command) => {
+        const { backend, calls } = scripted('inside', 'outside');
+        const result = await exec(`
+def answer() { return ${command} 'inside' }
+enforce 'Answer in English' {
+    forbid 'jokes' { let inside = answer() }
+}
+let outside = ${command} 'outside'
+success [inside, outside]
+`, backend);
+        expect(result).toMatchObject({ status: 'success', value: ['inside', 'outside'] });
+        expect(calls).toHaveLength(2);
+        expect(calls[0].prompt).toContain('Follow: Answer in English');
+        expect(calls[0].prompt).toContain('Avoid: jokes');
+        expect(calls[1].prompt).not.toContain('Answer in English');
+        expect(calls[1].prompt).not.toContain('jokes');
+    });
+
+    it('unwinds mixed old and new guidance spellings after a caught failure', async () => {
+        const { backend, calls } = scripted('inside', 'after');
+        const result = await exec(`
+try {
+    enforce 'Be polite' {
+        avoid 'profanity' {
+            let answer = ?'inside'
+            fail 'expected'
+        }
+    }
+} except err {
+    success ?'after'
+}
+`, backend);
+        expect(result).toMatchObject({ status: 'success', value: 'after' });
+        expect(calls[0].prompt).toContain('Follow: Be polite');
+        expect(calls[0].prompt).toContain('Avoid: profanity');
+        expect(calls[1].prompt).not.toContain('Be polite');
+        expect(calls[1].prompt).not.toContain('profanity');
+    });
 });
 
 describe('raw tools and bindings', () => {

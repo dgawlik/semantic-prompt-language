@@ -59,6 +59,16 @@
     "body": ["let ${1:result} = agent{reasoning='${2|medium,low,high|}'} '${0:task}'"],
     "description": "Explicit model-directed runtime and MCP tool access"
   },
+  "Enforce": {
+    "prefix": "enforce",
+    "body": ["enforce '${1:guidance}' {", "\t$0", "}"],
+    "description": "Scoped positive prompt guidance, not runtime validation"
+  },
+  "Forbid": {
+    "prefix": "forbid",
+    "body": ["forbid '${1:guidance}' {", "\t$0", "}"],
+    "description": "Scoped negative prompt guidance, not runtime enforcement"
+  },
   "Instruct": {
     "prefix": "instruct",
     "body": ["instruct '${1:guidance}' {", "\t$0", "}"],

@@ -10,9 +10,10 @@ this repository).
   triple-quoted strings. Illegal escapes and stray `}` in strings are flagged with the `invalid` scope.
 * **Generation and agency**: generation-only `?` and `think`, explicit `agent`, and expression-valued modifiers
   (`len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`). Raw tools are ordinary function calls.
-* **Guidance and failures**: `instruct`, `avoid`, `restrict [fs|net|exec|mcp]` (including comma-separated clauses), `try`/`except`, `assert`, `fail`, `success`.
+* **Guidance and failures**: `enforce`/`forbid` and their `instruct`/`avoid` aliases,
+  `restrict [fs|net|exec|mcp]` (including comma-separated clauses), `try`/`except`, `assert`, `fail`, `success`.
 * **Snippets** (type the prefix): `def`, `if`, `ifelse`, `for`, `while`, `let`, `ask`, `askobj`, `think`, `try`,
-  `askschema`, `retry` (bounded schema repair), `agent`, `instruct`, `avoid`, `restrict`, `restrictnet`, `restrictexec`, `restrictmcp`, `restrictmulti`, `read_file`, `write_file`, `web_fetch`,
+  `askschema`, `retry` (bounded schema repair), `agent`, `enforce`, `forbid`, `instruct`, `avoid`, `restrict`, `restrictnet`, `restrictexec`, `restrictmcp`, `restrictmulti`, `read_file`, `write_file`, `web_fetch`,
   `web_search`, `shell`, `assert`, `fail`, `success`, `model`.
 * **Editing**: `#` line comments (Ctrl+/), bracket matching and auto-closing for `{}` `[]` `()` and quotes
   (including `'''`), auto-indent after `{`, `#region` / `#endregion` folding.

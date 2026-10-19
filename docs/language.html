@@ -67,7 +67,7 @@ log(color)                 # Red: braces do not introduce a scope
 <p>Conditionals, loops, exception handlers, and guidance/restriction blocks all follow the same rule. Loop variables and caught failure names are local bindings too. Results remain visible after the block:</p>
 <pre><code class="language-spl">
 let color = None
-instruct 'Your favorite color is blue' {
+enforce 'Your favorite color is blue' {
     let color = ?{len='word'} 'What is your favorite color?'
 }
 log(color)                 # the answer
@@ -79,6 +79,7 @@ try {
 }
 log(response)              # visible here, whichever branch ran
 </code></pre>
+<p><code>enforce</code>/<code>forbid</code> provide scoped prompt guidance; <code>instruct</code>/<code>avoid</code> are equivalent aliases. They do not create variable scopes or verify model compliance.</p>
 <p>Functions can read lexical enclosing variables. A <code>let</code> inside a function declares/redeclares locally and can shadow an enclosing name. Name assignment cannot rebind an enclosing variable: declare a local first. To share mutable state, mutate a list or dict (<code>cell[0] += 1</code>).</p>
 
 <h3 id="persistence">Persistence</h3>

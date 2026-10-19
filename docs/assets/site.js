@@ -42,7 +42,7 @@
   function span(cls, text) { return '<span class="t-' + cls + '">' + esc(text) + "</span>"; }
 
   /* ---------- syntax highlighting ---------- */
-  var KEYWORDS = "let if elif else for in while def return try except assert fail success instruct avoid restrict break continue pass and or not fs net exec mcp".split(" ");
+  var KEYWORDS = "let if elif else for in while def return try except assert fail success enforce forbid instruct avoid restrict break continue pass and or not fs net exec mcp".split(" ");
   var TOOLS = "read_file write_file web_fetch web_search shell".split(" ");
   var CONSTS = ["True", "False", "None"];
   var BUILTINS = "len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log".split(" ");
