@@ -1,19 +1,19 @@
+@{model='gpt-5.6-luna'}
 # Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
 #
 # Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd <project>
 # Exit code is 1 (failure payload on stdout) when high-severity findings exist.
 # The review phase may only touch ./src; the report is written under ./reports.
 
-let target = './src/restrict.ts'
-
 let notes = ''
-restrict './src' {
-    forbid 'suggesting purely stylistic changes' {
-        let notes = think{level='high'} '''
-Read {target} and review it for security problems and correctness bugs.
+
+forbid 'suggesting purely stylistic changes' {
+    let notes = think{level='high'} '''
+List the files in ./src (use a plain command such as `dir src`, no chaining or redirection).
+Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 List each finding with its location, why it matters and a suggested fix.'''
-    }
 }
+
 
 let review = ?{fmt='object'} '''
 Convert this review into JSON:
@@ -22,7 +22,7 @@ Use an empty list when there are no findings.
 
 {notes}'''
 
-let lines = ["# Review of {target}", '']
+let lines = ["# Review of repository", '']
 let high = 0
 for f in review.findings {
     assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
