@@ -157,4 +157,5 @@ npm test
 
 Tests are offline by default. To opt into authenticated live tests in PowerShell:
 `$env:SPL_LIVE_TESTS='1'; npm test`. Remove that environment variable afterward.
-The [VS Code extension](vscode/README.md) has its own `npm test`.
+The [VS Code extension](vscode/README.md) provides live parser-backed diagnostics, completions, hover,
+go-to-definition, and document symbols. It has its own `npm test` and bundles its language server.

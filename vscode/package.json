@@ -1,14 +1,18 @@
 {
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
-  "description": "Syntax highlighting, snippets and editing support for Semantic Prompt Language (.spl) scripts",
+  "description": "Language server, syntax highlighting and snippets for Semantic Prompt Language (.spl) scripts",
   "version": "0.3.0",
   "publisher": "spl-lang",
   "license": "ISC",
   "private": true,
   "engines": {
-    "vscode": "^1.80.0"
+    "vscode": "^1.82.0"
   },
+  "main": "./out/extension.cjs",
+  "activationEvents": [
+    "onLanguage:spl"
+  ],
   "categories": [
     "Programming Languages",
     "Snippets"
@@ -48,11 +52,23 @@
     ]
   },
   "scripts": {
-    "test": "node test/run-assertions.mjs && node test/check-examples.mjs",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "vscode:prepublish": "npm run typecheck && npm run build",
+    "test": "npm run typecheck && node build.mjs --test && node --test out/test/language-server.test.cjs && node test/run-assertions.mjs && node test/check-examples.mjs",
     "package": "vsce package --allow-missing-repository --skip-license"
   },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
   "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/vscode": "~1.82.0",
     "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.0.0"
   }
