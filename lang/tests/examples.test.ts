@@ -21,15 +21,32 @@ describe('examples', () => {
 
 describe('documentation snippets', () => {
     const docs = path.resolve(dir, '..', '..', 'docs');
-    const decode = (source: string) => source.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    const normalize = (source: string) => source.replace(/\r\n/g, '\n').trim();
+    const decode = (source: string) => source.replace(/<\/?span\b[^>]*>/g, '')
+        .replace(/&#x([a-f\d]+);/gi, (_, digits: string) => String.fromCodePoint(parseInt(digits, 16)))
+        .replace(/&#(\d+);/g, (_, digits: string) => String.fromCodePoint(parseInt(digits, 10)))
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
     for (const file of fs.readdirSync(docs).filter((name) => name.endsWith('.html'))) {
         const html = fs.readFileSync(path.join(docs, file), 'utf8');
+        it(`${file} includes an accessible static documentation shell`, () => {
+            expect([...html.matchAll(/<h1(?:\s|>)/g)]).toHaveLength(1);
+            expect(html).toContain('<html lang="en">');
+            expect(html).toContain('<main id="page"');
+            expect(html).toContain('href="#page">Skip to content');
+            expect(html).toContain('<dialog class="search-dialog" aria-labelledby="search-title">');
+            expect(html).toContain('aria-current="page"');
+            const depths = [...html.matchAll(/<h([1-6])(?:\s|>)/g)].map((match) => Number(match[1]));
+            for (let i = 1; i < depths.length; i++) expect(depths[i]).toBeLessThanOrEqual(depths[i - 1] + 1);
+            for (const match of html.matchAll(/(?:src|href)="(assets\/[^"]+)"/g)) {
+                expect(fs.existsSync(path.join(docs, match[1].split('?')[0])), `${file}: ${match[1]}`).toBe(true);
+            }
+        });
         it(`${file} local documentation links resolve`, () => {
             for (const match of html.matchAll(/href="([^"]+)"/g)) {
                 const href = match[1];
                 if (/^[a-z][a-z\d+.-]*:/i.test(href)) continue;
                 const [name, fragment] = href.split('#');
-                const target = path.resolve(docs, decodeURIComponent(name || file));
+                const target = path.resolve(docs, decodeURIComponent(name.split('?')[0] || file));
                 expect(fs.existsSync(target), `${file}: ${href}`).toBe(true);
                 if (fragment && target.endsWith('.html')) {
                     expect(fs.readFileSync(target, 'utf8'), `${file}: ${href}`).toContain(`id="${fragment}"`);
@@ -45,13 +62,69 @@ describe('documentation snippets', () => {
             const source = name === 'quickstart.spl' ? 'hi.spl' : name;
             if (source && fs.existsSync(path.join(dir, source))) {
                 it(`${file} embeds current ${source}`, () => {
-                    expect(decode(match[2]).trim()).toBe(load(source).trim());
+                    expect(normalize(decode(match[2]))).toBe(normalize(load(source)));
                 });
             }
         });
     }
     const root = path.resolve(docs, '..');
-    for (const file of ['README.md', path.join('lang', 'README.md')]) {
+    const markdownDocs = path.join(root, 'docs-template');
+    const markdownFiles = fs.readdirSync(markdownDocs).filter((file) => file.endsWith('.md'));
+    const withoutFences = (markdown: string) => normalize(markdown).replace(/^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```[ \t]*$/gm, '');
+    const headingId = (heading: string) => heading.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, '').replace(/ /g, '-');
+    it('has a Markdown page for every HTML documentation page', () => {
+        const expected = fs.readdirSync(docs).filter((file) => file.endsWith('.html'))
+            .map((file) => file === 'index.html' ? 'introduction.md' : file.replace(/\.html$/, '.md'))
+            .sort();
+        expect(markdownFiles.map((file) => file.toLowerCase()).sort()).toEqual(expected);
+    });
+    it('indexes every page and resolves every search result', () => {
+        const content = fs.readFileSync(path.join(docs, 'assets', 'search-index.js'), 'utf8');
+        const entries: { href: string; title: string; text: string }[] = JSON.parse(content.replace(/^window\.SPL_SEARCH_INDEX = /, '').trim().replace(/;$/, ''));
+        const indexedPages = [...new Set(entries.map((entry) => entry.href.split('#')[0]))].sort();
+        expect(indexedPages).toEqual(fs.readdirSync(docs).filter((file) => file.endsWith('.html')).sort());
+        for (const entry of entries) {
+            const [name, fragment] = entry.href.split('#');
+            expect(entry.title.trim()).not.toBe('');
+            if (fragment) {
+                expect(fs.readFileSync(path.join(docs, name), 'utf8'), entry.href).toContain(`id="${fragment}"`);
+            }
+        }
+    });
+    it('preserves the published output formats permalink', () => {
+        expect(fs.readFileSync(path.join(docs, 'llm-commands.html'), 'utf8')).toContain('id="fmt-object"');
+    });
+    for (const file of markdownFiles) {
+        const markdown = fs.readFileSync(path.join(markdownDocs, file), 'utf8');
+        it(`${file} local Markdown links resolve`, () => {
+            for (const match of withoutFences(markdown).matchAll(/\[[^\n]*?\]\(([^)\s]+)\)/g)) {
+                const href = match[1];
+                if (/^[a-z][a-z\d+.-]*:/i.test(href)) continue;
+                const [name, fragment] = href.split('#');
+                const target = path.resolve(markdownDocs, decodeURIComponent(name || file));
+                expect(fs.existsSync(target), `${file}: ${href}`).toBe(true);
+                if (fragment && target.endsWith('.md')) {
+                    const headings = [...withoutFences(fs.readFileSync(target, 'utf8')).matchAll(/^#{1,6} (.+)$/gm)]
+                        .map((heading) => headingId(heading[1]));
+                    expect(headings, `${file}: ${href}`).toContain(decodeURIComponent(fragment));
+                }
+            }
+        });
+        for (const match of markdown.matchAll(/^`([^`\r\n]+\.spl)`\r?\n\r?\n```spl\r?\n([\s\S]*?)^```[ \t]*\r?$/gm)) {
+            const name = match[1];
+            if (fs.existsSync(path.join(dir, name))) {
+                it(`${file} embeds current ${name}`, () => {
+                    expect(normalize(match[2])).toBe(normalize(load(name)));
+                });
+            }
+        }
+    }
+    it('includes the current grammar in Markdown', () => {
+        const markdown = fs.readFileSync(path.join(markdownDocs, 'Grammar.md'), 'utf8');
+        const grammar = /```ebnf\s*\n([\s\S]*?)```/.exec(markdown);
+        expect(grammar?.[1] && normalize(grammar[1])).toBe(normalize(fs.readFileSync(path.join(root, 'lang', 'docs', 'syntax.ebnf'), 'utf8')));
+    });
+    for (const file of ['README.md', path.join('lang', 'README.md'), ...markdownFiles.map((file) => path.join('docs-template', file))]) {
         const markdown = fs.readFileSync(path.join(root, file), 'utf8');
         [...markdown.matchAll(/```spl\s*\n([\s\S]*?)```/g)].forEach((match, i) => {
             it(`${file} SPL example ${i + 1} parses`, () => {

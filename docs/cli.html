@@ -1,228 +1,350 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="SPL command-line interpreter reference: options, logging, backends, variable store and reproducibility.">
-<title>CLI &amp; runtime - SPL</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css">
+<meta name="description" content="The interpreter runs one script file to completion. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.">
 <meta name="color-scheme" content="light dark">
-<script>try{document.querySelector('meta[name="color-scheme"]').content=localStorage.getItem("color-scheme")??"light dark"}catch(e){}</script>
+<title>CLI &amp; runtime - SPL docs</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=40cc3636dea6">
+<link rel="stylesheet" href="assets/style.css?v=40cc3636dea6">
+<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
+<script defer src="assets/search-index.js?v=40cc3636dea6"></script>
+<script defer src="assets/site.js?v=40cc3636dea6"></script>
 </head>
 <body data-page="cli">
-<main id="page">
-
-<div class="eyebrow">Reference</div>
-<h1>CLI &amp; runtime</h1>
-<p class="lead">The interpreter runs one script file to completion. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.</p>
-
-<h2 id="usage">Usage</h2>
-<pre><code class="language-bash">
-spl &lt;script.spl&gt; [--log-level error|info|debug] [--silent] [--model &lt;id&gt;]
+<a class="skip-link" href="#page">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v0.4.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Less glue code.<br><strong>More intent.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>CLI &amp; runtime</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav></details>
+  <main id="page" tabindex="-1">
+    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>CLI &amp; runtime</span><span class="reading-time">9 min read</span></div>
+    <header class="page-heading"><h1>CLI &amp; runtime</h1><div class="lead"><p>The interpreter runs one script file to completion. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#options">Options</a></li><li class="toc-level-2"><a href="#output-streams--exit-codes">Output streams &amp; exit codes</a></li><li class="toc-level-3"><a href="#stdout">stdout</a></li><li class="toc-level-3"><a href="#stderr">stderr</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#mcp-configuration">MCP configuration</a></li><li class="toc-level-3"><a href="#remote-http-or-sse-server">Remote HTTP or SSE server</a></li><li class="toc-level-3"><a href="#local-stdio-server">Local stdio server</a></li><li class="toc-level-3"><a href="#configuration-fields">Configuration fields</a></li><li class="toc-level-3"><a href="#variables-paths-and-unsupported-settings">Variables, paths and unsupported settings</a></li><li class="toc-level-3"><a href="#validate-run-and-restrict-access">Validate, run and restrict access</a></li><li class="toc-level-2"><a href="#variable-store">Variable store</a></li><li class="toc-level-3"><a href="#custom-stores">Custom stores</a></li><li class="toc-level-2"><a href="#authentication">Authentication</a></li><li class="toc-level-2"><a href="#backend">Backend</a></li><li class="toc-level-2"><a href="#offline-generation-recordreplay">Offline generation record/replay</a></li><li class="toc-level-2"><a href="#reproducibility">Reproducibility</a></li></ul></nav></details>
+    <article class="prose"><h2 id="usage">Usage<a class="heading-anchor" href="#usage" aria-label="Link to Usage">#</a></h2>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-1">spl &lt;script.spl&gt; [--log-level error|info|debug] [--silent] [--model &lt;<span class="hljs-built_in">id</span>&gt;]
                  [--store &lt;file.json&gt; | --store-module &lt;module&gt;]
-                 [--timeout &lt;s&gt;] [--cwd &lt;dir&gt;] [--mcp &lt;file.json&gt;] [--check]
+                 [--<span class="hljs-built_in">timeout</span> &lt;s&gt;] [--cwd &lt;<span class="hljs-built_in">dir</span>&gt;] [--mcp &lt;file.json&gt;] [--check]
                  [--record &lt;file.jsonl&gt; | --replay &lt;file.jsonl&gt;]
 spl login
-spl logout
-</code></pre>
-<p>From a checkout use <code>node dist/cli.js</code> or <code>npx file:./lang</code>. The package installs two equivalent binaries: <code>spl</code> and <code>spl-lang</code>. A script run expects exactly one script file; <code>login</code> and <code>logout</code> are separate commands, see <a href="#login">Authentication</a>.</p>
-
-<h2 id="options">Options</h2>
-<div class="table-wrap"><table>
-<thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
-<tbody>
-<tr><td><code>--log-level &lt;level&gt;</code></td><td><code>info</code></td><td><code>error</code>, <code>info</code> or <code>debug</code>. Logs go to stderr.</td></tr>
-<tr><td><code>--silent</code></td><td>off</td><td>Suppress all logs; only the result is printed.</td></tr>
-<tr><td><code>--model &lt;id&gt;</code></td><td>SDK default</td><td>Overrides per-call model, then header model, then SDK default.</td></tr>
-<tr><td><code>--mcp &lt;file.json&gt;</code></td><td>none</td><td>MCP servers in VS Code <code>mcp.json</code> format; see <a href="#mcp">MCP configuration</a>.</td></tr>
-<tr><td><code>--store &lt;file.json&gt;</code></td><td>&mdash;</td><td>Persist top-level variables in a JSON file.</td></tr>
-<tr><td><code>--store-module &lt;path&gt;</code></td><td>&mdash;</td><td>Custom store module exporting <code>createStore()</code>. Mutually exclusive with <code>--store</code>.</td></tr>
-<tr><td><code>--timeout &lt;seconds&gt;</code></td><td><code>300</code></td><td>Per-LLM-call timeout.</td></tr>
-<tr><td><code>--record &lt;file.jsonl&gt;</code></td><td>none</td><td>Create a new generation recording. Rejects existing files and agent calls.</td></tr>
-<tr><td><code>--replay &lt;file.jsonl&gt;</code></td><td>none</td><td>Offline generation replay. Blocks agents, writes, shell, network, and stores. Mutually exclusive with record.</td></tr>
-<tr><td><code>--cwd &lt;dir&gt;</code></td><td>current dir</td><td>Base directory for relative paths, <code>restrict</code> checks, and the working directory of tools and the model.</td></tr>
-<tr><td><code>--check</code></td><td>off</td><td>Parse the script and validate any <code>--mcp</code> config without starting servers or making LLM calls.</td></tr>
-<tr><td><code>-v</code>, <code>--version</code></td><td>&mdash;</td><td>Print the version.</td></tr>
-<tr><td><code>-h</code>, <code>--help</code></td><td>&mdash;</td><td>Print usage.</td></tr>
-</tbody></table></div>
-
-<h2 id="streams">Output streams &amp; exit codes</h2>
-<div class="compare">
-  <div>
-    <h4>stdout</h4>
-    <p>The value of <code>success</code> or of a top-level <code>return</code>: strings raw, everything else as pretty-printed JSON. On an uncaught failure: the failure payload.</p>
-  </div>
-  <div>
-    <h4>stderr</h4>
-    <p>Logs, <code>log()</code> output, syntax errors, and for every LLM call the effective model and reasoning effort.</p>
-  </div>
+spl <span class="hljs-built_in">logout</span>
+</code></pre></figure>
+<p>From a checkout use <code>node dist/cli.js</code> or <code>npx file:./lang</code>. The package installs two equivalent binaries: <code>spl</code> and <code>spl-lang</code>. A script run expects exactly one script file; <code>login</code> and <code>logout</code> are separate commands, see <a href="#authentication">Authentication</a>.</p>
+<h2 id="options">Options<a class="heading-anchor" href="#options" aria-label="Link to Options">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Options reference table"><table>
+<thead>
+<tr>
+<th scope="col">Option</th>
+<th scope="col">Default</th>
+<th scope="col">Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--log-level &lt;level&gt;</code></td>
+<td><code>info</code></td>
+<td><code>error</code>, <code>info</code> or <code>debug</code>. Logs go to stderr.</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>off</td>
+<td>Suppress all logs; only the result is printed.</td>
+</tr>
+<tr>
+<td><code>--model &lt;id&gt;</code></td>
+<td>SDK default</td>
+<td>Overrides per-call model, then header model, then SDK default.</td>
+</tr>
+<tr>
+<td><code>--mcp &lt;file.json&gt;</code></td>
+<td>none</td>
+<td>MCP servers in VS Code <code>mcp.json</code> format; see <a href="#mcp-configuration">MCP configuration</a>.</td>
+</tr>
+<tr>
+<td><code>--store &lt;file.json&gt;</code></td>
+<td>—</td>
+<td>Persist top-level variables in a JSON file.</td>
+</tr>
+<tr>
+<td><code>--store-module &lt;path&gt;</code></td>
+<td>—</td>
+<td>Custom store module exporting <code>createStore()</code>. Mutually exclusive with <code>--store</code>.</td>
+</tr>
+<tr>
+<td><code>--timeout &lt;seconds&gt;</code></td>
+<td><code>300</code></td>
+<td>Per-LLM-call timeout.</td>
+</tr>
+<tr>
+<td><code>--record &lt;file.jsonl&gt;</code></td>
+<td>none</td>
+<td>Create a new generation recording. Rejects existing files and agent calls.</td>
+</tr>
+<tr>
+<td><code>--replay &lt;file.jsonl&gt;</code></td>
+<td>none</td>
+<td>Offline generation replay. Blocks agents, writes, shell, network, and stores. Mutually exclusive with record.</td>
+</tr>
+<tr>
+<td><code>--cwd &lt;dir&gt;</code></td>
+<td>current dir</td>
+<td>Base directory for relative paths, <code>restrict</code> checks, and the working directory of tools and the model.</td>
+</tr>
+<tr>
+<td><code>--check</code></td>
+<td>off</td>
+<td>Parse the script and validate any <code>--mcp</code> config without starting servers or making LLM calls.</td>
+</tr>
+<tr>
+<td><code>-v</code>, <code>--version</code></td>
+<td>—</td>
+<td>Print the version.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>—</td>
+<td>Print usage.</td>
+</tr>
+</tbody></table>
 </div>
-<div class="table-wrap"><table>
-<thead><tr><th>Exit code</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>0</code></td><td>Success.</td></tr>
-<tr><td><code>1</code></td><td>Uncaught script failure.</td></tr>
-<tr><td><code>2</code></td><td>Syntax or usage error.</td></tr>
-<tr><td><code>70</code></td><td>Internal error in the interpreter.</td></tr>
-</tbody></table></div>
-
-<h2 id="logging">Logging</h2>
-<div class="table-wrap"><table>
-<thead><tr><th>Level</th><th>Shows</th></tr></thead>
-<tbody>
-<tr><td><code>error</code></td><td>Errors (for example a variable store that could not be saved), the full assembled prompt and raw response of every LLM call, and deterministic statement traces.</td></tr>
-<tr><td><code>info</code> (default)</td><td>Everything above plus warnings, one line per LLM call with its effective parameters and duration, <code>think{show=True}</code> reasoning, <code>log()</code> messages.</td></tr>
-<tr><td><code>debug</code></td><td>Everything above plus tool invocations, caught failures and active restrictions.</td></tr>
-</tbody></table></div>
+<span id="streams" class="anchor-alias" aria-hidden="true"></span><h2 id="output-streams--exit-codes">Output streams &amp; exit codes<a class="heading-anchor" href="#output-streams--exit-codes" aria-label="Link to Output streams &amp; exit codes">#</a></h2>
+<h3 id="stdout">stdout<a class="heading-anchor" href="#stdout" aria-label="Link to stdout">#</a></h3>
+<p>The value of <code>success</code> or of a top-level <code>return</code>: strings raw, everything else as pretty-printed JSON. On an uncaught failure: the failure payload.</p>
+<h3 id="stderr">stderr<a class="heading-anchor" href="#stderr" aria-label="Link to stderr">#</a></h3>
+<p>Logs, <code>log()</code> output, syntax errors, and for every LLM call the effective model and reasoning effort.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="stderr reference table"><table>
+<thead>
+<tr>
+<th scope="col">Exit code</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>0</code></td>
+<td>Success.</td>
+</tr>
+<tr>
+<td><code>1</code></td>
+<td>Uncaught script failure.</td>
+</tr>
+<tr>
+<td><code>2</code></td>
+<td>Syntax or usage error.</td>
+</tr>
+<tr>
+<td><code>70</code></td>
+<td>Internal error in the interpreter.</td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="logging">Logging<a class="heading-anchor" href="#logging" aria-label="Link to Logging">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Logging reference table"><table>
+<thead>
+<tr>
+<th scope="col">Level</th>
+<th scope="col">Shows</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>error</code></td>
+<td>Errors (for example a variable store that could not be saved), the full assembled prompt and raw response of every LLM call, and deterministic statement traces.</td>
+</tr>
+<tr>
+<td><code>info</code> (default)</td>
+<td>Everything above plus warnings, one line per LLM call with its effective parameters and duration, <code>think{show=True}</code> reasoning, <code>log()</code> messages.</td>
+</tr>
+<tr>
+<td><code>debug</code></td>
+<td>Everything above plus tool invocations, caught failures and active restrictions.</td>
+</tr>
+</tbody></table>
+</div>
 <p>LLM requests and responses use the <code>[llm]</code> tag at every non-silent level. They may contain sensitive data; use <code>--silent</code> to suppress all logs.</p>
 <p>Each executed SPL statement is traced to stderr under <code>[deterministic]</code>, with its line number, statement kind and source line, at every non-silent level. Loop bodies are traced for each iteration; skipped branches are not traced. This records control flow, including statements wrapping LLM calls, not intermediate expression values.</p>
-<pre><code class="language-bash">
-spl script.spl --silent                    # result only
-spl script.spl --log-level debug 2&gt; run.log   # keep the full transcript, pipe the result
-</code></pre>
-
-<h2 id="mcp">MCP configuration</h2>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-2">spl script.spl --silent                    <span class="hljs-comment"># result only</span>
+spl script.spl --log-level debug 2&gt; run.log   <span class="hljs-comment"># keep the full transcript, pipe the result</span>
+</code></pre></figure>
+<span id="mcp" class="anchor-alias" aria-hidden="true"></span><h2 id="mcp-configuration">MCP configuration<a class="heading-anchor" href="#mcp-configuration" aria-label="Link to MCP configuration">#</a></h2>
 <p>Pass a JSON file using the VS Code <code>mcp.json</code> shape: a top-level <code>servers</code> object maps server names to connection settings. MCP tools are available only during explicit <code>agent</code> calls. Generation never starts MCP servers, and record/replay rejects agents.</p>
-
-<h3 id="mcp-http">Remote HTTP or SSE server</h3>
-<p>For a URL-based server, explicitly set <code>"type": "http"</code> (or <code>"sse"</code> for an SSE endpoint). Omitting <code>type</code> defaults to <code>stdio</code>, so a config containing only <code>url</code> and <code>headers</code> is rejected.</p>
-<pre><code class="language-json">
-{
-  "servers": {
-    "socialtoai": {
-      "type": "http",
-      "url": "https://mcp.socialtoai.com/mcp",
-      "headers": {
-        "Authorization": "${env:SOCIALTOAI_AUTHORIZATION}"
-      },
-      "timeout": 30000
-    }
-  }
-}
-</code></pre>
+<span id="mcp-http" class="anchor-alias" aria-hidden="true"></span><h3 id="remote-http-or-sse-server">Remote HTTP or SSE server<a class="heading-anchor" href="#remote-http-or-sse-server" aria-label="Link to Remote HTTP or SSE server">#</a></h3>
+<p>For a URL-based server, explicitly set <code>&quot;type&quot;: &quot;http&quot;</code> (or <code>&quot;sse&quot;</code> for an SSE endpoint). Omitting <code>type</code> defaults to <code>stdio</code>, so a config containing only <code>url</code> and <code>headers</code> is rejected.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-3"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;servers&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;socialtoai&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+      <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;http&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;url&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://mcp.socialtoai.com/mcp&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;headers&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+        <span class="hljs-attr">&quot;Authorization&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;${env:SOCIALTOAI_AUTHORIZATION}&quot;</span>
+      <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;timeout&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">30000</span>
+    <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span>
+</code></pre></figure>
 <p>Keep credentials out of the JSON file. Set <code>SOCIALTOAI_AUTHORIZATION</code> in the environment before running SPL. Its value must be the complete header value required by the service (for example <code>Bearer YOUR_TOKEN</code> if that service requires Bearer authentication). SPL substitutes the value verbatim; it does not add an authentication scheme. Omit <code>headers</code> when the server does not require them.</p>
-
-<h3 id="mcp-stdio">Local stdio server</h3>
-<p>A stdio server runs a local executable that speaks MCP over stdin/stdout. Replace the script path below with your MCP server's entry point. Keep the executable in <code>command</code> and its arguments as separate strings in <code>args</code>, not as one shell command.</p>
-<pre><code class="language-json">
-{
-  "servers": {
-    "docs": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["${workspaceFolder}/tools/docs-server.js"],
-      "env": { "TOKEN": "${env:DOCS_TOKEN}" },
-      "cwd": "${workspaceFolder}",
-      "tools": ["search"],
-      "timeout": 30000
-    }
-  }
-}
-</code></pre>
-
-<h3 id="mcp-fields">Configuration fields</h3>
-<p>Server names use letters, digits, underscores, dots or hyphens. They are the names used in <code>restrict mcp</code>, not a server's URL or executable name.</p>
-<div class="table-wrap"><table>
-<thead><tr><th>Field</th><th>Applies to</th><th>Meaning</th></tr></thead>
-<tbody>
-<tr><td><code>type</code></td><td>All</td><td><code>"stdio"</code> (default), <code>"http"</code> or <code>"sse"</code>. Always specify it for remote servers.</td></tr>
-<tr><td><code>command</code></td><td>stdio, required</td><td>Non-empty string: executable name or path.</td></tr>
-<tr><td><code>args</code></td><td>stdio, optional</td><td>Array of argument strings, such as <code>["server.js", "--port", "3000"]</code>.</td></tr>
-<tr><td><code>env</code></td><td>stdio, optional</td><td>Object mapping environment variable names to string values.</td></tr>
-<tr><td><code>cwd</code></td><td>stdio, optional</td><td>Working directory string; defaults to SPL's <code>--cwd</code>. Relative values resolve against <code>--cwd</code>.</td></tr>
-<tr><td><code>url</code></td><td>http/sse, required</td><td>Full MCP endpoint URL using <code>http:</code> or <code>https:</code>.</td></tr>
-<tr><td><code>headers</code></td><td>http/sse, optional</td><td>Object mapping HTTP header names to string values.</td></tr>
-<tr><td><code>tools</code></td><td>All, optional</td><td>Array of tool names exposed by the server, for example <code>["search"]</code>. Omitted or <code>["*"]</code> allows all; <code>[]</code> disables the server. This is a configuration allowlist, which <code>restrict mcp</code> can only narrow.</td></tr>
-<tr><td><code>timeout</code></td><td>All, optional</td><td>Positive number of milliseconds per MCP tool call, such as <code>30000</code>. This is separate from SPL's <code>--timeout</code> in seconds per LLM call.</td></tr>
-</tbody></table></div>
-
-<h3 id="mcp-variables">Variables, paths and unsupported settings</h3>
+<span id="mcp-stdio" class="anchor-alias" aria-hidden="true"></span><h3 id="local-stdio-server">Local stdio server<a class="heading-anchor" href="#local-stdio-server" aria-label="Link to Local stdio server">#</a></h3>
+<p>A stdio server runs a local executable that speaks MCP over stdin/stdout. Replace the script path below with your MCP server&#39;s entry point. Keep the executable in <code>command</code> and its arguments as separate strings in <code>args</code>, not as one shell command.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-4"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;servers&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;docs&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+      <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;stdio&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;command&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;node&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;args&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;${workspaceFolder}/tools/docs-server.js&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;env&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;TOKEN&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;${env:DOCS_TOKEN}&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;cwd&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;${workspaceFolder}&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;tools&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;search&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;timeout&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">30000</span>
+    <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span>
+</code></pre></figure>
+<span id="mcp-fields" class="anchor-alias" aria-hidden="true"></span><h3 id="configuration-fields">Configuration fields<a class="heading-anchor" href="#configuration-fields" aria-label="Link to Configuration fields">#</a></h3>
+<p>Server names use letters, digits, underscores, dots or hyphens. They are the names used in <code>restrict mcp</code>, not a server&#39;s URL or executable name.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Configuration fields reference table"><table>
+<thead>
+<tr>
+<th scope="col">Field</th>
+<th scope="col">Applies to</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>type</code></td>
+<td>All</td>
+<td><code>&quot;stdio&quot;</code> (default), <code>&quot;http&quot;</code> or <code>&quot;sse&quot;</code>. Always specify it for remote servers.</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td>stdio, required</td>
+<td>Non-empty string: executable name or path.</td>
+</tr>
+<tr>
+<td><code>args</code></td>
+<td>stdio, optional</td>
+<td>Array of argument strings, such as <code>[&quot;server.js&quot;, &quot;--port&quot;, &quot;3000&quot;]</code>.</td>
+</tr>
+<tr>
+<td><code>env</code></td>
+<td>stdio, optional</td>
+<td>Object mapping environment variable names to string values.</td>
+</tr>
+<tr>
+<td><code>cwd</code></td>
+<td>stdio, optional</td>
+<td>Working directory string; defaults to SPL&#39;s <code>--cwd</code>. Relative values resolve against <code>--cwd</code>.</td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td>http/sse, required</td>
+<td>Full MCP endpoint URL using <code>http:</code> or <code>https:</code>.</td>
+</tr>
+<tr>
+<td><code>headers</code></td>
+<td>http/sse, optional</td>
+<td>Object mapping HTTP header names to string values.</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>All, optional</td>
+<td>Array of tool names exposed by the server, for example <code>[&quot;search&quot;]</code>. Omitted or <code>[&quot;*&quot;]</code> allows all; <code>[]</code> disables the server. This is a configuration allowlist, which <code>restrict mcp</code> can only narrow.</td>
+</tr>
+<tr>
+<td><code>timeout</code></td>
+<td>All, optional</td>
+<td>Positive number of milliseconds per MCP tool call, such as <code>30000</code>. This is separate from SPL&#39;s <code>--timeout</code> in seconds per LLM call.</td>
+</tr>
+</tbody></table>
+</div>
+<span id="mcp-variables" class="anchor-alias" aria-hidden="true"></span><h3 id="variables-paths-and-unsupported-settings">Variables, paths and unsupported settings<a class="heading-anchor" href="#variables-paths-and-unsupported-settings" aria-label="Link to Variables, paths and unsupported settings">#</a></h3>
 <ul>
-  <li><code>${workspaceFolder}</code> expands to SPL's <code>--cwd</code>, not the folder containing the JSON file.</li>
-  <li><code>${env:NAME}</code> expands an environment variable in <code>command</code>, <code>args</code>, <code>env</code>, <code>cwd</code>, <code>url</code> or <code>headers</code> values. A missing variable is a configuration error, including during <code>--check</code>.</li>
-  <li>The <code>--mcp</code> filename is relative to the invoking directory, independently of <code>--cwd</code>. The config may be anywhere; <code>.vscode/mcp.json</code> is a convention, not a requirement.</li>
-  <li>Use strict JSON: no comments or trailing commas. Windows backslashes inside JSON strings must be escaped (<code>"C:\\tools\\server.js"</code>); forward slashes avoid this escaping.</li>
-  <li>SPL supports the documented VS Code configuration subset, not every VS Code setting. Interactive <code>inputs</code>, <code>${input:...}</code>, other variable forms, <code>envFile</code> and other unsupported server fields are rejected explicitly.</li>
+<li><p><code>${workspaceFolder}</code> expands to SPL&#39;s <code>--cwd</code>, not the folder containing the JSON file.</p>
+</li>
+<li><p><code>${env:NAME}</code> expands an environment variable in <code>command</code>, <code>args</code>, <code>env</code>, <code>cwd</code>, <code>url</code> or <code>headers</code> values. A missing variable is a configuration error, including during <code>--check</code>.</p>
+</li>
+<li><p>The <code>--mcp</code> filename is relative to the invoking directory, independently of <code>--cwd</code>. The config may be anywhere; <code>.vscode/mcp.json</code> is a convention, not a requirement.</p>
+</li>
+<li><p>Use strict JSON: no comments or trailing commas. Windows backslashes inside JSON strings must be escaped (<code>&quot;C:\\tools\\server.js&quot;</code>); forward slashes avoid this escaping.</p>
+</li>
+<li><p>SPL supports the documented VS Code configuration subset, not every VS Code setting. Interactive <code>inputs</code>, <code>${input:...}</code>, other variable forms, <code>envFile</code> and other unsupported server fields are rejected explicitly.</p>
+</li>
 </ul>
-
-<h3 id="mcp-usage">Validate, run and restrict access</h3>
+<span id="mcp-usage" class="anchor-alias" aria-hidden="true"></span><h3 id="validate-run-and-restrict-access">Validate, run and restrict access<a class="heading-anchor" href="#validate-run-and-restrict-access" aria-label="Link to Validate, run and restrict access">#</a></h3>
 <p>With a script and config in the current directory:</p>
-<pre><code class="language-bash">
-spl script.spl --mcp mcp.json --check
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-5">spl script.spl --mcp mcp.json --check
 spl script.spl --mcp mcp.json
-</code></pre>
+</code></pre></figure>
 <p><code>--check</code> validates script syntax, JSON structure, settings and variable expansion without starting MCP servers or making LLM calls. It does not verify credentials, endpoint reachability, executable availability or tool names.</p>
 <p>Use server names from the JSON keys to limit tool access:</p>
-<pre><code class="language-spl">
-restrict mcp 'socialtoai' {
-    let news = agent 'Use the configured socialtoai MCP tools to summarize current news.'
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">restrict</span> mcp <span class="hljs-string">&#x27;socialtoai&#x27;</span> {
+    <span class="hljs-keyword">let</span> news = <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Use the configured socialtoai MCP tools to summarize current news.&#x27;</span>
 }
-</code></pre>
-<p><code>restrict mcp 'socialtoai/tool_name'</code> allows just one tool; replace <code>tool_name</code> with an actual tool exposed by that server. A <code>tools</code> list in the config uses unqualified names such as <code>"search"</code>, not <code>"socialtoai/search"</code>.</p>
-<p>Only load trusted configurations: they can launch local programs or connect to remote services. Server names and <code>server/tool</code> selectors in <a href="restrictions.html#mcp"><code>restrict mcp</code></a> are case-sensitive. Without an MCP restriction all configured tools are allowed; no unconfigured MCP server is approved.</p>
-
-<h2 id="store">Variable store</h2>
+</code></pre></figure>
+<p><code>restrict mcp &#39;socialtoai/tool_name&#39;</code> allows just one tool; replace <code>tool_name</code> with an actual tool exposed by that server. A <code>tools</code> list in the config uses unqualified names such as <code>&quot;search&quot;</code>, not <code>&quot;socialtoai/search&quot;</code>.</p>
+<p>Only load trusted configurations: they can launch local programs or connect to remote services. Server names and <code>server/tool</code> selectors in <a href="restrictions.html#mcp-servers-and-tools"><code>restrict mcp</code></a> are case-sensitive. Without an MCP restriction all configured tools are allowed; no unconfigured MCP server is approved.</p>
+<span id="store" class="anchor-alias" aria-hidden="true"></span><h2 id="variable-store">Variable store<a class="heading-anchor" href="#variable-store" aria-label="Link to Variable store">#</a></h2>
 <p>Stores are independent of generation recordings. <code>--replay</code> rejects both <code>--store</code> and <code>--store-module</code> before loading user modules or writing state.</p>
-<p>Scripts can keep state between runs. <code>--store vars.json</code> loads top-level variables from the file at start and writes them back at exit &mdash; <strong>also on failure</strong>. Functions are not persisted. The file must contain a JSON object; writes are atomic (temp file + rename).</p>
-<pre><code class="language-bash">
-spl examples/journal.spl --store journal.json
-</code></pre>
-
-<h3 id="custom-store">Custom stores</h3>
+<p>Scripts can keep state between runs. <code>--store vars.json</code> loads top-level variables from the file at start and writes them back at exit — <strong>also on failure</strong>. Functions are not persisted. The file must contain a JSON object; writes are atomic (temp file + rename).</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-7">spl examples/journal.spl --store journal.json
+</code></pre></figure>
+<span id="custom-store" class="anchor-alias" aria-hidden="true"></span><h3 id="custom-stores">Custom stores<a class="heading-anchor" href="#custom-stores" aria-label="Link to Custom stores">#</a></h3>
 <p><code>--store-module ./mystore.mjs</code> plugs in your own persistence. The module exports <code>createStore()</code> (or a default export of that shape) returning an object with <code>load()</code> and <code>save(vars)</code>:</p>
-<pre><code class="language-js" data-file="mystore.mjs">
-import fs from 'node:fs';
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">mystore.mjs</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy mystore.mjs code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="mystore.mjs code example"><code class="language-js" id="code-8"><span class="hljs-keyword">import</span> fs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:fs&#x27;</span>;
 
-export function createStore() {
-  const file = './state.json';
-  return {
-    load() { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}; },
-    save(vars) { fs.writeFileSync(file, JSON.stringify(vars)); },
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">createStore</span>(<span class="hljs-params"></span>) {
+  <span class="hljs-keyword">const</span> file = <span class="hljs-string">&#x27;./state.json&#x27;</span>;
+  <span class="hljs-keyword">return</span> {
+    <span class="hljs-title function_">load</span>(<span class="hljs-params"></span>) { <span class="hljs-keyword">return</span> fs.<span class="hljs-title function_">existsSync</span>(file) ? <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(fs.<span class="hljs-title function_">readFileSync</span>(file, <span class="hljs-string">&#x27;utf8&#x27;</span>)) : {}; },
+    <span class="hljs-title function_">save</span>(<span class="hljs-params">vars</span>) { fs.<span class="hljs-title function_">writeFileSync</span>(file, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(vars)); },
   };
 }
-</code></pre>
-<div class="callout warn">
-  <span class="ico">⚠️</span>
-  <div class="body"><span class="title">Synchronous interface</span>
-  <p><code>load()</code> and <code>save()</code> are synchronous, so a store must complete its I/O before returning. <code>createStore()</code> itself may be async. <code>save()</code> receives plain JSON-compatible values (<code>vars</code>), never functions.</p></div>
-</div>
-
-<h2 id="login">Authentication</h2>
-<p>LLM calls go to GitHub Copilot, so the runtime needs credentials. Run <code>spl login</code> once: it does nothing if the runtime is already authenticated (an earlier login, a Copilot CLI or <code>gh</code> login, or <code>COPILOT_GITHUB_TOKEN</code> / <code>GH_TOKEN</code> / <code>GITHUB_TOKEN</code>); otherwise it starts GitHub's device flow, prints a one-time code and a URL, waits until you confirm in the browser, verifies the token with the Copilot runtime and saves it to <code>~/.spl/credentials.json</code> (folder overridable with <code>SPL_HOME</code>). Scripts pick that token up automatically. <code>spl logout</code> deletes the saved file.</p>
-<pre><code class="language-bash">
-spl login
-# Open https://github.com/login/device and enter the code: ABCD-1234
-# Authenticated with GitHub Copilot as octocat.
-</code></pre>
+</code></pre></figure>
+<p><strong>Synchronous interface</strong></p>
+<p><code>load()</code> and <code>save()</code> are synchronous, so a store must complete its I/O before returning. <code>createStore()</code> itself may be async. <code>save()</code> receives plain JSON-compatible values (<code>vars</code>), never functions.</p>
+<span id="login" class="anchor-alias" aria-hidden="true"></span><h2 id="authentication">Authentication<a class="heading-anchor" href="#authentication" aria-label="Link to Authentication">#</a></h2>
+<p>LLM calls go to GitHub Copilot, so the runtime needs credentials. Run <code>spl login</code> once: it does nothing if the runtime is already authenticated (an earlier login, a Copilot CLI or <code>gh</code> login, or <code>COPILOT_GITHUB_TOKEN</code> / <code>GH_TOKEN</code> / <code>GITHUB_TOKEN</code>); otherwise it starts GitHub&#39;s device flow, prints a one-time code and a URL, waits until you confirm in the browser, verifies the token with the Copilot runtime and saves it to <code>~/.spl/credentials.json</code> (folder overridable with <code>SPL_HOME</code>). Scripts pick that token up automatically. <code>spl logout</code> deletes the saved file.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-9">spl login
+<span class="hljs-comment"># Open https://github.com/login/device and enter the code: ABCD-1234</span>
+<span class="hljs-comment"># Authenticated with GitHub Copilot as octocat.</span>
+</code></pre></figure>
 <p>A script that needs an LLM without credentials fails with <code>llm_error</code> and asks you to run <code>spl login</code>. Scripts that never call an LLM (and <code>--check</code>) need no login.</p>
-
-<h2 id="backends">Backend</h2>
+<span id="backends" class="anchor-alias" aria-hidden="true"></span><h2 id="backend">Backend<a class="heading-anchor" href="#backend" aria-label="Link to Backend">#</a></h2>
 <p>Each live call opens a fresh session through the GitHub Copilot SDK. Generation (<code>?</code> and <code>think</code>) exposes no tools and aborts unexpected permission requests. Only explicit <code>agent</code> sessions expose runtime and configured MCP tools under active restrictions. Pass context explicitly; previous calls are not implicit conversation history.</p>
-
-<h2 id="record-replay">Offline generation record/replay</h2>
-<pre><code class="language-bash">
-spl examples/triage-issues.spl --record triage.jsonl
+<span id="record-replay" class="anchor-alias" aria-hidden="true"></span><h2 id="offline-generation-recordreplay">Offline generation record/replay<a class="heading-anchor" href="#offline-generation-recordreplay" aria-label="Link to Offline generation record/replay">#</a></h2>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-10">spl examples/triage-issues.spl --record triage.jsonl
 spl examples/triage-issues.spl --replay triage.jsonl --silent
-</code></pre>
+</code></pre></figure>
 <p>Record creates a new JSONL file and never overwrites one. Replay needs no credentials and never constructs a Copilot client or starts MCP servers. Both modes reject agents. Recording captures successful backend responses, including invalid JSON that subsequently triggers a repair; transport errors are not recorded.</p>
 <p>Requests must match exactly and in order: call kind, assembled prompt (including schema/guidance), requested model, reasoning effort, and show-reasoning flag. Changed prompts, exhausted recordings, and unused entries fail explicitly. Replay re-runs JSON parsing, schema validation, repair prompts, and deterministic code.</p>
 <p>Replay permits local reads only. Writes, shell, network, agents, and persistent stores fail before execution. It never replays external actions and is not a general workflow cache. Split those stages out of replayable scripts.</p>
-<div class="callout warn"><div class="body"><span class="title">Protect recordings</span><p>Files contain assembled prompts and raw responses, including source data. Treat them as sensitive; do not commit private recordings. Record mode still executes explicit raw I/O normally.</p></div></div>
-
-<h2 id="reproducibility">Reproducibility</h2>
+<p><strong>Protect recordings</strong></p>
+<p>Files contain assembled prompts and raw responses, including source data. Treat them as sensitive; do not commit private recordings. Record mode still executes explicit raw I/O normally.</p>
+<h2 id="reproducibility">Reproducibility<a class="heading-anchor" href="#reproducibility" aria-label="Link to Reproducibility">#</a></h2>
 <p>Control flow, arithmetic and interpolation are deterministic. For LLM calls reproducibility is <strong>best effort</strong>:</p>
 <ul>
-  <li>The Copilot SDK has no <code>temperature</code> or <code>seed</code> setting, so the language has none either.</li>
-  <li>The shared <code>reasoning</code> modifier maps to SDK effort; unsupported effort logs a warning and uses the model default.</li>
-  <li>Use schemas, assertions, bounded generation repair, and offline record/replay to contain variance; see <a href="failures.html#retry">repair behavior</a>.</li>
+<li><p>The Copilot SDK has no <code>temperature</code> or <code>seed</code> setting, so the language has none either.</p>
+</li>
+<li><p>The shared <code>reasoning</code> modifier maps to SDK effort; unsupported effort logs a warning and uses the model default.</p>
+</li>
+<li><p>Use schemas, assertions, bounded generation repair, and offline record/replay to contain variance; see <a href="failures.html#bounded-generation-repair">repair behavior</a>.</p>
+</li>
 </ul>
-<pre><code class="language-text">
-[info] llm ask call: {"backend":"copilot-sdk","model":"gpt-5.5","reasoningEffort":null} (1840 ms)
-</code></pre>
-
-</main>
-<script src="assets/search-index.js"></script>
-<script src="assets/site.js"></script>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-11">[info] llm ask call: {&quot;backend&quot;:&quot;copilot-sdk&quot;,&quot;model&quot;:&quot;gpt-5.5&quot;,&quot;reasoningEffort&quot;:null} (1840 ms)
+</code></pre></figure>
+</article>
+    <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/CLI.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="builtins.html"><span>Previous</span><strong>Built-ins</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="grammar.html"><span>Next</span><strong>Grammar</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Small language. Deliberate workflows.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </main>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#options">Options</a></li><li class="toc-level-2"><a href="#output-streams--exit-codes">Output streams &amp; exit codes</a></li><li class="toc-level-3"><a href="#stdout">stdout</a></li><li class="toc-level-3"><a href="#stderr">stderr</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#mcp-configuration">MCP configuration</a></li><li class="toc-level-3"><a href="#remote-http-or-sse-server">Remote HTTP or SSE server</a></li><li class="toc-level-3"><a href="#local-stdio-server">Local stdio server</a></li><li class="toc-level-3"><a href="#configuration-fields">Configuration fields</a></li><li class="toc-level-3"><a href="#variables-paths-and-unsupported-settings">Variables, paths and unsupported settings</a></li><li class="toc-level-3"><a href="#validate-run-and-restrict-access">Validate, run and restrict access</a></li><li class="toc-level-2"><a href="#variable-store">Variable store</a></li><li class="toc-level-3"><a href="#custom-stores">Custom stores</a></li><li class="toc-level-2"><a href="#authentication">Authentication</a></li><li class="toc-level-2"><a href="#backend">Backend</a></li><li class="toc-level-2"><a href="#offline-generation-recordreplay">Offline generation record/replay</a></li><li class="toc-level-2"><a href="#reproducibility">Reproducibility</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Prompts are just the start.</strong><p>Give your workflow structure, validation, and clear boundaries.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+</div>
+<dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
+<p class="visually-hidden" id="announcement" role="status"></p>
+<noscript><p class="noscript-note">Search, code copying, and the theme switch need JavaScript. All documentation and navigation work without it.</p></noscript>
 </body>
 </html>

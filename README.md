@@ -4,6 +4,7 @@ A small Python-like language for reliable AI workflows: raw tools execute exactl
 the script specifies, generation returns validated data, and explicit agents choose actions.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
+[Markdown documentation](docs-template/Introduction.md) |
 [Language specification](LANG-PRD.md) | [Grammar](lang/docs/syntax.ebnf)
 
 ## Install and run
@@ -188,3 +189,24 @@ Tests are offline by default. To opt into authenticated live tests in PowerShell
 `$env:SPL_LIVE_TESTS='1'; npm test`. Remove that environment variable afterward.
 The [VS Code extension](vscode/README.md) provides live parser-backed diagnostics, completions, hover,
 go-to-definition, and document symbols. It has its own `npm test` and bundles its language server.
+
+### Documentation site
+
+Edit the Markdown pages in [docs-template/](docs-template/Introduction.md), then
+regenerate the static site:
+
+```sh
+npm install
+npm run docs:build
+npm run docs:check
+```
+
+Shared styles and browser interactions live in [docs/assets/](docs/assets/).
+The build renders all pages, highlights code, preserves published permalinks, and
+creates a local search index. Commit the generated HTML and search index together
+with the Markdown changes; GitHub Pages serves `docs/` without a runtime build.
+`docs:check` fails if generated files are stale.
+
+To preview locally, run `python -m http.server 8765 --directory docs` and open
+`http://localhost:8765`. The focused offline checks are in
+[examples.test.ts](lang/tests/examples.test.ts).

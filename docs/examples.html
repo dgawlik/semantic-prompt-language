@@ -1,159 +1,201 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Annotated SPL example scripts: commit messages, issue triage, invoice extraction, code review, release notes and more.">
-<title>Examples - SPL</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css">
+<meta name="description" content="Working scripts from lang/examples/, synchronized with their executable sources. Most run from lang/; test repair runs against the npm project selected by --cwd. That option controls relative I/O and tool directories, not the script filename.">
 <meta name="color-scheme" content="light dark">
-<script>try{document.querySelector('meta[name="color-scheme"]').content=localStorage.getItem("color-scheme")??"light dark"}catch(e){}</script>
+<title>Examples - SPL docs</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=40cc3636dea6">
+<link rel="stylesheet" href="assets/style.css?v=40cc3636dea6">
+<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
+<script defer src="assets/search-index.js?v=40cc3636dea6"></script>
+<script defer src="assets/site.js?v=40cc3636dea6"></script>
 </head>
 <body data-page="examples">
-<main id="page">
-
-<div class="eyebrow">Guides</div>
-<h1>Examples</h1>
-<p class="lead">Working scripts from <code>lang/examples/</code>, synchronized with their executable sources. Most run from <code>lang/</code>; test repair runs against the npm project selected by <code>--cwd</code>. That option controls relative I/O and tool directories, not the script filename.</p>
-<p>Authenticate before live generation or agents. Use <code>--model &lt;id&gt;</code> to override an unavailable example model. Default tests check every example and documentation snippet offline, including scripted triage and invoice runs. Authenticated Copilot tests require explicit <code>SPL_LIVE_TESTS=1</code>.</p>
-
-<div class="table-wrap"><table>
-<thead><tr><th>Script</th><th>Shows</th></tr></thead>
-<tbody>
-<tr><td><a href="#commit-message"><code>commit-message.spl</code></a></td><td><code>shell</code> under <code>restrict exec 'git'</code>, validation helper, retry loop</td></tr>
-<tr><td><a href="#mcp"><code>mcp.spl</code></a></td><td>Explicit agent using a configured docs/search MCP tool</td></tr>
-<tr><td><a href="#triage-issues"><code>triage-issues.spl</code></a></td><td>Schema-validated classification, bounded generation repair, aggregation</td></tr>
-<tr><td><a href="#extract-invoice"><code>extract-invoice.spl</code></a></td><td>Structured extraction cross-checked with arithmetic before it is accepted</td></tr>
-<tr><td><a href="#code-review"><code>code-review.spl</code></a></td><td>Three-file review, structured findings, restricted report write, <code>fail</code> as a CI gate</td></tr>
-<tr><td><a href="#release-notes"><code>release-notes.spl</code></a></td><td>Nested <code>forbid</code>/<code>enforce</code>, git history to a file inside <code>./out</code></td></tr>
-<tr><td><a href="#web-digest"><code>web-digest.spl</code></a></td><td><code>restrict net</code>, <code>web_fetch</code>, catching a blocked second host</td></tr>
-<tr><td><a href="#fix-failing-tests"><code>fix-failing-tests.spl</code></a></td><td>Raw npm test plus explicit repair agent, up to three rounds</td></tr>
-<tr><td><a href="#translate-docs"><code>translate-docs.spl</code></a></td><td>Read once, generate translations, write exact output to script-chosen paths</td></tr>
-<tr><td><a href="#journal"><code>journal.spl</code></a></td><td>State across runs with <code>--store</code></td></tr>
-<tr><td><a href="#tours"><code>basics</code>, <code>hi</code>, <code>live</code>, <code>restrict-live</code>, <code>tools-live</code></a></td><td>Small feature tours</td></tr>
-</tbody></table></div>
-
-<h2 id="commit-message">Commit message</h2>
+<a class="skip-link" href="#page">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v0.4.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Less glue code.<br><strong>More intent.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Examples</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav></details>
+  <main id="page" tabindex="-1">
+    <div class="page-meta"><span>Guides</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Examples</span><span class="reading-time">13 min read</span></div>
+    <header class="page-heading"><h1>Examples</h1><div class="lead"><p>Working scripts from <code>lang/examples/</code>, synchronized with their executable sources. Most run from <code>lang/</code>; test repair runs against the npm project selected by <code>--cwd</code>. That option controls relative I/O and tool directories, not the script filename.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#commit-message">Commit message</a></li><li class="toc-level-2"><a href="#triage-issues">Triage issues</a></li><li class="toc-level-2"><a href="#extract-an-invoice">Extract an invoice</a></li><li class="toc-level-2"><a href="#code-review-as-a-ci-gate">Code review as a CI gate</a></li><li class="toc-level-2"><a href="#release-notes">Release notes</a></li><li class="toc-level-2"><a href="#web-digest">Web digest</a></li><li class="toc-level-2"><a href="#fix-failing-tests">Fix failing tests</a></li><li class="toc-level-2"><a href="#search-with-mcp">Search with MCP</a></li><li class="toc-level-2"><a href="#translate-docs">Translate docs</a></li><li class="toc-level-2"><a href="#journal-with-persistent-state">Journal with persistent state</a></li><li class="toc-level-2"><a href="#feature-tours">Feature tours</a></li><li class="toc-level-3"><a href="#basicsspl--functions-objects-and-llm-calls">basics.spl — functions, objects and LLM calls</a></li><li class="toc-level-3"><a href="#hispl--compact-end-to-end-tour">hi.spl — compact end-to-end tour</a></li><li class="toc-level-3"><a href="#live-tours">Live tours</a></li></ul></nav></details>
+    <article class="prose"><p>Authenticate before live generation or agents. Use <code>--model &lt;id&gt;</code> to override an unavailable example model. Default tests check every example and documentation snippet offline, including scripted triage and invoice runs. Authenticated Copilot tests require explicit <code>SPL_LIVE_TESTS=1</code>.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Examples reference table"><table>
+<thead>
+<tr>
+<th scope="col">Script</th>
+<th scope="col">Shows</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="#commit-message"><code>commit-message.spl</code></a></td>
+<td><code>shell</code> under <code>restrict exec &#39;git&#39;</code>, validation helper, retry loop</td>
+</tr>
+<tr>
+<td><a href="#search-with-mcp"><code>mcp.spl</code></a></td>
+<td>Explicit agent using a configured docs/search MCP tool</td>
+</tr>
+<tr>
+<td><a href="#triage-issues"><code>triage-issues.spl</code></a></td>
+<td>Schema-validated classification, bounded generation repair, aggregation</td>
+</tr>
+<tr>
+<td><a href="#extract-an-invoice"><code>extract-invoice.spl</code></a></td>
+<td>Structured extraction cross-checked with arithmetic before it is accepted</td>
+</tr>
+<tr>
+<td><a href="#code-review-as-a-ci-gate"><code>code-review.spl</code></a></td>
+<td>Three-file review, structured findings, restricted report write, <code>fail</code> as a CI gate</td>
+</tr>
+<tr>
+<td><a href="#release-notes"><code>release-notes.spl</code></a></td>
+<td>Nested <code>forbid</code>/<code>enforce</code>, git history to a file inside <code>./out</code></td>
+</tr>
+<tr>
+<td><a href="#web-digest"><code>web-digest.spl</code></a></td>
+<td><code>restrict net</code>, <code>web_fetch</code>, catching a blocked second host</td>
+</tr>
+<tr>
+<td><a href="#fix-failing-tests"><code>fix-failing-tests.spl</code></a></td>
+<td>Raw npm test plus explicit repair agent, up to three rounds</td>
+</tr>
+<tr>
+<td><a href="#translate-docs"><code>translate-docs.spl</code></a></td>
+<td>Read once, generate translations, write exact output to script-chosen paths</td>
+</tr>
+<tr>
+<td><a href="#journal-with-persistent-state"><code>journal.spl</code></a></td>
+<td>State across runs with <code>--store</code></td>
+</tr>
+<tr>
+<td><a href="#feature-tours"><code>basics</code>, <code>hi</code>, <code>live</code>, <code>restrict-live</code>, <code>tools-live</code></a></td>
+<td>Small feature tours</td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="commit-message">Commit message<a class="heading-anchor" href="#commit-message" aria-label="Link to Commit message">#</a></h2>
 <p>Read the staged diff with raw <code>shell</code>, restricted to git. Generation itself has no tools. A deterministic validator permits at most three message attempts; it never reruns the shell command.</p>
-<pre><code class="language-bash">
-cd your-repo &amp;&amp; git add -p
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-1"><span class="hljs-built_in">cd</span> your-repo &amp;&amp; git add -p
 spl path/to/commit-message.spl
-</code></pre>
-<pre><code class="language-spl" data-file="commit-message.spl">
-# Draft a Conventional Commit message for the staged changes.
-#
-#   cd your-repo &amp;&amp; git add -p
-#   spl path/to/commit-message.spl
-#
-# The script reads the diff with git once; tool-free generation gets at most three attempts.
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">commit-message.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy commit-message.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="commit-message.spl code example"><code class="language-spl" data-file="commit-message.spl" id="code-2"><span class="hljs-comment"># Draft a Conventional Commit message for the staged changes.</span>
+<span class="hljs-comment">#</span>
+<span class="hljs-comment">#   cd your-repo &amp;&amp; git add -p</span>
+<span class="hljs-comment">#   spl path/to/commit-message.spl</span>
+<span class="hljs-comment">#</span>
+<span class="hljs-comment"># The script reads the diff with git once; tool-free generation gets at most three attempts.</span>
 
-let TYPES = ['feat', 'fix', 'docs', 'refactor', 'test', 'chore', 'perf']
+<span class="hljs-keyword">let</span> TYPES = [<span class="hljs-string">&#x27;feat&#x27;</span>, <span class="hljs-string">&#x27;fix&#x27;</span>, <span class="hljs-string">&#x27;docs&#x27;</span>, <span class="hljs-string">&#x27;refactor&#x27;</span>, <span class="hljs-string">&#x27;test&#x27;</span>, <span class="hljs-string">&#x27;chore&#x27;</span>, <span class="hljs-string">&#x27;perf&#x27;</span>]
 
-def is_valid(msg) {
-    let first = msg.splitlines()[0]
-    if len(first) &gt; 72 or ': ' not in first {
-        return False
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">is_valid</span>(<span class="hljs-params">msg</span>) {
+    <span class="hljs-keyword">let</span> first = msg.splitlines()[<span class="hljs-number">0</span>]
+    <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(first) &gt; <span class="hljs-number">72</span> <span class="hljs-keyword">or</span> <span class="hljs-string">&#x27;: &#x27;</span> <span class="hljs-keyword">not</span> <span class="hljs-keyword">in</span> first {
+        <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span>
     }
-    return first.split(':')[0].split('(')[0] in TYPES
+    <span class="hljs-keyword">return</span> first.split(<span class="hljs-string">&#x27;:&#x27;</span>)[<span class="hljs-number">0</span>].split(<span class="hljs-string">&#x27;(&#x27;</span>)[<span class="hljs-number">0</span>] <span class="hljs-keyword">in</span> TYPES
 }
 
-let msg = ''
-let attempt = 0
+<span class="hljs-keyword">let</span> msg = <span class="hljs-string">&#x27;&#x27;</span>
+<span class="hljs-keyword">let</span> attempt = <span class="hljs-number">0</span>
 
-restrict exec 'git' {
-    let diff = shell('git diff --staged')
-    assert len(diff.strip()) &gt; 0 'nothing is staged'
-    forbid 'wrapping the message in quotes or code fences' {
-        while attempt &lt; 3 {
-            attempt += 1
-            let msg = ? '''
+<span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;git&#x27;</span> {
+    <span class="hljs-keyword">let</span> diff = <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git diff --staged&#x27;</span>)
+    <span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(diff.strip()) &gt; <span class="hljs-number">0</span> <span class="hljs-string">&#x27;nothing is staged&#x27;</span>
+    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;wrapping the message in quotes or code fences&#x27;</span> {
+        <span class="hljs-keyword">while</span> attempt &lt; <span class="hljs-number">3</span> {
+            attempt += <span class="hljs-number">1</span>
+            <span class="hljs-keyword">let</span> msg = <span class="hljs-keyword">?</span> <span class="hljs-string">&#x27;&#x27;&#x27;
 Write a Conventional Commit message for this diff: a subject line of at most 72 characters
-("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
+(&quot;type(scope): summary&quot;, type is one of {TYPES}), then a blank line and a short body.
 Reply with ONLY the message.
-{diff}'''
-            if msg == 'NO_CHANGES' {
-                fail 'nothing is staged'
+{diff}&#x27;&#x27;&#x27;</span>
+            <span class="hljs-keyword">if</span> msg == <span class="hljs-string">&#x27;NO_CHANGES&#x27;</span> {
+                <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;nothing is staged&#x27;</span>
             }
-            if is_valid(msg) {
-                break
+            <span class="hljs-keyword">if</span> is_valid(msg) {
+                <span class="hljs-keyword">break</span>
             }
-            log("attempt {attempt}: invalid message, retrying")
+            <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;attempt {attempt}: invalid message, retrying&quot;</span>)
         }
     }
 }
 
-assert is_valid(msg) 'could not produce a valid commit message'
-success msg
-</code></pre>
-<div class="callout tip"><span class="ico">🔑</span><div class="body"><span class="title">Pattern: deterministic validator</span>
-<p>The model proposes; <code>is_valid()</code> decides. The loop gives it three tries, and the final <code>assert</code> makes sure a script never succeeds with an invalid message.</p></div></div>
-
-<h2 id="triage-issues">Triage issues</h2>
+<span class="hljs-keyword">assert</span> is_valid(msg) <span class="hljs-string">&#x27;could not produce a valid commit message&#x27;</span>
+<span class="hljs-keyword">success</span> msg
+</code></pre></figure>
+<p><strong>Pattern: deterministic validator</strong></p>
+<p>The model proposes; <code>is_valid()</code> decides. The loop gives it three tries, and the final <code>assert</code> makes sure a script never succeeds with an invalid message.</p>
+<h2 id="triage-issues">Triage issues<a class="heading-anchor" href="#triage-issues" aria-label="Link to Triage issues">#</a></h2>
 <p>Classify issues against a strict schema with enum labels/priorities and required reason text. Up to two repairs correct format/schema errors, without retrying transport errors. This generation-only example supports offline record/replay.</p>
-<pre><code class="language-spl" data-file="triage-issues.spl">
-# Triage a batch of issues into labels and priorities, with validated JSON and retries.
-# Schema repairs retry generation only; transport errors are not retried.
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">triage-issues.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy triage-issues.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="triage-issues.spl code example"><code class="language-spl" data-file="triage-issues.spl" id="code-3"><span class="hljs-comment"># Triage a batch of issues into labels and priorities, with validated JSON and retries.</span>
+<span class="hljs-comment"># Schema repairs retry generation only; transport errors are not retried.</span>
 
-let LABELS = ['bug', 'feature', 'question', 'docs']
-let PRIORITIES = ['low', 'medium', 'high']
-let Triage = {
-    'type': 'object',
-    'properties': {
-        'label': {'type': 'string', 'enum': LABELS},
-        'priority': {'type': 'string', 'enum': PRIORITIES},
-        'reason': {'type': 'string', 'minLength': 1},
+<span class="hljs-keyword">let</span> LABELS = [<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;feature&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>, <span class="hljs-string">&#x27;docs&#x27;</span>]
+<span class="hljs-keyword">let</span> PRIORITIES = [<span class="hljs-string">&#x27;low&#x27;</span>, <span class="hljs-string">&#x27;medium&#x27;</span>, <span class="hljs-string">&#x27;high&#x27;</span>]
+<span class="hljs-keyword">let</span> Triage = {
+    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
+    <span class="hljs-string">&#x27;properties&#x27;</span>: {
+        <span class="hljs-string">&#x27;label&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>, <span class="hljs-string">&#x27;enum&#x27;</span>: LABELS},
+        <span class="hljs-string">&#x27;priority&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>, <span class="hljs-string">&#x27;enum&#x27;</span>: PRIORITIES},
+        <span class="hljs-string">&#x27;reason&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>, <span class="hljs-string">&#x27;minLength&#x27;</span>: <span class="hljs-number">1</span>},
     },
-    'required': ['label', 'priority', 'reason'],
-    'additionalProperties': False,
+    <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;label&#x27;</span>, <span class="hljs-string">&#x27;priority&#x27;</span>, <span class="hljs-string">&#x27;reason&#x27;</span>],
+    <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
 
-let issues = [
-    {'id': 101, 'title': 'App crashes on startup', 'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
-    {'id': 102, 'title': 'Support dark mode', 'body': 'It would be great to have a dark theme, my eyes hurt at night.'},
-    {'id': 103, 'title': 'How do I export to CSV?', 'body': 'I cannot find the export option anywhere in the menus.'},
-    {'id': 104, 'title': 'Typo in install guide', 'body': 'The guide says "npm instal", should be "npm install".'},
+<span class="hljs-keyword">let</span> issues = [
+    {<span class="hljs-string">&#x27;id&#x27;</span>: <span class="hljs-number">101</span>, <span class="hljs-string">&#x27;title&#x27;</span>: <span class="hljs-string">&#x27;App crashes on startup&#x27;</span>, <span class="hljs-string">&#x27;body&#x27;</span>: <span class="hljs-string">&#x27;Since 2.3 the app exits with a segfault right after the splash screen on macOS.&#x27;</span>},
+    {<span class="hljs-string">&#x27;id&#x27;</span>: <span class="hljs-number">102</span>, <span class="hljs-string">&#x27;title&#x27;</span>: <span class="hljs-string">&#x27;Support dark mode&#x27;</span>, <span class="hljs-string">&#x27;body&#x27;</span>: <span class="hljs-string">&#x27;It would be great to have a dark theme, my eyes hurt at night.&#x27;</span>},
+    {<span class="hljs-string">&#x27;id&#x27;</span>: <span class="hljs-number">103</span>, <span class="hljs-string">&#x27;title&#x27;</span>: <span class="hljs-string">&#x27;How do I export to CSV?&#x27;</span>, <span class="hljs-string">&#x27;body&#x27;</span>: <span class="hljs-string">&#x27;I cannot find the export option anywhere in the menus.&#x27;</span>},
+    {<span class="hljs-string">&#x27;id&#x27;</span>: <span class="hljs-number">104</span>, <span class="hljs-string">&#x27;title&#x27;</span>: <span class="hljs-string">&#x27;Typo in install guide&#x27;</span>, <span class="hljs-string">&#x27;body&#x27;</span>: <span class="hljs-string">&#x27;The guide says &quot;npm instal&quot;, should be &quot;npm install&quot;.&#x27;</span>},
 ]
 
-def triage(issue) {
-    let r = ?{schema=Triage, reasoning='low', repairs=2} '''
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">triage</span>(<span class="hljs-params">issue</span>) {
+    <span class="hljs-keyword">let</span> r = <span class="hljs-keyword">?</span>{schema=Triage, reasoning=<span class="hljs-string">&#x27;low&#x27;</span>, repairs=<span class="hljs-number">2</span>} <span class="hljs-string">&#x27;&#x27;&#x27;
 Classify this GitHub issue.
-Title: {issue['title']}
-Body: {issue['body']}
-Give a one-sentence reason.'''
-    return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
+Title: {issue[&#x27;title&#x27;]}
+Body: {issue[&#x27;body&#x27;]}
+Give a one-sentence reason.&#x27;&#x27;&#x27;</span>
+    <span class="hljs-keyword">return</span> {<span class="hljs-string">&#x27;id&#x27;</span>: issue[<span class="hljs-string">&#x27;id&#x27;</span>], <span class="hljs-string">&#x27;title&#x27;</span>: issue[<span class="hljs-string">&#x27;title&#x27;</span>], <span class="hljs-string">&#x27;label&#x27;</span>: r.label, <span class="hljs-string">&#x27;priority&#x27;</span>: r.priority, <span class="hljs-string">&#x27;reason&#x27;</span>: r.reason}
 }
 
-let results = []
-let counts = {}
-for issue in issues {
-    let t = triage(issue)
+<span class="hljs-keyword">let</span> results = []
+<span class="hljs-keyword">let</span> counts = {}
+<span class="hljs-keyword">for</span> issue <span class="hljs-keyword">in</span> issues {
+    <span class="hljs-keyword">let</span> t = triage(issue)
     results.append(t)
-    if t['label'] in counts {
-        counts[t['label']] += 1
-    } else {
-        counts[t['label']] = 1
+    <span class="hljs-keyword">if</span> t[<span class="hljs-string">&#x27;label&#x27;</span>] <span class="hljs-keyword">in</span> counts {
+        counts[t[<span class="hljs-string">&#x27;label&#x27;</span>]] += <span class="hljs-number">1</span>
+    } <span class="hljs-keyword">else</span> {
+        counts[t[<span class="hljs-string">&#x27;label&#x27;</span>]] = <span class="hljs-number">1</span>
     }
 }
 
-let urgent = []
-for t in results {
-    if t['priority'] == 'high' {
-        urgent.append(t['title'])
+<span class="hljs-keyword">let</span> urgent = []
+<span class="hljs-keyword">for</span> t <span class="hljs-keyword">in</span> results {
+    <span class="hljs-keyword">if</span> t[<span class="hljs-string">&#x27;priority&#x27;</span>] == <span class="hljs-string">&#x27;high&#x27;</span> {
+        urgent.append(t[<span class="hljs-string">&#x27;title&#x27;</span>])
     }
 }
 
-let summary = ?{len='sentence'} 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
-success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}
-</code></pre>
-
-<h2 id="extract-invoice">Extract an invoice</h2>
+<span class="hljs-keyword">let</span> summary = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>} <span class="hljs-string">&#x27;Summarize this triage result for the team channel: {counts}. High priority: {urgent}.&#x27;</span>
+<span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;counts&#x27;</span>: counts, <span class="hljs-string">&#x27;urgent&#x27;</span>: urgent, <span class="hljs-string">&#x27;results&#x27;</span>: results, <span class="hljs-string">&#x27;summary&#x27;</span>: summary}
+</code></pre></figure>
+<span id="extract-invoice" class="anchor-alias" aria-hidden="true"></span><h2 id="extract-an-invoice">Extract an invoice<a class="heading-anchor" href="#extract-an-invoice" aria-label="Link to Extract an invoice">#</a></h2>
 <p>Validate invoice shape with a nested schema and bounded repair, then independently check arithmetic with assertions. A business-rule failure is not automatically repaired.</p>
-<pre><code class="language-spl" data-file="extract-invoice.spl">
-# Extract structured data from messy text and cross-check it with plain arithmetic.
-# Schemas validate shape; ordinary assertions validate the business rules.
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">extract-invoice.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy extract-invoice.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="extract-invoice.spl code example"><code class="language-spl" data-file="extract-invoice.spl" id="code-4"><span class="hljs-comment"># Extract structured data from messy text and cross-check it with plain arithmetic.</span>
+<span class="hljs-comment"># Schemas validate shape; ordinary assertions validate the business rules.</span>
 
-let document = '''
+<span class="hljs-keyword">let</span> document = <span class="hljs-string">&#x27;&#x27;&#x27;
 ACME Industrial Supplies GmbH            Invoice No. INV-2026-0042
 Date: 2026-03-14                          Currency: EUR
 
@@ -162,360 +204,344 @@ Date: 2026-03-14                          Currency: EUR
   1 x Cordless drill                  @ 119.00   119.00
 
 Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
-'''
+&#x27;&#x27;&#x27;</span>
 
-let Invoice = {
-    'type': 'object',
-    'properties': {
-        'vendor': {'type': 'string'}, 'number': {'type': 'string'},
-        'date': {'type': 'string'}, 'currency': {'type': 'string'},
-        'lines': {
-            'type': 'array', 'minItems': 1,
-            'items': {
-                'type': 'object',
-                'properties': {
-                    'description': {'type': 'string'},
-                    'quantity': {'type': 'integer', 'minimum': 1},
-                    'unit_price': {'type': 'number', 'minimum': 0},
+<span class="hljs-keyword">let</span> Invoice = {
+    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
+    <span class="hljs-string">&#x27;properties&#x27;</span>: {
+        <span class="hljs-string">&#x27;vendor&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>}, <span class="hljs-string">&#x27;number&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>},
+        <span class="hljs-string">&#x27;date&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>}, <span class="hljs-string">&#x27;currency&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>},
+        <span class="hljs-string">&#x27;lines&#x27;</span>: {
+            <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;array&#x27;</span>, <span class="hljs-string">&#x27;minItems&#x27;</span>: <span class="hljs-number">1</span>,
+            <span class="hljs-string">&#x27;items&#x27;</span>: {
+                <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
+                <span class="hljs-string">&#x27;properties&#x27;</span>: {
+                    <span class="hljs-string">&#x27;description&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>},
+                    <span class="hljs-string">&#x27;quantity&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;integer&#x27;</span>, <span class="hljs-string">&#x27;minimum&#x27;</span>: <span class="hljs-number">1</span>},
+                    <span class="hljs-string">&#x27;unit_price&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;number&#x27;</span>, <span class="hljs-string">&#x27;minimum&#x27;</span>: <span class="hljs-number">0</span>},
                 },
-                'required': ['description', 'quantity', 'unit_price'],
-                'additionalProperties': False,
+                <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;description&#x27;</span>, <span class="hljs-string">&#x27;quantity&#x27;</span>, <span class="hljs-string">&#x27;unit_price&#x27;</span>],
+                <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
             },
         },
-        'subtotal': {'type': 'number'}, 'total': {'type': 'number'},
+        <span class="hljs-string">&#x27;subtotal&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;number&#x27;</span>}, <span class="hljs-string">&#x27;total&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;number&#x27;</span>},
     },
-    'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'total'],
-    'additionalProperties': False,
+    <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;vendor&#x27;</span>, <span class="hljs-string">&#x27;number&#x27;</span>, <span class="hljs-string">&#x27;date&#x27;</span>, <span class="hljs-string">&#x27;currency&#x27;</span>, <span class="hljs-string">&#x27;lines&#x27;</span>, <span class="hljs-string">&#x27;subtotal&#x27;</span>, <span class="hljs-string">&#x27;total&#x27;</span>],
+    <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
-let invoice = ?{schema=Invoice, reasoning='high', repairs=2} 'Extract this invoice: {document}'
-let computed = 0
-for line in invoice.lines {
+<span class="hljs-keyword">let</span> invoice = <span class="hljs-keyword">?</span>{schema=Invoice, reasoning=<span class="hljs-string">&#x27;high&#x27;</span>, repairs=<span class="hljs-number">2</span>} <span class="hljs-string">&#x27;Extract this invoice: {document}&#x27;</span>
+<span class="hljs-keyword">let</span> computed = <span class="hljs-number">0</span>
+<span class="hljs-keyword">for</span> line <span class="hljs-keyword">in</span> invoice.lines {
     computed += line.quantity * line.unit_price
 }
-assert abs(computed - invoice.subtotal) &lt; 0.01 "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
-assert invoice.total &gt;= invoice.subtotal 'total is smaller than subtotal'
-success invoice
-</code></pre>
-
-<h2 id="code-review">Code review as a CI gate</h2>
+<span class="hljs-keyword">assert</span> <span class="hljs-built_in">abs</span>(computed - invoice.subtotal) &lt; <span class="hljs-number">0.01</span> <span class="hljs-string">&quot;lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}&quot;</span>
+<span class="hljs-keyword">assert</span> invoice.total &gt;= invoice.subtotal <span class="hljs-string">&#x27;total is smaller than subtotal&#x27;</span>
+<span class="hljs-keyword">success</span> invoice
+</code></pre></figure>
+<span id="code-review" class="anchor-alias" aria-hidden="true"></span><h2 id="code-review-as-a-ci-gate">Code review as a CI gate<a class="heading-anchor" href="#code-review-as-a-ci-gate" aria-label="Link to Code review as a CI gate">#</a></h2>
 <p>An explicit agent inspects source under filesystem and git restrictions, then tool-free generation structures its findings. The report write is restricted to <code>./reports</code>, and high-severity findings fail the CI gate. A request to only review is guidance, not a read-only filesystem capability.</p>
-<pre><code class="language-bash">
-spl examples/code-review.spl --cwd &lt;project&gt;
-</code></pre>
-<pre><code class="language-spl" data-file="code-review.spl">
-@{model='gpt-5.6-luna'}
-# Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
-#
-# Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd &lt;project&gt;
-# Exit code is 1 (failure payload on stdout) when high-severity findings exist.
-# The review phase may only touch ./src; the report is written under ./reports.
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-5">spl examples/code-review.spl --cwd &lt;project&gt;
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">code-review.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy code-review.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="code-review.spl code example"><code class="language-spl" data-file="code-review.spl" id="code-6"><span class="hljs-meta">@{model=<span class="hljs-string">&#x27;gpt-5.6-luna&#x27;</span>}</span>
+<span class="hljs-comment"># Two-stage code review that can gate CI: think deeply in prose, then structure the findings.</span>
+<span class="hljs-comment">#</span>
+<span class="hljs-comment"># Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd &lt;project&gt;</span>
+<span class="hljs-comment"># Exit code is 1 (failure payload on stdout) when high-severity findings exist.</span>
+<span class="hljs-comment"># The review phase may only touch ./src; the report is written under ./reports.</span>
 
-let notes = ''
+<span class="hljs-keyword">let</span> notes = <span class="hljs-string">&#x27;&#x27;</span>
 
-forbid 'suggesting purely stylistic changes' {
-    restrict './src', exec 'git' {
-        notes = agent{reasoning='high'} '''
+<span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;suggesting purely stylistic changes&#x27;</span> {
+    <span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span>, exec <span class="hljs-string">&#x27;git&#x27;</span> {
+        notes = <span class="hljs-keyword">agent</span>{reasoning=<span class="hljs-string">&#x27;high&#x27;</span>} <span class="hljs-string">&#x27;&#x27;&#x27;
 List source files with `git ls-files src`.
 Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
-List each finding with its location, why it matters and a suggested fix.'''
+List each finding with its location, why it matters and a suggested fix.&#x27;&#x27;&#x27;</span>
     }
 }
 
 
-let Review = {
-    'type': 'object',
-    'properties': {
-        'findings': {
-            'type': 'array',
-            'items': {
-                'type': 'object',
-                'properties': {
-                    'severity': {'type': 'string', 'enum': ['low', 'medium', 'high']},
-                    'title': {'type': 'string'}, 'location': {'type': 'string'}, 'fix': {'type': 'string'},
+<span class="hljs-keyword">let</span> Review = {
+    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
+    <span class="hljs-string">&#x27;properties&#x27;</span>: {
+        <span class="hljs-string">&#x27;findings&#x27;</span>: {
+            <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;array&#x27;</span>,
+            <span class="hljs-string">&#x27;items&#x27;</span>: {
+                <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
+                <span class="hljs-string">&#x27;properties&#x27;</span>: {
+                    <span class="hljs-string">&#x27;severity&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>, <span class="hljs-string">&#x27;enum&#x27;</span>: [<span class="hljs-string">&#x27;low&#x27;</span>, <span class="hljs-string">&#x27;medium&#x27;</span>, <span class="hljs-string">&#x27;high&#x27;</span>]},
+                    <span class="hljs-string">&#x27;title&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>}, <span class="hljs-string">&#x27;location&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>}, <span class="hljs-string">&#x27;fix&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>},
                 },
-                'required': ['severity', 'title', 'location', 'fix'],
-                'additionalProperties': False,
+                <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;severity&#x27;</span>, <span class="hljs-string">&#x27;title&#x27;</span>, <span class="hljs-string">&#x27;location&#x27;</span>, <span class="hljs-string">&#x27;fix&#x27;</span>],
+                <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
             },
         },
     },
-    'required': ['findings'],
-    'additionalProperties': False,
+    <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;findings&#x27;</span>],
+    <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
-let review = ?{schema=Review, repairs=2} 'Convert this review into structured findings, using an empty list when there are none: {notes}'
+<span class="hljs-keyword">let</span> review = <span class="hljs-keyword">?</span>{schema=Review, repairs=<span class="hljs-number">2</span>} <span class="hljs-string">&#x27;Convert this review into structured findings, using an empty list when there are none: {notes}&#x27;</span>
 
-let lines = ["# Review of repository", '']
-let high = 0
-for f in review.findings {
-    assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
-    if f.severity == 'high' {
-        high += 1
+<span class="hljs-keyword">let</span> lines = [<span class="hljs-string">&quot;# Review of repository&quot;</span>, <span class="hljs-string">&#x27;&#x27;</span>]
+<span class="hljs-keyword">let</span> high = <span class="hljs-number">0</span>
+<span class="hljs-keyword">for</span> f <span class="hljs-keyword">in</span> review.findings {
+    <span class="hljs-keyword">assert</span> f.severity <span class="hljs-keyword">in</span> [<span class="hljs-string">&#x27;low&#x27;</span>, <span class="hljs-string">&#x27;medium&#x27;</span>, <span class="hljs-string">&#x27;high&#x27;</span>] <span class="hljs-string">&quot;bad severity &#x27;{f.severity}&#x27;&quot;</span>
+    <span class="hljs-keyword">if</span> f.severity == <span class="hljs-string">&#x27;high&#x27;</span> {
+        high += <span class="hljs-number">1</span>
     }
-    lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
-    lines.append("  - Fix: {f.fix}")
+    lines.append(<span class="hljs-string">&quot;- **{f.severity.upper()}** {f.title} ({f.location})&quot;</span>)
+    lines.append(<span class="hljs-string">&quot;  - Fix: {f.fix}&quot;</span>)
 }
-lines.append('')
-lines.append("{len(review.findings)} finding(s), {high} high severity")
+lines.append(<span class="hljs-string">&#x27;&#x27;</span>)
+lines.append(<span class="hljs-string">&quot;{len(review.findings)} finding(s), {high} high severity&quot;</span>)
 
-restrict './reports' {
-    write_file('./reports/review.md', '\n'.join(lines))
+<span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./reports&#x27;</span> {
+    <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./reports/review.md&#x27;</span>, <span class="hljs-string">&#x27;\n&#x27;</span>.join(lines))
 }
 
-if high &gt; 0 {
-    fail "{high} high severity finding(s), see ./reports/review.md"
+<span class="hljs-keyword">if</span> high &gt; <span class="hljs-number">0</span> {
+    <span class="hljs-keyword">fail</span> <span class="hljs-string">&quot;{high} high severity finding(s), see ./reports/review.md&quot;</span>
 }
-success '\n'.join(lines)
-</code></pre>
-
-<h2 id="release-notes">Release notes</h2>
+<span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;\n&#x27;</span>.join(lines)
+</code></pre></figure>
+<h2 id="release-notes">Release notes<a class="heading-anchor" href="#release-notes" aria-label="Link to Release notes">#</a></h2>
 <p>Generate release notes from recent git history and save them to <code>./out/RELEASE_NOTES.md</code>. The history-reading phase restricts executable names to <code>git</code>; the separate file-writing phase restricts filesystem access to <code>./out</code>. Note how rules and restrictions nest.</p>
-<pre><code class="language-spl" data-file="release-notes.spl">
-# Generate release notes from recent git history and save them to ./out/RELEASE_NOTES.md.
-# Raw git reads precede tool-free generation; the final write is restricted to ./out.
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">release-notes.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy release-notes.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="release-notes.spl code example"><code class="language-spl" data-file="release-notes.spl" id="code-7"><span class="hljs-comment"># Generate release notes from recent git history and save them to ./out/RELEASE_NOTES.md.</span>
+<span class="hljs-comment"># Raw git reads precede tool-free generation; the final write is restricted to ./out.</span>
 
-let notes = ''
+<span class="hljs-keyword">let</span> notes = <span class="hljs-string">&#x27;&#x27;</span>
 
-restrict exec 'git' {
-    forbid 'inventing changes that are not in the commit list' {
-        enforce 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
-            let commits = shell('git log --oneline -n 40')
-            notes = ? '''
+<span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;git&#x27;</span> {
+    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;inventing changes that are not in the commit list&#x27;</span> {
+        <span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble&#x27;</span> {
+            <span class="hljs-keyword">let</span> commits = <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git log --oneline -n 40&#x27;</span>)
+            notes = <span class="hljs-keyword">?</span> <span class="hljs-string">&#x27;&#x27;&#x27;
 Write release notes for end users from these commits (one per line: hash and subject).
 Rewrite technical subjects into clear user-facing sentences and drop merge/chore noise.
-{commits}'''
+{commits}&#x27;&#x27;&#x27;</span>
         }
     }
 }
 
-assert len(notes) &gt; 20 'release notes are suspiciously short'
+<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(notes) &gt; <span class="hljs-number">20</span> <span class="hljs-string">&#x27;release notes are suspiciously short&#x27;</span>
 
-restrict './out' {
-    write_file('./out/RELEASE_NOTES.md', notes)
+<span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./out&#x27;</span> {
+    <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./out/RELEASE_NOTES.md&#x27;</span>, notes)
 }
-success notes
-</code></pre>
+<span class="hljs-keyword">success</span> notes
+</code></pre></figure>
+<h2 id="web-digest">Web digest<a class="heading-anchor" href="#web-digest" aria-label="Link to Web digest">#</a></h2>
+<p>Summarize a web page with network access limited to a single host — and prove the sandbox holds by catching a blocked request to a second host.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">web-digest.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy web-digest.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="web-digest.spl code example"><code class="language-spl" data-file="web-digest.spl" id="code-8"><span class="hljs-comment"># Summarize a web page with network access limited to a single host,</span>
+<span class="hljs-comment"># and prove the sandbox holds by catching a blocked request.</span>
 
-<h2 id="web-digest">Web digest</h2>
-<p>Summarize a web page with network access limited to a single host &mdash; and prove the sandbox holds by catching a blocked request to a second host.</p>
-<pre><code class="language-spl" data-file="web-digest.spl">
-# Summarize a web page with network access limited to a single host,
-# and prove the sandbox holds by catching a blocked request.
-
-restrict net 'news.ycombinator.com' {
-    let page = web_fetch('https://news.ycombinator.com')
-    let headlines = ? '''
-From this HTML list the 10 top stories as a Markdown bullet list: "- title (domain)".
+<span class="hljs-keyword">restrict</span> net <span class="hljs-string">&#x27;news.ycombinator.com&#x27;</span> {
+    <span class="hljs-keyword">let</span> page = <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://news.ycombinator.com&#x27;</span>)
+    <span class="hljs-keyword">let</span> headlines = <span class="hljs-keyword">?</span> <span class="hljs-string">&#x27;&#x27;&#x27;
+From this HTML list the 10 top stories as a Markdown bullet list: &quot;- title (domain)&quot;.
 Reply with ONLY the list.
-{page}'''
+{page}&#x27;&#x27;&#x27;</span>
 
-    let themes = ?{len='paragraph'} 'What themes run through these headlines?\n{headlines}'
+    <span class="hljs-keyword">let</span> themes = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>} <span class="hljs-string">&#x27;What themes run through these headlines?\n{headlines}&#x27;</span>
 
-    try {
-        web_fetch('https://example.org')
-        fail 'the request to a second host should have been blocked'
-    } except err {
-        assert err.status_code == 'restriction_violation' "unexpected failure: {err.reason}"
-        log("blocked as expected: {err.reason}")
+    <span class="hljs-keyword">try</span> {
+        <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://example.org&#x27;</span>)
+        <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;the request to a second host should have been blocked&#x27;</span>
+    } <span class="hljs-keyword">except</span> err {
+        <span class="hljs-keyword">assert</span> err.status_code == <span class="hljs-string">&#x27;restriction_violation&#x27;</span> <span class="hljs-string">&quot;unexpected failure: {err.reason}&quot;</span>
+        <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;blocked as expected: {err.reason}&quot;</span>)
     }
 }
 
-success "{headlines}\n\n{themes}"
-</code></pre>
-
-<h2 id="fix-failing-tests">Fix failing tests</h2>
+<span class="hljs-keyword">success</span> <span class="hljs-string">&quot;{headlines}\n\n{themes}&quot;</span>
+</code></pre></figure>
+<h2 id="fix-failing-tests">Fix failing tests<a class="heading-anchor" href="#fix-failing-tests" aria-label="Link to Fix failing tests">#</a></h2>
 <p>Run raw <code>npm test</code> in the project selected by <code>--cwd</code>, invoke an explicit repair agent after a failure, and repeat up to three rounds. Files are restricted to the project and executable names to npm. Avoiding test edits is guidance, not a filesystem write prohibition. This workflow intentionally performs actions and is not record/replay-compatible; review its changes.</p>
-<pre><code class="language-bash">
-spl lang/examples/fix-failing-tests.spl --cwd .
-</code></pre>
-<pre><code class="language-spl" data-file="fix-failing-tests.spl">
-@{model='mai-code-1.1-flash'}
-# Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).
-#
-#   spl examples/fix-failing-tests.spl --cwd &lt;your npm project&gt;
-#
-# Raw test runs do not call the model. The repair agent is restricted to the project and npm.
-# Avoiding test edits is prompt guidance, not a filesystem write prohibition.
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-9">spl lang/examples/fix-failing-tests.spl --cwd .
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">fix-failing-tests.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy fix-failing-tests.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="fix-failing-tests.spl code example"><code class="language-spl" data-file="fix-failing-tests.spl" id="code-10"><span class="hljs-meta">@{model=<span class="hljs-string">&#x27;mai-code-1.1-flash&#x27;</span>}</span>
+<span class="hljs-comment"># Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).</span>
+<span class="hljs-comment">#</span>
+<span class="hljs-comment">#   spl examples/fix-failing-tests.spl --cwd &lt;your npm project&gt;</span>
+<span class="hljs-comment">#</span>
+<span class="hljs-comment"># Raw test runs do not call the model. The repair agent is restricted to the project and npm.</span>
+<span class="hljs-comment"># Avoiding test edits is prompt guidance, not a filesystem write prohibition.</span>
 
-let attempt = 0
-let green = False
+<span class="hljs-keyword">let</span> attempt = <span class="hljs-number">0</span>
+<span class="hljs-keyword">let</span> green = <span class="hljs-literal">False</span>
 
 
-restrict '.', exec 'npm' {
-    forbid 'editing or deleting test files, or weakening assertions' {
-        while attempt &lt; 3 and not green {
-            attempt += 1
-            try {
-                shell('npm test')
-                green = True
-            } except err {
-                log("tests failing (round {attempt}): {err.status_code}")
-                agent{reasoning='medium'} '''
+<span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;.&#x27;</span>, exec <span class="hljs-string">&#x27;npm&#x27;</span> {
+    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;editing or deleting test files, or weakening assertions&#x27;</span> {
+        <span class="hljs-keyword">while</span> attempt &lt; <span class="hljs-number">3</span> <span class="hljs-keyword">and</span> <span class="hljs-keyword">not</span> green {
+            attempt += <span class="hljs-number">1</span>
+            <span class="hljs-keyword">try</span> {
+                <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;npm test&#x27;</span>)
+                green = <span class="hljs-literal">True</span>
+            } <span class="hljs-keyword">except</span> err {
+                <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;tests failing (round {attempt}): {err.status_code}&quot;</span>)
+                <span class="hljs-keyword">agent</span>{reasoning=<span class="hljs-string">&#x27;medium&#x27;</span>} <span class="hljs-string">&#x27;&#x27;&#x27;
 The test run failed with this output:
 {err.reason}
 
-Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.'''
+Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.&#x27;&#x27;&#x27;</span>
                 }
             }
         }
 }
 
-assert green 'tests are still failing after 3 rounds'
-success "tests pass after {attempt} run(s)"
-</code></pre>
-<div class="callout"><span class="ico">🔑</span><div class="body"><span class="title">Pattern: failure as input</span>
-<p>A failing <code>npm test</code> is a <code>tool_error</code> whose <code>reason</code> contains the test output. Catching it turns the failure into the prompt for the next step.</p></div></div>
-
-<h2 id="mcp">Search with MCP</h2>
+<span class="hljs-keyword">assert</span> green <span class="hljs-string">&#x27;tests are still failing after 3 rounds&#x27;</span>
+<span class="hljs-keyword">success</span> <span class="hljs-string">&quot;tests pass after {attempt} run(s)&quot;</span>
+</code></pre></figure>
+<p><strong>Pattern: failure as input</strong></p>
+<p>A failing <code>npm test</code> is a <code>tool_error</code> whose <code>reason</code> contains the test output. Catching it turns the failure into the prompt for the next step.</p>
+<span id="mcp" class="anchor-alias" aria-hidden="true"></span><h2 id="search-with-mcp">Search with MCP<a class="heading-anchor" href="#search-with-mcp" aria-label="Link to Search with MCP">#</a></h2>
 <p>Configure a trusted MCP server named <code>docs</code> exposing <code>search</code>, then run this explicit agent with <code>--mcp</code>. The exact <code>docs/search</code> selector narrows MCP access. Services are trusted; scopes limit calls, not their internal I/O. Generation-only calls never start MCP servers.</p>
-<pre><code class="language-bash">
-spl examples/mcp.spl --mcp mcp/mcp.json
-</code></pre>
-<pre><code class="language-spl" data-file="mcp.spl">
-# Configure a docs MCP server exposing search, then run:
-# spl examples/mcp.spl --mcp &lt;your-mcp.json&gt; --cwd &lt;project&gt;
-# MCP servers are trusted services; scopes limit calls, not their internal I/O.
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-11">spl examples/mcp.spl --mcp mcp/mcp.json
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">mcp.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-12" aria-label="Copy mcp.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="mcp.spl code example"><code class="language-spl" data-file="mcp.spl" id="code-12"><span class="hljs-comment"># Configure a docs MCP server exposing search, then run:</span>
+<span class="hljs-comment"># spl examples/mcp.spl --mcp &lt;your-mcp.json&gt; --cwd &lt;project&gt;</span>
+<span class="hljs-comment"># MCP servers are trusted services; scopes limit calls, not their internal I/O.</span>
 
-restrict mcp 'docs/search' {
-    let summary = agent 'Use docs/search to find the documentation for this project and summarize it.'
-    success summary
+<span class="hljs-keyword">restrict</span> mcp <span class="hljs-string">&#x27;docs/search&#x27;</span> {
+    <span class="hljs-keyword">let</span> summary = <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Use docs/search to find the documentation for this project and summarize it.&#x27;</span>
+    <span class="hljs-keyword">success</span> summary
 }
-</code></pre>
-
-<h2 id="translate-docs">Translate docs</h2>
+</code></pre></figure>
+<h2 id="translate-docs">Translate docs<a class="heading-anchor" href="#translate-docs" aria-label="Link to Translate docs">#</a></h2>
 <p>Read the document once, generate German, Polish, and Japanese translations without tools, and write each exact response to a script-chosen path. Run from <code>lang/</code> so the source document resolves correctly. No model is responsible for choosing or confirming the output path.</p>
-<pre><code class="language-bash">
-spl examples/translate-docs.spl
-</code></pre>
-<pre><code class="language-spl" data-file="translate-docs.spl">
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-13" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-13">spl examples/translate-docs.spl
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">translate-docs.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-14" aria-label="Copy translate-docs.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="translate-docs.spl code example"><code class="language-spl" data-file="translate-docs.spl" id="code-14"><span class="hljs-comment"># Translate a document into several languages, one file each, without leaving the project folder.</span>
+<span class="hljs-comment"># The script reads once and writes exact model responses; generation has no tools.</span>
 
-# Translate a document into several languages, one file each, without leaving the project folder.
-# The script reads once and writes exact model responses; generation has no tools.
+<span class="hljs-keyword">let</span> locales = {<span class="hljs-string">&#x27;de&#x27;</span>: <span class="hljs-string">&#x27;German&#x27;</span>, <span class="hljs-string">&#x27;pl&#x27;</span>: <span class="hljs-string">&#x27;Polish&#x27;</span>, <span class="hljs-string">&#x27;ja&#x27;</span>: <span class="hljs-string">&#x27;Japanese&#x27;</span>}
+<span class="hljs-keyword">let</span> written = []
 
-let locales = {'de': 'German', 'pl': 'Polish', 'ja': 'Japanese'}
-let written = []
-
-restrict '.' {
-    let source = read_file('./examples/data/product-update.md')
-    enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
-        for code, language in items(locales) {
-            let translation = ?{reasoning='medium'} 'Translate this document to {language}: {source}'
-            write_file("./out/translations/product-update.{code}.md", translation)
-            written.append("./out/translations/product-update.{code}.md")
+<span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;.&#x27;</span> {
+    <span class="hljs-keyword">let</span> source = <span class="hljs-built_in">read_file</span>(<span class="hljs-string">&#x27;./examples/data/product-update.md&#x27;</span>)
+    <span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Keep Markdown formatting, URLs and code identifiers untranslated&#x27;</span> {
+        <span class="hljs-keyword">for</span> code, language <span class="hljs-keyword">in</span> <span class="hljs-built_in">items</span>(locales) {
+            <span class="hljs-keyword">let</span> translation = <span class="hljs-keyword">?</span>{reasoning=<span class="hljs-string">&#x27;medium&#x27;</span>} <span class="hljs-string">&#x27;Translate this document to {language}: {source}&#x27;</span>
+            <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&quot;./out/translations/product-update.{code}.md&quot;</span>, translation)
+            written.append(<span class="hljs-string">&quot;./out/translations/product-update.{code}.md&quot;</span>)
         }
     }
 }
 
-success written
-</code></pre>
-
-<h2 id="journal">Journal with persistent state</h2>
+<span class="hljs-keyword">success</span> written
+</code></pre></figure>
+<span id="journal" class="anchor-alias" aria-hidden="true"></span><h2 id="journal-with-persistent-state">Journal with persistent state<a class="heading-anchor" href="#journal-with-persistent-state" aria-label="Link to Journal with persistent state">#</a></h2>
 <p>A rolling journal that remembers previous runs through the variable store. Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.</p>
-<pre><code class="language-bash">
-spl examples/journal.spl --store journal.json
-</code></pre>
-<pre><code class="language-spl" data-file="journal.spl">
-# A rolling journal that remembers previous runs through the variable store:
-#
-#   spl examples/journal.spl --store journal.json
-#
-# Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-15" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-15">spl examples/journal.spl --store journal.json
+</code></pre></figure>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">journal.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-16" aria-label="Copy journal.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="journal.spl code example"><code class="language-spl" data-file="journal.spl" id="code-16"><span class="hljs-comment"># A rolling journal that remembers previous runs through the variable store:</span>
+<span class="hljs-comment">#</span>
+<span class="hljs-comment">#   spl examples/journal.spl --store journal.json</span>
+<span class="hljs-comment">#</span>
+<span class="hljs-comment"># Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.</span>
 
-def stored_runs() {
-    try { return runs } except first_run { return 0 }
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">stored_runs</span>() {
+    <span class="hljs-keyword">try</span> { <span class="hljs-keyword">return</span> runs } <span class="hljs-keyword">except</span> first_run { <span class="hljs-keyword">return</span> <span class="hljs-number">0</span> }
 }
-def stored_history() {
-    try { return history } except first_run { return [] }
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">stored_history</span>() {
+    <span class="hljs-keyword">try</span> { <span class="hljs-keyword">return</span> history } <span class="hljs-keyword">except</span> first_run { <span class="hljs-keyword">return</span> [] }
 }
-let runs = stored_runs() + 1
-let history = stored_history()
+<span class="hljs-keyword">let</span> runs = stored_runs() + <span class="hljs-number">1</span>
+<span class="hljs-keyword">let</span> history = stored_history()
 
-let notes = read_file('./examples/data/notes.txt')
-let todays = ?{len='sentence'} 'Summarize these notes: {notes}'
-history.append({'run': runs, 'summary': todays})
-if len(history) &gt; 5 {
-    history = history[1:]
+<span class="hljs-keyword">let</span> notes = <span class="hljs-built_in">read_file</span>(<span class="hljs-string">&#x27;./examples/data/notes.txt&#x27;</span>)
+<span class="hljs-keyword">let</span> todays = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>} <span class="hljs-string">&#x27;Summarize these notes: {notes}&#x27;</span>
+history.append({<span class="hljs-string">&#x27;run&#x27;</span>: runs, <span class="hljs-string">&#x27;summary&#x27;</span>: todays})
+<span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(history) &gt; <span class="hljs-number">5</span> {
+    history = history[<span class="hljs-number">1</span>:]
 }
 
-let trend = ''
-if len(history) &gt; 1 {
-    trend = ?{len='paragraph'} '''
+<span class="hljs-keyword">let</span> trend = <span class="hljs-string">&#x27;&#x27;</span>
+<span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(history) &gt; <span class="hljs-number">1</span> {
+    trend = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>} <span class="hljs-string">&#x27;&#x27;&#x27;
 Here are my last journal summaries, oldest first: {history}
-What is changing from run to run? Be concrete.'''
+What is changing from run to run? Be concrete.&#x27;&#x27;&#x27;</span>
 }
 
-success {'run': runs, 'today': todays, 'trend': trend}
-</code></pre>
-
-<h2 id="tours">Feature tours</h2>
+<span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;run&#x27;</span>: runs, <span class="hljs-string">&#x27;today&#x27;</span>: todays, <span class="hljs-string">&#x27;trend&#x27;</span>: trend}
+</code></pre></figure>
+<span id="tours" class="anchor-alias" aria-hidden="true"></span><h2 id="feature-tours">Feature tours<a class="heading-anchor" href="#feature-tours" aria-label="Link to Feature tours">#</a></h2>
 <p>Small scripts that exercise one area each.</p>
-<h3 id="basics">basics.spl &mdash; functions, objects and LLM calls</h3>
+<span id="basics" class="anchor-alias" aria-hidden="true"></span><h3 id="basicsspl--functions-objects-and-llm-calls">basics.spl — functions, objects and LLM calls<a class="heading-anchor" href="#basicsspl--functions-objects-and-llm-calls" aria-label="Link to basics.spl — functions, objects and LLM calls">#</a></h3>
 <p>Compare a computed Fibonacci number with an integer model response, then request a structured joke and a pet story. This tour includes LLM calls and requires authentication.</p>
-<pre><code class="language-spl" data-file="basics.spl">
-@{model='gpt-6-luna'}
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">basics.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-17" aria-label="Copy basics.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="basics.spl code example"><code class="language-spl" data-file="basics.spl" id="code-17"><span class="hljs-meta">@{model=<span class="hljs-string">&#x27;gpt-6-luna&#x27;</span>}</span>
 
-def fib(n) {
-    if n &lt; 2 {
-        return n
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
+    <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">2</span> {
+        <span class="hljs-keyword">return</span> n
     }
-    return fib(n - 1) + fib(n - 2)
+    <span class="hljs-keyword">return</span> fib(n - <span class="hljs-number">1</span>) + fib(n - <span class="hljs-number">2</span>)
 }
 
-let fib10 = fib(10)
-let modelFib10 = ?{fmt='integer'} 'fibonacci of 10 is?'
+<span class="hljs-keyword">let</span> fib10 = fib(<span class="hljs-number">10</span>)
+<span class="hljs-keyword">let</span> modelFib10 = <span class="hljs-keyword">?</span>{fmt=<span class="hljs-string">&#x27;integer&#x27;</span>} <span class="hljs-string">&#x27;fibonacci of 10 is?&#x27;</span>
 
-assert fib10 == modelFib10 'Oops model got it wrong'
+<span class="hljs-keyword">assert</span> fib10 == modelFib10 <span class="hljs-string">&#x27;Oops model got it wrong&#x27;</span>
 
-let joke = ?{fmt='object'} 'A joke about programmers as {{"setup": ..., "punchline": ...}}'
+<span class="hljs-keyword">let</span> joke = <span class="hljs-keyword">?</span>{fmt=<span class="hljs-string">&#x27;object&#x27;</span>} <span class="hljs-string">&#x27;A joke about programmers as {{&quot;setup&quot;: ..., &quot;punchline&quot;: ...}}&#x27;</span>
 
-let animal = None
-enforce 'Answer in Chinese' {
-    forbid 'Mentioning the word cat' {
-        animal = ?{len='paragraph'} 'Funny story involving a pet animal'
+<span class="hljs-keyword">let</span> animal = <span class="hljs-literal">None</span>
+<span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Answer in Chinese&#x27;</span> {
+    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;Mentioning the word cat&#x27;</span> {
+        animal = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>} <span class="hljs-string">&#x27;Funny story involving a pet animal&#x27;</span>
     }
 }
 
-success {'fib': fib10, 'modelFib': modelFib10, 'animal': animal, 'joke': joke}
-</code></pre>
-
-<h3 id="hi">hi.spl &mdash; compact end-to-end tour</h3>
+<span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;fib&#x27;</span>: fib10, <span class="hljs-string">&#x27;modelFib&#x27;</span>: modelFib10, <span class="hljs-string">&#x27;animal&#x27;</span>: animal, <span class="hljs-string">&#x27;joke&#x27;</span>: joke}
+</code></pre></figure>
+<span id="hi" class="anchor-alias" aria-hidden="true"></span><h3 id="hispl--compact-end-to-end-tour">hi.spl — compact end-to-end tour<a class="heading-anchor" href="#hispl--compact-end-to-end-tour" aria-label="Link to hi.spl — compact end-to-end tour">#</a></h3>
 <p>Use <code>gpt-5.5</code> for a structured joke, reasoning and a greeting, then write the deterministic value <code>fib(10)</code> under <code>./out</code>.</p>
-<pre><code class="language-spl" data-file="hi.spl">
-@{model='gpt-5.5'}
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">hi.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-18" aria-label="Copy hi.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="hi.spl code example"><code class="language-spl" data-file="hi.spl" id="code-18"><span class="hljs-meta">@{model=<span class="hljs-string">&#x27;gpt-5.5&#x27;</span>}</span>
 
-def fib(n) {
-    if n &lt; 2 { return n }
-    return fib(n - 1) + fib(n - 2)
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
+    <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">2</span> { <span class="hljs-keyword">return</span> n }
+    <span class="hljs-keyword">return</span> fib(n - <span class="hljs-number">1</span>) + fib(n - <span class="hljs-number">2</span>)
 }
 
-# an LLM call, validated and parsed as JSON
-let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
+<span class="hljs-comment"># an LLM call, validated and parsed as JSON</span>
+<span class="hljs-keyword">let</span> joke = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>, fmt=<span class="hljs-string">&#x27;object&#x27;</span>} <span class="hljs-string">&#x27;A joke about programmers. Give setup and punchline.&#x27;</span>
 
-# deliberate before answering
-let why = think{reasoning='high'} 'Why is {joke.setup} funny?'
+<span class="hljs-comment"># deliberate before answering</span>
+<span class="hljs-keyword">let</span> why = <span class="hljs-keyword">think</span>{reasoning=<span class="hljs-string">&#x27;high&#x27;</span>} <span class="hljs-string">&#x27;Why is {joke.setup} funny?&#x27;</span>
 
-# Prompt guidance for calls inside the block (not runtime validation).
-let hi = None
-enforce 'Answer in English' {
-    forbid 'profanity' { let hi = ?'Say hi' }
+<span class="hljs-comment"># Prompt guidance for calls inside the block (not runtime validation).</span>
+<span class="hljs-keyword">let</span> hi = <span class="hljs-literal">None</span>
+<span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Answer in English&#x27;</span> {
+    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;profanity&#x27;</span> { <span class="hljs-keyword">let</span> hi = <span class="hljs-keyword">?</span><span class="hljs-string">&#x27;Say hi&#x27;</span> }
 }
 
-# Raw I/O does not call the model.
-restrict './out' {
-    write_file('./out/a.txt', '{fib(10)}')
+<span class="hljs-comment"># Raw I/O does not call the model.</span>
+<span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./out&#x27;</span> {
+    <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./out/a.txt&#x27;</span>, <span class="hljs-string">&#x27;{fib(10)}&#x27;</span>)
 }
 
-try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
-success {'joke': joke, 'why': why, 'hi': hi}
-</code></pre>
-
-<h3 id="live-tours">Live tours</h3>
+<span class="hljs-keyword">try</span> { <span class="hljs-keyword">assert</span> fib(<span class="hljs-number">5</span>) == <span class="hljs-number">5</span> <span class="hljs-string">&#x27;wrong&#x27;</span> } <span class="hljs-keyword">except</span> err { <span class="hljs-built_in">log</span>(err.reason) }
+<span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;joke&#x27;</span>: joke, <span class="hljs-string">&#x27;why&#x27;</span>: why, <span class="hljs-string">&#x27;hi&#x27;</span>: hi}
+</code></pre></figure>
+<h3 id="live-tours">Live tours<a class="heading-anchor" href="#live-tours" aria-label="Link to Live tours">#</a></h3>
 <ul>
-  <li><code>live.spl</code> &mdash; a quick smoke test of <code>?</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>enforce</code>/<code>forbid</code> and <code>assert</code> against the real model.</li>
-  <li><code>tools-live.spl</code> &mdash; <code>read_file</code>, <code>write_file</code> and <code>think{show=True}</code> inside <code>restrict './sandbox'</code>. Run it after <code>mkdir sandbox; echo hello world &gt; sandbox/note.txt</code>.</li>
-  <li><code>restrict-live.spl</code> &mdash; asks the model to read <code>secret.txt</code> outside the sandbox and shows the runtime blocking it, returning a <code>restriction_violation</code> payload.</li>
+<li><p><code>live.spl</code> — a quick smoke test of <code>?</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>enforce</code>/<code>forbid</code> and <code>assert</code> against the real model.</p>
+</li>
+<li><p><code>tools-live.spl</code> — <code>read_file</code>, <code>write_file</code> and <code>think{show=True}</code> inside <code>restrict &#39;./sandbox&#39;</code>. Run it after <code>mkdir sandbox; echo hello world &gt; sandbox/note.txt</code>.</p>
+</li>
+<li><p><code>restrict-live.spl</code> — asks the model to read <code>secret.txt</code> outside the sandbox and shows the runtime blocking it, returning a <code>restriction_violation</code> payload.</p>
+</li>
 </ul>
-
-</main>
-<script src="assets/search-index.js"></script>
-<script src="assets/site.js"></script>
+</article>
+    <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Examples.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="grammar.html"><span>Previous</span><strong>Grammar</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="editor.html"><span>Next</span><strong>VS Code extension</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Small language. Deliberate workflows.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </main>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#commit-message">Commit message</a></li><li class="toc-level-2"><a href="#triage-issues">Triage issues</a></li><li class="toc-level-2"><a href="#extract-an-invoice">Extract an invoice</a></li><li class="toc-level-2"><a href="#code-review-as-a-ci-gate">Code review as a CI gate</a></li><li class="toc-level-2"><a href="#release-notes">Release notes</a></li><li class="toc-level-2"><a href="#web-digest">Web digest</a></li><li class="toc-level-2"><a href="#fix-failing-tests">Fix failing tests</a></li><li class="toc-level-2"><a href="#search-with-mcp">Search with MCP</a></li><li class="toc-level-2"><a href="#translate-docs">Translate docs</a></li><li class="toc-level-2"><a href="#journal-with-persistent-state">Journal with persistent state</a></li><li class="toc-level-2"><a href="#feature-tours">Feature tours</a></li><li class="toc-level-3"><a href="#basicsspl--functions-objects-and-llm-calls">basics.spl — functions, objects and LLM calls</a></li><li class="toc-level-3"><a href="#hispl--compact-end-to-end-tour">hi.spl — compact end-to-end tour</a></li><li class="toc-level-3"><a href="#live-tours">Live tours</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Prompts are just the start.</strong><p>Give your workflow structure, validation, and clear boundaries.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+</div>
+<dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
+<p class="visually-hidden" id="announcement" role="status"></p>
+<noscript><p class="noscript-note">Search, code copying, and the theme switch need JavaScript. All documentation and navigation work without it.</p></noscript>
 </body>
 </html>

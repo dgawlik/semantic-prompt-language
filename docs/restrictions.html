@@ -1,144 +1,193 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Least-privilege scopes in SPL: restrict files, network hosts and executables, enforced by the runtime.">
-<title>Restrictions - SPL</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css">
+<meta name="description" content="restrict narrows raw tools and explicit agent actions. Outside restrictions they are allow-by-default. Generation has no tools at all, and replay further restricts execution to local reads and recorded generation.">
 <meta name="color-scheme" content="light dark">
-<script>try{document.querySelector('meta[name="color-scheme"]').content=localStorage.getItem("color-scheme")??"light dark"}catch(e){}</script>
+<title>Restrictions - SPL docs</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=40cc3636dea6">
+<link rel="stylesheet" href="assets/style.css?v=40cc3636dea6">
+<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
+<script defer src="assets/search-index.js?v=40cc3636dea6"></script>
+<script defer src="assets/site.js?v=40cc3636dea6"></script>
 </head>
 <body data-page="restrictions">
-<main id="page">
-
-<div class="eyebrow">The language</div>
-<h1>Restrictions</h1>
-<p class="lead"><code>restrict</code> narrows raw tools and explicit agent actions. Outside restrictions they are allow-by-default. Generation has no tools at all, and replay further restricts execution to local reads and recorded generation.</p>
-
-<h2 id="forms">The four forms</h2>
-<div class="table-wrap"><table>
-<thead><tr><th>Form</th><th>Effect</th></tr></thead>
-<tbody>
-<tr><td><code>restrict './target/out' { … }</code></td><td>Reads and writes are allowed only inside the folder. Same as <code>restrict fs</code>.</td></tr>
-<tr><td><code>restrict net 'api.example.com' { … }</code></td><td>Network access is allowed only to the listed hosts.</td></tr>
-<tr><td><code>restrict exec 'npm,git' { … }</code></td><td>Shell commands are allowed only for the listed executables.</td></tr>
-<tr><td><code>restrict mcp 'docs/search,issues' { … }</code></td><td>Only the named MCP tools or servers may be called. Servers must be configured with <code>--mcp</code>.</td></tr>
-</tbody></table></div>
-<pre><code class="language-spl">
-restrict './out' {
-    agent 'Run the report and write it to ./out/report.md'
-}
-
-restrict net 'news.ycombinator.com' {
-    let page = web_fetch('https://news.ycombinator.com')
-}
-
-restrict exec 'git' {
-    let diff = shell('git diff --staged')
-}
-</code></pre>
-<p>The argument is an expression evaluating to a comma-separated string (<code>'npm,git'</code>) or a list of strings. An empty list is an error.</p>
-<p>Combine clauses with commas. Each clause defaults to <code>fs</code> if its kind is omitted. All clauses apply together; repeated kinds intersect just like nested blocks. Commas inside strings or lists remain part of that clause's allowlist.</p>
-<pre><code class="language-spl">
-restrict './src', net 'example.com', exec 'git', mcp 'docs/search' {
-    let review = agent 'Inspect the source and use docs/search for reference material'
-}
-</code></pre>
-
-<h2 id="enforcement">Two layers of enforcement</h2>
-<div class="compare">
-  <div class="callout"><span class="ico">🗣️</span><div class="body"><span class="title">1 · Guidance</span><p>The runtime tells the model about the active restrictions in the prompt, so it plans within them.</p></div></div>
-  <div class="callout danger"><span class="ico">🚧</span><div class="body"><span class="title">2 · Hard enforcement</span><p>The runtime intercepts <em>every</em> file, network and exec call and blocks any that violate the active scopes.</p></div></div>
+<a class="skip-link" href="#page">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v0.4.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Less glue code.<br><strong>More intent.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Restrictions</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav></details>
+  <main id="page" tabindex="-1">
+    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Restrictions</span><span class="reading-time">5 min read</span></div>
+    <header class="page-heading"><h1>Restrictions</h1><div class="lead"><p><code>restrict</code> narrows raw tools and explicit agent actions. Outside restrictions they are allow-by-default. Generation has no tools at all, and replay further restricts execution to local reads and recorded generation.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#the-four-forms">The four forms</a></li><li class="toc-level-2"><a href="#two-layers-of-enforcement">Two layers of enforcement</a></li><li class="toc-level-2"><a href="#nesting">Nesting</a></li><li class="toc-level-2"><a href="#matching-rules">Matching rules</a></li><li class="toc-level-3"><a href="#file-system">File system</a></li><li class="toc-level-3"><a href="#network">Network</a></li><li class="toc-level-3"><a href="#executables">Executables</a></li><li class="toc-level-3"><a href="#mcp-servers-and-tools">MCP servers and tools</a></li><li class="toc-level-2"><a href="#what-is-covered">What is covered</a></li></ul></nav></details>
+    <article class="prose"><span id="forms" class="anchor-alias" aria-hidden="true"></span><h2 id="the-four-forms">The four forms<a class="heading-anchor" href="#the-four-forms" aria-label="Link to The four forms">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="The four forms reference table"><table>
+<thead>
+<tr>
+<th scope="col">Form</th>
+<th scope="col">Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>restrict &#39;./target/out&#39; { … }</code></td>
+<td>Reads and writes are allowed only inside the folder. Same as <code>restrict fs</code>.</td>
+</tr>
+<tr>
+<td><code>restrict net &#39;api.example.com&#39; { … }</code></td>
+<td>Network access is allowed only to the listed hosts.</td>
+</tr>
+<tr>
+<td><code>restrict exec &#39;npm,git&#39; { … }</code></td>
+<td>Shell commands are allowed only for the listed executables.</td>
+</tr>
+<tr>
+<td><code>restrict mcp &#39;docs/search,issues&#39; { … }</code></td>
+<td>Only the named MCP tools or servers may be called. Servers must be configured with <code>--mcp</code>.</td>
+</tr>
+</tbody></table>
 </div>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./out&#x27;</span> {
+    <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Run the report and write it to ./out/report.md&#x27;</span>
+}
+
+<span class="hljs-keyword">restrict</span> net <span class="hljs-string">&#x27;news.ycombinator.com&#x27;</span> {
+    <span class="hljs-keyword">let</span> page = <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://news.ycombinator.com&#x27;</span>)
+}
+
+<span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;git&#x27;</span> {
+    <span class="hljs-keyword">let</span> diff = <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git diff --staged&#x27;</span>)
+}
+</code></pre></figure>
+<p>The argument is an expression evaluating to a comma-separated string (<code>&#39;npm,git&#39;</code>) or a list of strings. An empty list is an error.</p>
+<p>Combine clauses with commas. Each clause defaults to <code>fs</code> if its kind is omitted. All clauses apply together; repeated kinds intersect just like nested blocks. Commas inside strings or lists remain part of that clause&#39;s allowlist.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span>, net <span class="hljs-string">&#x27;example.com&#x27;</span>, exec <span class="hljs-string">&#x27;git&#x27;</span>, mcp <span class="hljs-string">&#x27;docs/search&#x27;</span> {
+    <span class="hljs-keyword">let</span> review = <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Inspect the source and use docs/search for reference material&#x27;</span>
+}
+</code></pre></figure>
+<span id="enforcement" class="anchor-alias" aria-hidden="true"></span><h2 id="two-layers-of-enforcement">Two layers of enforcement<a class="heading-anchor" href="#two-layers-of-enforcement" aria-label="Link to Two layers of enforcement">#</a></h2>
+<p><strong>1 · Guidance</strong></p>
+<p>The runtime tells the model about the active restrictions in the prompt, so it plans within them.</p>
+<p><strong>2 · Hard enforcement</strong></p>
+<p>The runtime intercepts <em>every</em> file, network and exec call and blocks any that violate the active scopes.</p>
 <p>A blocked call raises a <code>restriction_violation</code> failure. It is catchable with <code>try/except</code>:</p>
-<pre><code class="language-spl" data-file="web-digest.spl">
-# Summarize a web page with network access limited to a single host,
-# and prove the sandbox holds by catching a blocked request.
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">web-digest.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy web-digest.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="web-digest.spl code example"><code class="language-spl" data-file="web-digest.spl" id="code-3"><span class="hljs-comment"># Summarize a web page with network access limited to a single host,</span>
+<span class="hljs-comment"># and prove the sandbox holds by catching a blocked request.</span>
 
-restrict net 'news.ycombinator.com' {
-    let page = web_fetch('https://news.ycombinator.com')
-    let headlines = ? '''
-From this HTML list the 10 top stories as a Markdown bullet list: "- title (domain)".
+<span class="hljs-keyword">restrict</span> net <span class="hljs-string">&#x27;news.ycombinator.com&#x27;</span> {
+    <span class="hljs-keyword">let</span> page = <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://news.ycombinator.com&#x27;</span>)
+    <span class="hljs-keyword">let</span> headlines = <span class="hljs-keyword">?</span> <span class="hljs-string">&#x27;&#x27;&#x27;
+From this HTML list the 10 top stories as a Markdown bullet list: &quot;- title (domain)&quot;.
 Reply with ONLY the list.
-{page}'''
+{page}&#x27;&#x27;&#x27;</span>
 
-    let themes = ?{len='paragraph'} 'What themes run through these headlines?\n{headlines}'
+    <span class="hljs-keyword">let</span> themes = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>} <span class="hljs-string">&#x27;What themes run through these headlines?\n{headlines}&#x27;</span>
 
-    try {
-        web_fetch('https://example.org')
-        fail 'the request to a second host should have been blocked'
-    } except err {
-        assert err.status_code == 'restriction_violation' "unexpected failure: {err.reason}"
-        log("blocked as expected: {err.reason}")
+    <span class="hljs-keyword">try</span> {
+        <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://example.org&#x27;</span>)
+        <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;the request to a second host should have been blocked&#x27;</span>
+    } <span class="hljs-keyword">except</span> err {
+        <span class="hljs-keyword">assert</span> err.status_code == <span class="hljs-string">&#x27;restriction_violation&#x27;</span> <span class="hljs-string">&quot;unexpected failure: {err.reason}&quot;</span>
+        <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;blocked as expected: {err.reason}&quot;</span>)
     }
 }
 
-success "{headlines}\n\n{themes}"
-</code></pre>
-
-<h2 id="nesting">Nesting</h2>
+<span class="hljs-keyword">success</span> <span class="hljs-string">&quot;{headlines}\n\n{themes}&quot;</span>
+</code></pre></figure>
+<h2 id="nesting">Nesting<a class="heading-anchor" href="#nesting" aria-label="Link to Nesting">#</a></h2>
 <p>Restrictions are scoped to their block and can be nested. Nested restrictions of the same kind <strong>intersect</strong>: they can only narrow the allowed set, never widen it. Different kinds combine freely.</p>
-<pre><code class="language-spl">
-restrict exec 'npm' {
-    restrict '.' {                       # fs + exec both active
-        restrict './src' {               # fs narrowed to ./src (still inside '.')
-            shell('npm test')
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;npm&#x27;</span> {
+    <span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;.&#x27;</span> {                       <span class="hljs-comment"># fs + exec both active</span>
+        <span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span> {               <span class="hljs-comment"># fs narrowed to ./src (still inside &#x27;.&#x27;)</span>
+            <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;npm test&#x27;</span>)
         }
     }
 }
-</code></pre>
-
-<h2 id="rules">Matching rules</h2>
-<h3 id="fs">File system</h3>
+</code></pre></figure>
+<span id="rules" class="anchor-alias" aria-hidden="true"></span><h2 id="matching-rules">Matching rules<a class="heading-anchor" href="#matching-rules" aria-label="Link to Matching rules">#</a></h2>
+<span id="fs" class="anchor-alias" aria-hidden="true"></span><h3 id="file-system">File system<a class="heading-anchor" href="#file-system" aria-label="Link to File system">#</a></h3>
 <ul>
-  <li>Paths are <strong>canonicalized</strong> before checking: made absolute relative to <code>--cwd</code>, <code>..</code> removed, symbolic links resolved &mdash; including dangling links, whose targets are followed so a write cannot escape through them.</li>
-  <li>A path is allowed when it is the allowed folder itself or inside it. On Windows the comparison is case-insensitive.</li>
+<li><p>Paths are <strong>canonicalized</strong> before checking: made absolute relative to <code>--cwd</code>, <code>..</code> removed, symbolic links resolved — including dangling links, whose targets are followed so a write cannot escape through them.</p>
+</li>
+<li><p>A path is allowed when it is the allowed folder itself or inside it. On Windows the comparison is case-insensitive.</p>
+</li>
 </ul>
-<h3 id="net">Network</h3>
+<span id="net" class="anchor-alias" aria-hidden="true"></span><h3 id="network">Network<a class="heading-anchor" href="#network" aria-label="Link to Network">#</a></h3>
 <ul>
-  <li><code>net</code> matches exact hostnames and <code>*.example.com</code> wildcards. Entries may be bare hosts or URLs (the host is extracted; ports are ignored).</li>
-  <li>Only <code>http:</code> and <code>https:</code> URLs are fetched. Redirects are followed manually (at most 5) and the host is <strong>re-checked on every hop</strong>.</li>
-  <li><code>web_search</code> is network access too: it queries <code>html.duckduckgo.com</code>, so a <code>restrict net</code> scope must list that host for searches to work.</li>
+<li><p><code>net</code> matches exact hostnames and <code>*.example.com</code> wildcards. Entries may be bare hosts or URLs (the host is extracted; ports are ignored).</p>
+</li>
+<li><p>Only <code>http:</code> and <code>https:</code> URLs are fetched. Redirects are followed manually (at most 5) and the host is <strong>re-checked on every hop</strong>.</p>
+</li>
+<li><p><code>web_search</code> is network access too: it queries <code>html.duckduckgo.com</code>, so a <code>restrict net</code> scope must list that host for searches to work.</p>
+</li>
 </ul>
-<h3 id="exec">Executables</h3>
+<span id="exec" class="anchor-alias" aria-hidden="true"></span><h3 id="executables">Executables<a class="heading-anchor" href="#executables" aria-label="Link to Executables">#</a></h3>
 <ul>
-  <li><code>exec</code> matches the executable <em>name</em>. On Windows <code>.exe</code>, <code>.cmd</code>, <code>.bat</code> and <code>.com</code> suffixes are ignored.</li>
-  <li>Inside a <code>restrict exec</code> block, commands must be named <em>without a path</em> (<code>git</code>, not <code>/usr/bin/git</code>).</li>
-  <li>Shell commands in pipelines and chains are checked against active restrictions: executables are checked against <code>restrict exec</code>, and path-like/URL arguments and redirection targets are checked against active <code>fs</code> and <code>net</code> scopes.</li>
+<li><p><code>exec</code> matches the executable <em>name</em>. On Windows <code>.exe</code>, <code>.cmd</code>, <code>.bat</code> and <code>.com</code> suffixes are ignored.</p>
+</li>
+<li><p>Inside a <code>restrict exec</code> block, commands must be named <em>without a path</em> (<code>git</code>, not <code>/usr/bin/git</code>).</p>
+</li>
+<li><p>Shell commands in pipelines and chains are checked against active restrictions: executables are checked against <code>restrict exec</code>, and path-like/URL arguments and redirection targets are checked against active <code>fs</code> and <code>net</code> scopes.</p>
+</li>
 </ul>
-<div class="callout warn">
-  <span class="ico">⚠️</span>
-  <div class="body"><span class="title">Best effort for programs with their own I/O</span>
-  <p>The runtime can only inspect what it sees on the command line. A program that touches files or the network on its own (a build tool, a package manager) is limited by its executable name, not by what it does internally.</p></div>
-</div>
-
-<h3 id="mcp">MCP servers and tools</h3>
-<p>Load servers with <a href="cli.html#mcp"><code>--mcp</code></a>. A selector such as <code>docs</code> or <code>docs/*</code> allows every configured tool from that server; <code>docs/search</code> allows only its <code>search</code> tool. Names are case-sensitive. Nested scopes intersect, and cannot widen the configuration's optional <code>tools</code> allowlist.</p>
+<p><strong>Best effort for programs with their own I/O</strong></p>
+<p>The runtime can only inspect what it sees on the command line. A program that touches files or the network on its own (a build tool, a package manager) is limited by its executable name, not by what it does internally.</p>
+<span id="mcp" class="anchor-alias" aria-hidden="true"></span><h3 id="mcp-servers-and-tools">MCP servers and tools<a class="heading-anchor" href="#mcp-servers-and-tools" aria-label="Link to MCP servers and tools">#</a></h3>
+<p>Load servers with <a href="cli.html#mcp-configuration"><code>--mcp</code></a>. A selector such as <code>docs</code> or <code>docs/*</code> allows every configured tool from that server; <code>docs/search</code> allows only its <code>search</code> tool. Names are case-sensitive. Nested scopes intersect, and cannot widen the configuration&#39;s optional <code>tools</code> allowlist.</p>
 <p>Disallowed servers and tools are removed before creating each LLM session. Every MCP permission request is checked again before approval; a restriction violation aborts the call like a file or shell violation. Unconfigured MCP servers are always rejected.</p>
-<p>MCP servers are trusted programs or remote services: <code>restrict mcp</code> controls which tools may be called, not their internal I/O. The <code>fs</code>, <code>net</code> and <code>exec</code> clauses do not sandbox an MCP server's implementation or its configured connection.</p>
-
-<h2 id="what-is-guarded">What is covered</h2>
-<div class="table-wrap"><table>
-<thead><tr><th>Caller</th><th>Checked?</th></tr></thead>
-<tbody>
-<tr><td>Raw function calls (<code>read_file(...)</code>, <code>shell(...)</code>)</td><td><span class="pill ok">yes</span></td></tr>
-<tr><td>Tool calls during explicit <code>agent</code> operations</td><td><span class="pill ok">yes</span></td></tr>
-<tr><td>Generation (<code>?</code> / <code>think</code>)</td><td>No tools exposed; permission attempts abort the call.</td></tr>
-<tr><td>MCP tools from <code>--mcp</code></td><td><span class="pill ok">configuration and MCP scope checked</span></td></tr>
-<tr><td>Any other Copilot permission request</td><td><span class="pill danger">rejected</span></td></tr>
-<tr><td>Plain SPL code (arithmetic, <code>log</code>, variables)</td><td>nothing to restrict</td></tr>
-</tbody></table></div>
-
-<div class="callout">
-  <span class="ico">🔮</span>
-  <div class="body"><span class="title">Future direction</span>
-  <p>Raw tools and agents remain allow-by-default; a global deny-by-default mode is not implemented. Shell command inspection and trusted MCP services are not OS sandboxes.</p></div>
+<p>MCP servers are trusted programs or remote services: <code>restrict mcp</code> controls which tools may be called, not their internal I/O. The <code>fs</code>, <code>net</code> and <code>exec</code> clauses do not sandbox an MCP server&#39;s implementation or its configured connection.</p>
+<span id="what-is-guarded" class="anchor-alias" aria-hidden="true"></span><h2 id="what-is-covered">What is covered<a class="heading-anchor" href="#what-is-covered" aria-label="Link to What is covered">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="What is covered reference table"><table>
+<thead>
+<tr>
+<th scope="col">Caller</th>
+<th scope="col">Checked?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Raw function calls (<code>read_file(...)</code>, <code>shell(...)</code>)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Tool calls during explicit <code>agent</code> operations</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Generation (<code>?</code> / <code>think</code>)</td>
+<td>No tools exposed; permission attempts abort the call.</td>
+</tr>
+<tr>
+<td>MCP tools from <code>--mcp</code></td>
+<td>configuration and MCP scope checked</td>
+</tr>
+<tr>
+<td>Any other Copilot permission request</td>
+<td>rejected</td>
+</tr>
+<tr>
+<td>Plain SPL code (arithmetic, <code>log</code>, variables)</td>
+<td>nothing to restrict</td>
+</tr>
+</tbody></table>
 </div>
-
-</main>
-<script src="assets/search-index.js"></script>
-<script src="assets/site.js"></script>
+<p><strong>Future direction</strong></p>
+<p>Raw tools and agents remain allow-by-default; a global deny-by-default mode is not implemented. Shell command inspection and trusted MCP services are not OS sandboxes.</p>
+</article>
+    <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Restrictions.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="llm-commands.html"><span>Previous</span><strong>Generation & agents</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="failures.html"><span>Next</span><strong>Failures & errors</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Small language. Deliberate workflows.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </main>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#the-four-forms">The four forms</a></li><li class="toc-level-2"><a href="#two-layers-of-enforcement">Two layers of enforcement</a></li><li class="toc-level-2"><a href="#nesting">Nesting</a></li><li class="toc-level-2"><a href="#matching-rules">Matching rules</a></li><li class="toc-level-3"><a href="#file-system">File system</a></li><li class="toc-level-3"><a href="#network">Network</a></li><li class="toc-level-3"><a href="#executables">Executables</a></li><li class="toc-level-3"><a href="#mcp-servers-and-tools">MCP servers and tools</a></li><li class="toc-level-2"><a href="#what-is-covered">What is covered</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Prompts are just the start.</strong><p>Give your workflow structure, validation, and clear boundaries.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+</div>
+<dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
+<p class="visually-hidden" id="announcement" role="status"></p>
+<noscript><p class="noscript-note">Search, code copying, and the theme switch need JavaScript. All documentation and navigation work without it.</p></noscript>
 </body>
 </html>

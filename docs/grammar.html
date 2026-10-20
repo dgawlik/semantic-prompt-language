@@ -1,83 +1,95 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="The SPL 0.3 grammar: declarations, assignment, generation, agents, and raw functions.">
-<title>Grammar (EBNF) - SPL</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236d4aff'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'%3E?%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/style.css">
+<meta name="description" content="SPL 0.3 syntax, synchronized from lang/docs/syntax.ebnf. Modifier names are checked while parsing; expression values and schemas are checked at runtime.">
 <meta name="color-scheme" content="light dark">
-<script>try{document.querySelector('meta[name="color-scheme"]').content=localStorage.getItem("color-scheme")??"light dark"}catch(e){}</script>
+<title>Grammar - SPL docs</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=40cc3636dea6">
+<link rel="stylesheet" href="assets/style.css?v=40cc3636dea6">
+<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
+<script defer src="assets/search-index.js?v=40cc3636dea6"></script>
+<script defer src="assets/site.js?v=40cc3636dea6"></script>
 </head>
 <body data-page="grammar">
-<main id="page">
-<div class="eyebrow">Reference</div>
-<h1>Grammar (EBNF)</h1>
-<p class="lead">SPL 0.3 syntax, synchronized from lang/docs/syntax.ebnf. Modifier names are checked while parsing; expression values and schemas are checked at runtime.</p>
-<h2 id="notation">Notation</h2>
-<p><code>{ x }</code> means repetition, <code>[ x ]</code> means optional, and <code>|</code> separates alternatives. Statements end at a newline, semicolon, closing block, or end of input. Opening block braces must share the keyword's line. Comments begin with <code>#</code>.</p>
-<h2 id="program">Complete grammar</h2>
-<pre><code class="language-ebnf">
-(* SPL 0.3. { x } means repetition; [ x ] means optional.
-   Statements end at newline, ';', '}' or EOF. Newlines inside () and [] are ignored.
-   '#' starts a comment. Opening block braces must be on the keyword's line. *)
+<a class="skip-link" href="#page">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v0.4.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Less glue code.<br><strong>More intent.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Grammar</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav></details>
+  <main id="page" tabindex="-1">
+    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Grammar</span><span class="reading-time">6 min read</span></div>
+    <header class="page-heading"><h1>Grammar (EBNF)</h1><div class="lead"><p>SPL 0.3 syntax, synchronized from lang/docs/syntax.ebnf. Modifier names are checked while parsing; expression values and schemas are checked at runtime.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#notation">Notation</a></li><li class="toc-level-2"><a href="#complete-grammar">Complete grammar</a></li><li class="toc-level-2"><a href="#syntax-versus-semantics">Syntax versus semantics</a></li></ul></nav></details>
+    <article class="prose"><h2 id="notation">Notation<a class="heading-anchor" href="#notation" aria-label="Link to Notation">#</a></h2>
+<p><code>{ x }</code> means repetition, <code>[ x ]</code> means optional, and <code>|</code> separates alternatives. Statements end at a newline, semicolon, closing block, or end of input. Opening block braces must share the keyword&#39;s line. Comments begin with <code>#</code>.</p>
+<span id="program" class="anchor-alias" aria-hidden="true"></span><h2 id="complete-grammar">Complete grammar<a class="heading-anchor" href="#complete-grammar" aria-label="Link to Complete grammar">#</a></h2>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">ebnf</span><span class="code-language">ebnf</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy ebnf code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="ebnf code example"><code class="language-ebnf" id="code-1"><span class="hljs-comment">(* SPL 0.3. { x } means repetition; [ x ] means optional.
+   Statements end at newline, &#x27;;&#x27;, &#x27;}&#x27; or EOF. Newlines inside () and [] are ignored.
+   &#x27;#&#x27; starts a comment. Opening block braces must be on the keyword&#x27;s line. *)</span>
 
-program        = { directive , separator } , { statement , separator } ;
-separator      = NL | ";" | end_of_block | EOF ;
-directive      = "@" , "{" , "model" , "=" , plain_string , [ "," ] , "}" ;
-block          = "{" , { statement , separator } , "}" ;
+<span class="hljs-attribute">program</span>        = { directive , separator } , { statement , separator } ;
+<span class="hljs-attribute">separator</span>      = NL | <span class="hljs-string">&quot;;&quot;</span> | end_of_block | EOF ;
+<span class="hljs-attribute">directive</span>      = <span class="hljs-string">&quot;@&quot;</span> , <span class="hljs-string">&quot;{&quot;</span> , <span class="hljs-string">&quot;model&quot;</span> , <span class="hljs-string">&quot;=&quot;</span> , plain_string , [ <span class="hljs-string">&quot;,&quot;</span> ] , <span class="hljs-string">&quot;}&quot;</span> ;
+<span class="hljs-attribute">block</span>          = <span class="hljs-string">&quot;{&quot;</span> , { statement , separator } , <span class="hljs-string">&quot;}&quot;</span> ;
 
-statement      = declaration | assignment | if_stmt | for_stmt | while_stmt
+<span class="hljs-attribute">statement</span>      = declaration | assignment | if_stmt | for_stmt | while_stmt
                | def_stmt | try_stmt | guidance_stmt | restrict_stmt | block
-               | "return" , [ expr ] | "success" , [ expr ]
-               | "assert" , expr , [ expr ] | "fail" , expr
-               | "break" | "continue" | "pass" | expr ;
-declaration    = "let" , NAME , "=" , expr ;
-assignment     = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
-target         = NAME | postfix , "." , NAME | postfix , "[" , expr , "]" ;
-if_stmt        = "if" , expr , block , { NL* , "elif" , expr , block } , [ NL* , "else" , block ] ;
-for_stmt       = "for" , NAME , { "," , NAME } , "in" , expr , block ;
-while_stmt     = "while" , expr , block ;
-def_stmt       = "def" , NAME , "(" , [ NAME , { "," , NAME } , [ "," ] ] , ")" , block ;
-try_stmt       = "try" , block , NL* , "except" , NAME , block ;
-guidance_stmt  = ( "enforce" | "forbid" ) , expr , block ;
-restrict_stmt  = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
-restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;
+               | <span class="hljs-string">&quot;return&quot;</span> , [ expr ] | <span class="hljs-string">&quot;success&quot;</span> , [ expr ]
+               | <span class="hljs-string">&quot;assert&quot;</span> , expr , [ expr ] | <span class="hljs-string">&quot;fail&quot;</span> , expr
+               | <span class="hljs-string">&quot;break&quot;</span> | <span class="hljs-string">&quot;continue&quot;</span> | <span class="hljs-string">&quot;pass&quot;</span> | expr ;
+<span class="hljs-attribute">declaration</span>    = <span class="hljs-string">&quot;let&quot;</span> , NAME , <span class="hljs-string">&quot;=&quot;</span> , expr ;
+<span class="hljs-attribute">assignment</span>     = target , ( <span class="hljs-string">&quot;=&quot;</span> | <span class="hljs-string">&quot;+=&quot;</span> | <span class="hljs-string">&quot;-=&quot;</span> | <span class="hljs-string">&quot;*=&quot;</span> | <span class="hljs-string">&quot;/=&quot;</span> | <span class="hljs-string">&quot;//=&quot;</span> | <span class="hljs-string">&quot;%=&quot;</span> ) , expr ;
+<span class="hljs-attribute">target</span>         = NAME | postfix , <span class="hljs-string">&quot;.&quot;</span> , NAME | postfix , <span class="hljs-string">&quot;[&quot;</span> , expr , <span class="hljs-string">&quot;]&quot;</span> ;
+<span class="hljs-attribute">if_stmt</span>        = <span class="hljs-string">&quot;if&quot;</span> , expr , block , { NL* , <span class="hljs-string">&quot;elif&quot;</span> , expr , block } , [ NL* , <span class="hljs-string">&quot;else&quot;</span> , block ] ;
+<span class="hljs-attribute">for_stmt</span>       = <span class="hljs-string">&quot;for&quot;</span> , NAME , { <span class="hljs-string">&quot;,&quot;</span> , NAME } , <span class="hljs-string">&quot;in&quot;</span> , expr , block ;
+<span class="hljs-attribute">while_stmt</span>     = <span class="hljs-string">&quot;while&quot;</span> , expr , block ;
+<span class="hljs-attribute">def_stmt</span>       = <span class="hljs-string">&quot;def&quot;</span> , NAME , <span class="hljs-string">&quot;(&quot;</span> , [ NAME , { <span class="hljs-string">&quot;,&quot;</span> , NAME } , [ <span class="hljs-string">&quot;,&quot;</span> ] ] , <span class="hljs-string">&quot;)&quot;</span> , block ;
+<span class="hljs-attribute">try_stmt</span>       = <span class="hljs-string">&quot;try&quot;</span> , block , NL* , <span class="hljs-string">&quot;except&quot;</span> , NAME , block ;
+<span class="hljs-attribute">guidance_stmt</span>  = ( <span class="hljs-string">&quot;enforce&quot;</span> | <span class="hljs-string">&quot;forbid&quot;</span> ) , expr , block ;
+<span class="hljs-attribute">restrict_stmt</span>  = <span class="hljs-string">&quot;restrict&quot;</span> , restrict_clause , { <span class="hljs-string">&quot;,&quot;</span> , restrict_clause } , block ;
+<span class="hljs-attribute">restrict_clause</span> = [ <span class="hljs-string">&quot;fs&quot;</span> | <span class="hljs-string">&quot;net&quot;</span> | <span class="hljs-string">&quot;exec&quot;</span> | <span class="hljs-string">&quot;mcp&quot;</span> ] , expr ;
 
-(* Every block creates a lexical child scope. let declares/redeclares locally and shadows parents.
+<span class="hljs-comment">(* Every block creates a lexical child scope. let declares/redeclares locally and shadows parents.
    Reads and assignments search outward for the first declaration; undeclared names are errors.
    Each loop iteration has fresh locals; caught failure names belong to the handler scope.
    Blocks/if yield their final expression, otherwise None. An unmatched if yields None.
    {} remains an empty dict; { pass } is a block yielding None. Functions need explicit return.
    return exits the innermost function, or the script at top level.
-   success exits the script, including when used in a function. *)
+   success exits the script, including when used in a function. *)</span>
 
-expr           = or_expr , [ "if" , or_expr , "else" , expr ] ;
-or_expr        = and_expr , { "or" , and_expr } ;
-and_expr       = not_expr , { "and" , not_expr } ;
-not_expr       = "not" , not_expr | comparison ;
-comparison     = sum , { ( "==" | "!=" | "&lt;" | "&lt;=" | "&gt;" | "&gt;=" | "in" | "not" , "in" ) , sum } ;
-sum            = term , { ( "+" | "-" ) , term } ;
-term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
-unary          = ( "-" | "+" ) , unary | "?" , [ modifiers ] , postfix | power ;
-power          = postfix , [ "**" , unary ] ;
-postfix        = primary , { call | index | slice | member } ;
-call           = "(" , [ expr , { "," , expr } , [ "," ] ] , ")" ;
-index          = "[" , expr , "]" ;
-slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
-member         = "." , NAME ;
-primary        = NUMBER | string | "True" | "False" | "None" | NAME
-               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr
-               | ( "think" | "agent" ) , [ modifiers ] , postfix ;
-list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
-dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
-modifiers      = "{" , [ modifier , { "," , modifier } , [ "," ] ] , "}" ;
-modifier       = ( "len" | "fmt" | "reasoning" | "show" | "schema" | "repairs" | "model" ) , "=" , expr ;
-log_expr       = "log" , "{" , [ "level" , "=" , log_level , [ "," ] ] , "}" , call ;
-log_level      = "error" | "info" | "debug" | expr ;
+<span class="hljs-attribute">expr</span>           = or_expr , [ <span class="hljs-string">&quot;if&quot;</span> , or_expr , <span class="hljs-string">&quot;else&quot;</span> , expr ] ;
+<span class="hljs-attribute">or_expr</span>        = and_expr , { <span class="hljs-string">&quot;or&quot;</span> , and_expr } ;
+<span class="hljs-attribute">and_expr</span>       = not_expr , { <span class="hljs-string">&quot;and&quot;</span> , not_expr } ;
+<span class="hljs-attribute">not_expr</span>       = <span class="hljs-string">&quot;not&quot;</span> , not_expr | comparison ;
+<span class="hljs-attribute">comparison</span>     = sum , { ( <span class="hljs-string">&quot;==&quot;</span> | <span class="hljs-string">&quot;!=&quot;</span> | <span class="hljs-string">&quot;&lt;&quot;</span> | <span class="hljs-string">&quot;&lt;=&quot;</span> | <span class="hljs-string">&quot;&gt;&quot;</span> | <span class="hljs-string">&quot;&gt;=&quot;</span> | <span class="hljs-string">&quot;in&quot;</span> | <span class="hljs-string">&quot;not&quot;</span> , <span class="hljs-string">&quot;in&quot;</span> ) , sum } ;
+<span class="hljs-attribute">sum</span>            = term , { ( <span class="hljs-string">&quot;+&quot;</span> | <span class="hljs-string">&quot;-&quot;</span> ) , term } ;
+<span class="hljs-attribute">term</span>           = unary , { ( <span class="hljs-string">&quot;*&quot;</span> | <span class="hljs-string">&quot;/&quot;</span> | <span class="hljs-string">&quot;//&quot;</span> | <span class="hljs-string">&quot;%&quot;</span> ) , unary } ;
+<span class="hljs-attribute">unary</span>          = ( <span class="hljs-string">&quot;-&quot;</span> | <span class="hljs-string">&quot;+&quot;</span> ) , unary | <span class="hljs-string">&quot;?&quot;</span> , [ modifiers ] , postfix | power ;
+<span class="hljs-attribute">power</span>          = postfix , [ <span class="hljs-string">&quot;**&quot;</span> , unary ] ;
+<span class="hljs-attribute">postfix</span>        = primary , { call | index | slice | member } ;
+<span class="hljs-attribute">call</span>           = <span class="hljs-string">&quot;(&quot;</span> , [ expr , { <span class="hljs-string">&quot;,&quot;</span> , expr } , [ <span class="hljs-string">&quot;,&quot;</span> ] ] , <span class="hljs-string">&quot;)&quot;</span> ;
+<span class="hljs-attribute">index</span>          = <span class="hljs-string">&quot;[&quot;</span> , expr , <span class="hljs-string">&quot;]&quot;</span> ;
+<span class="hljs-attribute">slice</span>          = <span class="hljs-string">&quot;[&quot;</span> , [ expr ] , <span class="hljs-string">&quot;:&quot;</span> , [ expr ] , <span class="hljs-string">&quot;]&quot;</span> ;
+<span class="hljs-attribute">member</span>         = <span class="hljs-string">&quot;.&quot;</span> , NAME ;
+<span class="hljs-attribute">primary</span>        = NUMBER | string | <span class="hljs-string">&quot;True&quot;</span> | <span class="hljs-string">&quot;False&quot;</span> | <span class="hljs-string">&quot;None&quot;</span> | NAME
+               | <span class="hljs-string">&quot;(&quot;</span> , expr , <span class="hljs-string">&quot;)&quot;</span> | list | dict | block | if_stmt | log_expr
+               | ( <span class="hljs-string">&quot;think&quot;</span> | <span class="hljs-string">&quot;agent&quot;</span> ) , [ modifiers ] , postfix ;
+<span class="hljs-attribute">list</span>           = <span class="hljs-string">&quot;[&quot;</span> , [ expr , { <span class="hljs-string">&quot;,&quot;</span> , expr } , [ <span class="hljs-string">&quot;,&quot;</span> ] ] , <span class="hljs-string">&quot;]&quot;</span> ;
+<span class="hljs-attribute">dict</span>           = <span class="hljs-string">&quot;{&quot;</span> , [ expr , <span class="hljs-string">&quot;:&quot;</span> , expr , { <span class="hljs-string">&quot;,&quot;</span> , expr , <span class="hljs-string">&quot;:&quot;</span> , expr } , [ <span class="hljs-string">&quot;,&quot;</span> ] ] , <span class="hljs-string">&quot;}&quot;</span> ;
+<span class="hljs-attribute">modifiers</span>      = <span class="hljs-string">&quot;{&quot;</span> , [ modifier , { <span class="hljs-string">&quot;,&quot;</span> , modifier } , [ <span class="hljs-string">&quot;,&quot;</span> ] ] , <span class="hljs-string">&quot;}&quot;</span> ;
+<span class="hljs-attribute">modifier</span>       = ( <span class="hljs-string">&quot;len&quot;</span> | <span class="hljs-string">&quot;fmt&quot;</span> | <span class="hljs-string">&quot;reasoning&quot;</span> | <span class="hljs-string">&quot;show&quot;</span> | <span class="hljs-string">&quot;schema&quot;</span> | <span class="hljs-string">&quot;repairs&quot;</span> | <span class="hljs-string">&quot;model&quot;</span> ) , <span class="hljs-string">&quot;=&quot;</span> , expr ;
+<span class="hljs-attribute">log_expr</span>       = <span class="hljs-string">&quot;log&quot;</span> , <span class="hljs-string">&quot;{&quot;</span> , [ <span class="hljs-string">&quot;level&quot;</span> , <span class="hljs-string">&quot;=&quot;</span> , log_level , [ <span class="hljs-string">&quot;,&quot;</span> ] ] , <span class="hljs-string">&quot;}&quot;</span> , call ;
+<span class="hljs-attribute">log_level</span>      = <span class="hljs-string">&quot;error&quot;</span> | <span class="hljs-string">&quot;info&quot;</span> | <span class="hljs-string">&quot;debug&quot;</span> | expr ;
 
-(* Unknown/duplicate modifier names are syntax errors. Values are expressions, validated at runtime:
+<span class="hljs-comment">(* Unknown/duplicate modifier names are syntax errors. Values are expressions, validated at runtime:
    len: word/sentence/paragraph/long (guidance only)
    fmt: integer/float/array/object/text/boolean/json; schema implies json unless fmt is explicit
    Non-text formats require strict JSON of the selected type; float accepts finite numbers,
@@ -93,28 +105,35 @@ log_level      = "error" | "info" | "debug" | expr ;
    Level values are bare names, strings or expressions, validated before evaluating arguments.
    Debug messages are emitted only at debug log level; silent suppresses all logs.
    enforce/forbid are scoped prompt guidance.
-   schema/assert validate data; restrict checks actions. *)
+   schema/assert validate data; restrict checks actions. *)</span>
 
-string         = [ "r" ] , quote , { char | escape | interpolation } , closing_quote ;
-quote          = "'" | '"' | "'''" | '"""' ;
-plain_string   = string_without_interpolation ;
-escape         = "\" , ( "n" | "t" | "r" | "0" | "\" | "'" | '"' | "{" | "}" ) ;
-interpolation  = "{" , expr , "}" ;
-NUMBER         = digit+ , [ "." , digit+ ] , [ ( "e" | "E" ) , [ "+" | "-" ] , digit+ ] ;
-NAME           = ( letter | "_" ) , { letter | digit | "_" } ;
-NL             = newline ;
+<span class="hljs-attribute">string</span>         = [ <span class="hljs-string">&quot;r&quot;</span> ] , quote , { char | escape | interpolation } , closing_quote ;
+<span class="hljs-attribute">quote</span>          = <span class="hljs-string">&quot;&#x27;&quot;</span> | <span class="hljs-string">&#x27;&quot;&#x27;</span> | <span class="hljs-string">&quot;&#x27;&#x27;&#x27;&quot;</span> | <span class="hljs-string">&#x27;&quot;&quot;&quot;&#x27;</span> ;
+<span class="hljs-attribute">plain_string</span>   = string_without_interpolation ;
+<span class="hljs-attribute">escape</span>         = <span class="hljs-string">&quot;\&quot; , ( &quot;</span>n<span class="hljs-string">&quot; | &quot;</span>t<span class="hljs-string">&quot; | &quot;</span>r<span class="hljs-string">&quot; | &quot;</span>0<span class="hljs-string">&quot; | &quot;</span>\<span class="hljs-string">&quot; | &quot;</span><span class="hljs-string">&#x27;&quot; | &#x27;</span><span class="hljs-string">&quot;&#x27; | &quot;</span>{<span class="hljs-string">&quot; | &quot;</span>}<span class="hljs-string">&quot; ) ;
+interpolation  = &quot;</span>{<span class="hljs-string">&quot; , expr , &quot;</span>}<span class="hljs-string">&quot; ;
+NUMBER         = digit+ , [ &quot;</span>.&quot; , digit+ ] , [ ( &quot;e&quot; | &quot;E&quot; ) , [ &quot;+&quot; | &quot;-&quot; ] , digit+ ] ;
+<span class="hljs-attribute">NAME</span>           = ( letter | <span class="hljs-string">&quot;_&quot;</span> ) , { letter | digit | <span class="hljs-string">&quot;_&quot;</span> } ;
+<span class="hljs-attribute">NL</span>             = newline ;
 
-(* "{{"/"}}" are literal braces; raw strings have no interpolation or escapes.
+<span class="hljs-comment">(* &quot;{{&quot;/&quot;}}&quot; are literal braces; raw strings have no interpolation or escapes.
    Reserved words: let if elif else for in while def return try except assert fail success
    enforce forbid restrict think agent break continue pass and or not True False None.
-   Removed syntax: think{level=...}, tool{param=...} 'instructions',
-   let x += ... and let d.key = ... . *)
-</code></pre>
-<h2 id="semantics">Syntax versus semantics</h2>
+   Removed syntax: think{level=...}, tool{param=...} &#x27;instructions&#x27;,
+   let x += ... and let d.key = ... . *)</span>
+</code></pre></figure>
+<span id="semantics" class="anchor-alias" aria-hidden="true"></span><h2 id="syntax-versus-semantics">Syntax versus semantics<a class="heading-anchor" href="#syntax-versus-semantics" aria-label="Link to Syntax versus semantics">#</a></h2>
 <p><code>let</code> declares in the current block scope; reads and assignment search enclosing lexical scopes. Blocks and conditionals yield their final expression or <code>None</code>. Raw tools are ordinary function calls. Generation and agents share expression-valued modifiers; <code>log</code> has its own <code>level</code> modifier. See <a href="language.html">language basics</a> and <a href="llm-commands.html">generation contracts</a> for runtime rules.</p>
-<p>Run <code>node docs/build-search-index.mjs</code> from the repository root after updating the grammar or executable examples to refresh their site copies and the search index.</p>
-</main>
-<script src="assets/search-index.js"></script>
-<script src="assets/site.js"></script>
+<p>After changing the grammar or executable examples, update their Markdown copies in <code>docs-template/</code>. Run <code>npm run docs:build</code> from the repository root to regenerate all HTML pages and the search index. Documentation tests check that the embedded grammar and examples remain synchronized.</p>
+</article>
+    <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Grammar.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="cli.html"><span>Previous</span><strong>CLI & runtime</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="examples.html"><span>Next</span><strong>Examples</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Small language. Deliberate workflows.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </main>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#notation">Notation</a></li><li class="toc-level-2"><a href="#complete-grammar">Complete grammar</a></li><li class="toc-level-2"><a href="#syntax-versus-semantics">Syntax versus semantics</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Prompts are just the start.</strong><p>Give your workflow structure, validation, and clear boundaries.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+</div>
+<dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
+<p class="visually-hidden" id="announcement" role="status"></p>
+<noscript><p class="noscript-note">Search, code copying, and the theme switch need JavaScript. All documentation and navigation work without it.</p></noscript>
 </body>
 </html>
