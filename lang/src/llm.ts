@@ -47,6 +47,16 @@ const LEN_HINTS: Record<NonNullable<AskMods['len']>, string> = {
 
 const JSON_HINT = 'Respond with ONLY valid JSON. No prose, no markdown, no code fences.';
 
+type JsonFormat = Exclude<NonNullable<AskMods['fmt']>, 'text'>;
+
+const FORMAT_CONTRACTS: Record<Exclude<JsonFormat, 'json'>, { description: string; accepts: (value: Value) => boolean }> = {
+    integer: { description: 'a JSON integer', accepts: (value) => typeof value === 'number' && Number.isInteger(value) },
+    float: { description: 'a finite JSON number', accepts: (value) => typeof value === 'number' && Number.isFinite(value) },
+    array: { description: 'a JSON array', accepts: isList },
+    object: { description: 'a JSON object', accepts: isDict },
+    boolean: { description: 'a JSON boolean (true or false)', accepts: (value) => typeof value === 'boolean' },
+};
+
 export function buildPrompt(opts: {
     prompt: string;
     mods?: AskMods;
@@ -65,12 +75,14 @@ export function buildPrompt(opts: {
     if (guidance.length) sections.push(`Active restrictions (enforced by the runtime):\n${guidance.map((g) => `- ${g}`).join('\n')}`);
     if (opts.thinking) sections.push('Think carefully about the problem before giving the final answer.');
     if (opts.mods?.len) sections.push(LEN_HINTS[opts.mods.len]);
-    if (opts.mods?.fmt === 'object') sections.push(`${JSON_HINT} Return an object or array.`);
+    if (opts.mods?.fmt && opts.mods.fmt !== 'text' && opts.mods.fmt !== 'json') {
+        sections.push(`${JSON_HINT} Return ${FORMAT_CONTRACTS[opts.mods.fmt].description}.`);
+    }
     sections.push(opts.prompt);
     return sections.join('\n\n');
 }
 
-export function parseJsonResponse(text: string, objectOnly = false): Value {
+export function parseJsonResponse(text: string, format: JsonFormat = 'json'): Value {
     let value: Value;
     try {
         value = fromJson(JSON.parse(text));
@@ -78,8 +90,8 @@ export function parseJsonResponse(text: string, objectOnly = false): Value {
         if (!(e instanceof SyntaxError)) throw e;
         throw new Failure('invalid_format', `LLM response is not valid JSON: ${e.message}`);
     }
-    if (objectOnly && !isDict(value) && !isList(value)) {
-        throw new Failure('invalid_format', 'LLM response must be a JSON object or array');
+    if (format !== 'json' && !FORMAT_CONTRACTS[format].accepts(value)) {
+        throw new Failure('invalid_format', `LLM response must be ${FORMAT_CONTRACTS[format].description} (fmt='${format}')`);
     }
     return value;
 }

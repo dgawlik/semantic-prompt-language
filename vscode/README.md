@@ -7,8 +7,8 @@ this repository).
 
 * **Live syntax diagnostics** from the interpreter's actual lexer and parser, including invalid escapes,
   misplaced control flow, and unknown/duplicate generation modifiers.
-* **Completions** for language keywords, all built-in functions and raw tools, visible function/script bindings,
-  generation modifiers, and the `model` header directive.
+* **Completions** for language keywords, all built-in functions and raw tools, visible lexical bindings,
+  generation modifiers, log `level`, and the `model` header directive.
 * **Hover documentation** for keywords, built-ins, generation modifiers, and local declarations.
 * **Go to Definition** for bindings in the current document, including function parameters, nested functions,
   loop variables, caught failures, and references inside string interpolation.
@@ -18,9 +18,11 @@ this repository).
   triple-quoted strings. Illegal escapes and stray `}` in strings are flagged with the `invalid` scope.
 * **Generation and agency**: generation-only `?` and `think`, explicit `agent`, and expression-valued modifiers
   (`len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`). Raw tools are ordinary function calls.
+* **Block expressions and logging**: expression-valued blocks and conditionals, and
+  `log{level=debug}(value)` with separate log modifier completion, hover and highlighting.
 * **Guidance and failures**: `enforce`/`forbid`,
   `restrict [fs|net|exec|mcp]` (including comma-separated clauses), `try`/`except`, `assert`, `fail`, `success`.
-* **Snippets** (type the prefix): `def`, `if`, `ifelse`, `for`, `while`, `let`, `ask`, `askobj`, `think`, `try`,
+* **Snippets** (type the prefix): `def`, `if`, `ifelse`, `ifexpr`, `loglevel`, `for`, `while`, `let`, `ask`, `askobj`, `think`, `try`,
   `askschema`, `retry` (bounded schema repair), `agent`, `enforce`, `forbid`, `restrict`, `restrictnet`, `restrictexec`, `restrictmcp`, `restrictmulti`, `read_file`, `write_file`, `web_fetch`,
   `web_search`, `shell`, `assert`, `fail`, `success`, `model`.
 * **Editing**: `#` line comments (Ctrl+/), bracket matching and auto-closing for `{}` `[]` `()` and quotes
@@ -28,8 +30,8 @@ this repository).
 
 Highlighting is lexical (TextMate); the language server separately checks syntax on open and after edits.
 Expression values, schemas, and whether a name exists on a particular execution path are validated at runtime,
-not by the language server. Navigation is document-local and follows lexical function/script scopes; ordinary
-blocks do not introduce scopes. While source is incomplete, available tokens still provide bindings and
+not by the language server. Navigation is document-local and follows lexical block/function scopes;
+child declarations, loop variables and caught failures do not leak into parents. While source is incomplete, available tokens still provide bindings and
 static completions remain available even if lexing fails.
 `let` declares/redeclares names; compound and member/index assignments do not use `let`.
 

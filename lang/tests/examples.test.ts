@@ -1,9 +1,11 @@
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { run } from '../src/interpreter.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
+import { JsonFileStore } from '../src/store.js';
 import { LIVE_TIMEOUT, RecordingCopilot, live } from './live.js';
 
 const dir = path.resolve(__dirname, '..', 'examples');
@@ -60,6 +62,59 @@ describe('documentation snippets', () => {
 });
 
 describe('examples with offline backends', () => {
+    it('preserves journal state and bounds its history across runs with block scopes', async () => {
+        const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-journal-'));
+        try {
+            fs.mkdirSync(path.join(cwd, 'examples', 'data'), { recursive: true });
+            fs.writeFileSync(path.join(cwd, 'examples', 'data', 'notes.txt'), 'Today we shipped.');
+            const file = path.join(cwd, 'journal.json');
+            for (let i = 1; i <= 6; i++) {
+                let calls = 0;
+                const result = await run(parse(load('journal.spl')), {
+                    cwd, logger: new Logger('silent'), store: new JsonFileStore(file),
+                    backend: {
+                        async call() { return { text: ++calls === 1 ? `Summary ${i}` : 'Steady progress.', effective: {} }; },
+                        async close() {},
+                    },
+                });
+                expect(result).toMatchObject({
+                    status: 'success', value: { run: i, today: `Summary ${i}`, trend: i === 1 ? '' : 'Steady progress.' },
+                });
+                const state = JSON.parse(fs.readFileSync(file, 'utf8'));
+                expect(state.runs).toBe(i);
+                expect(state.history).toHaveLength(Math.min(i, 5));
+                expect(state).not.toHaveProperty('first_run');
+            }
+        } finally {
+            fs.rmSync(cwd, { recursive: true, force: true });
+        }
+    });
+
+    it('compares integer generation with deterministic Fibonacci in the basics example', async () => {
+        const responses = ['55', '{"setup":"A programmer walks into a bar.","punchline":"It was a FooBar."}', 'A pet story.'];
+        let calls = 0;
+        const result = await run(parse(load('basics.spl')), {
+            logger: new Logger('silent'),
+            backend: {
+                async call() {
+                    const text = responses[calls++];
+                    if (text === undefined) throw new Error('unexpected extra generation');
+                    return { text, effective: {} };
+                },
+                async close() {},
+            },
+        });
+        expect(result).toMatchObject({
+            status: 'success',
+            value: {
+                fib: 55, modelFib: 55,
+                joke: { setup: 'A programmer walks into a bar.', punchline: 'It was a FooBar.' },
+                animal: 'A pet story.',
+            },
+        });
+        expect(calls).toBe(3);
+    });
+
     it('triages every issue using validated output without live model calls', async () => {
         let calls = 0;
         const result = await run(parse(load('triage-issues.spl')), {

@@ -79,6 +79,8 @@ test('modifier and directive completions replace partial identifiers', () => {
         assert.deepEqual(completions(analysis(text), document(text).positionAt(text.length)).map((item) => item.label), [...MODIFIER_NAMES]);
     }
     assert.deepEqual(completions(analysis('@{'), { line: 0, character: 2 }).map((item) => item.label), ['model']);
+    const log = 'log{le';
+    assert.deepEqual(completions(analysis(log), document(log).positionAt(log.length)).map((item) => item.label), ['level']);
     assert.ok(completions(analysis('let value = ('), { line: 0, character: 13 }).some((item) => item.label === 'range'));
 });
 
@@ -95,7 +97,20 @@ test('hover distinguishes builtin calls, generation modifiers, and user bindings
     assert.equal(hover(analysis("log('len')"), { line: 0, character: 5 }), undefined);
 });
 
-test('navigation and completions follow function scopes, not block scopes', () => {
+test('format hover and completions describe every supported output type', () => {
+    const source = "let answer = ?{fmt='integer'} 'Fibonacci of 10'";
+    const formats = ['integer', 'float', 'array', 'object', 'text', 'boolean', 'json'];
+    const help = JSON.stringify(hover(analysis(source), at(source, 'fmt'))?.contents);
+    const partial = 'let answer = ?{fm';
+    const item = completions(analysis(partial), document(partial).positionAt(partial.length)).find((entry) => entry.label === 'fmt');
+    for (const format of formats) {
+        assert.ok(help.includes(`'${format}'`), format);
+        assert.ok(JSON.stringify(item).includes(`'${format}'`), format);
+    }
+    assert.match(help, /object excludes arrays/);
+});
+
+test('navigation and completions respect block and function scopes', () => {
     const source = [
         'let outer = 1',
         'def first(value) {',
@@ -107,7 +122,7 @@ test('navigation and completions follow function scopes, not block scopes', () =
     ].join('\n');
     const result = analysis(source);
     assert.deepEqual(result.diagnostics, []);
-    assert.deepEqual(definition(result, at(source, 'local +'))?.range.start, at(source, 'local ='));
+    assert.equal(definition(result, at(source, 'local +')), undefined);
     assert.deepEqual(definition(result, at(source, 'outer', 1))?.range.start, at(source, 'outer'));
     assert.deepEqual(definition(result, at(source, 'value }'))?.range.start, at(source, 'value'));
     assert.deepEqual(definition(result, at(source, 'value }', 1))?.range.start, at(source, 'value', 2));
@@ -115,9 +130,31 @@ test('navigation and completions follow function scopes, not block scopes', () =
     assert.ok(!outside.includes('local'));
     assert.ok(!outside.includes('value'));
     const inside = completions(result, at(source, 'return local')).map((item) => item.label);
-    assert.ok(inside.includes('local'));
+    assert.ok(!inside.includes('local'));
     assert.ok(inside.includes('outer'));
     assert.ok(inside.includes('value'));
+});
+
+test('definitions restore shadowed names and hide loop and handler bindings', () => {
+    const source = [
+        'let x = 1',
+        '{ let x = 2; log(x) }',
+        'log(x)',
+        'for i in [1] { log(i) }',
+        "try { fail 'x' } except err { log(err) }",
+        'log(i, err)',
+        'let value = if True { let hidden = 3; hidden } else { 0 }',
+        'log(hidden)',
+        'log{level=debug}(value)',
+    ].join('\n');
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    assert.deepEqual(definition(result, at(source, 'x)'))?.range.start, at(source, 'x = 2'));
+    assert.deepEqual(definition(result, at(source, 'x)', 1))?.range.start, at(source, 'x = 1'));
+    assert.equal(definition(result, at(source, 'i, err')), undefined);
+    assert.equal(definition(result, at(source, 'err)', 1)), undefined);
+    assert.equal(definition(result, at(source, 'hidden)', 0)), undefined);
+    assert.match(JSON.stringify(hover(result, at(source, 'level'))?.contents), /Log severity/);
 });
 
 test('definitions handle nested functions, redeclarations, loop and exception bindings', () => {

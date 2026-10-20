@@ -19,20 +19,34 @@ The Copilot SDK does not expose temperature/seed controls used by this runtime.
 
 ## Bindings
 
-`let name = expression` declares or redeclares a binding in the current function/script.
-`name = expression` and compound assignments require an existing binding in that local scope.
-Functions can read lexical enclosing scopes but cannot rebind their callers' variables.
-There is no implicit nonlocal assignment.
+`let name = expression` declares or redeclares a binding in the current scope.
+Reads, `name = expression`, and compound assignments search the lexical scope chain
+from the current scope outward. Assignment requires an existing declaration.
+An inner `let` shadows an outer declaration without changing it.
 
-All blocks, including bare grouping blocks, share their enclosing function/script scope.
-Only function calls introduce a new local scope. Parameters, loop variables, function
-definitions, and caught-failure names create local bindings.
+Every block creates a child scope. Each loop iteration gets fresh loop variables and locals;
+caught-failure names belong to their handler scope. Function calls introduce a local scope
+linked to their lexical closure, not their caller. Parent scopes cannot access child locals.
+Parameters and function definitions also create local bindings.
 List/dict members remain mutable and can be shared across function boundaries.
 
 Values: None, bool, number, string, list, string-keyed dict, and functions.
 Python-style operators, comparisons, short-circuiting, indexing, slicing, methods,
 closures, recursion, loops, and conditionals form the deterministic subset.
 Strings interpolate `{expression}`; `{{`/`}}`, escaped braces, and raw strings provide literal braces.
+
+Blocks and `if`/`elif`/`else` are expressions when their last executed line is an expression.
+The final expression is their value; a block ending in a statement, an empty branch,
+or an `if` with no selected branch yields `None`. Only the selected branch is evaluated.
+`{}` is an empty dict; `{ pass }` is a block yielding `None`. Function bodies still require
+explicit `return` to return a value. Explicit return, break, continue, fail and success
+retain their normal control flow inside expression blocks.
+
+`log(value, ...)` writes at info severity and returns `None`.
+`log{level=debug}(value, ...)` selects error/info/debug severity. Levels may be bare
+names, strings or expressions, evaluated once and validated before the arguments.
+Unknown/duplicate log modifiers are syntax errors. Debug messages are visible only at
+debug log level; `--silent` suppresses all logs.
 
 ## Exact tools
 
@@ -68,7 +82,7 @@ values are arbitrary expressions, evaluated once and checked at runtime before a
 | Modifier | Contract |
 |---|---|
 | `len` | `word`, `sentence`, `paragraph`, `long`; prompt hint only |
-| `fmt` | `text` (default), `json` (any JSON value), `object` (object/array) |
+| `fmt` | `integer`, `float`, `array`, `object`, `text` (default), `boolean`, `json` (any JSON value) |
 | `reasoning` | `low`, `medium`, `high`; model support is best effort with warnings |
 | `show` | Boolean, default False; stream available model reasoning to info logs |
 | `schema` | Strict synchronous JSON Schema draft-07 object/boolean; implies json format |
@@ -81,11 +95,16 @@ Every call uses a fresh session; context must be passed explicitly through value
 ### Structured output and repairs
 
 JSON parsing is strict: no extraction from prose or Markdown fences.
+`integer` requires a JSON number with no fractional part; `float` accepts any finite
+JSON number, including whole numbers. `array` returns a list, `object` requires a dict
+(not an array), and `boolean` requires JSON `true` or `false`. These formats never coerce
+strings or other types. `text` returns trimmed text without JSON parsing.
+`json` remains available for any JSON value, including scalars and null.
 Schema compilation uses Ajv strict mode, without coercion, defaults, or deleting extra fields.
 Invalid schemas and configuration combinations are `runtime_error` before model invocation.
 Asynchronous schemas and unresolved external references are not supported.
 
-Malformed JSON raises `invalid_format`. Schema mismatch raises `validation_failed`
+Malformed JSON or a value of the wrong format type raises `invalid_format`. Schema mismatch raises `validation_failed`
 with field paths, including missing fields and array indices.
 `schema` cannot be combined with `fmt='text'`. Repairs require JSON output.
 

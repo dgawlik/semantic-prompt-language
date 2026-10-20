@@ -26,16 +26,22 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
 - **Generation:** `?` and `think` have no tools or MCP access.
 - **Agency:** `agent` explicitly enables model-directed runtime and configured MCP tools.
 - **Validation:** expression-valued `schema` uses strict synchronous JSON Schema draft-07;
-  `fmt='json'` accepts any JSON value, `fmt='object'` requires an object/array.
-  Prose and code fences are not silently extracted.
+  `fmt` supports `integer`, `float`, `array`, `object`, `text`, and `boolean`.
+  Non-text formats require strict JSON of the selected type; `float` accepts any finite
+  number, including whole numbers, and `object` requires a dict, not a list.
+  `fmt='json'` still accepts any JSON value. Prose and code fences are not silently extracted.
 - **Repairs:** `repairs=0..5` retries only malformed/invalid generation, not transport errors
   or external actions. Agents require `repairs=0`. Use `assert` for business rules.
 - **Guidance:** `enforce`/`forbid` and `len` influence prompts, not runtime guarantees.
 - **Capabilities:** nested `restrict fs/net/exec/mcp` clauses intersect. Shell command
   inspection is best effort; MCP servers are trusted services, not OS-sandboxed.
-- **Bindings:** `let` declares/redeclares function/script locals; `x = ...` and `x += ...`
-  update existing locals. Every block shares that scope. Enclosing names are readable but
-  cannot be rebound by a function; shared collections remain mutable.
+- **Bindings:** every block has a lexical child scope. `let` declares/redeclares locally
+  and shadows outer names. Reads and assignments search outward for the first declaration;
+  child locals, loop variables and caught failures do not leak to parents.
+- **Expressions:** blocks and conditionals yield their final expression, otherwise `None`.
+  `{}` remains an empty dict. Functions still require explicit `return`.
+- **Logging:** `log(...)` defaults to info. `log{level=debug}(...)` selects error/info/debug;
+  bare level names, strings and expressions are accepted and checked at runtime.
 
 Common generation modifiers are `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`,
 and `model`. Values are evaluated once, then validated before calling the model.
@@ -88,4 +94,6 @@ See [embedding](../docs/internals.html#embedding).
 Use `enforce` and `forbid` for scoped prompt guidance; `instruct` and `avoid` are not accepted.
 0.3 removes `think{level=...}`, tool-command syntax, and `let` before
 compound/member/index assignments. Use `reasoning`, ordinary raw functions, and explicit agents instead.
-Bare blocks no longer create scopes. See the [migration table](../README.md#breaking-changes-in-03).
+Blocks create lexical child scopes; replace inner `let` with assignment when an outer
+binding must be updated. See the [migration table](../README.md#breaking-changes-in-03).
+`fmt='object'` is now object-only; use `fmt='array'` for lists or `fmt='json'` for any JSON value.

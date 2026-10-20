@@ -17,11 +17,14 @@ export type Expr =
     | { t: 'member'; obj: Expr; name: string }
     | { t: 'index'; obj: Expr; index: Expr }
     | { t: 'slice'; obj: Expr; lo?: Expr; hi?: Expr }
+    | { t: 'block'; body: Stmt[]; line: number }
+    | { t: 'if'; branches: { cond: Expr; body: Stmt[] }[]; orelse?: Stmt[]; line: number }
+    | { t: 'log'; level: Expr; args: Expr[] }
     | { t: 'ask' | 'think' | 'agent'; mods: Record<string, Expr>; prompt: Expr };
 
 export interface AskMods {
     len?: 'word' | 'sentence' | 'paragraph' | 'long';
-    fmt?: 'text' | 'object';
+    fmt?: 'integer' | 'float' | 'array' | 'object' | 'text' | 'boolean' | 'json';
 }
 
 export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'web_search' | 'shell';

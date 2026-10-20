@@ -15,7 +15,7 @@
 
 <div class="eyebrow">The language</div>
 <h1>Language basics</h1>
-<p class="lead">The deterministic core of SPL: Python-flavoured expressions, braces, function-scoped variables, and explicit assignment. Model calls are distinct expressions, not implicit behavior of ordinary functions.</p>
+<p class="lead">The deterministic core of SPL: Python-flavoured expressions, braces, lexical block scopes, and explicit assignment. Model calls are distinct expressions, not implicit behavior of ordinary functions.</p>
 
 <div class="callout">
   <span class="ico">📌</span>
@@ -23,7 +23,7 @@
   <ul>
     <li><strong>Blocks use braces</strong>; the opening <code>{</code> must be on the same line as its keyword. Statements end at a newline (or <code>;</code>).</li>
     <li><strong><code>let</code> declares/redeclares a local</strong>; <code>x = …</code> and <code>x += …</code> update an existing local. Collection assignment uses <code>d['k'] = 2</code>, without <code>let</code>.</li>
-    <li><strong>Function scoping:</strong> every block shares its function/script scope. Only function calls create a new local scope. See <a href="#scope">Scope</a>.</li>
+    <li><strong>Block scoping:</strong> each block has a child scope. Reads and assignments search outward; <code>let</code> shadows enclosing names. See <a href="#scope">Scope</a>.</li>
     <li><strong><code>return</code> exits immediately</strong> from any scope &mdash; the function, or the whole script at the top level.</li>
     <li><strong>Every string interpolates</strong> <code>{expr}</code>.</li>
     <li>Unknown/duplicate modifier names, <code>break</code> outside loops, and <code>try</code> without <code>except</code> are syntax errors. Modifier values are expressions validated at runtime.</li>
@@ -55,32 +55,49 @@ user['age'] = 36       # item assignment
 </code></pre>
 
 <h3 id="scope">Scope</h3>
-<p><code>let name = …</code> binds in the current function or script. Every other block shares that scope, including a bare grouping block. Redeclaring a name in such a block updates the same binding, and newly declared names remain visible afterward. There is no hoisting: a local appears when execution binds it.</p>
+<p><code>let name = …</code> binds in the current scope. Every block creates a lexical child scope. Inner declarations shadow enclosing names and cannot be accessed from a parent scope. Reads and assignments search outward through the full lexical chain for the first declaration. There is no hoisting: a local appears when execution binds it.</p>
 <pre><code class="language-spl">
 let color = 'Blue'
 {
     let color = 'Red'
     log(color)             # Red
 }
-log(color)                 # Red: braces do not introduce a scope
+log(color)                 # Blue: the child declaration did not change it
 </code></pre>
-<p>Conditionals, loops, exception handlers, and guidance/restriction blocks all follow the same rule. Loop variables and caught failure names are local bindings too. Results remain visible after the block:</p>
+<p>Conditionals, loops, exception handlers, and guidance/restriction blocks follow the same rule. Each loop iteration has fresh locals, including its loop variables. Caught failure names belong to their handler. To keep a result, declare it outside and assign inside:</p>
 <pre><code class="language-spl">
 let color = None
 enforce 'Your favorite color is blue' {
-    let color = ?{len='word'} 'What is your favorite color?'
+    color = ?{len='word'} 'What is your favorite color?'
 }
 log(color)                 # the answer
 
+let response = None
 try {
-    let response = ?{fmt='object'} 'A joke about programmers'
+    response = ?{fmt='object'} 'A joke about programmers'
 } except err {
-    let response = {'setup': 'none', 'punchline': err.reason}
+    response = {'setup': 'none', 'punchline': err.reason}
 }
 log(response)              # visible here, whichever branch ran
 </code></pre>
-<p><code>enforce</code> provides positive scoped prompt guidance and <code>forbid</code> provides negative guidance. They do not create variable scopes or verify model compliance.</p>
-<p>Functions can read lexical enclosing variables. A <code>let</code> inside a function declares/redeclares locally and can shadow an enclosing name. Name assignment cannot rebind an enclosing variable: declare a local first. To share mutable state, mutate a list or dict (<code>cell[0] += 1</code>).</p>
+<p><code>enforce</code> provides positive scoped prompt guidance and <code>forbid</code> provides negative guidance. Both create child variable scopes, but neither verifies model compliance.</p>
+<p>Functions close over their lexical defining scope. They can read or assign enclosing declarations; <code>let</code> instead declares locally and shadows an enclosing name. Lists and dicts remain mutable across scopes.</p>
+
+<h3 id="block-expressions">Block and conditional expressions</h3>
+<p>A block or selected <code>if</code>/<code>elif</code>/<code>else</code> branch yields its final expression. An empty branch, a block ending in a statement, or an unmatched conditional returns <code>None</code>. Only the selected branch runs. <code>{}</code> remains an empty dictionary; use <code>{ pass }</code> for a block yielding <code>None</code>. Functions still require explicit <code>return</code>.</p>
+<pre><code class="language-spl">
+let result = if ?{fmt='boolean'} 'Today is Friday?' {
+    ? 'Haiku on variance'
+} else {
+    ? 'Sentence on passing time'
+}
+let length = {
+    let text = result
+    len(text)
+}
+log{level=debug}(length)
+success result
+</code></pre>
 
 <h3 id="persistence">Persistence</h3>
 <p>Top-level variables can be saved between runs with opt-in <code>--store</code>, even after a script failure. Persistence is not a transaction or an action log and is forbidden during replay. See <a href="cli.html#store">CLI &amp; runtime</a>.</p>
@@ -97,6 +114,7 @@ log(response)              # visible here, whichever branch ran
 <tr><td><code>'dict'</code></td><td><code>{'a': 1}</code></td><td>Keys must be strings. Insertion ordered. Also readable as <code>d.a</code>.</td></tr>
 <tr><td><code>'function'</code></td><td><code>def f(x) { … }</code></td><td>First-class values.</td></tr>
 </tbody></table></div>
+<p>Model calls can request typed output with <code>fmt='integer'</code>, <code>'float'</code>, <code>'array'</code>, <code>'object'</code>, <code>'text'</code>, or <code>'boolean'</code>. Non-text formats validate strict JSON and return ordinary SPL values; <code>fmt='json'</code> accepts any JSON value. See <a href="llm-commands.html#fmt-object">output formats and examples</a>.</p>
 
 <div class="callout warn">
   <span class="ico">⚠️</span>

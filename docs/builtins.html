@@ -71,7 +71,7 @@
 <div class="table-wrap"><table>
 <thead><tr><th>Signature</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td><code>log(a, b, …)</code></td><td>Writes the <code>str()</code> of each argument, space-separated, to <strong>stderr</strong> through the logger. Returns <code>None</code>. Never pollutes the result on stdout.</td></tr>
+<tr><td><code>log(a, b, …)</code><br><code>log{level=debug}(a, b, …)</code></td><td>Writes the <code>str()</code> of each argument, space-separated, to <strong>stderr</strong>. Plain calls default to info; the modifier selects <code>error</code>, <code>info</code> or <code>debug</code>, using a bare name, string or expression. The level is evaluated once and validated before arguments. Debug messages appear only at debug log level; silent suppresses all logs. Returns <code>None</code>. Never pollutes stdout.</td></tr>
 </tbody></table></div>
 
 <h2 id="methods">Methods</h2>

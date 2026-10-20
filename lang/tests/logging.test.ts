@@ -3,6 +3,40 @@ import { run } from '../src/interpreter.js';
 import { LlmError, type LlmBackend, type LlmRequest } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
+import { NoLlm } from './helpers.js';
+
+describe.each(['error', 'info', 'debug', 'silent'] as const)('script log levels at %s', (level) => {
+    it('filters modifier logs and keeps ordinary log at info', async () => {
+        const lines: string[] = [];
+        const result = await run(parse(`
+let chosen = 'debug'
+let n = 0
+def next() { n += 1; return n }
+log('plain', next())
+log{level=error}('problem', next())
+log{level='info'}('details', next())
+let logged = log{level=chosen}('trace', next())
+success [n, logged]
+`), { backend: new NoLlm(), logger: new Logger(level, (line) => lines.push(line)) });
+        expect(result).toMatchObject({ status: 'success', value: [4, null] });
+        const messages = lines.filter((line) => /^\[(error|info|debug)\] log:/.test(line));
+        expect(messages).toEqual(level === 'silent' ? [] : [
+            ...(level === 'error' ? [] : ['[info] log: plain 1']),
+            '[error] log: problem 2',
+            ...(level === 'error' ? [] : ['[info] log: details 3']),
+            ...(level === 'debug' ? ['[debug] log: trace 4'] : []),
+        ]);
+    });
+});
+
+it.each(["'trace'", '1', 'None', 'True'])('rejects invalid log level %s before evaluating arguments', async (level) => {
+    const result = await run(parse(`log{level=${level}}(missing)`), {
+        backend: new NoLlm(), logger: new Logger('silent'),
+    });
+    expect(result).toMatchObject({
+        status: 'failure', failure: { status_code: 'runtime_error', reason: "log level must be 'error', 'info' or 'debug'" },
+    });
+});
 
 describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s', (level) => {
     it.each([

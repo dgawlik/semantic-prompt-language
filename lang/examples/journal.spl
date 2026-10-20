@@ -4,27 +4,25 @@
 #
 # Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.
 
-try {
-    runs
-} except first_run {
-    # `runs` is not in the store yet, so this is the first run (the caught payload is dropped again)
-    let first_run = None
-    let runs = 0
-    let history = []
+def stored_runs() {
+    try { return runs } except first_run { return 0 }
 }
-
-runs += 1
+def stored_history() {
+    try { return history } except first_run { return [] }
+}
+let runs = stored_runs() + 1
+let history = stored_history()
 
 let notes = read_file('./examples/data/notes.txt')
 let todays = ?{len='sentence'} 'Summarize these notes: {notes}'
 history.append({'run': runs, 'summary': todays})
 if len(history) > 5 {
-    let history = history[1:]
+    history = history[1:]
 }
 
 let trend = ''
 if len(history) > 1 {
-    let trend = ?{len='paragraph'} '''
+    trend = ?{len='paragraph'} '''
 Here are my last journal summaries, oldest first: {history}
 What is changing from run to run? Be concrete.'''
 }

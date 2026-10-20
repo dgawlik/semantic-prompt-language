@@ -120,7 +120,7 @@ success [e.get('polluted', 'clean'), len(d)]
         expect(failure((await exec(`z += 1`)).result).reason).toMatch(/declare a local/);
     });
 
-    it('shares function-scoped bindings across nested grouping blocks', async () => {
+    it('shadows bindings in nested blocks without changing their parents', async () => {
         const { result } = await exec(`
 let color = 'Blue'
 let seen = []
@@ -136,12 +136,12 @@ let seen = []
 seen.append(color)
 success seen
 `);
-        expect(value(result)).toEqual(['Red', 'Green', 'Green', 'Green']);
+        expect(value(result)).toEqual(['Red', 'Green', 'Red', 'Blue']);
     });
 
-    it('keeps variables declared in a grouping block visible', async () => {
+    it('rejects access to variables declared in a child scope', async () => {
         const { result } = await exec(`{ let inner = 1 }\nsuccess inner`);
-        expect(value(result)).toBe(1);
+        expect(failure(result)).toMatchObject({ status_code: 'runtime_error', reason: "name 'inner' is not defined", line: 2 });
     });
 
     it('lets function parameters and locals shadow outer variables', async () => {
@@ -156,7 +156,7 @@ success [f('inner'), x]
         expect(value(result)).toEqual(['inner!', 'outer']);
     });
 
-    it('updates the outer variable from enforce, forbid, restrict, if, loop and try bodies', async () => {
+    it('updates enclosing declarations through multiple nested scopes', async () => {
         fs.mkdirSync(path.join(dir, 'out'));
         const { result } = await exec(`
 let color = None
@@ -164,7 +164,7 @@ let n = 0
 enforce 'be brief' {
     forbid 'swearing' {
         restrict './out' {
-            let color = 'blue'
+            color = 'blue'
         }
     }
 }
@@ -176,12 +176,13 @@ success [color, n]
         expect(value(result)).toEqual(['blue', 13]);
     });
 
-    it('keeps variables set before a caught failure inside constraint blocks', async () => {
+    it('keeps outer assignments but discards child declarations after failure', async () => {
         const { result } = await exec(`
 let r = 0
 try {
     enforce 'x' {
-        let r = 1
+        r = 1
+        let hidden = 2
         fail 'f'
     }
 } except e {
@@ -190,6 +191,124 @@ try {
 success r
 `);
         expect(value(result)).toBe(6);
+    });
+
+    it.each([
+        `if True { let hidden = 1 }`,
+        `for hidden in [1] { pass }`,
+        `while True { let hidden = 1; break }`,
+        `try { let hidden = 1 } except e { pass }`,
+        `try { fail 'x' } except hidden { pass }`,
+        `enforce 'x' { let hidden = 1 }`,
+        `forbid 'x' { let hidden = 1 }`,
+        `restrict '.' { let hidden = 1 }`,
+    ])('isolates block-local declarations: %s', async (source) => {
+        expect(failure((await exec(`${source}\nsuccess hidden`)).result).reason).toBe("name 'hidden' is not defined");
+    });
+
+    it('creates fresh loop scopes and retains lexical closures', async () => {
+        const { result } = await exec(`
+let fns = []
+let i = 'outer'
+for i in [1, 2, 3] {
+    def capture() { return i }
+    fns.append(capture)
+}
+success [fns[0](), fns[1](), fns[2](), i]
+`);
+        expect(value(result)).toEqual([1, 2, 3, 'outer']);
+    });
+
+    it('searches the entire lexical chain for assignments without losing child scopes', async () => {
+        const { result } = await exec(`
+let x = 1
+{
+    let local = 3
+    {
+        x += 2
+        assert local == 3
+    }
+    assert local == 3
+}
+def update() { x += 4 }
+update()
+success x
+`);
+        expect(value(result)).toBe(7);
+    });
+
+    it('returns final expressions from blocks and selected conditional branches', async () => {
+        const { result } = await exec(`
+let result = if False { fail 'unreachable' } elif True {
+    let x = 3
+    { let y = 4; x + y }
+} else { fail 'unreachable' }
+let other = {
+    let result = 8
+    if True { result + 1 } else { 0 }
+}
+success [result, other, if False { 0 } else { 10 }]
+`);
+        expect(value(result)).toEqual([7, 9, 10]);
+    });
+
+    it('returns None for blocks ending in statements or unmatched conditionals', async () => {
+        const { result } = await exec(`
+let x = { 1; let y = 2 }
+let y = if False { 3 }
+let z = if True { }
+success [x, y, z, { pass }, { 5; pass }]
+`);
+        expect(value(result)).toEqual([null, null, null, null, null]);
+    });
+
+    it('preserves dictionaries and supports multiline blocks within calls and lists', async () => {
+        const { result } = await exec(`
+success [
+    len({
+        let value = [1, 2]
+        value
+    }),
+    if True {
+        let x = 2
+        {'value': x}
+    } else { {} },
+    {},
+    {'if': if False { 1 } else { 2 }},
+]
+`);
+        expect(value(result)).toEqual([2, { value: 2 }, {}, { if: 2 }]);
+    });
+
+    it('propagates return, break, continue and success out of expression blocks', async () => {
+        const { result } = await exec(`
+def f() {
+    let unused = { if True { return 42 }; 0 }
+    fail 'unreachable'
+}
+let out = []
+for i in [1, 2, 3, 4] {
+    let x = if i == 2 { continue } elif i == 4 { break } else { i }
+    out.append(x)
+}
+success [f(), out]
+`);
+        expect(value(result)).toEqual([42, [1, 3]]);
+        expect(value((await exec(`let unused = { success 7 }\nfail 'unreachable'`)).result)).toBe(7);
+    });
+
+    it('restores scopes after expression failures and persists only top-level bindings', async () => {
+        const file = path.join(dir, 'store.json');
+        const { result } = await exec(`
+let x = 1
+try {
+    let bad = { let x = 2; fail 'stop' }
+} except e { assert x == 1 }
+{ let transient = 3; x += 4 }
+success x
+`, { store: new JsonFileStore(file) });
+        expect(value(result)).toBe(5);
+        expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ x: 5 });
     });
 
     it('returns immediately from any scope', async () => {

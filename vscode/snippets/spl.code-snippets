@@ -19,6 +19,16 @@
     "body": ["for ${1:item} in ${2:items} {", "\t$0", "}"],
     "description": "for loop"
   },
+  "If expression": {
+    "prefix": "ifexpr",
+    "body": ["let ${1:result} = if ${2:condition} {", "\t${3:value}", "} else {", "\t${0:other}", "}"],
+    "description": "Conditional expression returning the selected branch's final expression"
+  },
+  "Leveled log": {
+    "prefix": "loglevel",
+    "body": ["log{level=${1|debug,info,error|}}(${0:value})"],
+    "description": "Write a script log at the selected severity"
+  },
   "While loop": {
     "prefix": "while",
     "body": ["while ${1:condition} {", "\t$0", "}"],

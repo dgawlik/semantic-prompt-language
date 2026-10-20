@@ -12,6 +12,7 @@
         { "include": "#comment" },
         { "include": "#string" },
         { "include": "#number" },
+        { "include": "#log-with-modifiers" },
         { "include": "#command-with-modifiers" },
         { "include": "#declarations" },
         { "include": "#keywords" },
@@ -128,6 +129,22 @@
     "number": {
       "name": "constant.numeric.spl",
       "match": "\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b"
+    },
+
+    "log-with-modifiers": {
+      "name": "meta.log.spl",
+      "begin": "(?<![.\\w])(log)\\s*(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": { "name": "support.function.builtin.spl" },
+        "2": { "name": "punctuation.section.modifiers.begin.spl" }
+      },
+      "endCaptures": { "0": { "name": "punctuation.section.modifiers.end.spl" } },
+      "patterns": [
+        { "name": "variable.parameter.modifier.spl", "match": "\\blevel\\b(?=\\s*=(?!=))" },
+        { "name": "constant.language.spl", "match": "\\b(?:error|info|debug)\\b" },
+        { "include": "#expression" }
+      ]
     },
 
     "command-with-modifiers": {

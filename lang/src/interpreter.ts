@@ -42,6 +42,11 @@ export type RunResult =
     | { status: 'failure'; failure: FailurePayload };
 
 type Signal = { k: 'break' } | { k: 'continue' } | { k: 'return'; v: Value; hasValue: boolean };
+type Completion = Signal | { k: 'value'; v: Value } | undefined;
+
+class ExpressionSignal {
+    constructor(readonly signal: Signal) {}
+}
 
 export async function run(program: Program, opts: RunOptions): Promise<RunResult> {
     return new Interpreter(program, opts).run();
@@ -82,7 +87,7 @@ class Interpreter {
             for (const [k, v] of Object.entries(this.store.load())) this.globals.vars.set(k, v);
             const signal = await this.execBlock(this.program.body, this.globals);
             if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
-            if (signal) throw runtimeError(`'${signal.k}' outside of a loop`);
+            if (signal && signal.k !== 'value') throw runtimeError(`'${signal.k}' outside of a loop`);
             return { status: 'success', value: null, hasValue: false };
         } catch (e) {
             if (e instanceof SuccessSignal) return { status: 'success', value: e.value as Value, hasValue: true };
@@ -107,29 +112,41 @@ class Interpreter {
     // ---- environments --------------------------------------------------
 
     private lookup(name: string, env: Env): Value {
-        for (let e: Env | undefined = env; e; e = e.parent) {
-            if (e.vars.has(name)) return e.vars.get(name)!;
-        }
+        const scope = this.bindingScope(name, env);
+        if (scope) return scope.vars.get(name)!;
         const b = this.builtins.get(name);
         if (b) return b;
         throw runtimeError(`name '${name}' is not defined`);
     }
 
-    // ---- statements ----------------------------------------------------
-
-    private async execBlock(stmts: Stmt[], env: Env): Promise<Signal | undefined> {
-        for (const s of stmts) {
-            const signal = await this.execStmt(s, env);
-            if (signal) return signal;
+    private bindingScope(name: string, env: Env): Env | undefined {
+        for (let scope: Env | undefined = env; scope; scope = scope.parent) {
+            if (scope.vars.has(name)) return scope;
         }
         return undefined;
     }
 
-    private async execStmt(s: Stmt, env: Env): Promise<Signal | undefined> {
+    private childScope(parent: Env): Env {
+        return { vars: new Map(), parent };
+    }
+
+    // ---- statements ----------------------------------------------------
+
+    private async execBlock(stmts: Stmt[], env: Env): Promise<Completion> {
+        let completion: Completion;
+        for (const s of stmts) {
+            completion = await this.execStmt(s, env);
+            if (completion && completion.k !== 'value') return completion;
+        }
+        return completion;
+    }
+
+    private async execStmt(s: Stmt, env: Env): Promise<Completion> {
         try {
             this.opts.logger.deterministic(`line ${s.line} (${s.t}): ${this.program.lines[s.line - 1]?.trim() ?? ''}`);
             return await this.execStmtInner(s, env);
         } catch (e) {
+            if (e instanceof ExpressionSignal) return e.signal;
             if (e instanceof Failure) throw e.locate(s.line, this.program.lines[s.line - 1]?.trim() ?? '');
             if (e instanceof RangeError) {
                 throw new Failure('runtime_error', e.message).locate(s.line, this.program.lines[s.line - 1]?.trim() ?? '');
@@ -138,7 +155,7 @@ class Interpreter {
         }
     }
 
-    private async execStmtInner(s: Stmt, env: Env): Promise<Signal | undefined> {
+    private async execStmtInner(s: Stmt, env: Env): Promise<Completion> {
         switch (s.t) {
             case 'let':
                 env.vars.set(s.name, await this.eval(s.value, env));
@@ -147,10 +164,9 @@ class Interpreter {
                 await this.execAssign(s.target, s.op, s.value, env);
                 return;
             case 'block':
-                return this.execBlock(s.body, env);
+                return this.execBlock(s.body, this.childScope(env));
             case 'expr':
-                await this.eval(s.e, env);
-                return;
+                return { k: 'value', v: await this.eval(s.e, env) };
             case 'pass':
                 return;
             case 'break':
@@ -161,13 +177,13 @@ class Interpreter {
                 return { k: 'return', v: s.value ? await this.eval(s.value, env) : null, hasValue: s.value !== undefined };
             case 'if': {
                 for (const b of s.branches) {
-                    if (truthy(await this.eval(b.cond, env))) return this.execBlock(b.body, env);
+                    if (truthy(await this.eval(b.cond, env))) return this.execBlock(b.body, this.childScope(env));
                 }
-                return s.orelse ? this.execBlock(s.orelse, env) : undefined;
+                return s.orelse ? this.execBlock(s.orelse, this.childScope(env)) : undefined;
             }
             case 'while': {
                 while (truthy(await this.eval(s.cond, env))) {
-                    const sig = await this.execBlock(s.body, env);
+                    const sig = await this.execBlock(s.body, this.childScope(env));
                     if (sig?.k === 'break') break;
                     if (sig?.k === 'return') return sig;
                 }
@@ -176,8 +192,9 @@ class Interpreter {
             case 'for': {
                 const items = iterate(await this.eval(s.iter, env));
                 for (let i = 0; i < items.length; i++) {
-                    this.bindLoopVars(s.vars, items[i], env);
-                    const sig = await this.execBlock(s.body, env);
+                    const scope = this.childScope(env);
+                    this.bindLoopVars(s.vars, items[i], scope);
+                    const sig = await this.execBlock(s.body, scope);
                     if (sig?.k === 'break') break;
                     if (sig?.k === 'return') return sig;
                 }
@@ -193,15 +210,18 @@ class Interpreter {
                 const savedRestrictions = this.restrictions;
                 const savedDepth = this.depth;
                 try {
-                    return await this.execBlock(s.body, env);
+                    const completion = await this.execBlock(s.body, this.childScope(env));
+                    return completion?.k === 'value' ? undefined : completion;
                 } catch (e) {
                     if (!(e instanceof Failure)) throw e;
                     this.constraints = savedConstraints;
                     this.restrictions = savedRestrictions;
                     this.depth = savedDepth;
                     this.opts.logger.debug(`caught ${e.statusCode}: ${e.reason}`);
-                    env.vars.set(s.errName, newDict(Object.entries(e.payload()) as [string, Value][]));
-                    return this.execBlock(s.handler, env);
+                    const scope = this.childScope(env);
+                    scope.vars.set(s.errName, newDict(Object.entries(e.payload()) as [string, Value][]));
+                    const completion = await this.execBlock(s.handler, scope);
+                    return completion?.k === 'value' ? undefined : completion;
                 }
             }
             case 'assert': {
@@ -218,7 +238,8 @@ class Interpreter {
                 const saved = this.constraints;
                 this.constraints = [...saved, { kind: s.kind, text }];
                 try {
-                    return await this.execBlock(s.body, env);
+                    const completion = await this.execBlock(s.body, this.childScope(env));
+                    return completion?.k === 'value' ? undefined : completion;
                 } finally {
                     this.constraints = saved;
                 }
@@ -231,7 +252,8 @@ class Interpreter {
                         this.restrictions = this.restrictions.with(restriction);
                         this.opts.logger.debug(`restrict ${clause.kind}: ${restriction.values.join(', ')}`);
                     }
-                    return await this.execBlock(s.body, env);
+                    const completion = await this.execBlock(s.body, this.childScope(env));
+                    return completion?.k === 'value' ? undefined : completion;
                 } finally {
                     this.restrictions = saved;
                 }
@@ -256,8 +278,9 @@ class Interpreter {
             return op === '=' ? rhs : this.binary(op.slice(0, -1), current(), rhs);
         };
         if (target.t === 'name') {
-            if (!env.vars.has(target.name)) throw runtimeError(`cannot assign '${target.name}': declare a local with let first`);
-            env.vars.set(target.name, await compute(() => this.lookup(target.name, env)));
+            const scope = this.bindingScope(target.name, env);
+            if (!scope) throw runtimeError(`cannot assign '${target.name}': declare a local with let first`);
+            scope.vars.set(target.name, await compute(() => this.lookup(target.name, env)));
             return;
         }
         const obj = await this.eval(target.obj, env);
@@ -293,6 +316,21 @@ class Interpreter {
             case 'str': return this.text(e.parts, env);
             case 'bool': return e.v;
             case 'none': return null;
+            case 'block':
+            case 'if': {
+                const completion = await this.execStmt(e, env);
+                if (completion && completion.k !== 'value') throw new ExpressionSignal(completion);
+                return completion?.v ?? null;
+            }
+            case 'log': {
+                const level = await this.eval(e.level, env);
+                if (level !== 'error' && level !== 'info' && level !== 'debug') {
+                    throw runtimeError("log level must be 'error', 'info' or 'debug'");
+                }
+                const args = await this.evalArgs(e.args, env);
+                this.opts.logger[level](`log: ${args.map(str).join(' ')}`);
+                return null;
+            }
             case 'name': return this.lookup(e.name, env);
             case 'list': {
                 const out: Value[] = [];
@@ -385,7 +423,7 @@ class Interpreter {
         this.depth++;
         try {
             const sig = await this.execBlock(fn.body, local);
-            if (sig && sig.k !== 'return') throw runtimeError(`'${sig.k}' outside of a loop`);
+            if (sig && sig.k !== 'return' && sig.k !== 'value') throw runtimeError(`'${sig.k}' outside of a loop`);
             return sig?.k === 'return' ? sig.v : null;
         } finally {
             this.depth--;
@@ -523,7 +561,9 @@ class Interpreter {
         const { len, reasoning = kind === 'ask' ? undefined : 'medium', show = false, repairs = 0, model } = options;
         const fmt = options.fmt ?? ('schema' in options ? 'json' : 'text');
         if (len !== undefined && len !== 'word' && len !== 'sentence' && len !== 'paragraph' && len !== 'long') throw runtimeError('len must be word, sentence, paragraph, or long');
-        if (fmt !== 'text' && fmt !== 'json' && fmt !== 'object') throw runtimeError('fmt must be text, json, or object');
+        if (fmt !== 'integer' && fmt !== 'float' && fmt !== 'array' && fmt !== 'object' && fmt !== 'text' && fmt !== 'boolean' && fmt !== 'json') {
+            throw runtimeError('fmt must be integer, float, array, object, text, boolean, or json');
+        }
         if (reasoning !== undefined && reasoning !== 'low' && reasoning !== 'medium' && reasoning !== 'high') throw runtimeError('reasoning must be low, medium, or high');
         if (typeof show !== 'boolean') throw runtimeError('show must be True or False');
         if (model !== undefined && (typeof model !== 'string' || !model.trim())) throw runtimeError('model must be a non-empty string');
@@ -533,7 +573,7 @@ class Interpreter {
         const validate = 'schema' in options ? compileSchema(options.schema) : undefined;
         let prompt = buildPrompt({
             prompt: str(await this.eval(promptExpr, env)),
-            mods: { len, fmt: fmt === 'object' ? 'object' : undefined },
+            mods: { len, fmt },
             thinking: reasoning !== undefined,
             constraints: this.constraints,
             restrictions: this.restrictions,
@@ -551,7 +591,7 @@ class Interpreter {
                 tools: new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay'),
             });
             try {
-                const value = fmt === 'text' ? text : parseJsonResponse(text, fmt === 'object');
+                const value = fmt === 'text' ? text : parseJsonResponse(text, fmt);
                 validate?.(value);
                 return value;
             } catch (e) {

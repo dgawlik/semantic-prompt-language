@@ -45,10 +45,11 @@ guidance_stmt  = ( "enforce" | "forbid" ) , expr , block ;
 restrict_stmt  = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
 restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;
 
-(* let declares/redeclares in the current function or script. All blocks share that scope.
-   Name assignment requires a declared local; it cannot rebind an enclosing function/script.
-   Functions read lexical enclosing scopes; collection mutations can share state.
-   Loop variables and caught failure names are local bindings.
+(* Every block creates a lexical child scope. let declares/redeclares locally and shadows parents.
+   Reads and assignments search outward for the first declaration; undeclared names are errors.
+   Each loop iteration has fresh locals; caught failure names belong to the handler scope.
+   Blocks/if yield their final expression, otherwise None. An unmatched if yields None.
+   {} remains an empty dict; { pass } is a block yielding None. Functions need explicit return.
    return exits the innermost function, or the script at top level.
    success exits the script, including when used in a function. *)
 
@@ -67,16 +68,20 @@ index          = "[" , expr , "]" ;
 slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
 member         = "." , NAME ;
 primary        = NUMBER | string | "True" | "False" | "None" | NAME
-               | "(" , expr , ")" | list | dict
+               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr
                | ( "think" | "agent" ) , [ modifiers ] , postfix ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
 modifiers      = "{" , [ modifier , { "," , modifier } , [ "," ] ] , "}" ;
 modifier       = ( "len" | "fmt" | "reasoning" | "show" | "schema" | "repairs" | "model" ) , "=" , expr ;
+log_expr       = "log" , "{" , [ "level" , "=" , log_level , [ "," ] ] , "}" , call ;
+log_level      = "error" | "info" | "debug" | expr ;
 
 (* Unknown/duplicate modifier names are syntax errors. Values are expressions, validated at runtime:
    len: word/sentence/paragraph/long (guidance only)
-   fmt: text/json/object; schema implies json unless fmt is explicit
+   fmt: integer/float/array/object/text/boolean/json; schema implies json unless fmt is explicit
+   Non-text formats require strict JSON of the selected type; float accepts finite numbers,
+   object excludes arrays, and json accepts any JSON value.
    reasoning: low/medium/high; think and agent default to medium
    show: True/False; schema: synchronous strict JSON Schema draft-07 object or boolean
    repairs: integer 0..5 (additional generation attempts, default 0); agents require 0
@@ -84,6 +89,9 @@ modifier       = ( "len" | "fmt" | "reasoning" | "show" | "schema" | "repairs" |
    Generation (? and think) has no tools. agent explicitly enables restricted runtime/MCP tools.
    Raw tools are ordinary positional functions: read_file(path), write_file(path, content),
    web_fetch(url), web_search(query), shell(command). They never invoke a model.
+   log{level=...}(args) selects error/info/debug severity; plain log(args) defaults to info.
+   Level values are bare names, strings or expressions, validated before evaluating arguments.
+   Debug messages are emitted only at debug log level; silent suppresses all logs.
    enforce/forbid are scoped prompt guidance.
    schema/assert validate data; restrict checks actions. *)
 
@@ -103,7 +111,7 @@ NL             = newline ;
    let x += ... and let d.key = ... . *)
 </code></pre>
 <h2 id="semantics">Syntax versus semantics</h2>
-<p><code>let</code> binds names; assignment updates existing locals. All blocks share their function/script scope. Raw tools are ordinary function calls, not reserved command syntax. Generation and explicit agents share expression-valued modifiers. See <a href="language.html">language basics</a> and <a href="llm-commands.html">generation contracts</a> for runtime rules.</p>
+<p><code>let</code> declares in the current block scope; reads and assignment search enclosing lexical scopes. Blocks and conditionals yield their final expression or <code>None</code>. Raw tools are ordinary function calls. Generation and agents share expression-valued modifiers; <code>log</code> has its own <code>level</code> modifier. See <a href="language.html">language basics</a> and <a href="llm-commands.html">generation contracts</a> for runtime rules.</p>
 <p>Run <code>node docs/build-search-index.mjs</code> from the repository root after updating the grammar or executable examples to refresh their site copies and the search index.</p>
 </main>
 <script src="assets/search-index.js"></script>

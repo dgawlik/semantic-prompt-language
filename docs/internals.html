@@ -29,7 +29,7 @@
 <thead><tr><th>Source</th><th>Responsibility</th></tr></thead>
 <tbody>
 <tr><td><code>lexer.ts / parser.ts / ast.ts</code></td><td>Tokenization, syntax validation, typed statements and expressions.</td></tr>
-<tr><td><code>interpreter.ts</code></td><td>Function-scoped bindings, control flow, raw built-ins, generation options, repair, scoped guidance/restrictions, source locations.</td></tr>
+<tr><td><code>interpreter.ts</code></td><td>Lexical block scopes, expression-valued blocks/conditionals, leveled logging, control flow, raw built-ins, generation options, repair, scoped guidance/restrictions, source locations.</td></tr>
 <tr><td><code>values.ts / builtins.ts</code></td><td>Value model, conversions, ordinary functions and collection methods.</td></tr>
 <tr><td><code>llm.ts</code></td><td>Backend contract, prompt construction, strict JSON parsing.</td></tr>
 <tr><td><code>schema.ts</code></td><td>Strict synchronous draft-07 schema compilation and field-path validation errors.</td></tr>
@@ -41,7 +41,7 @@
 </tbody></table></div>
 
 <h2 id="execution-model">Execution model</h2>
-<p>Each function call creates a child environment linked to its lexical closure. All other blocks reuse that environment. <code>let</code> declares/redeclares locally; name assignment requires a local binding and cannot rebind an enclosing variable. Collection mutation can share state. There is no declaration hoisting: names become local when execution binds them.</p>
+<p>Each block creates a child environment; function calls link to their lexical closure rather than the caller. Reads and assignments search outward for the first declaration, while <code>let</code> declares/redeclares locally and shadows enclosing names. Each loop iteration and exception handler has its own bindings. Child declarations do not leak into parents or persistent globals. Block/conditional expressions yield the last expression or <code>None</code>; explicit control-flow signals still propagate normally. There is no declaration hoisting.</p>
 <p>Guidance and restrictions are execution context, not captured capabilities: a function called inside a policy block uses the caller's currently active policies. Policies unwind on return, success, or failure. Functions have a default recursion cap of 200.</p>
 <p>Failures receive the innermost statement location once. Return/break/continue propagate as control signals; success ends the entire script. Opt-in stores save globals even after script failure, but replay forbids stores and skips saving.</p>
 

@@ -9,7 +9,7 @@ let notes = ''
 
 forbid 'suggesting purely stylistic changes' {
     restrict './src', exec 'git' {
-        let notes = agent{reasoning='high'} '''
+        notes = agent{reasoning='high'} '''
 List source files with `git ls-files src`.
 Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 List each finding with its location, why it matters and a suggested fix.'''

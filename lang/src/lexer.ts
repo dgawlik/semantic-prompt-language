@@ -37,6 +37,7 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
     let col = opts.col ?? 1;
     let depth = opts.inExpr ? 1 : 0;
     const brackets: string[] = [];
+    const braceDepths: number[] = [];
 
     const err = (msg: string, l = line, c = col): never => {
         throw new SplSyntaxError(msg, l, c);
@@ -105,7 +106,12 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
         const op = OPS.find((o) => src.startsWith(o, i));
         if (!op) err(`unexpected character '${c}'`);
         advance(op!.length);
-        if (op === '(' || op === '[') {
+        if (op === '{') {
+            braceDepths.push(depth);
+            depth = 0;
+        } else if (op === '}') {
+            depth = braceDepths.pop() ?? depth;
+        } else if (op === '(' || op === '[') {
             brackets.push(op);
             depth++;
         } else if (op === ')' || op === ']') {

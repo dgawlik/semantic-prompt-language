@@ -72,6 +72,22 @@ let multi = {
         parse(`for i in [1] { { return i } }\nrestrict './x' { enforce 'a' { return } }`);
     });
 
+    it('accepts block and conditional expressions without confusing dictionaries', () => {
+        const program = parse(`let x = if True { 1 } else { 2 }\nlet y = { let n = 2; n + 1 }\nlet d = {'key': x}`);
+        expect(program.body[0]).toMatchObject({ value: { t: 'if' } });
+        expect(program.body[1]).toMatchObject({ value: { t: 'block' } });
+        expect(program.body[2]).toMatchObject({ value: { t: 'dict' } });
+        parse(`success (if True {\nlet x = 1\nx\n} else { 0 }) + 2`);
+    });
+
+    it('accepts bare, quoted and expression-valued log levels', () => {
+        parse(`log{level=debug}('x')\nlog{level='error'}(1, 2)\nlog{level=chosen}('x')\nlog{}()`);
+        bad(`log{other=1}('x')`, /unknown modifier/);
+        bad(`log{level=info, level=debug}('x')`, /duplicate modifier/);
+        bad(`log{level=debug} 'x'`, /expected '\('/);
+        bad(`?{level=debug} 'x'`, /unknown modifier/);
+    });
+
     it('treats escapes, raw strings and multiline interpolation', () => {
         parse(`let a = 'a\\n{{b}}'\nlet b = r'{no} \\interp'\nlet c = '''multi\nline {a}'''`);
     });

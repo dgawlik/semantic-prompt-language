@@ -45,3 +45,10 @@
 #            ^^^^ storage.modifier.restrict-kind.spl
     content = 5
 #   ^^^^^^^ - variable.parameter.modifier.spl
+    log{level=debug}('details')
+#   ^^^ support.function.builtin.spl
+#       ^^^^^ variable.parameter.modifier.spl
+#             ^^^^^ constant.language.spl
+    log{level='error'}('problem')
+#   ^^^ support.function.builtin.spl
+#       ^^^^^ variable.parameter.modifier.spl

@@ -31,7 +31,7 @@ success summary
 <thead><tr><th>Modifier</th><th>Values</th><th>Meaning</th></tr></thead>
 <tbody>
 <tr><td><code>len</code></td><td><code>'word'</code>, <code>'sentence'</code>, <code>'paragraph'</code>, <code>'long'</code></td><td>Prompt hint, not a hard length limit.</td></tr>
-<tr><td><code>fmt</code></td><td><code>'text'</code>, <code>'json'</code>, <code>'object'</code></td><td>Text by default; JSON when a schema is supplied.</td></tr>
+<tr><td><code>fmt</code></td><td><code>'integer'</code>, <code>'float'</code>, <code>'array'</code>, <code>'object'</code>, <code>'text'</code>, <code>'boolean'</code>, <code>'json'</code></td><td>Text by default; JSON when a schema is supplied and no explicit format is given.</td></tr>
 <tr><td><code>reasoning</code></td><td><code>'low'</code>, <code>'medium'</code>, <code>'high'</code></td><td>Requested model reasoning effort. Unsupported effort logs a warning and uses the model default.</td></tr>
 <tr><td><code>show</code></td><td><code>True</code>, <code>False</code> (default)</td><td>Log available model reasoning at info level.</td></tr>
 <tr><td><code>schema</code></td><td>JSON Schema dict or boolean</td><td>Validate the result; implies JSON output.</td></tr>
@@ -58,8 +58,28 @@ success result
 <p>Schemas use synchronous JSON Schema draft-07 with Ajv strict mode. Types, enums, nested properties, required fields, arrays, numeric/string limits, and standard synchronous composition are supported. Unknown keywords, invalid schemas, unresolved remote references, and asynchronous schemas fail before generation. There is no coercion, default insertion, or removal of extra fields. Custom formats/plugins are not installed.</p>
 <p>A mismatch raises <code>validation_failed</code> with field paths, for example <code>lines[2].quantity: must be number</code>. Missing fields and additional properties also identify the offending path. Schemas validate structure; ordinary <code>assert</code> statements validate business rules.</p>
 
-<h3 id="fmt-object">Strict JSON formats</h3>
-<p><code>fmt='json'</code> accepts any JSON value, including scalars and null. <code>fmt='object'</code> requires a dict or list. Neither extracts JSON from prose or Markdown fences: malformed output raises <code>invalid_format</code>. A schema cannot be combined with <code>fmt='text'</code>.</p>
+<h3 id="fmt-object">Output formats</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Format</th><th>Required response</th><th>SPL value</th></tr></thead>
+<tbody>
+<tr><td><code>'integer'</code></td><td>A JSON number with no fractional part, such as <code>55</code>.</td><td>number</td></tr>
+<tr><td><code>'float'</code></td><td>Any finite JSON number, such as <code>3.14</code> or <code>42</code>.</td><td>number</td></tr>
+<tr><td><code>'array'</code></td><td>A JSON array, such as <code>[1, 2, 3]</code>.</td><td>list</td></tr>
+<tr><td><code>'object'</code></td><td>A JSON object, such as <code>{"ok": true}</code>. Arrays are rejected.</td><td>dict</td></tr>
+<tr><td><code>'text'</code></td><td>Plain text, trimmed without JSON parsing. This is the default.</td><td>str</td></tr>
+<tr><td><code>'boolean'</code></td><td>JSON <code>true</code> or <code>false</code>, not quoted strings or Python spelling.</td><td>bool</td></tr>
+<tr><td><code>'json'</code></td><td>Any JSON value, including scalars and <code>null</code>.</td><td>Parsed value</td></tr>
+</tbody></table></div>
+<pre tabindex="0"><code class="language-spl">
+let fib = ?{fmt='integer'} 'Fibonacci of 10?'
+let pi = ?{fmt='float'} 'Pi to five decimal places?'
+let colors = ?{fmt='array'} 'Three primary colors'
+let joke = ?{fmt='object'} 'A joke with setup and punchline fields'
+let greeting = ?{fmt='text'} 'Say hello'
+let prime = ?{fmt='boolean'} 'Is 17 prime?'
+</code></pre>
+<p>Non-text formats use strict JSON: neither prose nor Markdown fences are extracted, and values are never coerced. Malformed output or the wrong type raises <code>invalid_format</code> and can be corrected with <code>repairs</code>. An explicit format is checked before any supplied schema. A schema cannot be combined with <code>fmt='text'</code>.</p>
+<p><strong>Migration:</strong> <code>fmt='object'</code> is now object-only. Scripts expecting lists should use <code>fmt='array'</code>, or <code>fmt='json'</code> to accept any JSON value.</p>
 
 <h3 id="repairs">Bounded repair, not action retry</h3>
 <p><code>repairs=2</code> permits at most three model calls: the initial call plus two corrections. Only <code>invalid_format</code> and <code>validation_failed</code> trigger correction. The next prompt contains the prior answer and validation errors. Prompt/modifier expressions are not reevaluated. Authentication, timeout, transport, tool, and restriction errors are not repaired; assertions outside the call are not repaired either.</p>
@@ -85,14 +105,15 @@ success review
 <h2 id="constraints">Scoped guidance: enforce &amp; forbid</h2>
 <p><code>enforce</code> adds positive guidance and <code>forbid</code> adds negative guidance for every model call inside the block. These are the language's scoped prompt-guidance keywords.</p>
 <pre><code class="language-spl">
+let answer = None
 enforce 'Answer in English' {
     forbid 'jokes' {
-        let answer = ?{len='sentence'} 'Explain recursion'
+        answer = ?{len='sentence'} 'Explain recursion'
     }
 }
 success answer
 </code></pre>
-<p>Guidance applies dynamically to calls made inside the block, including called functions, and unwinds afterward. All blocks share the current function/script variable scope, so <code>answer</code> remains visible.</p>
+<p>Guidance applies dynamically to calls made inside the block, including called functions, and unwinds afterward. Each block has a child variable scope, so declare <code>answer</code> outside and assign inside when it must remain visible.</p>
 <div class="callout warn"><div class="body"><span class="title">Guidance is not validation</span>
 <p><code>enforce</code>, <code>forbid</code>, and <code>len</code> influence a prompt; they do not verify compliance. Use schemas and assertions for output guarantees, and <a href="restrictions.html">restrict</a> for runtime action checks.</p></div></div>
 

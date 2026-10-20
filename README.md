@@ -47,8 +47,11 @@ success invoice
   Runtime tools and configured MCP tools remain subject to active restrictions.
 - All three accept expression-valued `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`,
   and `model` modifiers. Unknown/duplicate names are syntax errors; invalid values are runtime errors.
-- `fmt='json'` parses any JSON value; `fmt='object'` requires an object or array.
-  Both are strict: prose and Markdown fences are rejected. `schema` implies JSON output.
+- `fmt` supports `integer`, `float`, `array`, `object`, `text`, and `boolean`.
+  Non-text formats require strict JSON of the selected type; `float` accepts any finite
+  number, including whole numbers. `object` requires a dict, not an array.
+  `fmt='json'` still accepts any JSON value. Prose and Markdown fences are rejected for
+  JSON formats. `schema` implies JSON output unless `fmt` is explicit.
 - Schemas use synchronous JSON Schema draft-07, validated by Ajv in strict mode.
   No coercion, implicit defaults, or removal of extra fields. Errors include field paths.
 - `repairs=0..5` allows that many **additional generation attempts**, only for JSON/shape errors.
@@ -58,9 +61,10 @@ success invoice
 ## Guidance is not a guarantee
 
 ```spl
+let answer = None
 enforce 'Answer in English' {
     forbid 'jokes' {
-        let answer = ?{len='sentence'} 'Explain recursion'
+        answer = ?{len='sentence'} 'Explain recursion'
     }
 }
 success answer
@@ -71,8 +75,9 @@ They and `len` do not verify compliance. `schema` and `assert` validate results.
 `restrict` checks actions, and nested restrictions intersect:
 
 ```spl
+let findings = None
 restrict './src', exec 'git', mcp 'docs/search' {
-    let findings = agent{reasoning='high'} 'Inspect the source and consult docs/search'
+    findings = agent{reasoning='high'} 'Inspect the source and consult docs/search'
 }
 success findings
 ```
@@ -88,15 +93,38 @@ let count = 0
 for i in range(3) {
     count += i
 }
-{ let visible = count }
-success visible
+let result = {
+    let count = 10
+    count + 1
+}
+success [count, result]  # [3, 11]
 ```
 
-`let name = ...` declares/redeclares in the current function or script. All blocks share that
-scope. Assignment requires an existing local binding; a function may read outer names but
-cannot rebind them. Lists and dicts can be mutated to share state. `def`, recursion,
+`let name = ...` declares/redeclares in the current scope. Every block creates a child scope;
+inner declarations shadow outer names and are inaccessible from the parent. Reads and
+assignments search outward through the lexical scope chain, using the first declaration found.
+Each loop iteration has its own scope, including its loop variables.
+`def`, recursion,
 Python-style expressions, interpolation, `try/except`, `assert`, `fail`, `success`, and
 top-level `return` are supported.
+
+Blocks and `if`/`elif`/`else` can be used as expressions. Their final expression is their
+value; an empty block, a statement-ending block, or an unmatched conditional returns `None`.
+`{}` remains an empty dictionary; use `{ pass }` for a block returning `None`.
+
+```spl
+let result = if ?{fmt='boolean'} 'Today is Friday?' {
+    ? 'Haiku on variance'
+} else {
+    ? 'Sentence on passing time'
+}
+log{level=debug}(result)
+success result
+```
+
+`log(value, ...)` defaults to info. `log{level=error|info|debug}(value, ...)` selects
+severity (one level, not a literal `|` expression); quoted levels and expressions are also
+accepted. Debug messages are emitted only with `--log-level debug`.
 
 ## Offline regression tests
 
@@ -144,8 +172,9 @@ Persistence is opt-in with `--store`; snapshots are saved even after a script fa
 | `instruct` / `avoid` | Use `enforce` / `forbid` for scoped prompt guidance |
 | `think{level='high'}` | `?{reasoning='high'}` or `think{reasoning='high'}` |
 | `let x += 1`, `let d.key = 2` | `x += 1`, `d.key = 2` |
-| Bare blocks shadow variables | Every block shares its function/script scope |
+| Blocks share their function/script scope | Blocks create lexical scopes; use assignment to update an outer binding |
 | Unknown modifier values fail at parse time | Expression values are validated at runtime |
+| `fmt='object'` accepts objects and arrays | Use `object` for dicts, `array` for lists, or `json` for any JSON value |
 
 ## Development
 

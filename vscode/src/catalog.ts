@@ -28,7 +28,7 @@ export const builtins: Record<string, Help> = {
     items: { signature: 'items(dict)', description: 'Return dictionary [key, value] pairs.' },
     json_parse: { signature: 'json_parse(text)', description: 'Parse a JSON string into an SPL value.' },
     json_stringify: { signature: 'json_stringify(value, indent=None)', description: 'Serialize a value as JSON, optionally with indentation.' },
-    log: { signature: 'log(value, ...)', description: 'Write values to the script log and return None.' },
+    log: { signature: 'log{level=info}(value, ...)', description: 'Write values to stderr at error, info or debug severity and return None. Plain log(...) defaults to info; level accepts bare names, strings or expressions.' },
     read_file: { signature: 'read_file(path)', description: 'Read a UTF-8 file. This raw tool does not call a model.' },
     write_file: { signature: 'write_file(path, content)', description: 'Create or overwrite a UTF-8 file. Subject to active restrictions.' },
     web_fetch: { signature: 'web_fetch(url)', description: 'Fetch an HTTP(S) URL and return response text. Does not call a model.' },
@@ -37,12 +37,12 @@ export const builtins: Record<string, Help> = {
 };
 
 export const keywords: Record<string, string> = {
-    let: 'Declare or redeclare a binding in the current function or script. Blocks do not create scopes.',
+    let: 'Declare or redeclare a binding in the current block scope, shadowing enclosing declarations.',
     def: 'Define a function with positional parameters and lexical access to enclosing bindings.',
-    if: 'Execute a block when its condition is truthy.',
+    if: 'Execute the selected branch in its own scope. As an expression, return its final expression or None.',
     elif: 'Test another condition after an if branch.',
     else: 'Fallback branch of an if statement or conditional expression.',
-    for: 'Iterate over a list, string, or dictionary keys. Loop variables belong to the current function/script.',
+    for: 'Iterate over a list, string, or dictionary keys. Each iteration has its own block scope and loop bindings.',
     in: 'Iteration or membership test.',
     while: 'Repeat a block while its condition is truthy.',
     return: 'Return from the innermost function, or from the script at top level.',
@@ -68,8 +68,9 @@ export const keywords: Record<string, string> = {
 };
 
 export const modifiers: Record<string, Help> = {
+    level: { signature: 'level=error | info | debug', description: 'Log severity, default info. Accepts bare level names, strings or expressions. Debug messages are emitted only at debug log level.' },
     len: { signature: "len='word' | 'sentence' | 'paragraph' | 'long'", description: 'Requested output length (guidance only).' },
-    fmt: { signature: "fmt='text' | 'json' | 'object'", description: 'JSON is strict; object requires an object or array. Markdown fences and prose are rejected.' },
+    fmt: { signature: "fmt='integer' | 'float' | 'array' | 'object' | 'text' | 'boolean' | 'json'", description: 'Text returns trimmed prose. Other formats require strict JSON of the selected type; float accepts any finite number, object excludes arrays, and json accepts any JSON value. Markdown fences and prose are rejected for JSON formats.' },
     reasoning: { signature: "reasoning='low' | 'medium' | 'high'", description: 'Reasoning effort. think and agent default to medium.' },
     show: { signature: 'show=True | False', description: 'Control model output display.' },
     schema: { signature: 'schema=expression', description: 'Validate against synchronous strict JSON Schema draft-07. Implies JSON output.' },

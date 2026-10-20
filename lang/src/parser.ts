@@ -17,6 +17,7 @@ const KEYWORDS = new Set([
 ]);
 
 export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'show', 'schema', 'repairs', 'model'] as const;
+export const LOG_MODIFIER_NAMES = ['level'] as const;
 
 const DIRECTIVE_SCHEMA: Record<string, 'string'> = { model: 'string' };
 
@@ -180,7 +181,11 @@ class Parser {
 
     private parseBlock(): Stmt[] {
         this.expectOp('{');
-        const body: Stmt[] = [];
+        return this.finishBlock();
+    }
+
+    private finishBlock(body: Stmt[] = []): Stmt[] {
+        if (body.length) this.endOfStatement();
         this.skipSeparators();
         while (!this.isOp('}')) {
             if (this.tok.type === 'eof') this.fail("unclosed block, missing '}'");
@@ -199,7 +204,6 @@ class Parser {
         if (t.type === 'name') {
             switch (t.value) {
                 case 'let': return this.parseLet();
-                case 'if': return this.parseIf();
                 case 'for': {
                     this.next();
                     const vars = [this.expectIdent('a loop variable')];
@@ -268,7 +272,6 @@ class Parser {
                     break;
             }
         }
-        if (t.type === 'op' && t.value === '{') return { t: 'block', line, body: this.parseBlock() };
         return this.parseSimpleStatement();
     }
 
@@ -280,7 +283,7 @@ class Parser {
         return { t: 'let', line, name, value: this.parseExpr() };
     }
 
-    private parseIf(): Stmt {
+    private parseIf(): Extract<Expr, { t: 'if' }> {
         const line = this.tok.line;
         this.next();
         const branches: { cond: Expr; body: Stmt[] }[] = [];
@@ -363,7 +366,7 @@ class Parser {
             this.next();
             return { t: 'assign', line, target, op: t.value as Extract<Stmt, { t: 'assign' }>['op'], value: this.parseExpr() };
         }
-        return { t: 'expr', line, e };
+        return e.t === 'block' || e.t === 'if' ? e : { t: 'expr', line, e };
     }
 
     private toTarget(e: Expr, at: Token): AssignTarget {
@@ -481,15 +484,7 @@ class Parser {
         let e = this.parsePrimary();
         for (;;) {
             if (this.isOp('(')) {
-                this.next();
-                const args: Expr[] = [];
-                while (!this.isOp(')')) {
-                    args.push(this.parseExpr());
-                    if (this.isOp(',')) this.next();
-                    else if (!this.isOp(')')) this.fail("expected ',' or ')' in call");
-                }
-                this.next();
-                e = { t: 'call', callee: e, args };
+                e = { t: 'call', callee: e, args: this.parseArgs() };
             } else if (this.isOp('[')) {
                 this.next();
                 e = this.parseSubscript(e);
@@ -503,6 +498,18 @@ class Parser {
                 return e;
             }
         }
+    }
+
+    private parseArgs(): Expr[] {
+        this.expectOp('(');
+        const args: Expr[] = [];
+        while (!this.isOp(')')) {
+            args.push(this.parseExpr());
+            if (this.isOp(',')) this.next();
+            else if (!this.isOp(')')) this.fail("expected ',' or ')' in call");
+        }
+        this.next();
+        return args;
     }
 
     private parseSubscript(obj: Expr): Expr {
@@ -555,10 +562,19 @@ class Parser {
         }
         if (t.value === '{') {
             this.next();
-            this.skipNl();
+            this.skipSeparators();
+            if (this.isOp('}')) {
+                this.next();
+                return { t: 'dict', entries: [] };
+            }
+            const first = this.parseStatement();
+            const key = first.t === 'expr' ? first.e : first.t === 'if' || first.t === 'block' ? first : undefined;
+            if (!key || !this.isOp(':')) {
+                return { t: 'block', line: t.line, body: this.finishBlock([first]) };
+            }
             const entries: [Expr, Expr][] = [];
+            let k = key;
             while (!this.isOp('}')) {
-                const k = this.parseExpr();
                 this.expectOp(':');
                 this.skipNl();
                 entries.push([k, this.parseExpr()]);
@@ -569,6 +585,7 @@ class Parser {
                 } else if (!this.isOp('}')) {
                     this.fail("expected ',' or '}' in dict");
                 }
+                if (!this.isOp('}')) k = this.parseExpr();
             }
             this.next();
             return { t: 'dict', entries };
@@ -584,6 +601,16 @@ class Parser {
             case 'True': this.next(); return { t: 'bool', v: true };
             case 'False': this.next(); return { t: 'bool', v: false };
             case 'None': this.next(); return { t: 'none' };
+            case 'if': return this.parseIf();
+            case 'log':
+                if (this.isOp('{', this.peekAt(1))) {
+                    this.next();
+                    const mods = this.parseMods('log');
+                    const level = mods.level ?? { t: 'str', parts: ['info'] };
+                    return { t: 'log', level, args: this.parseArgs() };
+                }
+                this.next();
+                return { t: 'name', name: t.value, line: t.line };
             case 'think':
             case 'agent': {
                 this.next();
@@ -602,21 +629,26 @@ class Parser {
         return this.parsePostfix();
     }
 
-    private parseMods(cmd: '?' | 'think' | 'agent'): Record<string, Expr> {
+    private parseMods(cmd: '?' | 'think' | 'agent' | 'log'): Record<string, Expr> {
         this.expectOp('{');
         this.skipNl();
         const out: Record<string, Expr> = {};
+        const allowed: readonly string[] = cmd === 'log' ? LOG_MODIFIER_NAMES : MODIFIER_NAMES;
         while (!this.isOp('}')) {
             const nameTok = this.tok;
             if (nameTok.type !== 'name') this.fail('expected a modifier name');
             const name = (nameTok as { value: string }).value;
             this.next();
-            if (!MODIFIER_NAMES.some((allowed) => allowed === name)) {
-                this.fail(`unknown modifier '${name}' for '${cmd}' (allowed: ${MODIFIER_NAMES.join(', ')})`, nameTok);
+            if (!allowed.includes(name)) {
+                this.fail(`unknown modifier '${name}' for '${cmd}' (allowed: ${allowed.join(', ')})`, nameTok);
             }
             if (name in out) this.fail(`duplicate modifier '${name}'`, nameTok);
             this.expectOp('=');
             out[name] = this.parseExpr();
+            const value = out[name];
+            if (cmd === 'log' && value.t === 'name' && ['error', 'info', 'debug'].includes(value.name)) {
+                out[name] = { t: 'str', parts: [value.name] };
+            }
             this.skipNl();
             if (this.isOp(',')) {
                 this.next();

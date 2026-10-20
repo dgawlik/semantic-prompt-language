@@ -31,6 +31,21 @@ const exec = (source: string, backend: LlmBackend) => run(parse(source), { backe
 const schema = `{'type': 'object', 'properties': {'total': {'type': 'number'}}, 'required': ['total'], 'additionalProperties': False}`;
 
 describe('generation contracts', () => {
+    it.each([true, false])('evaluates only the selected generation branch for %s', async (friday) => {
+        const { backend, calls } = scripted(String(friday), 'selected answer');
+        const result = await exec(`
+let result = if ?{fmt='boolean'} 'Today is friday? True/False' {
+    ? 'Haiku on variance'
+} else {
+    ? 'Sentence on passing time'
+}
+success result
+`, backend);
+        expect(result).toMatchObject({ status: 'success', value: 'selected answer' });
+        expect(calls).toHaveLength(2);
+        expect(calls[1].prompt).toBe(friday ? 'Haiku on variance' : 'Sentence on passing time');
+    });
+
     it('composes expression-valued schema, format, reasoning, model, and show modifiers', async () => {
         const { backend, calls } = scripted('{"total": 42}');
         const result = await exec(`
@@ -65,6 +80,91 @@ success ?{schema=Contract, reasoning=effort, model='test-model', show=True} 'Ext
     it.each(['42', 'null', 'true', '"hello"', '[1,2]'])('supports JSON values: %s', async (response) => {
         const { backend } = scripted(response);
         expect(await exec(`success ?{fmt='json'} 'Extract'`, backend)).toMatchObject({ status: 'success', value: JSON.parse(response) });
+    });
+
+    it.each([
+        ['integer', '55', 55],
+        ['integer', '-10', -10],
+        ['integer', '1e2', 100],
+        ['integer', '42.0', 42],
+        ['float', '3.14', 3.14],
+        ['float', '-1.2e-3', -0.0012],
+        ['float', '42', 42],
+        ['array', '[1, "two", {"three": true}, null]', [1, 'two', { three: true }, null]],
+        ['array', '[]', []],
+        ['object', '{"items": [1, 2], "ok": false}', { items: [1, 2], ok: false }],
+        ['object', '{}', {}],
+        ['boolean', 'true', true],
+        ['boolean', 'false', false],
+        ['text', 'Hello, world!', 'Hello, world!'],
+        ['text', 'true', 'true'],
+        ['text', '```json\n{}\n```', '```json\n{}\n```'],
+    ])('returns typed %s output from %s for all generation commands', async (fmt, response, expected) => {
+        for (const command of ['?', 'think', 'agent']) {
+            const { backend, calls } = scripted(` \n${response}\n `);
+            expect(await exec(`let format = '${fmt}'\nsuccess ${command}{fmt=format} 'Generate'`, backend)).toMatchObject({
+                status: 'success', value: expected,
+            });
+            expect(calls).toHaveLength(1);
+            if (fmt !== 'text') {
+                expect(calls[0].prompt).toContain('ONLY valid JSON');
+                expect(calls[0].prompt).toContain(fmt === 'float' ? 'finite JSON number' : `JSON ${fmt}`);
+            }
+        }
+    });
+
+    it.each([
+        ['integer', ['3.5', '"42"', 'true', 'null', '[]', '{}', '1e400']],
+        ['float', ['"3.14"', 'false', 'null', '[]', '{}', '1e400', '-1e400', 'NaN', 'Infinity']],
+        ['array', ['42', '3.5', 'true', 'null', '"[]"', '{}']],
+        ['object', ['42', '3.5', 'false', 'null', '"{}"', '[]']],
+        ['boolean', ['0', '1', '3.5', '"true"', 'null', '[]', '{}', 'True', 'False']],
+    ])('rejects incorrect %s output without coercion', async (fmt, responses) => {
+        for (const response of responses) {
+            const { backend } = scripted(response);
+            expect(await exec(`success ?{fmt='${fmt}'} 'Generate'`, backend)).toMatchObject({
+                status: 'failure', failure: { status_code: 'invalid_format' },
+            });
+        }
+    });
+
+    it.each(['integer', 'float', 'array', 'object', 'boolean'])('requires strict JSON for %s', async (fmt) => {
+        for (const response of ['```json\n42\n```', 'Here: 42', '42 trailing', '']) {
+            const { backend } = scripted(response);
+            expect(await exec(`success ?{fmt='${fmt}'} 'Generate'`, backend)).toMatchObject({
+                status: 'failure', failure: { status_code: 'invalid_format' },
+            });
+        }
+    });
+
+    it.each([
+        ['integer', '3.5', '55'],
+        ['float', '"3.14"', '3.14'],
+        ['array', '{}', '[1, 2]'],
+        ['object', '[]', '{"ok": true}'],
+        ['boolean', '"true"', 'true'],
+    ])('repairs %s type mismatches and evaluates expressions once', async (fmt, invalid, valid) => {
+        const { backend, calls } = scripted(invalid, valid);
+        const result = await exec(`
+let count = [0]
+def format() { count[0] += 1; return '${fmt}' }
+def prompt() { count[0] += 1; return 'Generate' }
+let result = ?{fmt=format(), repairs=1} prompt()
+success [result, count[0]]
+`, backend);
+        expect(result).toMatchObject({ status: 'success', value: [JSON.parse(valid), 2] });
+        expect(calls).toHaveLength(2);
+        expect(calls[1].prompt).toContain(`fmt='${fmt}'`);
+        expect(calls[1].prompt).toContain('Previous response:');
+    });
+
+    it('validates schemas after checking the explicit format', async () => {
+        const { backend, calls } = scripted('"55"', '55', '89');
+        expect(await exec(`success ?{fmt='integer', schema={'type':'integer', 'minimum':80}, repairs=2} 'Fibonacci'`, backend)).toMatchObject({
+            status: 'success', value: 89,
+        });
+        expect(calls[1].prompt).toContain(`fmt='integer'`);
+        expect(calls[2].prompt).toContain('must be >= 80');
     });
 
     it('reports nested field paths and missing required fields', async () => {
@@ -130,7 +230,9 @@ success [result, count[0]]
         `?{schema={'$async':True, 'type':'number'}} 'x'`,
         `?{repairs=6, fmt='json'} 'x'`, `?{repairs=-1, fmt='json'} 'x'`,
         `?{show='yes'} 'x'`, `?{reasoning='extreme'} 'x'`,
+        `?{fmt='unsupported'} 'x'`, `?{fmt=42} 'x'`, `?{fmt=True} 'x'`,
         `?{fmt='text', schema=${schema}} 'x'`, `agent{repairs=1, fmt='json'} 'x'`,
+        `?{fmt='text', repairs=1} 'x'`,
     ])('validates configuration before calling a model: %s', async (expression) => {
         const { backend, calls } = scripted();
         expect(await exec(`success ${expression}`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'runtime_error' } });
@@ -150,8 +252,9 @@ success [result, count[0]]
         const { backend, calls } = scripted('inside', 'outside');
         const result = await exec(`
 def answer() { return ${command} 'inside' }
+let inside = None
 enforce 'Answer in English' {
-    forbid 'jokes' { let inside = answer() }
+    forbid 'jokes' { inside = answer() }
 }
 let outside = ${command} 'outside'
 success [inside, outside]
@@ -224,10 +327,11 @@ describe('raw tools and bindings', () => {
         }
     });
 
-    it('shares block bindings but prevents rebinding an enclosing function variable', async () => {
+    it('isolates child declarations and assigns to enclosing lexical bindings', async () => {
         const { backend } = scripted();
-        expect(await exec(`let x = 1\n{ let x = 2; let visible = 3 }\nx += visible\nsuccess x`, backend)).toMatchObject({ status: 'success', value: 5 });
-        expect(await exec(`let x = 1\ndef f() { x = 2 }\nf()`, backend)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('declare a local') } });
+        expect(await exec(`let x = 1\n{ let x = 2; let hidden = 3 }\nsuccess x`, backend)).toMatchObject({ status: 'success', value: 1 });
+        expect(await exec(`{ let hidden = 3 }\nsuccess hidden`, backend)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('not defined') } });
+        expect(await exec(`let x = 1\ndef f() { x = 2 }\nf()\nsuccess x`, backend)).toMatchObject({ status: 'success', value: 2 });
         expect(await exec(`x = 1`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'runtime_error' } });
     });
 });

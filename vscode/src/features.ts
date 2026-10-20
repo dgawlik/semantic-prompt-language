@@ -6,7 +6,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
-import { MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
+import { LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
 import { builtins, keywords, modifiers, type Help } from './catalog';
 
 type NamedToken = Extract<Token, { type: 'name' }>;
@@ -111,6 +111,37 @@ export function analyze(document: TextDocument): Analysis {
         }
     }
     const currentScope = (at: number) => scopes.findLast((scope) => scope.start <= at && at <= scope.end) ?? root;
+    const braceScopes = new Map<number, Scope>();
+    const blockScope = (open: number, parent: Scope): Scope => {
+        const existing = braceScopes.get(open);
+        if (existing) return existing;
+        const close = braceEnds.get(open);
+        const scope = {
+            start: offset(document, tokens[open]),
+            end: close === undefined ? source.length : offset(document, tokens[close]) + 1,
+            parent,
+        };
+        braceScopes.set(open, scope);
+        scopes.push(scope);
+        return scope;
+    };
+    const bodyOpen = (start: number): number | undefined => {
+        let candidate: number | undefined;
+        let depth = 0;
+        for (let j = start; j < tokens.length; j++) {
+            const token = tokens[j];
+            if (depth === 0 && (token.type === 'nl' || token.type === 'eof' || isOp(token, ';'))) break;
+            if (isOp(token, '(') || isOp(token, '[')) depth++;
+            if (isOp(token, ')') || isOp(token, ']')) depth--;
+            if (depth === 0 && isOp(token, '{')) {
+                candidate = j;
+                const close = braceEnds.get(j);
+                if (close === undefined) break;
+                j = close;
+            }
+        }
+        return candidate;
+    };
     const add = (token: NamedToken, scope: Scope, signature: string, kind: SymbolKind = SymbolKind.Variable): Binding => {
         const binding = { name: token.value, token, scope, signature, kind, end: offset(document, token) + token.value.length };
         bindings.push(binding);
@@ -119,16 +150,21 @@ export function analyze(document: TextDocument): Analysis {
 
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
+        if (isOp(token, '{')) blockScope(i, currentScope(offset(document, token)));
         if (!isName(token) || isOp(tokens[i - 1], '.')) continue;
         const scope = currentScope(offset(document, token));
         const name = tokens[i + 1];
         if ((token.value === 'let' || token.value === 'except') && isName(name)) {
-            add(name, scope, token.value === 'let' ? `let ${name.value}` : `except ${name.value}`);
+            const open = token.value === 'except' && isOp(tokens[i + 2], '{') ? i + 2 : undefined;
+            add(name, open === undefined ? scope : blockScope(open, scope),
+                token.value === 'let' ? `let ${name.value}` : `except ${name.value}`);
         } else if (token.value === 'for') {
+            const open = bodyOpen(i + 1);
+            const loopScope = open === undefined ? scope : blockScope(open, scope);
             for (let j = i + 1; j < tokens.length; j++) {
                 const variable = tokens[j];
                 if (isName(variable) && variable.value === 'in') break;
-                if (isName(variable)) add(variable, scope, `for ${variable.value}`);
+                if (isName(variable)) add(variable, loopScope, `for ${variable.value}`);
                 else if (!isOp(variable, ',')) break;
             }
         } else if (token.value === 'def' && isName(name) && isOp(tokens[i + 2], '(')) {
@@ -143,11 +179,10 @@ export function analyze(document: TextDocument): Analysis {
             const open = j + 1;
             const close = braceEnds.get(open);
             const end = close === undefined ? source.length : offset(document, tokens[close]) + 1;
-            const functionScope: Scope = { start: offset(document, tokens[open]), end, parent: scope };
+            const functionScope = blockScope(open, scope);
             const binding = add(name, scope, `def ${name.value}(${params.map((param) => param.value).join(', ')})`, SymbolKind.Function);
             binding.end = end;
             binding.functionScope = functionScope;
-            scopes.push(functionScope);
             for (const param of params) add(param, functionScope, `parameter ${param.value}`);
         }
     }
@@ -165,7 +200,8 @@ function visibleBindings(analysis: Analysis, at: number): Binding[] {
         for (const binding of local) {
             if (result.has(binding.name)) continue;
             const candidates = local.filter((candidate) => candidate.name === binding.name);
-            result.set(binding.name, candidates.findLast((candidate) => offset(analysis.document, candidate.token) <= at) ?? binding);
+            const visible = candidates.findLast((candidate) => offset(analysis.document, candidate.token) <= at);
+            if (visible) result.set(binding.name, visible);
         }
     }
     return [...result.values()];
@@ -177,8 +213,8 @@ function nameAt(analysis: Analysis, position: Position): NamedToken | undefined 
         position.character < token.col - 1 + token.value.length);
 }
 
-function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' | undefined {
-    const stack: { op: string; context?: 'call' | 'directive' }[] = [];
+function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' | 'log' | undefined {
+    const stack: { op: string; context?: 'call' | 'directive' | 'log' }[] = [];
     const tokens = analysis.tokens;
     for (let i = 0; i < tokens.length && offset(analysis.document, tokens[i]) < at; i++) {
         const token = tokens[i];
@@ -186,6 +222,7 @@ function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' |
         if (['{', '(', '['].includes(token.value)) {
             const previous = tokens[i - 1];
             const context = token.value !== '{' ? undefined : isOp(previous, '@') ? 'directive' :
+                isName(previous) && previous.value === 'log' ? 'log' :
                 isOp(previous, '?') || (isName(previous) && ['think', 'agent'].includes(previous.value)) ? 'call' : undefined;
             stack.push({ op: token.value, context });
         } else if (['}', ')', ']'].includes(token.value)) {
@@ -201,7 +238,7 @@ export function completions(analysis: Analysis, position: Position): CompletionI
     const range = { start: analysis.document.positionAt(at - prefix.length), end: position };
     const context = modifierContext(analysis, at - prefix.length);
     if (context) {
-        return (context === 'directive' ? ['model'] : MODIFIER_NAMES).map((name) => ({
+        return (context === 'directive' ? ['model'] : context === 'log' ? LOG_MODIFIER_NAMES : MODIFIER_NAMES).map((name) => ({
             label: name,
             kind: CompletionItemKind.Property,
             detail: modifiers[name].signature,
@@ -258,8 +295,12 @@ export function definition(analysis: Analysis, position: Position): Location | u
 }
 
 export function documentSymbols(analysis: Analysis): DocumentSymbol[] {
+    const symbolScope = (scope: Scope): Scope => {
+        while (scope.parent && !analysis.bindings.some((binding) => binding.functionScope === scope)) scope = scope.parent;
+        return scope;
+    };
     const inScope = (scope: Scope): DocumentSymbol[] => analysis.bindings
-        .filter((binding) => binding.scope === scope && !binding.signature.startsWith('parameter '))
+        .filter((binding) => symbolScope(binding.scope) === scope && !binding.signature.startsWith('parameter '))
         .map((binding) => ({
             name: binding.name,
             detail: binding.signature,
