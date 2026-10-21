@@ -7,7 +7,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
 import { LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
-import { builtins, keywords, modifiers, type Help } from './catalog';
+import { builtins, keywords, modifiers, specialVariables, type Help } from './catalog';
 
 type NamedToken = Extract<Token, { type: 'name' }>;
 
@@ -234,7 +234,7 @@ function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' |
 
 export function completions(analysis: Analysis, position: Position): CompletionItem[] {
     const at = analysis.document.offsetAt(position);
-    const prefix = /[A-Za-z_][A-Za-z0-9_]*$/.exec(analysis.document.getText().slice(0, at))?.[0] ?? '';
+    const prefix = /\$[A-Za-z0-9_]*$|[A-Za-z_][A-Za-z0-9_]*$/.exec(analysis.document.getText().slice(0, at))?.[0] ?? '';
     const range = { start: analysis.document.positionAt(at - prefix.length), end: position };
     const context = modifierContext(analysis, at - prefix.length);
     if (context) {
@@ -252,6 +252,9 @@ export function completions(analysis: Analysis, position: Position): CompletionI
     }
     for (const [name, help] of Object.entries(builtins)) {
         items.set(name, { label: name, kind: CompletionItemKind.Function, detail: help.signature, documentation: help.description });
+    }
+    for (const [name, help] of Object.entries(specialVariables)) {
+        items.set(name, { label: name, kind: CompletionItemKind.Variable, detail: help.signature, documentation: help.description });
     }
     for (const binding of visibleBindings(analysis, at)) {
         items.set(binding.name, {
@@ -272,6 +275,7 @@ export function hover(analysis: Analysis, position: Position): Hover | undefined
     if (!token) return undefined;
     const at = offset(analysis.document, token);
     const range = tokenRange(token);
+    if (Object.hasOwn(specialVariables, token.value)) return helpHover(specialVariables[token.value], range);
     const context = modifierContext(analysis, at);
     const next = analysis.tokens.find((candidate) => offset(analysis.document, candidate) >= at + token.value.length);
     if (context && isOp(next, '=') && Object.hasOwn(modifiers, token.value)) return helpHover(modifiers[token.value], range);

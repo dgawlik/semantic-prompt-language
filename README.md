@@ -145,11 +145,19 @@ general workflow cache: split side-effecting stages from replayable generation.
 
 ## CLI and failures
 
+Scripts can read process environment strings with `$env.NAME` or `$env['NAME']`,
+and arguments with `$args[0]`, `$args[1]`, etc. Pass each argument with
+`spl --arg=first --arg="two words" script.spl`. Missing environment names and
+out-of-range argument indexes return `None`; a set-but-empty environment value stays `''`.
+Both values are read-only snapshots, including through aliases, and are not
+automatically persisted. See [runtime inputs](docs-template/Language.md#runtime-inputs-env-and-args).
+
 ```text
 spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
                [--store file.json | --store-module module]
                [--record file.jsonl | --replay file.jsonl]
                [--log-level error|info|debug] [--silent] [--check]
+               [--arg value ...]
 spl login
 spl logout
 ```

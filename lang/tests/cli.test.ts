@@ -30,6 +30,28 @@ function run(args: string[]) {
 }
 
 describe('cli', () => {
+    it('passes repeated --arg values in order before and after the script path', () => {
+        const file = path.join(dir, 'args.spl');
+        fs.writeFileSync(file, `success [$args, $args[0], $args[3]]`);
+        const result = run(['--arg=first', file, '--arg', 'two words', '--silent', '--arg=--model=x']);
+        expect(result.code).toBe(0);
+        expect(JSON.parse(result.out)).toEqual([['first', 'two words', '--model=x'], 'first', null]);
+        expect(result.err).toBe('');
+    });
+
+    it('supports empty arguments and defaults to an empty argument list', () => {
+        expect(JSON.parse(spl(`success [$args, $args[0]]`, '--silent').out)).toEqual([[], null]);
+        expect(JSON.parse(spl(`success [$args[0], $args[1]]`, '--arg=', '--silent').out)).toEqual(['', null]);
+        expect(spl(`success 1`, '--arg').code).toBe(2);
+        expect(spl(`success $args[0]`, '--arg=x', '--check')).toEqual({ code: 0, out: '', err: '' });
+    });
+
+    it('exposes the child process environment', () => {
+        const result = spl(`success [$env.SPL_HOME, $env['SPL_HOME']]`, '--silent');
+        expect(result.code).toBe(0);
+        expect(JSON.parse(result.out)).toEqual([path.join(dir, 'spl-home'), path.join(dir, 'spl-home')]);
+    });
+
     it('prints the success value to stdout and logs to stderr', () => {
         const r = spl(`log('hi')\nsuccess 'done'`);
         expect(r.code).toBe(0);
@@ -97,6 +119,10 @@ describe('cli', () => {
         expect(spl(`success ?'changed'`, '--replay', file, '--silent').code).not.toBe(0);
         const empty = path.join(dir, 'empty.jsonl');
         fs.writeFileSync(empty, '{"format":"spl-generation","version":1}\n');
+        const inputs = spl(`success [$env.SPL_HOME, $args[0], $args[1]]`, '--arg=current', '--replay', empty, '--silent');
+        expect(inputs.code).toBe(0);
+        expect(JSON.parse(inputs.out)).toEqual([path.join(dir, 'spl-home'), 'current', null]);
+        expect(inputs.err).toBe('');
         const denied = spl(`write_file('blocked.txt', 'x')`, '--replay', empty, '--silent');
         expect(denied.code).toBe(1);
         expect(JSON.parse(denied.out).status_code).toBe('restriction_violation');
@@ -147,6 +173,7 @@ describe('cli', () => {
         expect(help).not.toContain('--backend');
         expect(help).not.toContain('--seed');
         expect(help).toContain('--mcp <file.json>');
+        expect(help).toContain('--arg <value>');
     });
 
     it('validates --mcp without starting servers, including with --check', () => {

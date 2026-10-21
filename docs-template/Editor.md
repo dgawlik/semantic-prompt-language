@@ -12,6 +12,15 @@ Keywords, `let`/`def` declarations, numbers, comments, the `@{model=…}` direct
 
 `?`, `think`, explicit `agent`, and shared modifiers: `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`. Raw tools use ordinary calls.
 
+### Runtime inputs
+
+Read-only `$env` and `$args` have highlighting, hover documentation and completions,
+including inside interpolation. Typing `$` triggers completion; accepting `$env` or
+`$args` replaces the whole partial special-variable name without duplicating `$`.
+Diagnostics reject unknown special names and attempts to declare/rebind them.
+The editor never reads the process environment or script arguments.
+See [runtime inputs](Language.md#runtime-inputs-env-and-args).
+
 ### Scopes & failures
 
 `enforce`/`forbid`, `restrict [fs|net|exec|mcp]` with comma-separated clauses, `try`/`except`, `assert`, `fail`, `success`.

@@ -1,4 +1,5 @@
 import {
+    assertMutable,
     compareValues,
     equals,
     fromJson,
@@ -347,5 +348,9 @@ export function callMethod(self: Value, name: string, args: Value[]): Value {
     if (!table || !Object.prototype.hasOwnProperty.call(table, name)) {
         throw runtimeError(`${typeName(self)} has no method '${name}'`);
     }
+    const mutating = isList(self)
+        ? ['append', 'extend', 'insert', 'pop', 'remove', 'reverse', 'sort', 'clear']
+        : isDict(self) ? ['pop', 'update', 'clear'] : [];
+    if (mutating.includes(name)) assertMutable(self);
     return table[name](self, args);
 }

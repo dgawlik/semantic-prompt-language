@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { run, type RunResult } from '../src/interpreter.js';
 import { Failure } from '../src/errors.js';
 import { Logger } from '../src/logger.js';
@@ -14,6 +14,7 @@ beforeEach(() => {
     dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'spl-')));
 });
 afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -33,6 +34,106 @@ const failure = (r: RunResult) => {
 };
 
 describe('deterministic language', () => {
+    it('reads environment strings and returns None for absent keys without exposing prototypes', async () => {
+        vi.stubEnv('SPL_TEST_INPUT', 'a value');
+        vi.stubEnv('SPL_TEST_EMPTY', '');
+        for (const name of ['SPL_TEST_MISSING', 'toString', 'constructor', '__proto__']) vi.stubEnv(name, undefined);
+        const { result } = await exec(`
+let env = $env
+def read() { return env.SPL_TEST_INPUT }
+success [read(), $env['SPL_TEST_INPUT'], $env.SPL_TEST_EMPTY, env.SPL_TEST_MISSING,
+         env['toString'], env.constructor, env.__proto__, type(env), '{env.SPL_TEST_INPUT}']
+`);
+        expect(value(result)).toEqual(['a value', 'a value', '', null, null, null, null, 'dict', 'a value']);
+    });
+
+    it('exposes only supplied script arguments with normal list operations and nullable bounds', async () => {
+        const args = ['first', '', '--model=x'];
+        const { result } = await exec(`
+let args = $args
+def read() { return args[0] }
+success [read(), args[1], args[2], args[3], args[99], args[-1], args[-4],
+         args[1:], len(args), type(args), list(enumerate(args)), '{$args[0]}']
+`, { args });
+        expect(value(result)).toEqual(['first', '', '--model=x', null, null, '--model=x', null,
+            ['', '--model=x'], 3, 'list', [[0, 'first'], [1, ''], [2, '--model=x']], 'first']);
+        expect(args).toEqual(['first', '', '--model=x']);
+        expect(value((await exec(`success [$args, $args[0], $args[-1], len($args)]`)).result)).toEqual([[], null, null, 0]);
+    });
+
+    it.each([
+        `$args['0']`, `$args[0.5]`, `$args[None]`, `$env[0]`,
+        `[][0]`, `[1][1]`, `'x'[1]`, `{}.missing`, `{}['missing']`,
+    ])('preserves index type validation and ordinary collection errors: %s', async (expr) => {
+        expect(failure((await exec(`success ${expr}`)).result).status_code).toBe('runtime_error');
+    });
+
+    it.each([
+        `$env.KEY = 'changed'`, `$env['KEY'] = 'changed'`, `$env.KEY += 'changed'`,
+        `$env.pop('KEY')`, `$env.update({'KEY': 'changed'})`, `$env.clear()`,
+        `$args[0] = 'changed'`, `$args[0] += 'changed'`, `$args.append('changed')`,
+        `$args.extend(['changed'])`, `$args.insert(0, 'changed')`, `$args.pop()`,
+        `$args.remove('first')`, `$args.reverse()`, `$args.sort()`, `$args.clear()`,
+        `let alias = $env\nalias.KEY = 'changed'`, `let alias = $env\nalias.clear()`,
+        `let alias = $args\nalias[0] = 'changed'`, `let alias = $args\nalias.append('changed')`,
+        `def change(a) { a.clear() }\nchange($args)`,
+        `let nested = {'env': $env}\nnested.env.update({})`,
+    ])('rejects mutation of runtime inputs through all aliases: %s', async (source) => {
+        const { result } = await exec(source, { args: ['first'] });
+        expect(failure(result)).toMatchObject({ status_code: 'runtime_error', reason: 'cannot modify a read-only value' });
+    });
+
+    it('allows catchable read-only errors, read methods, and mutable copies', async () => {
+        vi.stubEnv('SPL_TEST_INPUT', 'original');
+        const { result } = await exec(`
+let caught = None
+try { $args.clear() } except err { caught = err.status_code }
+let args = $args.copy()
+args.append('copy')
+let env = $env.copy()
+env.SPL_TEST_INPUT = 'copy'
+let sliced = $args[:]
+sliced[0] = 'slice'
+success [caught, args, sliced, env.SPL_TEST_INPUT, $env.get('SPL_TEST_INPUT'),
+         $args.count('first'), $args.index('first'), $args, $env.SPL_TEST_INPUT]
+`, { args: ['first'] });
+        expect(value(result)).toEqual(['runtime_error', ['first', 'copy'], ['slice'], 'copy', 'original', 1, 0, ['first'], 'original']);
+        expect(process.env.SPL_TEST_INPUT).toBe('original');
+    });
+
+    it('does not automatically persist runtime inputs or let stores shadow them', async () => {
+        vi.stubEnv('SPL_TEST_MISSING', undefined);
+        const file = path.join(dir, 'inputs.json');
+        fs.writeFileSync(file, JSON.stringify({ '$env': { fake: 'stored' }, '$args': ['stored'] }));
+        const { result } = await exec(`let kept = $args[0]\nsuccess [$env.SPL_TEST_MISSING, $args]`, {
+            args: ['current'], store: new JsonFileStore(file),
+        });
+        expect(value(result)).toEqual([null, ['current']]);
+        expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ '$env': { fake: 'stored' }, '$args': ['stored'], kept: 'current' });
+        const cleanFile = path.join(dir, 'clean.json');
+        await exec(`assert $args[0] == None`, { store: new JsonFileStore(cleanFile) });
+        expect(JSON.parse(fs.readFileSync(cleanFile, 'utf8'))).toEqual({});
+    });
+
+    it('copies host inputs once per run without freezing or changing the originals', async () => {
+        vi.stubEnv('SPL_TEST_INPUT', 'initial');
+        const args = ['initial'];
+        const { result } = await exec(`success [$env.SPL_TEST_INPUT, $args[0]]`, {
+            args,
+            store: {
+                load() {
+                    vi.stubEnv('SPL_TEST_INPUT', 'changed');
+                    args[0] = 'changed';
+                    return {};
+                },
+                save() {},
+            },
+        });
+        expect(value(result)).toEqual(['initial', 'initial']);
+        expect(value((await exec(`success [$env.SPL_TEST_INPUT, $args[0]]`, { args })).result)).toEqual(['changed', 'changed']);
+        expect(Object.isFrozen(args)).toBe(false);
+    });
+
     it('evaluates arithmetic with Python semantics', async () => {
         const { result } = await exec(`success [7 / 2, 7 // 2, -7 // 2, -7 % 3, 2 ** 10, 2 ** 3 ** 2, -2 ** 2, 1 + 2 * 3, 'ab' * 2, [1] + [2]]`);
         expect(value(result)).toEqual([3.5, 3, -4, 2, 1024, 512, -4, 7, 'abab', [1, 2]]);

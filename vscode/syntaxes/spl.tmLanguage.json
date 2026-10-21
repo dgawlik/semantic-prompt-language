@@ -17,12 +17,18 @@
         { "include": "#declarations" },
         { "include": "#keywords" },
         { "include": "#constants" },
+        { "include": "#special-variables" },
         { "include": "#builtins" },
         { "include": "#calls" },
         { "include": "#member" },
         { "include": "#operators" },
         { "include": "#group" }
       ]
+    },
+
+    "special-variables": {
+      "name": "variable.language.spl",
+      "match": "\\$(?:env|args)\\b"
     },
 
     "comment": {

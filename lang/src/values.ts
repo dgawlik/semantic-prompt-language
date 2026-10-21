@@ -26,6 +26,12 @@ export type FunctionValue = UserFunction | BuiltinFunction;
 
 export const runtimeError = (msg: string): Failure => new Failure('runtime_error', msg);
 
+export function assertMutable(v: Value): void {
+    if (typeof v === 'object' && v !== null && Object.isFrozen(v)) {
+        throw runtimeError('cannot modify a read-only value');
+    }
+}
+
 export function isFunction(v: unknown): v is FunctionValue {
     return typeof v === 'object' && v !== null && '__fn' in v && ((v as { __fn: unknown }).__fn === 'user' || (v as { __fn: unknown }).__fn === 'builtin');
 }

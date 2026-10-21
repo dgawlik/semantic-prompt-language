@@ -9,6 +9,7 @@ spl <script.spl> [--log-level error|info|debug] [--silent] [--model <id>]
                  [--store <file.json> | --store-module <module>]
                  [--timeout <s>] [--cwd <dir>] [--mcp <file.json>] [--check]
                  [--record <file.jsonl> | --replay <file.jsonl>]
+                 [--arg <value> ...]
 spl login
 spl logout
 ```
@@ -22,6 +23,7 @@ From a checkout use `node dist/cli.js` or `npx file:./lang`. The package install
 | `--log-level <level>` | `info` | `error`, `info` or `debug`. Logs go to stderr. |
 | `--silent` | off | Suppress all logs; only the result is printed. |
 | `--model <id>` | SDK default | Overrides per-call model, then header model, then SDK default. |
+| `--arg <value>` | none | Repeatable string argument exposed through `$args`, in order. Also accepts `--arg=value`. |
 | `--mcp <file.json>` | none | MCP servers in VS Code `mcp.json` format; see [MCP configuration](#mcp-configuration). |
 | `--store <file.json>` | — | Persist top-level variables in a JSON file. |
 | `--store-module <path>` | — | Custom store module exporting `createStore()`. Mutually exclusive with `--store`. |
@@ -32,6 +34,26 @@ From a checkout use `node dist/cli.js` or `npx file:./lang`. The package install
 | `--check` | off | Parse the script and validate any `--mcp` config without starting servers or making LLM calls. |
 | `-v`, `--version` | — | Print the version. |
 | `-h`, `--help` | — | Print usage. |
+
+## Script arguments and environment
+
+```bash
+spl --arg=first --arg="two words" example.spl
+spl example.spl --arg first --arg "two words"
+spl example.spl --arg= --arg=--literal-option
+```
+
+Options may appear before or after the single script file. Each `--arg` supplies exactly
+one string: the first is `$args[0]`, the second `$args[1]`, and so on. Empty values
+are preserved. Use `--arg=--literal-option` for strings beginning with `-`.
+Extra positional arguments are still usage errors; use `--arg` for each script argument.
+Without arguments `$args` is empty, and out-of-range indexes return `None`.
+
+`$env.NAME` or `$env['NAME']` reads the process environment as a string, returning `None`
+for absent variables and `''` for present-but-empty ones. Both special variables are
+read-only snapshots, including through aliases; they are not automatically persisted.
+They work during replay using the current process environment and supplied arguments.
+Neither is evaluated by `--check`. See [runtime inputs](Language.md#runtime-inputs-env-and-args).
 
 ## Output streams & exit codes
 

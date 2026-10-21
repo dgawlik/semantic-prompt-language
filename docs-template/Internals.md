@@ -71,7 +71,11 @@ try {
 }
 ```
 
-`run` returns success with `value` and `hasValue`, or failure with its payload. Options include backend, logger, cwd, optional store, model override, and maximum call depth. Other exports include authentication helpers, variable stores, MCP configuration helpers, and related TypeScript types.
+`run` returns success with `value` and `hasValue`, or failure with its payload. Options include backend, logger, cwd, optional store, model override, `args?: readonly string[]`, and maximum call depth. For example, `run(parse('success $args[0]'), { backend, logger, args: ['first'] })` returns `'first'`. Omitted `args` defaults to an empty list, not `process.argv`.
+
+Each run copies arguments and the current `process.env` into read-only `$args` and `$env` snapshots. Special-variable expressions bypass lexical bindings and stores. Missing environment keys and out-of-range argument indexes return `None`; ordinary collections keep their existing errors. Assignment and mutating-method checks preserve read-only behavior through aliases. The snapshots are not automatically persisted, but a script can explicitly bind their values or aliases to saved top-level variables.
+
+Other exports include authentication helpers, variable stores, MCP configuration helpers, and related TypeScript types.
 
 ## Recording and replay
 

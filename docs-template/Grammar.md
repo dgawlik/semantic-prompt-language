@@ -57,9 +57,10 @@ call           = "(" , [ expr , { "," , expr } , [ "," ] ] , ")" ;
 index          = "[" , expr , "]" ;
 slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
 member         = "." , NAME ;
-primary        = NUMBER | string | "True" | "False" | "None" | NAME
+primary        = NUMBER | string | "True" | "False" | "None" | NAME | special_var
                | "(" , expr , ")" | list | dict | block | if_stmt | log_expr
                | ( "think" | "agent" ) , [ modifiers ] , postfix ;
+special_var    = "$env" | "$args" ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
 modifiers      = "{" , [ modifier , { "," , modifier } , [ "," ] ] , "}" ;
@@ -95,6 +96,12 @@ NAME           = ( letter | "_" ) , { letter | digit | "_" } ;
 NL             = newline ;
 
 (* "{{"/"}}" are literal braces; raw strings have no interpolation or escapes.
+   $env is a read-only process-environment dict snapshot; missing keys return None.
+   $args is a read-only list of repeated CLI --arg strings (empty by default);
+   out-of-range integer indexes return None, and negative indexes count from the end.
+   Both are available in every scope and interpolation, cannot be rebound or mutated
+   (including through aliases), and are not automatically persisted.
+   Other $-prefixed names are syntax errors. Ordinary dict/list missing reads still fail.
    Reserved words: let if elif else for in while def return try except assert fail success
    enforce forbid restrict think agent break continue pass and or not True False None.
    Removed syntax: think{level=...}, tool{param=...} 'instructions',

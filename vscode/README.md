@@ -20,6 +20,8 @@ this repository).
   (`len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`). Raw tools are ordinary function calls.
 * **Block expressions and logging**: expression-valued blocks and conditionals, and
   `log{level=debug}(value)` with separate log modifier completion, hover and highlighting.
+* **Runtime inputs**: completion, hover and highlighting for read-only `$env` and `$args`,
+  including inside interpolation. Typing `$` triggers special-variable completion.
 * **Guidance and failures**: `enforce`/`forbid`,
   `restrict [fs|net|exec|mcp]` (including comma-separated clauses), `try`/`except`, `assert`, `fail`, `success`.
 * **Snippets** (type the prefix): `def`, `if`, `ifelse`, `ifexpr`, `loglevel`, `for`, `while`, `let`, `ask`, `askobj`, `think`, `try`,

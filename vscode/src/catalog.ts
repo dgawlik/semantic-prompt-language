@@ -3,6 +3,11 @@ export interface Help {
     description: string;
 }
 
+export const specialVariables: Record<string, Help> = {
+    $env: { signature: '$env', description: 'Read-only snapshot of process environment variables. Access with $env.NAME or $env["NAME"]; missing names return None. Aliases remain read-only.' },
+    $args: { signature: '$args', description: 'Read-only list of strings supplied with repeated --arg options, in order. Defaults to an empty list; out-of-range indexes return None. Negative indexes count from the end. Aliases remain read-only.' },
+};
+
 export const builtins: Record<string, Help> = {
     len: { signature: 'len(value)', description: 'Length of a string (Unicode characters), list, or dictionary.' },
     str: { signature: 'str(value)', description: 'Convert a value to its SPL string representation.' },

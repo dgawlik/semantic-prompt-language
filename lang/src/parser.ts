@@ -90,6 +90,7 @@ class Parser {
         const t = this.tok;
         if (t.type !== 'name') this.fail(`expected ${what} but found ${this.describe(t)}`);
         const name = (t as { value: string }).value;
+        if (name.startsWith('$')) this.fail(`special variable '${name}' cannot be used as ${what}`);
         if (KEYWORDS.has(name)) this.fail(`'${name}' is a reserved word and cannot be used as ${what}`);
         this.next();
         return name;
@@ -491,7 +492,7 @@ class Parser {
             } else if (this.isOp('.')) {
                 this.next();
                 const t = this.tok;
-                if (t.type !== 'name') this.fail("expected a member name after '.'");
+                if (t.type !== 'name' || t.value.startsWith('$')) this.fail("expected a member name after '.'");
                 this.next();
                 e = { t: 'member', obj: e, name: (t as { value: string }).value };
             } else {
@@ -597,6 +598,11 @@ class Parser {
     }
 
     private parseNamePrimary(t: Token & { type: 'name' }): Expr {
+        if (t.value.startsWith('$')) {
+            if (t.value !== '$env' && t.value !== '$args') this.fail(`unknown special variable '${t.value}'`);
+            this.next();
+            return { t: 'special', name: t.value === '$env' ? 'env' : 'args' };
+        }
         switch (t.value) {
             case 'True': this.next(); return { t: 'bool', v: true };
             case 'False': this.next(); return { t: 'bool', v: false };

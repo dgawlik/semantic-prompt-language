@@ -94,8 +94,9 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
             continue;
         }
 
-        if (isNameStart(c)) {
-            let j = i;
+        if (isNameStart(c) || c === '$') {
+            if (c === '$' && (i + 1 >= src.length || !isNameStart(src[i + 1]))) err("unexpected character '$'");
+            let j = i + (c === '$' ? 1 : 0);
             while (j < src.length && isNameChar(src[j])) j++;
             const value = src.slice(i, j);
             advance(j - i);

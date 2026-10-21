@@ -8,6 +8,7 @@ import { Restrictions, makeRestriction } from './restrict.js';
 import { MemoryStore, type VariableStore } from './store.js';
 import { ToolHost, TOOL_SPECS } from './tools.js';
 import {
+    assertMutable,
     compareValues,
     equals,
     hasKey,
@@ -34,6 +35,8 @@ export interface RunOptions {
     cwd?: string;
     /** Overrides the `@{model=...}` directive. */
     model?: string;
+    /** Script arguments exposed as read-only `$args`; defaults to an empty list. */
+    args?: readonly string[];
     maxCallDepth?: number;
 }
 
@@ -59,6 +62,8 @@ class Interpreter {
     private readonly cwd: string;
     private readonly model?: string;
     private readonly maxDepth: number;
+    private readonly runtimeEnv = newDict();
+    private readonly runtimeArgs: Value[];
     private constraints: Constraint[] = [];
     private restrictions: Restrictions;
     private depth = 0;
@@ -71,6 +76,12 @@ class Interpreter {
         this.store = opts.store ?? new MemoryStore();
         this.model = opts.model ?? program.directives.model;
         this.maxDepth = opts.maxCallDepth ?? 200;
+        for (const [name, value] of Object.entries(process.env)) {
+            if (value !== undefined) setKey(this.runtimeEnv, name, value);
+        }
+        this.runtimeArgs = [...(opts.args ?? [])];
+        Object.freeze(this.runtimeEnv);
+        Object.freeze(this.runtimeArgs);
         this.restrictions = new Restrictions(this.cwd);
         this.builtins = makeBuiltins({ log: (m) => opts.logger.info(`log: ${m}`) });
         for (const tool of Object.keys(TOOL_SPECS) as ToolName[]) {
@@ -284,6 +295,7 @@ class Interpreter {
             return;
         }
         const obj = await this.eval(target.obj, env);
+        assertMutable(obj);
         if (target.t === 'member') {
             if (!isDict(obj)) throw runtimeError(`cannot set member '${target.name}' on ${typeName(obj)}`);
             const value = await compute(() => this.getKey(obj, target.name));
@@ -332,6 +344,7 @@ class Interpreter {
                 return null;
             }
             case 'name': return this.lookup(e.name, env);
+            case 'special': return e.name === 'env' ? this.runtimeEnv : this.runtimeArgs;
             case 'list': {
                 const out: Value[] = [];
                 for (const it of e.items) out.push(await this.eval(it, env));
@@ -391,7 +404,10 @@ class Interpreter {
     }
 
     private getKey(d: { [key: string]: Value }, k: string): Value {
-        if (!hasKey(d, k)) throw runtimeError(`key '${k}' not found`);
+        if (!hasKey(d, k)) {
+            if (d === this.runtimeEnv) return null;
+            throw runtimeError(`key '${k}' not found`);
+        }
         return d[k];
     }
 
@@ -494,12 +510,12 @@ class Interpreter {
     private listIndex(list: Value[] | string, index: Value): number {
         if (typeof index !== 'number' || !Number.isInteger(index)) throw runtimeError(`indices must be integers, got ${typeName(index)}`);
         const i = index < 0 ? list.length + index : index;
-        if (i < 0 || i >= list.length) throw runtimeError(`index ${index} out of range`);
+        if ((i < 0 || i >= list.length) && list !== this.runtimeArgs) throw runtimeError(`index ${index} out of range`);
         return i;
     }
 
     private index(obj: Value, index: Value): Value {
-        if (isList(obj)) return obj[this.listIndex(obj, index)];
+        if (isList(obj)) return obj[this.listIndex(obj, index)] ?? null;
         if (typeof obj === 'string') {
             const chars = Array.from(obj);
             return chars[this.listIndex(chars, index)];

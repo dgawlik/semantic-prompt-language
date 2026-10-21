@@ -6,6 +6,18 @@ A deliberately small, Python-flavoured standard library — enough to validate, 
 
 An *iterable* is a list, a string (its characters) or a dict (its keys). Calling a built-in with the wrong number or type of arguments is a catchable `runtime_error`.
 
+## Special variables
+
+| Variable | Description |
+| --- | --- |
+| `$env` | Read-only process-environment dict snapshot. `$env.NAME` or `$env['NAME']` returns a string, or `None` if absent. Empty strings remain empty. |
+| `$args` | Read-only list of strings from repeated CLI `--arg` options, in order; empty by default. Out-of-range integer indexes return `None`. Negative indexes count from the end. |
+
+Both work in any scope and interpolation. Aliases remain read-only; assignments and
+mutating methods fail with `runtime_error`. Non-mutating dict/list operations work
+normally, and `.copy()` creates a mutable copy. The special names cannot be rebound.
+See [runtime inputs](Language.md#runtime-inputs-env-and-args) and [passing arguments](CLI.md#script-arguments-and-environment).
+
 ## Functions
 
 ### Raw tools: no model round-trip

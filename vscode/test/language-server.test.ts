@@ -66,6 +66,33 @@ test('builtin completions stay aligned with the runtime', () => {
     assert.ok(!items.some((item) => ['instruct', 'avoid', 'level'].includes(item.label)));
 });
 
+test('special variables have diagnostics, completion edits and hover without runtime access', () => {
+    const source = "let args = $args\nsuccess [$env.SPL_TEST, $args[0], '{$env.SPL_TEST}: {$args[1]}']";
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    for (const name of ['$env', '$args']) {
+        const help = hover(result, at(source, name));
+        assert.match(JSON.stringify(help?.contents), /[Rr]ead-only/);
+        assert.match(JSON.stringify(help?.contents), /None/);
+        assert.equal(definition(result, at(source, name)), undefined);
+    }
+    assert.match(JSON.stringify(hover(result, at(source, '$env', 1))?.contents), /process environment/);
+    assert.match(analysis('let $args = []').diagnostics[0].message, /special variable/);
+    assert.match(analysis('success $unknown').diagnostics[0].message, /unknown special variable/);
+    for (const prefix of ['$', '$ar', '$en']) {
+        const partial = `success ${prefix}`;
+        const end = document(partial).positionAt(partial.length);
+        const items = completions(analysis(partial), end);
+        for (const name of ['$env', '$args']) {
+            assert.deepEqual(items.find((item) => item.label === name)?.textEdit, {
+                range: { start: at(partial, prefix), end },
+                newText: name,
+            });
+        }
+    }
+    assert.deepEqual(documentSymbols(result).map((symbol) => symbol.name), ['args']);
+});
+
 test('modifier and directive completions replace partial identifiers', () => {
     const source = "let response = ?{rea} 'hello'";
     const items = completions(analysis(source), document(source).positionAt(source.indexOf('rea') + 3));
@@ -240,6 +267,7 @@ for (const transport of ['stdio', 'ipc'] as const) {
         });
         assert.equal(initialized.capabilities.textDocumentSync, TextDocumentSyncKind.Incremental);
         assert.equal(initialized.capabilities.definitionProvider, true);
+        assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('$'));
         await connection.sendNotification(InitializedNotification.type, {});
         const initialDiagnostics = nextDiagnostics();
         await connection.sendNotification(DidOpenTextDocumentNotification.type, {

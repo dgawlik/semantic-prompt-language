@@ -6,6 +6,7 @@ export type Expr =
     | { t: 'bool'; v: boolean }
     | { t: 'none' }
     | { t: 'name'; name: string; line: number }
+    | { t: 'special'; name: 'env' | 'args' }
     | { t: 'list'; items: Expr[] }
     | { t: 'dict'; entries: [Expr, Expr][] }
     | { t: 'unary'; op: 'not' | '-' | '+'; e: Expr }

@@ -48,6 +48,25 @@ names, strings or expressions, evaluated once and validated before the arguments
 Unknown/duplicate log modifiers are syntax errors. Debug messages are visible only at
 debug log level; `--silent` suppresses all logs.
 
+## Runtime inputs
+
+`$env` is a read-only snapshot of process environment variables, available in all scopes
+and interpolation. `$env.NAME` and `$env['NAME']` return strings (including empty strings),
+or `None` for absent names. Names use the spelling exposed by the host process.
+
+`$args` is a read-only list of strings supplied through repeatable CLI `--arg=value`
+or `--arg value` options, in order, excluding the script path and interpreter options.
+It defaults to `[]`. Integer indexes outside the available arguments return `None`;
+negative indexes count from the end. Invalid index types remain runtime errors.
+Embedding callers supply `RunOptions.args?: readonly string[]`; the host's `process.argv`
+is never implicitly exposed.
+
+The special names cannot be declared or rebound; unknown `$`-prefixed names are syntax
+errors. Mutations, including mutating methods through aliases, are catchable runtime
+errors. Explicit copies are ordinary mutable collections with normal missing-key/index
+errors. Neither special value is automatically persisted, though explicitly assigned
+top-level aliases or derived values can be. Replay uses the current inputs.
+
 ## Exact tools
 
 The following are ordinary positional built-in functions, not language keywords:

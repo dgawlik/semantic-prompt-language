@@ -45,3 +45,9 @@
 #   ^^^^^^^^^^^^^^^^^^^^^^^^ comment.line.number-sign.spl
     let after = 1  # trailing
 #                  ^^^^^^^^^^ comment.line.number-sign.spl
+    log($env.HOME, $args[0])
+#       ^^^^ variable.language.spl
+#                  ^^^^^ variable.language.spl
+    log('{$env.HOME}: {$args[0]}')
+#         ^^^^ variable.language.spl
+#                      ^^^^^ variable.language.spl

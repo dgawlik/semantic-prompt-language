@@ -8,6 +8,11 @@ const bad = (source: string, message: RegExp) => {
 };
 
 describe('parser: accepted syntax', () => {
+    it('accepts special variables in expressions, interpolation and modifiers', () => {
+        const program = parse(`let date = $env.date\nlog($args[0], '{$env.date}: {$args[1]}')\nsuccess ?{model=$args[2]} $env.PROMPT`);
+        expect(program.body[0]).toMatchObject({ value: { t: 'member', obj: { t: 'special', name: 'env' } } });
+    });
+
     it('uses enforce/forbid for positive and negative scoped guidance', () => {
         const program = parse(`enforce 'English' { forbid 'jokes' { let answer = ?'Hi' } }`);
         expect(program.body[0]).toMatchObject({
@@ -94,6 +99,21 @@ let multi = {
 });
 
 describe('parser: strict syntax errors', () => {
+    it('rejects unknown special variables and rebinding their names', () => {
+        bad(`success $unknown`, /unknown special variable/);
+        bad(`success $env_extra`, /unknown special variable/);
+        bad(`success $env.$args`, /expected a member name/);
+        for (const name of ['$env', '$args']) {
+            bad(`let ${name} = 1`, /special variable/);
+            bad(`${name} = None`, /invalid assignment target/);
+            bad(`${name} += []`, /invalid assignment target/);
+            bad(`def f(${name}) { pass }`, /special variable/);
+            bad(`def ${name}() { pass }`, /special variable/);
+            bad(`for ${name} in [] { pass }`, /special variable/);
+            bad(`try { pass } except ${name} { pass }`, /special variable/);
+        }
+    });
+
     it('rejects unknown or duplicate modifiers, but allows expression values', () => {
         bad(`?{verbose=True} 'x'`, /unknown modifier/);
         bad(`think{level='high'} 'x'`, /unknown modifier/);

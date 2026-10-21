@@ -42,6 +42,10 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
   `{}` remains an empty dict. Functions still require explicit `return`.
 - **Logging:** `log(...)` defaults to info. `log{level=debug}(...)` selects error/info/debug;
   bare level names, strings and expressions are accepted and checked at runtime.
+- **Runtime inputs:** `$env.NAME` / `$env['NAME']` reads process environment strings;
+  `$args[i]` reads repeated CLI `--arg` strings in order (empty list by default).
+  Missing environment names and out-of-range argument indexes return `None`.
+  Both are read-only snapshots, including through aliases, and are not automatically persisted.
 
 Common generation modifiers are `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`,
 and `model`. Values are evaluated once, then validated before calling the model.
@@ -67,6 +71,7 @@ spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
                [--store file.json | --store-module module]
                [--record file.jsonl | --replay file.jsonl]
                [--log-level error|info|debug] [--silent] [--check]
+               [--arg value ...]
 ```
 
 Results are printed on stdout, logs on stderr. Full prompts/responses and statement traces
@@ -87,6 +92,8 @@ The package exports `parse`, `run`, `Logger`, `CopilotBackend`, `RecordingBacken
 `ReplayBackend`, variable stores, authentication helpers, and related types.
 Call `close()` on the backend after running; replay also checks for unused entries there.
 Custom backends must honor the request kind: only `agent` may execute tools.
+Embedding callers can pass `args: ['first', 'second']` in `RunOptions`; omitted
+arguments default to `[]`, not the host's `process.argv`. Each run snapshots `process.env`.
 See [embedding](../docs/internals.html#embedding).
 
 ## Migration

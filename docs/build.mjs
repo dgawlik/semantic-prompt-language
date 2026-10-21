@@ -89,6 +89,7 @@ hljs.registerLanguage('spl', (engine) => {
         built_in: 'len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log read_file write_file web_fetch web_search shell',
     };
     language.contains.unshift({ scope: 'keyword', match: /\?(?=\{|\s|['"])/ });
+    language.contains.unshift({ scope: 'variable', match: /\$(?:env|args)\b/ });
     return language;
 });
 for (const [name, grammar] of Object.entries({ bash, sh: bash, json, js: javascript, javascript, ebnf })) hljs.registerLanguage(name, grammar);

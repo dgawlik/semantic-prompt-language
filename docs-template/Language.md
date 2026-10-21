@@ -45,6 +45,44 @@ user.name = 'Grace'    # member assignment
 user['age'] = 36       # item assignment
 ```
 
+### Runtime inputs: `$env` and `$args`
+
+These special variables are available in every scope, including functions and string
+interpolation. They are snapshots taken at the start of each run, not ordinary bindings.
+
+* `$env` is a read-only dict of process environment variables. `$env.NAME` and
+  `$env['NAME']` return a string, including `''` for a set-but-empty variable.
+  An absent name returns `None`. Bracket access also supports names containing punctuation.
+  Environment names use the spelling exposed by the host process.
+* `$args` is a read-only list of strings supplied with repeated CLI `--arg` options,
+  in command-line order. The script path and interpreter options are not included.
+  Without `--arg`, it is empty. Out-of-range integer indexes return `None`;
+  negative indexes count from the end, as with ordinary lists. Non-integer indexes fail.
+
+```bash
+spl --arg=first --arg="two words" example.spl
+```
+
+```spl
+let date = $env.date
+log($args[0])             # first
+log($args[1])             # two words
+log($args[2])             # None
+log("date={date}, first={$args[0]}")
+```
+
+The special names cannot be declared, rebound, or used as parameters or loop variables.
+Assignments to their members/items and mutating methods raise catchable `runtime_error`,
+even through aliases such as `let args = $args`. Use `$args.copy()`, `list($args)`,
+`$args[:]`, or `$env.copy()` to create a normal mutable copy. Copies have ordinary
+missing-index/key errors; this does not change ordinary dict/list behavior.
+
+The runtime does not automatically add either value to a variable store. Explicitly
+assigning a value or alias to a top-level variable can persist it, so do not persist,
+log, or interpolate sensitive environment values into prompts unintentionally.
+Replay uses the current run's inputs, not recorded environment variables or arguments.
+Other `$`-prefixed variable names are syntax errors.
+
 ### Scope
 
 `let name = …` binds in the current scope. Every block creates a lexical child scope. Inner declarations shadow enclosing names and cannot be accessed from a parent scope. Reads and assignments search outward through the full lexical chain for the first declaration. There is no hoisting: a local appears when execution binds it.
