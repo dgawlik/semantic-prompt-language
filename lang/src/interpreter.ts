@@ -569,7 +569,7 @@ class Interpreter {
     }
 
     private async evalGeneration(kind: LlmRequest['kind'], mods: Record<string, Expr>, promptExpr: Expr, env: Env): Promise<Value> {
-        if (kind === 'agent' && this.opts.backend.mode) {
+        if (kind === 'agent' && (this.opts.backend.mode === 'record' || this.opts.backend.mode === 'replay')) {
             throw new Failure('restriction_violation', 'agents cannot run in record/replay mode; record generation-only workflows');
         }
         const options: Record<string, Value> = {};

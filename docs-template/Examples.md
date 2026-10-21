@@ -335,7 +335,7 @@ success "{headlines}\n\n{themes}"
 
 ## Fix failing tests
 
-Run raw `npm test` in the project selected by `--cwd`, invoke an explicit repair agent after a failure, and repeat up to three rounds. Files are restricted to the project and executable names to npm. Avoiding test edits is guidance, not a filesystem write prohibition. This workflow intentionally performs actions and is not record/replay-compatible; review its changes.
+Run raw `npm test` in the project selected by `--cwd`, invoke an explicit repair agent after a failure, and repeat up to three rounds. Files are restricted to the project and executable names to npm. Avoiding test edits is guidance, not a filesystem write prohibition. This workflow intentionally performs actions; review its changes. `--trace` captures its LLM calls, but replay reruns explicit tests without repeating the agent's edits, so it requires suitable external state. Legacy `--record` does not support this workflow.
 
 ```bash
 spl lang/examples/fix-failing-tests.spl --cwd .

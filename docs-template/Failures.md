@@ -26,7 +26,7 @@ Failures stop execution unless caught. Format, validation, transport, tool, and 
 | `assertion_failed` | A business-rule assertion was false. |
 | `explicit_failure` | The script executed fail. |
 | `restriction_violation` | Blocked tool action, forbidden generation permission request, or record/replay capability violation. |
-| `llm_error` | Authentication, timeout, transport, model, recording I/O, or replay matching/completion failure. |
+| `llm_error` | Authentication, timeout, transport, model, trace/recording I/O, or replay matching/completion failure. |
 | `tool_error` | Missing file, HTTP failure, invalid tool input, or nonzero shell exit. |
 
 ## try / except
@@ -86,4 +86,4 @@ A raw write can finish before a later model call fails. Keep I/O outside repair,
 
 An uncaught script failure prints its payload to stdout and exits with code 1. Syntax/usage errors go to stderr with code 2; internal errors use 70. Invalid recording files are usage errors. Replay mismatch/exhaustion is catchable, while unused entries are checked at backend close and still make the CLI fail before printing a success value.
 
-Opt-in variable stores save even after a script failure. Replay forbids persistent stores and external writes. Logs and recordings can contain sensitive data.
+Opt-in variable stores save even after a script failure, including during workflow trace replay. Only legacy generation replay forbids stores and external writes. Workflow traces capture backend failures too, preserving their categories and reasons on replay. Logs, traces, and recordings can contain sensitive data.

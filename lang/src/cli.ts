@@ -12,7 +12,7 @@ import { run, type RunResult } from './interpreter.js';
 import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
 import { toJson } from './values.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
-import { RecordingBackend, ReplayBackend } from './recording.js';
+import { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
@@ -30,8 +30,10 @@ Options:
   --store <file.json>     persist top-level variables in a JSON file
   --store-module <path>   custom variable store: module exporting createStore() -> { load(), save(vars) }
   --timeout <seconds>     per LLM call timeout (default: 300)
+  --trace <file.jsonl>    trace all LLM requests, responses, and failures (new file)
   --record <file.jsonl>   record generation responses (new file; no agents)
-  --replay <file.jsonl>   offline generation replay; only local reads allowed
+  --replay <file.jsonl>   replay LLM results without Copilot/MCP; explicit script tools still run
+                          Legacy --record files allow only local reads and no stores.
   --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
   --check                 validate script syntax and any --mcp config without executing
   -v, --version           print version
@@ -87,6 +89,7 @@ async function main(): Promise<number> {
                 store: { type: 'string' },
                 'store-module': { type: 'string' },
                 timeout: { type: 'string' },
+                trace: { type: 'string' },
                 record: { type: 'string' },
                 replay: { type: 'string' },
                 cwd: { type: 'string' },
@@ -120,8 +123,12 @@ async function main(): Promise<number> {
     const timeoutSec = Number(values.timeout ?? 300);
     if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) usageError('--timeout must be a positive number');
     if (values.store && values['store-module']) usageError('--store and --store-module are mutually exclusive');
-    if (values.record && values.replay) usageError('--record and --replay are mutually exclusive');
-    if (values.replay && (values.store || values['store-module'])) usageError('--replay cannot use a persistent variable store');
+    if ([values.trace, values.record, values.replay].filter((value) => value !== undefined).length > 1) {
+        usageError('--trace, --record, and --replay are mutually exclusive');
+    }
+    if ([values.trace, values.record, values.replay].some((value) => value !== undefined && value.trim() === '')) {
+        usageError('--trace, --record, and --replay require a non-empty file path');
+    }
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
     const file = positionals[0];
@@ -150,27 +157,30 @@ async function main(): Promise<number> {
     }
     if (values.check) return 0;
 
-    let store: VariableStore;
-    try {
-        store = values.store ? new JsonFileStore(values.store) : values['store-module'] ? await loadStoreModule(values['store-module']) : new MemoryStore();
-    } catch (e) {
-        return usageError((e as Error).message);
-    }
-
     let backend: LlmBackend;
     try {
         if (values.replay) backend = new ReplayBackend(values.replay);
         else {
             backend = new CopilotBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers });
             if (values.record) backend = new RecordingBackend(backend, values.record);
+            if (values.trace) backend = new TraceBackend(backend, values.trace);
         }
     } catch (e) {
         if (!(e instanceof Error)) throw e;
         return usageError(`cannot open recording: ${e.message}`);
     }
+    if (backend.mode === 'replay' && (values.store || values['store-module'])) {
+        return usageError('--replay of legacy --record files cannot use a persistent variable store');
+    }
+    let store: VariableStore;
+    try {
+        store = values.store ? new JsonFileStore(values.store) : values['store-module'] ? await loadStoreModule(values['store-module']) : new MemoryStore();
+    } catch (e) {
+        return usageError((e as Error).message);
+    }
     let result: RunResult | undefined;
     try {
-        result = await run(program, { backend, logger, store: values.replay ? undefined : store, cwd, model: values.model, args: values.arg });
+        result = await run(program, { backend, logger, store: backend.mode === 'replay' ? undefined : store, cwd, model: values.model, args: values.arg });
     } finally {
         try {
             await backend.close();

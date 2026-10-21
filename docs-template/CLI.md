@@ -8,7 +8,7 @@ The interpreter runs one script file to completion. It prints the result on stdo
 spl <script.spl> [--log-level error|info|debug] [--silent] [--model <id>]
                  [--store <file.json> | --store-module <module>]
                  [--timeout <s>] [--cwd <dir>] [--mcp <file.json>] [--check]
-                 [--record <file.jsonl> | --replay <file.jsonl>]
+                 [--trace <file.jsonl> | --record <file.jsonl> | --replay <file.jsonl>]
                  [--arg <value> ...]
 spl login
 spl logout
@@ -28,8 +28,9 @@ From a checkout use `node dist/cli.js` or `npx file:./lang`. The package install
 | `--store <file.json>` | — | Persist top-level variables in a JSON file. |
 | `--store-module <path>` | — | Custom store module exporting `createStore()`. Mutually exclusive with `--store`. |
 | `--timeout <seconds>` | `300` | Per-LLM-call timeout. |
+| `--trace <file.jsonl>` | none | Create a new workflow trace of all LLM requests, responses, and failures, including agents. Works with `--silent`. |
 | `--record <file.jsonl>` | none | Create a new generation recording. Rejects existing files and agent calls. |
-| `--replay <file.jsonl>` | none | Offline generation replay. Blocks agents, writes, shell, network, and stores. Mutually exclusive with record. |
+| `--replay <file.jsonl>` | none | Replay recorded LLM/agent results without Copilot or MCP. Explicit script tools and stores run normally for workflow traces; legacy generation recordings retain their restrictions. Mutually exclusive with `--trace` and `--record`. |
 | `--cwd <dir>` | current dir | Base directory for relative paths, `restrict` checks, and the working directory of tools and the model. |
 | `--check` | off | Parse the script and validate any `--mcp` config without starting servers or making LLM calls. |
 | `-v`, `--version` | — | Print the version. |
@@ -91,7 +92,7 @@ spl script.spl --log-level debug 2> run.log   # keep the full transcript, pipe t
 
 ## MCP configuration
 
-Pass a JSON file using the VS Code `mcp.json` shape: a top-level `servers` object maps server names to connection settings. MCP tools are available only during explicit `agent` calls. Generation never starts MCP servers, and record/replay rejects agents.
+Pass a JSON file using the VS Code `mcp.json` shape: a top-level `servers` object maps server names to connection settings. MCP tools are available only during live `agent` calls. Generation and replay never start MCP servers. Workflow tracing supports agents; legacy generation recording rejects them.
 
 ### Remote HTTP or SSE server
 
@@ -187,7 +188,7 @@ Only load trusted configurations: they can launch local programs or connect to r
 
 ## Variable store
 
-Stores are independent of generation recordings. `--replay` rejects both `--store` and `--store-module` before loading user modules or writing state.
+Stores are independent of traces and recordings. Workflow trace replay loads and saves them normally. Replaying legacy `--record` files rejects both `--store` and `--store-module` before loading user modules or writing state.
 
 Scripts can keep state between runs. `--store vars.json` loads top-level variables from the file at start and writes them back at exit — **also on failure**. Functions are not persisted. The file must contain a JSON object; writes are atomic (temp file + rename).
 
@@ -233,6 +234,42 @@ A script that needs an LLM without credentials fails with `llm_error` and asks y
 
 Each live call opens a fresh session through the GitHub Copilot SDK. Generation (`?` and `think`) exposes no tools and aborts unexpected permission requests. Only explicit `agent` sessions expose runtime and configured MCP tools under active restrictions. Pass context explicitly; previous calls are not implicit conversation history.
 
+## Workflow traces and replay
+
+```bash
+spl workflow.spl --trace workflow.jsonl
+spl workflow.spl --replay workflow.jsonl --silent
+```
+
+`--trace` creates a new file and never overwrites an existing one. It instruments every backend call from `?`, `think`, and `agent`, including repair attempts and failures that the script catches. Tracing is independent of log level and `--silent`. `--trace`, `--record`, and `--replay` are mutually exclusive. `--check` does not create a trace.
+
+Replay needs no model credentials and never constructs a Copilot client or starts MCP servers. It supplies the recorded raw response or failure at each LLM call. JSON parsing, schemas, repairs, assertions, and normal control flow run again. Requests must match exactly and in order: call kind, assembled prompt (including schema/guidance), requested model, reasoning effort, and show-reasoning flag. Changed inputs, exhaustion, and unused entries fail explicitly.
+
+**Replay is not a dry run or a snapshot restore.** Explicit script calls to `read_file`, `write_file`, `shell`, `web_fetch`, and `web_search` still execute under normal restrictions. Persistent stores also load and save normally, including after script failure. Environment variables, arguments, files, and explicit tool outputs come from the current run. Replay can therefore perform writes and network requests; those inputs must still produce matching LLM requests.
+
+Agent results are replayed without executing the agent or repeating its runtime tools or MCP calls. Only the completed agent call's request and result/failure are captured, not the SDK's internal conversation or individual tool exchanges. Replay does not recreate files or other side effects produced by the original agent; provision required state separately.
+
+### Trace format
+
+The UTF-8 JSONL file begins with a versioned header, followed by one entry per completed backend call:
+
+```json
+{"format":"spl-trace","version":1}
+{"request":{"kind":"ask","prompt":"Question","model":null,"reasoningEffort":null,"showReasoning":false},"response":{"text":"Answer","reasoning":"Optional reasoning","effective":{"model":"actual-model"}}}
+```
+
+Requests are structured objects; absent model/effort values are `null`. Responses preserve unparsed text, optional reasoning, and effective backend parameters. A failed call has `error` instead of `response`, for example:
+
+```json
+{"request":{"kind":"ask","prompt":"Question","model":null,"reasoningEffort":null,"showReasoning":false},"error":{"status_code":"llm_error","reason":"transport failed"}}
+```
+
+Backend errors replay as `llm_error`; runtime failures retain their original category and reason. Source locations are attached by the current script. Incomplete or malformed entries and unknown format versions are rejected explicitly.
+
+**Protect traces**
+
+Files contain assembled prompts and raw responses, including source data and reasoning. Treat them as sensitive; do not commit private traces. Trace files are created with owner-only permissions where supported by the operating system.
+
 ## Offline generation record/replay
 
 ```bash
@@ -240,11 +277,11 @@ spl examples/triage-issues.spl --record triage.jsonl
 spl examples/triage-issues.spl --replay triage.jsonl --silent
 ```
 
-Record creates a new JSONL file and never overwrites one. Replay needs no credentials and never constructs a Copilot client or starts MCP servers. Both modes reject agents. Recording captures successful backend responses, including invalid JSON that subsequently triggers a repair; transport errors are not recorded.
+This legacy mode remains supported with its original `spl-generation`, version 1 format. Record creates a new JSONL file and never overwrites one. Replay needs no credentials and never constructs a Copilot client or starts MCP servers. Both modes reject agents. Recording captures successful backend responses, including invalid JSON that subsequently triggers a repair; transport errors are not recorded.
 
 Requests must match exactly and in order: call kind, assembled prompt (including schema/guidance), requested model, reasoning effort, and show-reasoning flag. Changed prompts, exhausted recordings, and unused entries fail explicitly. Replay re-runs JSON parsing, schema validation, repair prompts, and deterministic code.
 
-Replay permits local reads only. Writes, shell, network, agents, and persistent stores fail before execution. It never replays external actions and is not a general workflow cache. Split those stages out of replayable scripts.
+Replay of these legacy files permits local reads only. Writes, shell, network, agents, and persistent stores fail before execution. Use `--trace` for workflow replay with explicit side effects and agent results.
 
 **Protect recordings**
 

@@ -22,7 +22,7 @@ The lexer produces positioned tokens and string interpolation parts. The recursi
 | `llm.ts` | Backend contract, prompt construction, strict JSON parsing. |
 | `schema.ts` | Strict synchronous draft-07 schema compilation and field-path validation errors. |
 | `copilot.ts` | Fresh SDK sessions, model/effort checks, agent-only tool exposure, permission enforcement. |
-| `recording.ts` | Versioned generation-only JSONL recordings and exact sequential replay. |
+| `recording.ts` | Versioned workflow traces, legacy generation recordings, and exact sequential replay. |
 | `tools.ts / restrict.ts` | File, network, search, shell, path canonicalization, allowlists, and intersecting restrictions. |
 | `mcp.ts / auth.ts` | MCP configuration/filtering and Copilot device authentication. |
 | `cli.ts / store.ts / logger.ts / errors.ts` | CLI lifecycle, opt-in variable persistence, logs, failures and termination. |
@@ -33,7 +33,7 @@ Each block creates a child environment; function calls link to their lexical clo
 
 Guidance and restrictions are execution context, not captured capabilities: a function called inside a policy block uses the caller's currently active policies. Policies unwind on return, success, or failure. Functions have a default recursion cap of 200.
 
-Failures receive the innermost statement location once. Return/break/continue propagate as control signals; success ends the entire script. Opt-in stores save globals even after script failure, but replay forbids stores and skips saving.
+Failures receive the innermost statement location once. Return/break/continue propagate as control signals; success ends the entire script. Opt-in stores save globals even after script failure, including during workflow trace replay. Only legacy generation replay forbids stores and skips saving.
 
 ## Generation and repair lifecycle
 
@@ -79,11 +79,13 @@ Other exports include authentication helpers, variable stores, MCP configuration
 
 ## Recording and replay
 
-Wrap a live backend with `new RecordingBackend(backend, file)`, or use `new ReplayBackend(file)` without constructing a live backend. Close either backend after use; replay checks for unused entries on close. Do not publish a successful result until that check completes.
+Wrap a live backend with `new TraceBackend(backend, file)`, or use `new ReplayBackend(file)` without constructing a live backend. Close either backend after use; replay checks for unused entries on close. Do not publish a successful result until that check completes.
 
-Records contain raw backend responses, not just parsed values, so replay re-exercises parsing, schema checks, repair prompts, and deterministic code. Matching includes ordered assembled prompts, call kind, requested model, reasoning effort, and show-reasoning. Recordings do not capture transport errors or agent actions.
+Traces contain structured requests and raw backend responses (including reasoning and effective parameters), or failures with their status code and reason. Every `?`, `think`, and `agent` backend call is instrumented, including repairs and transport errors. Replay re-exercises parsing, schema checks, repairs, and deterministic code. Matching includes ordered assembled prompts, call kind, requested model, reasoning effort, and show-reasoning. See the [JSONL format](CLI.md#trace-format).
 
-The backend's `mode` identifies record/replay execution to the interpreter. Replay rejects agent calls, persistent stores, and all raw tools except local reads. No Copilot client or MCP server is started. This is generation regression testing, not workflow/action replay.
+The backend's `mode` identifies execution capabilities: `trace` records all LLM operations; `workflow-replay` returns their recorded results/failures while leaving explicit script tools and stores enabled. Agent-owned actions are not repeated or restored. No Copilot client or MCP server is started by replay.
+
+`new RecordingBackend(backend, file)` retains the legacy generation-only `record` mode. `ReplayBackend` selects `replay` for `spl-generation` files and `workflow-replay` for `spl-trace` files. Legacy `replay` rejects agents, stores, and all raw tools except local reads, preserving existing behavior.
 
 ## Extension points
 
@@ -93,7 +95,7 @@ Implement `LlmBackend.call(req)` returning text, optional reasoning, and effecti
 
 ### Custom store
 
-Implement synchronous `load()` and `save(vars)`, exported through a module factory. Stores are independent of model recordings and are forbidden in replay mode.
+Implement synchronous `load()` and `save(vars)`, exported through a module factory. Stores are independent of model traces and are forbidden only in legacy generation replay mode.
 
 ### Validation
 

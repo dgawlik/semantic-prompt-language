@@ -101,7 +101,7 @@ restrict './src', exec 'git', mcp 'docs/search' {
 success review
 ```
 
-Only agents expose tools to Copilot. Any permission request during generation is rejected and aborts the call. Agent tools still use the runtime restriction checks; unconfigured MCP servers and other Copilot tools are not approved. Agent actions are not transactional. Agents cannot be recorded or replayed.
+Only agents expose tools to Copilot. Any permission request during generation is rejected and aborts the call. Agent tools still use the runtime restriction checks; unconfigured MCP servers and other Copilot tools are not approved. Agent actions are not transactional. `--trace` captures agent results and failures; replay returns them without repeating agent-owned actions. Legacy `--record` does not support agents.
 
 ## Scoped guidance: enforce & forbid
 
@@ -142,4 +142,4 @@ write_file('commit-message.txt', message)
 success message
 ```
 
-Split side effects from generation when using [record/replay](CLI.md#offline-generation-recordreplay): replay permits local reads but blocks writes, network, shell, agents, and persistent stores.
+[Workflow trace replay](CLI.md#workflow-traces-and-replay) still executes these explicit raw tools and persistent stores under normal restrictions, but does not repeat agent-owned actions. The older [generation record/replay](CLI.md#offline-generation-recordreplay) mode permits local reads only and blocks writes, network, shell, agents, and persistent stores.

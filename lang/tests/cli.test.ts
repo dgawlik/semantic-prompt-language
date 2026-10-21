@@ -138,6 +138,74 @@ describe('cli', () => {
         expect(spl(`n += 1\nsuccess n`, '--store', store).out).toBe('42\n');
     });
 
+    it('--trace creates a new trace even with --silent, and --check does not create one', () => {
+        const file = path.join(dir, 'trace.jsonl');
+        expect(spl(`success 1`, '--trace', file, '--check')).toEqual({ code: 0, out: '', err: '' });
+        expect(fs.existsSync(file)).toBe(false);
+        expect(spl(`success 1`, '--trace', file, '--silent')).toEqual({ code: 0, out: '1\n', err: '' });
+        expect(fs.readFileSync(file, 'utf8')).toBe('{"format":"spl-trace","version":1}\n');
+        expect(spl(`success 1`, '--trace', file, '--silent').code).toBe(2);
+        expect(fs.readFileSync(file, 'utf8')).toBe('{"format":"spl-trace","version":1}\n');
+        for (const flags of [
+            ['--trace', file, '--record', file],
+            ['--trace', file, '--replay', file],
+            ['--trace='],
+            ['--trace'],
+        ]) {
+            expect(spl(`success 1`, ...flags).code).toBe(2);
+        }
+    });
+
+    it('replays agent traces without Copilot or MCP, but runs explicit writes and JSON stores', () => {
+        const file = path.join(dir, 'trace.jsonl');
+        const store = path.join(dir, 'vars.json');
+        const mcp = path.join(dir, 'mcp.json');
+        const marker = path.join(dir, 'mcp-started.txt');
+        fs.writeFileSync(mcp, JSON.stringify({ servers: {
+            offline: { command: process.execPath, args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'started')`] },
+        } }));
+        fs.writeFileSync(file, [
+            JSON.stringify({ format: 'spl-trace', version: 1 }),
+            JSON.stringify({
+                request: {
+                    kind: 'agent', prompt: 'Think carefully about the problem before giving the final answer.\n\nAct',
+                    model: null, reasoningEffort: 'medium', showReasoning: false,
+                },
+                response: { text: 'offline agent', effective: { model: 'test' } },
+            }),
+            '',
+        ].join('\n'));
+        const result = spl(`let answer = agent 'Act'\nwrite_file('output.txt', answer)\nsuccess answer`,
+            '--replay', file, '--store', store, '--mcp', mcp, '--silent');
+        expect(result).toEqual({ code: 0, out: 'offline agent\n', err: '' });
+        expect(fs.readFileSync(path.join(dir, 'output.txt'), 'utf8')).toBe('offline agent');
+        expect(JSON.parse(fs.readFileSync(store, 'utf8'))).toEqual({ answer: 'offline agent' });
+        expect(fs.existsSync(marker)).toBe(false);
+        const unused = spl(`success 'not replayed'`, '--replay', file, '--silent');
+        expect(unused.code).toBe(1);
+        expect(JSON.parse(unused.out)).toMatchObject({ status_code: 'llm_error', reason: expect.stringContaining('unused') });
+    });
+
+    it('allows custom store modules for workflow traces but rejects them before import for legacy recordings', () => {
+        const file = path.join(dir, 'trace.jsonl');
+        const legacy = path.join(dir, 'legacy.jsonl');
+        const mod = path.join(dir, 'store.mjs');
+        const marker = path.join(dir, 'imported.txt');
+        const saved = path.join(dir, 'saved.json');
+        fs.writeFileSync(file, '{"format":"spl-trace","version":1}\n');
+        fs.writeFileSync(legacy, '{"format":"spl-generation","version":1}\n');
+        fs.writeFileSync(mod, `import fs from 'node:fs';
+fs.writeFileSync(${JSON.stringify(marker)}, 'imported');
+export function createStore() {
+    return { load: () => ({ base: 7 }), save: (vars) => fs.writeFileSync(${JSON.stringify(saved)}, JSON.stringify(vars)) };
+}`);
+        expect(spl(`success 1`, '--replay', legacy, '--store-module', mod, '--silent').code).toBe(2);
+        expect(fs.existsSync(marker)).toBe(false);
+        expect(spl(`let answer = base * 6\nsuccess answer`, '--replay', file, '--store-module', mod, '--silent'))
+            .toEqual({ code: 0, out: '42\n', err: '' });
+        expect(JSON.parse(fs.readFileSync(saved, 'utf8'))).toEqual({ base: 7, answer: 42 });
+    });
+
     it('supports a pluggable store module', () => {
         const mod = path.join(dir, 'store.mjs');
         fs.writeFileSync(

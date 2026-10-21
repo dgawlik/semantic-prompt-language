@@ -30,7 +30,7 @@ export interface LlmResponse {
 }
 
 export interface LlmBackend {
-    readonly mode?: 'record' | 'replay';
+    readonly mode?: 'record' | 'replay' | 'trace' | 'workflow-replay';
     call(req: LlmRequest): Promise<LlmResponse>;
     close(): Promise<void>;
 }

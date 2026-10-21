@@ -132,14 +132,16 @@ Every non-raw string interpolates `{expr}`. For literal braces, double them
 ## Replay generation offline
 
 ```sh
-npx spl-lang user.spl --record user.jsonl
+npx spl-lang user.spl --trace user.jsonl
 npx spl-lang user.spl --replay user.jsonl --silent
 ```
 
 Replay needs no model credentials. Requests must match exactly and in order.
-Replay permits local reads but blocks writes, shell, network, agents and persistent
-stores. Recordings contain prompts and raw responses; protect them as sensitive
-data. See [record/replay](CLI.md#offline-generation-recordreplay).
+Workflow replay returns recorded generation and agent results without starting
+Copilot or MCP. Explicit script tools and stores still execute normally; agent-owned
+actions are not repeated. Traces contain prompts and raw responses; protect them as
+sensitive data. Legacy `--record` files retain generation-only replay restrictions.
+See [trace/replay](CLI.md#workflow-traces-and-replay).
 
 ## Breaking changes in 0.3
 

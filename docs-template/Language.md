@@ -138,7 +138,7 @@ success result
 
 ### Persistence
 
-Top-level variables can be saved between runs with opt-in `--store`, even after a script failure. Persistence is not a transaction or an action log and is forbidden during replay. See [CLI & runtime](CLI.md#variable-store).
+Top-level variables can be saved between runs with opt-in `--store`, even after a script failure. Persistence is not a transaction or an action log. It is allowed during workflow trace replay, but forbidden during legacy generation replay. See [CLI & runtime](CLI.md#variable-store).
 
 ## Types & values
 

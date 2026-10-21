@@ -10,7 +10,7 @@ the script specifies, generation returns validated data, and explicit agents cho
 ## Install and run
 
 Requires Node.js 20+. Model calls require GitHub Copilot authentication; raw tools,
-syntax checks, and recorded generation replay do not.
+syntax checks, and recorded LLM replay do not.
 
 ```sh
 npm install -g spl-lang
@@ -127,21 +127,29 @@ success result
 severity (one level, not a literal `|` expression); quoted levels and expressions are also
 accepted. Debug messages are emitted only with `--log-level debug`.
 
-## Offline regression tests
+## Replayable workflows
 
 ```sh
-spl extraction.spl --record responses.jsonl
+spl extraction.spl --trace responses.jsonl
 spl extraction.spl --replay responses.jsonl --silent
 ```
 
-Recordings are new JSONL files; existing files are never overwritten. They match ordered
+Traces capture all `?`, `think`, and `agent` requests, raw responses, reasoning,
+effective parameters, and failures in a versioned JSONL format. Existing files are
+never overwritten, and `--silent` does not suppress tracing. Replay matches ordered
 requests including the assembled prompt, call kind, requested model, reasoning, and display
-options. Repairs are recorded too. A mismatch, exhaustion, or unused response fails explicitly.
+options. Repairs and caught backend failures are replayed too. A mismatch, exhaustion,
+or unused entry fails explicitly. Replay never starts Copilot or MCP servers.
 
-Recording rejects agents. Replay never starts Copilot or MCP servers, permits local reads,
-and blocks writes, shell, network, agents, and persistent variable stores. It is not a
-general workflow cache: split side-effecting stages from replayable generation.
-**Recordings and logs contain prompts and responses; treat them as sensitive data.**
+**Workflow replay still executes explicit script tools and persistent stores normally.**
+It returns recorded agent results without repeating agent-owned tools or MCP actions;
+it does not recreate their side effects. Files, network responses, environment variables,
+and arguments come from the current run, so unchanged LLM inputs are required.
+For the older generation-only mode, `--record file.jsonl` remains supported; replaying
+those legacy files still blocks agents, writes, shell, network, and persistent stores.
+`--trace`, `--record`, and `--replay` are mutually exclusive.
+**Traces, recordings, and logs contain sensitive prompts and responses; protect them.**
+See [trace format and replay behavior](docs-template/CLI.md#workflow-traces-and-replay).
 
 ## CLI and failures
 
@@ -155,7 +163,7 @@ automatically persisted. See [runtime inputs](docs-template/Language.md#runtime-
 ```text
 spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
                [--store file.json | --store-module module]
-               [--record file.jsonl | --replay file.jsonl]
+               [--trace file.jsonl | --record file.jsonl | --replay file.jsonl]
                [--log-level error|info|debug] [--silent] [--check]
                [--arg value ...]
 spl login
