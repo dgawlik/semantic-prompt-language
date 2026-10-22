@@ -1,7 +1,8 @@
 # Getting started
 
-Orchestrate conversations with LLMs, validate the responses, enforce schemas
-and quickly iterate. Download the npm package or use it directly with `npx`.
+Go from an idea to a small, guarded workflow with a short edit-run-check loop.
+SPL keeps deterministic logic, model calls, and validation visible in one readable
+script, so you can iterate on the solution rather than build orchestration glue.
 
 Start with exact raw tools, add schema-validated generation, and opt into agents
 only when the model should choose actions. Syntax checks, scripts without LLM
@@ -18,14 +19,11 @@ commands and recorded replay need no Copilot login.
 Create `hello.spl`:
 
 ```spl
-@{model='gpt-6-luna'}
-
-let isFriday = ?{fmt='json'} 'Is today Friday? Return true or false.'
-if isFriday {
-    success 'Today is Friday!'
-} else {
-    success ?'Complain in original way'
-}
+let report = 'Checkout fails for every customer after deployment.'
+let severity = ?{fmt='integer', repairs=1} 'Rate the impact from 1 to 5: {report}'
+assert severity >= 1 and severity <= 5 'severity must be between 1 and 5'
+let route = if severity >= 4 { 'urgent-review' } else { 'normal-review' }
+success {'severity': severity, 'route': route}
 ```
 
 Check the syntax, log in and run it:
@@ -36,7 +34,10 @@ npx spl-lang login
 npx spl-lang hello.spl
 ```
 
-Use `--model <id>` if the example's model is unavailable.
+The `?` is the only model call; its result must be an integer. The assertion checks
+the allowed range, then ordinary code chooses a route. `repairs=1` can correct one
+format failure, not a failed assertion. Use `--model <id>` to choose a model instead
+of the SDK default.
 
 **stdout vs. stderr**
 
@@ -44,6 +45,30 @@ The value passed to `success` or a top-level `return` goes to stdout: strings
 are printed raw, everything else as JSON. An uncaught failure prints its payload
 to stdout. Logs, including the model and reasoning effort of each LLM call, go
 to stderr so results can be piped safely.
+
+## A short iteration loop
+
+1. **Edit one decision at a time.** Keep data preparation and control flow in
+   ordinary code. Put model judgment behind a visible `?` or `think`; use `agent`
+   only when the model should choose actions.
+2. **Check syntax cheaply.** `--check` parses the script without model calls or
+   script side effects. It does not validate runtime modifier values or compile schemas.
+3. **Run and inspect.** Read the result and failure category, then refine the
+   prompt, schema, assertion, or restriction. Capture a live trace when you want
+   to reuse that run's LLM results.
+4. **Retest with the same answers.** Replay to iterate on downstream logic and guards
+   while LLM requests stay unchanged. If you change a prompt, model, or matched
+   option, run live again with a new trace filename.
+
+```sh
+npx spl-lang hello.spl --check
+npx spl-lang hello.spl --trace hello-v1.jsonl
+npx spl-lang hello.spl --replay hello-v1.jsonl
+```
+
+Replay never starts Copilot or MCP, but explicit script tools and stores still run.
+It does not repeat or restore agent-owned actions. Protect traces as sensitive data;
+see [workflow replay](CLI.md#workflow-traces-and-replay).
 
 ## Install & build
 

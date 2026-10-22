@@ -1,6 +1,12 @@
 # Generation, agents & tools
 
-Exact I/O, model generation, and model-directed actions are different operations. SPL makes the boundary explicit so validation and retries cannot silently repeat external actions.
+Keep deterministic logic in ordinary code and put LLM judgment at visible boundaries.
+Exact I/O, generation, and model-directed actions are distinct operations, so you can
+iterate on a prompt or guard without hiding which parts can vary or perform actions.
+
+Use `fmt` and `schema` to constrain returned values, `assert` for acceptance rules,
+and bounded `repairs` for format/schema corrections. These guards contain variance;
+they do not make the model deterministic or establish factual correctness.
 
 ## Generation: `?`
 

@@ -1,72 +1,60 @@
-# Write scripts where prompts are syntax
+# Build AI workflows in minutes, not hours
 
-SPL is a small scripting language for reliable AI workflows. Minimize
-entropy by containing LLM calls, be explicit about constraints, validate
-schemas and more. Scripts are a compact way to specify what you want - let
-the runtime deal with glue code.
+SPL is a compact Python-like language designed for fast iteration: keep
+deterministic code separate from LLM calls, contain model variance with explicit
+guards, and read the whole workflow at a glance.
 
-Raw tools perform exact I/O, generation returns validated data, and explicit
-agents choose actions. Bounded repair and offline replay contain model variance
-without silently repeating external actions.
+Spend time developing the solution, not wiring an orchestration layer. Write a
+small script, run it, inspect the result, and refine the prompt or guard. The goal
+is a working solution in minutes rather than hours of glue code.
 
-`quickstart.spl`
+`guarded-triage.spl`
 
 ```spl
-@{model='gpt-6-luna'}
-
-def fib(n) {
-    if n < 2 {
-        return n
-    }
-    return fib(n - 1) + fib(n - 2)
-}
-
-let fib10 = fib(10)
-let modelFib10 = ?{fmt='integer'} 'fibonacci of 10 is?'
-
-assert fib10 == modelFib10 'Oops model got it wrong'
-
-let joke = ?{fmt='object'} 'A joke about programmers as {{"setup": ..., "punchline": ...}}'
-
-let animal = None
-enforce 'Answer in Chinese' {
-    forbid 'Mentioning the word cat' {
-        animal = ?{len='paragraph'} 'Funny story involving a pet animal'
-    }
-}
-
-success {'fib': fib10, 'modelFib': modelFib10, 'animal': animal, 'joke': joke}
+let report = 'Checkout fails for every customer after deployment.'
+let severity = ?{fmt='integer', repairs=1} 'Rate the impact from 1 to 5: {report}'
+assert severity >= 1 and severity <= 5 'severity must be between 1 and 5'
+let route = if severity >= 4 { 'urgent-review' } else { 'normal-review' }
+success {'severity': severity, 'route': route}
 ```
+
+The `?` is the only model call. `fmt` checks its output type; `assert` rejects an
+out-of-range answer before ordinary code routes it. A reviewer can see the input,
+the variable part, the guard, and the result without tracing through callbacks.
+These checks constrain the answer; they do not prove the severity assessment is correct.
 
 ## Why SPL?
 
-Solutions talking to LLMs manually usually end up as string-building logic and
-ad-hoc parsing. By expressing intent rather than method, you are able to quickly
-understand what code is doing and why.
-
-* Prompts as part of syntax - `?` and `think` return values.
-  You can store them in variables, test them and interpolate them in strings.
-* Clear deterministic boundaries - control flow, arithmetic, interpolation and
-  variables never touch the model. Generation has no tools; raw network and shell
-  operations still have their normal external variability.
-* Least privilege - scopes narrow files, hosts, executables and MCP tools.
-  The runtime blocks violations - it does not just ask nicely.
-* Untrusted output, validated - `schema` checks structure with field-path errors,
-  bounded `repairs` correct generation only, and `assert` checks business rules.
-* Runs with `npx` - run `npx spl-lang login` and you are good to go.
-* Editor support - the VS Code extension adds a language server, syntax coloring,
-  snippets and bracket handling for `.spl` files.
+1. **Fast iteration loops.** Start with one file and run it directly with `npx`.
+   Check syntax without a model, inspect explicit failures, then adjust the smallest
+   prompt or guard. Trace/replay lets you retest deterministic logic and checks
+   against the same LLM results when requests stay unchanged.
+2. **Separate deterministic logic from LLM judgment.** Control flow, arithmetic,
+   interpolation, and variables never call a model. `?` and `think` generate values
+   without tools; `agent` explicitly enables model-directed actions. Validate
+   outputs with `fmt`, `schema`, and `assert`; bound repairs and restrict actions
+   instead of relying on prompt wording.
+3. **Clean syntax that scans quickly.** Familiar expressions, brace-delimited
+   blocks, and compact call modifiers keep the workflow visible. Prompts return
+   values you can name, test, and pass to ordinary functions, rather than hiding
+   control flow in string-building and callback plumbing.
 
 ## Design tenets
 
-* Best-effort reproducibility - SPL provides controls to reduce LLM variance.
-  Control flow and interpolation are deterministic; live model output is not.
-  Schemas and assertions validate answers, while exact generation record/replay
-  supports offline regression tests.
-* Least privilege - the runtime checks file access, network connections, shell
-  execution and MCP usage. Generation has no tools. Raw tools and explicit agents
-  are allow-by-default outside `restrict` blocks. Shell command inspection and
-  trusted MCP services are not OS sandboxes.
+* Keep ordinary code ordinary. Raw file, web, and shell tools execute explicit
+  requests without model interpretation. Their external inputs can still vary;
+  model-free I/O is not a promise of reproducible external state.
+* Guard before accepting output. Formats and schemas check type and structure;
+  assertions check the rules you write. Neither proves factual correctness.
+* Repair generation, not actions. Bounded `repairs` correct only format/schema
+  failures. Agents reject repair retries so a validation failure cannot
+  automatically repeat their external actions.
+* Make capabilities visible. `restrict` narrows file, network, executable, and MCP
+  access. Tools and agents are allow-by-default outside those scopes. Shell
+  inspection and trusted MCP services are not OS sandboxes.
+* Reuse results deliberately. Workflow traces capture LLM inputs, outputs, and
+  failures. Replay skips the model and agent-owned actions, but explicit script
+  tools and stores still execute; it is not a dry run or a state restore.
 
 `enforce`, `forbid` and `len` provide prompt guidance, not validation. Use
 `schema` and `assert` to validate results, and `restrict` to check actions.
@@ -83,13 +71,13 @@ understand what code is doing and why.
 
 ## Where to next
 
-* [Getting started](Getting-started.md) - install, authenticate and run your first script.
+* [Getting started](Getting-started.md) - install, authenticate and build a short iteration loop.
 * [Language basics](Language.md) - variables, strings, operators, control flow and functions.
 * [Generation, agents & tools](LLM-commands.md) - modifiers, schemas, repairs, guidance and exact tools.
 * [Restrictions](Restrictions.md) - narrow file, network, executable and MCP access.
 * [Failures & errors](Failures.md) - failure payloads, status codes and recovery.
 * [Built-ins](Builtins.md) - functions and collection methods.
-* [CLI & runtime](CLI.md) - options, authentication, persistence and record/replay.
+* [CLI & runtime](CLI.md) - options, authentication, persistence and trace/replay.
 * [Grammar](Grammar.md) - the complete EBNF reference.
 * [Examples](Examples.md) - working scripts for extraction, triage, agents and CI gates.
 * [VS Code extension](Editor.md) - installation, highlighting and snippets.

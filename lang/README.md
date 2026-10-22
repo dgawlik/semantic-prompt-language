@@ -1,6 +1,17 @@
-# spl-lang 0.3
+# spl-lang
 
-The Semantic Prompt Language interpreter. Requires Node.js 20+.
+A compact Python-like language for building AI workflows in minutes, not hours of
+orchestration glue. Iterate in a small script, separate deterministic code from
+LLM judgment, and contain model variance with explicit guards. Requires Node.js 20+.
+
+SPL is designed around three priorities:
+
+1. **Short iteration loops:** check syntax, run, inspect, refine, and replay unchanged
+   LLM requests while testing guards or deterministic logic.
+2. **Explicit boundaries and guards:** use ordinary code for computation, `?`/`think`
+   for generation, `agent` for model-directed actions, and validation before accepting results.
+3. **Readable scripts:** keep inputs, prompts, checks, and outputs visible together,
+   with familiar expressions and compact modifiers rather than orchestration plumbing.
 
 See the [project guide](../README.md), [language specification](../LANG-PRD.md),
 [EBNF](docs/syntax.ebnf), and [documentation site](../docs/index.html).
@@ -52,24 +63,34 @@ and `model`. Values are evaluated once, then validated before calling the model.
 `think` and `agent` default to medium reasoning; `?` uses the model default.
 CLI `--model` overrides per-call `model`, which overrides the header directive.
 
-## Record/replay
+## Trace/replay for short iteration loops
 
 ```sh
-node dist/cli.js examples/triage-issues.spl --record triage.jsonl
+node dist/cli.js examples/triage-issues.spl --check
+node dist/cli.js examples/triage-issues.spl --trace triage.jsonl
 node dist/cli.js examples/triage-issues.spl --replay triage.jsonl --silent
 ```
 
-Record creates a new file and rejects agents. Replay performs exact, ordered request matching
-without starting Copilot/MCP. Local reads are permitted; writes, shell, network, agents,
-and persistent stores are blocked. Recordings include prompts and raw responses and must
-be protected like logs. Mismatched, missing, or unused entries fail explicitly.
+Trace captures all generation and agent requests, raw responses, reasoning, effective
+parameters, and backend failures in a new JSONL file. Replay performs exact, ordered
+request matching without starting Copilot or MCP. Use it to retest deterministic
+logic and guards with the same answers. Changed requests require a new live trace;
+mismatched, missing, or unused entries fail explicitly.
+
+Explicit script tools and stores still run normally during workflow replay.
+Agent-owned actions are not repeated or restored, so replay is not a dry run.
+External inputs can still vary, and guards validate only the rules you specify.
+Protect traces like logs: they contain sensitive prompts and raw responses.
+
+Legacy `--record` remains generation-only. Replaying those files allows local reads
+but blocks writes, shell, network, agents, and persistent stores.
 
 ## CLI
 
 ```text
 spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
                [--store file.json | --store-module module]
-               [--record file.jsonl | --replay file.jsonl]
+               [--trace file.jsonl | --record file.jsonl | --replay file.jsonl]
                [--log-level error|info|debug] [--silent] [--check]
                [--arg value ...]
 ```
@@ -88,8 +109,8 @@ npm test
 The default suite is offline. In PowerShell, opt into authenticated live checks with
 `$env:SPL_LIVE_TESTS='1'; npm test`, then remove the environment variable.
 
-The package exports `parse`, `run`, `Logger`, `CopilotBackend`, `RecordingBackend`,
-`ReplayBackend`, variable stores, authentication helpers, and related types.
+The package exports `parse`, `run`, `Logger`, `CopilotBackend`, `TraceBackend`,
+`RecordingBackend`, `ReplayBackend`, variable stores, authentication helpers, and related types.
 Call `close()` on the backend after running; replay also checks for unused entries there.
 Custom backends must honor the request kind: only `agent` may execute tools.
 Embedding callers can pass `args: ['first', 'second']` in `RunOptions`; omitted

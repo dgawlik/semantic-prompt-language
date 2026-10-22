@@ -2,6 +2,11 @@
 
 The deterministic core of SPL: Python-flavoured expressions, braces, lexical block scopes, and explicit assignment. Model calls are distinct expressions, not implicit behavior of ordinary functions.
 
+Read a script by its boundaries: `let` names values, `?` and `think` mark model
+judgment, `agent` opts into model-selected actions, and `assert` exposes acceptance
+rules. Keep routine computation in ordinary code so the variable parts and their
+guards remain easy to spot.
+
 **Design decisions at a glance**
 
 * **Blocks use braces**; the opening `{` must be on the same line as its keyword. Statements end at a newline (or `;`).

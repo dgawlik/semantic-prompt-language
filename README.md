@@ -1,11 +1,29 @@
 # SPL: Semantic Prompt Language
 
-A small Python-like language for reliable AI workflows: raw tools execute exactly what
-the script specifies, generation returns validated data, and explicit agents choose actions.
+A compact Python-like language for building AI workflows in minutes, not hours of
+orchestration glue. Iterate in a small script, keep deterministic code separate from
+LLM calls, and contain model variance with explicit guards.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
 [Markdown documentation](docs-template/Introduction.md) |
 [Language specification](LANG-PRD.md) | [Grammar](lang/docs/syntax.ebnf)
+
+## Why SPL?
+
+1. **Fast iteration loops.** Write a small workflow, run it, inspect the result, and
+   refine the prompt or guard. Syntax checks, direct execution, and trace/replay keep
+   the loop short without building a separate orchestration layer.
+2. **Deterministic logic stays separate from LLM judgment.** Ordinary code owns
+   control flow and data manipulation; `?` and `think` mark generation, and `agent`
+   explicitly opts into model-directed actions. Use `fmt`, `schema`, `assert`,
+   bounded `repairs`, and `restrict` to contain variance rather than trust a prompt.
+3. **Readable at a glance.** Familiar expressions, compact modifiers, and visible
+   guard statements put the inputs, model calls, checks, and outputs in one
+   scannable script.
+
+Raw tools never call a model, but files, network responses, and shell commands still
+depend on external state. Guards validate the rules you specify; they do not make
+live model output deterministic or guarantee that an answer is factually correct.
 
 ## Install and run
 
@@ -21,6 +39,9 @@ spl example.spl
 From a checkout: `cd lang`, `npm install`, then `node dist/cli.js examples/hi.spl`.
 
 ## Generation, validation, and exact I/O
+
+Read the workflow top to bottom: fetch the input explicitly, ask the model for a
+validated value, check the business rule, then write the accepted result.
 
 ```spl
 let Invoice = {
@@ -129,6 +150,9 @@ accepted. Debug messages are emitted only with `--log-level debug`.
 
 ## Replayable workflows
 
+Capture a live run, then iterate on guards and deterministic logic without another
+model call when the recorded LLM requests remain unchanged:
+
 ```sh
 spl extraction.spl --trace responses.jsonl
 spl extraction.spl --replay responses.jsonl --silent
@@ -150,6 +174,8 @@ those legacy files still blocks agents, writes, shell, network, and persistent s
 `--trace`, `--record`, and `--replay` are mutually exclusive.
 **Traces, recordings, and logs contain sensitive prompts and responses; protect them.**
 See [trace format and replay behavior](docs-template/CLI.md#workflow-traces-and-replay).
+Changing a prompt, model, or other matched request option requires a new live trace;
+replay does not generate a new answer.
 
 ## CLI and failures
 

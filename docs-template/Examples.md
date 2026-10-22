@@ -1,6 +1,12 @@
 # Examples
 
-Working scripts from `lang/examples/`, synchronized with their executable sources. Most run from `lang/`; test repair runs against the npm project selected by `--cwd`. That option controls relative I/O and tool directories, not the script filename.
+Start from a working script, adapt one prompt or guard, and run it again. These
+examples keep explicit I/O, LLM judgment, and acceptance checks together so you can
+scan the workflow and iterate without writing an orchestration layer.
+
+Scripts from `lang/examples/` are synchronized with their executable sources. Most
+run from `lang/`; test repair runs against the npm project selected by `--cwd`.
+That option controls relative I/O and tool directories, not the script filename.
 
 Authenticate before live generation or agents. Use `--model <id>` to override an unavailable example model. Default tests check every example and documentation snippet offline, including scripted triage and invoice runs. Authenticated Copilot tests require explicit `SPL_LIVE_TESTS=1`.
 

@@ -190,7 +190,7 @@ function renderPage(page, index) {
     const toc = `<nav class="toc-links" aria-label="On this page"><ul>${headings.map((heading) => `<li class="toc-level-${heading.depth}"><a href="#${heading.id}">${escape(heading.text)}</a></li>`).join('')}</ul></nav>`;
     const neighbors = [[pages[index - 1], 'Previous'], [pages[index + 1], 'Next']].map(([neighbor, direction]) => neighbor
         ? `<a class="page-link ${direction.toLowerCase()}" href="${neighbor.slug}.html"><span>${direction}</span><strong>${neighbor.label}</strong>${icon('arrow')}</a>` : '<div></div>').join('');
-    const heroTitle = page.slug === 'index' ? escape(title).replace('prompts are syntax', '<em>prompts are syntax</em>') : escape(title);
+    const heroTitle = page.slug === 'index' ? escape(title).replace('minutes, not hours', '<em>minutes, not hours</em>') : escape(title);
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -215,18 +215,18 @@ function renderPage(page, index) {
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v${version}<span class="version-status">Stable</span></a>${navigation(page, 'Documentation')}<div class="sidebar-note">${icon('spark')}<p>Less glue code.<br><strong>More intent.</strong></p></div><a class="sidebar-source" href="${repository}">Open source on GitHub ${icon('external')}</a></aside>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v${version}<span class="version-status">Stable</span></a>${navigation(page, 'Documentation')}<div class="sidebar-note">${icon('spark')}<p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="${repository}">Open source on GitHub ${icon('external')}</a></aside>
   <details class="mobile-nav"><summary>Browse documentation <span>${escape(page.label)}</span>${icon('chevron')}</summary>${navigation(page, 'Mobile documentation')}</details>
   <main id="page" tabindex="-1">
     <div class="page-meta"><span>${escape(page.group)}</span>${icon('chevron')}<span>${escape(page.label)}</span><span class="reading-time">${Math.max(1, Math.ceil(markdown.split(/\s+/).length / 220))} min read</span></div>
-    <header class="page-heading${page.slug === 'index' ? ' introduction-heading' : ''}">${page.slug === 'index' ? '<p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>A small language for reliable AI workflows</p>' : ''}<h1>${heroTitle}</h1><div class="lead"><p>${leadHtml}</p></div>${page.slug === 'index' ? `<div class="hero-actions"><a class="button-primary" href="getting-started.html">Start building ${icon('arrow')}</a><a class="button-secondary" href="language.html">Explore the language ${icon('chevron')}</a></div><div class="hero-tags"><span>${icon('terminal')}Node.js 20+</span><span>${icon('spark')}GitHub Copilot</span><span>${icon('shield')}Explicit by design</span></div>` : ''}</header>
+    <header class="page-heading${page.slug === 'index' ? ' introduction-heading' : ''}">${page.slug === 'index' ? '<p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Fast iteration. Explicit guards. Readable scripts.</p>' : ''}<h1>${heroTitle}</h1><div class="lead"><p>${leadHtml}</p></div>${page.slug === 'index' ? `<div class="hero-actions"><a class="button-primary" href="getting-started.html">Start building ${icon('arrow')}</a><a class="button-secondary" href="language.html">Explore the language ${icon('chevron')}</a></div><div class="hero-tags"><span>${icon('terminal')}Node.js 20+</span><span>${icon('spark')}GitHub Copilot</span><span>${icon('shield')}Visible boundaries</span></div>` : ''}</header>
     <details class="mobile-toc"><summary>On this page ${icon('chevron')}</summary>${toc}</details>
     <article class="prose">${body}</article>
     <footer class="page-footer"><a href="${repository}/blob/HEAD/docs-template/${page.file}.md">${icon('edit')}View this page in Markdown ${icon('external')}</a><span>Good tools make intent clear.</span></footer>
     <nav class="page-pagination" aria-label="Previous and next pages">${neighbors}</nav>
-    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Small language. Deliberate workflows.</span><a href="${repository}">GitHub ${icon('external')}</a></div>
+    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="${repository}">GitHub ${icon('external')}</a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading">${icon('layers')}On this page</div>${toc}<div class="rail-note"><span class="rail-note-icon">${icon('code')}</span><strong>Prompts are just the start.</strong><p>Give your workflow structure, validation, and clear boundaries.</p><a href="getting-started.html">Write your first script ${icon('arrow')}</a></div></aside>
+  <aside class="right-rail"><div class="toc-heading">${icon('layers')}On this page</div>${toc}<div class="rail-note"><span class="rail-note-icon">${icon('code')}</span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script ${icon('arrow')}</a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search">${icon('close')}</button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field">${icon('search')}<input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>
