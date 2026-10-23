@@ -110,10 +110,18 @@ let Triage = {
 }
 
 let issues = [
-    {'id': 101, 'title': 'App crashes on startup', 'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
-    {'id': 102, 'title': 'Support dark mode', 'body': 'It would be great to have a dark theme, my eyes hurt at night.'},
-    {'id': 103, 'title': 'How do I export to CSV?', 'body': 'I cannot find the export option anywhere in the menus.'},
-    {'id': 104, 'title': 'Typo in install guide', 'body': 'The guide says "npm instal", should be "npm install".'},
+    {'id': 101, 
+    'title': 'App crashes on startup', 
+    'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
+    {'id': 102, 
+    'title': 'Support dark mode', 
+    'body': 'It would be great to have a dark theme, my eyes hurt at night.'},
+    {'id': 103, 
+    'title': 'How do I export to CSV?', 
+    'body': 'I cannot find the export option anywhere in the menus.'},
+    {'id': 104, 
+    'title': 'Typo in install guide', 
+    'body': 'The guide says "npm instal", should be "npm install".'},
 ]
 
 def triage(issue) {
@@ -122,7 +130,13 @@ Classify this GitHub issue.
 Title: {issue['title']}
 Body: {issue['body']}
 Give a one-sentence reason.'''
-    return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
+    return {
+        'id': issue['id'], 
+        'title': issue['title'], 
+        'label': r.label, 
+        'priority': r.priority, 
+        'reason': r.reason
+    }
 }
 
 let results = []
@@ -144,7 +158,9 @@ for t in results {
     }
 }
 
-let summary = ask(len='sentence') 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
+let summary = ask(len='sentence') \
+'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
+
 success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}
 ```
 
@@ -192,12 +208,18 @@ let Invoice = {
     'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'total'],
     'additionalProperties': False,
 }
-let invoice = ask(schema=Invoice, reasoning='high', repairs=2) 'Extract this invoice: {document}'
+let invoice = ask(
+    schema=Invoice,
+    reasoning='high',
+    repairs=2
+    ) 'Extract this invoice: {document}'
+    
 let computed = 0
 for line in invoice.lines {
     computed += line.quantity * line.unit_price
 }
-assert abs(computed - invoice.subtotal) < 0.01 "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
+assert abs(computed - invoice.subtotal) < 0.01 \
+    "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
 assert invoice.total >= invoice.subtotal 'total is smaller than subtotal'
 success invoice
 ```
@@ -251,12 +273,16 @@ let Review = {
     'required': ['findings'],
     'additionalProperties': False,
 }
-let review = ask(schema=Review, repairs=2) 'Convert this review into structured findings, using an empty list when there are none: {notes}'
+let review = ask(
+    schema=Review, 
+    repairs=2) '''Convert this review into structured findings, 
+    using an empty list when there are none: {notes}'''
 
 let lines = ["# Review of repository", '']
 let high = 0
 for f in review.findings {
-    assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
+    assert f.severity in ['low', 'medium', 'high'] \
+         "bad severity '{f.severity}'"
     if f.severity == 'high' {
         high += 1
     }
@@ -375,7 +401,8 @@ restrict '.', exec 'npm' {
 The test run failed with this output:
 {err.reason}
 
-Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.'''
+Find the bug in the source code (not the tests), 
+fix it with the file tools, and describe the change in one sentence.'''
                 }
             }
         }
@@ -405,7 +432,8 @@ spl examples/mcp.spl --mcp mcp/mcp.json
 # MCP servers are trusted services; scopes limit calls, not their internal I/O.
 
 restrict mcp 'docs/search' {
-    let summary = agent 'Use docs/search to find the documentation for this project and summarize it.'
+    let summary = agent \
+     'Use docs/search to find the documentation for this project and summarize it.'
     success summary
 }
 ```
@@ -431,7 +459,9 @@ restrict '.' {
     let source = read_file('./examples/data/product-update.md')
     enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
         for code, language in items(locales) {
-            let translation = ask(reasoning='medium') 'Translate this document to {language}: {source}'
+            let translation = ask(reasoning='medium') \
+                'Translate this document to {language}: {source}'
+
             write_file("./out/translations/product-update.{code}.md", translation)
             written.append("./out/translations/product-update.{code}.md")
         }
@@ -505,20 +535,28 @@ def fib(n) {
 }
 
 let fib10 = fib(10)
-let modelFib10 = ask(fmt='integer') 'fibonacci of 10 is?'
+let modelFib10 = ask(fmt='integer') \
+    'fibonacci of 10 is?'
 
 assert fib10 == modelFib10 'Oops model got it wrong'
 
-let joke = ask(fmt='object') 'A joke about programmers as {{"setup": ..., "punchline": ...}}'
+let joke = ask(fmt='object') \
+    'A joke about programmers as {{"setup": ..., "punchline": ...}}'
 
 let animal = None
 enforce 'Answer in Chinese' {
     forbid 'Mentioning the word cat' {
-        animal = ask(len='paragraph') 'Funny story involving a pet animal'
+        animal = ask(len='paragraph') \
+         'Funny story involving a pet animal'
     }
 }
 
-success {'fib': fib10, 'modelFib': modelFib10, 'animal': animal, 'joke': joke}
+success {
+    'fib': fib10, 
+    'modelFib': modelFib10, 
+    'animal': animal, 
+    'joke': joke
+}
 ```
 
 ### hi.spl — compact end-to-end tour
@@ -536,10 +574,12 @@ def fib(n) {
 }
 
 # an LLM call, validated and parsed as JSON
-let joke = ask(len='sentence', fmt='object') 'A joke about programmers. Give setup and punchline.'
+let joke = ask(len='sentence', fmt='object') \
+ 'A joke about programmers. Give setup and punchline.'
 
 # deliberate before answering
-let why = think(reasoning='high') 'Why is {joke.setup} funny?'
+let why = think(reasoning='high') \
+    'Why is {joke.setup} funny?'
 
 # Prompt guidance for calls inside the block (not runtime validation).
 let hi = None
