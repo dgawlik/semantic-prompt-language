@@ -9,7 +9,9 @@ restrict '.' {
     let source = read_file('./examples/data/product-update.md')
     enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
         for code, language in items(locales) {
-            let translation = ask(reasoning='medium') 'Translate this document to {language}: {source}'
+            let translation = ask(reasoning='medium') \
+                'Translate this document to {language}: {source}'
+
             write_file("./out/translations/product-update.{code}.md", translation)
             written.append("./out/translations/product-update.{code}.md")
         }

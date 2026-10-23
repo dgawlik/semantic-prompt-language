@@ -15,10 +15,18 @@ let Triage = {
 }
 
 let issues = [
-    {'id': 101, 'title': 'App crashes on startup', 'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
-    {'id': 102, 'title': 'Support dark mode', 'body': 'It would be great to have a dark theme, my eyes hurt at night.'},
-    {'id': 103, 'title': 'How do I export to CSV?', 'body': 'I cannot find the export option anywhere in the menus.'},
-    {'id': 104, 'title': 'Typo in install guide', 'body': 'The guide says "npm instal", should be "npm install".'},
+    {'id': 101, 
+    'title': 'App crashes on startup', 
+    'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
+    {'id': 102, 
+    'title': 'Support dark mode', 
+    'body': 'It would be great to have a dark theme, my eyes hurt at night.'},
+    {'id': 103, 
+    'title': 'How do I export to CSV?', 
+    'body': 'I cannot find the export option anywhere in the menus.'},
+    {'id': 104, 
+    'title': 'Typo in install guide', 
+    'body': 'The guide says "npm instal", should be "npm install".'},
 ]
 
 def triage(issue) {
@@ -27,7 +35,13 @@ Classify this GitHub issue.
 Title: {issue['title']}
 Body: {issue['body']}
 Give a one-sentence reason.'''
-    return {'id': issue['id'], 'title': issue['title'], 'label': r.label, 'priority': r.priority, 'reason': r.reason}
+    return {
+        'id': issue['id'], 
+        'title': issue['title'], 
+        'label': r.label, 
+        'priority': r.priority, 
+        'reason': r.reason
+    }
 }
 
 let results = []
@@ -49,5 +63,7 @@ for t in results {
     }
 }
 
-let summary = ask(len='sentence') 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
+let summary = ask(len='sentence') \
+'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
+
 success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}

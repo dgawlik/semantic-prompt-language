@@ -1,7 +1,11 @@
 # Run from this folder after: mkdir sandbox; echo hello world > sandbox/note.txt
 restrict './sandbox' {
     let content = read_file('./sandbox/note.txt')
-    let why = think(reasoning='high', show=True) 'In one sentence: why is the file content "{content}" a greeting?'
+    
+    let why = think(
+        reasoning='high', 
+        show=True) 'In one sentence: why is the file content "{content}" a greeting?'
+
     write_file('./sandbox/out.txt', 'OK')
     success {'content': content, 'why': why, 'written': read_file('./sandbox/out.txt')}
 }

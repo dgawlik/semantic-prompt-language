@@ -35,11 +35,17 @@ let Invoice = {
     'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'total'],
     'additionalProperties': False,
 }
-let invoice = ask(schema=Invoice, reasoning='high', repairs=2) 'Extract this invoice: {document}'
+let invoice = ask(
+    schema=Invoice,
+    reasoning='high',
+    repairs=2
+    ) 'Extract this invoice: {document}'
+    
 let computed = 0
 for line in invoice.lines {
     computed += line.quantity * line.unit_price
 }
-assert abs(computed - invoice.subtotal) < 0.01 "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
+assert abs(computed - invoice.subtotal) < 0.01 \
+    "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
 assert invoice.total >= invoice.subtotal 'total is smaller than subtotal'
 success invoice

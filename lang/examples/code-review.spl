@@ -36,12 +36,16 @@ let Review = {
     'required': ['findings'],
     'additionalProperties': False,
 }
-let review = ask(schema=Review, repairs=2) 'Convert this review into structured findings, using an empty list when there are none: {notes}'
+let review = ask(
+    schema=Review, 
+    repairs=2) '''Convert this review into structured findings, 
+    using an empty list when there are none: {notes}'''
 
 let lines = ["# Review of repository", '']
 let high = 0
 for f in review.findings {
-    assert f.severity in ['low', 'medium', 'high'] "bad severity '{f.severity}'"
+    assert f.severity in ['low', 'medium', 'high'] \
+         "bad severity '{f.severity}'"
     if f.severity == 'high' {
         high += 1
     }

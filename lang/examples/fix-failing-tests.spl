@@ -23,7 +23,8 @@ restrict '.', exec 'npm' {
 The test run failed with this output:
 {err.reason}
 
-Find the bug in the source code (not the tests), fix it with the file tools, and describe the change in one sentence.'''
+Find the bug in the source code (not the tests), 
+fix it with the file tools, and describe the change in one sentence.'''
                 }
             }
         }
