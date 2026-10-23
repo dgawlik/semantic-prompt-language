@@ -6,7 +6,7 @@ LLM calls, and contain model variance with explicit guards.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
 [Markdown documentation](docs-template/Introduction.md) |
-[Language specification](LANG-PRD.md) | [Grammar](lang/docs/syntax.ebnf)
+[Language specification](LANG-PRD.md) | [Grammar](docs-template/Grammar.md)
 
 ## Why SPL?
 
@@ -14,7 +14,7 @@ LLM calls, and contain model variance with explicit guards.
    refine the prompt or guard. Syntax checks, direct execution, and trace/replay keep
    the loop short without building a separate orchestration layer.
 2. **Deterministic logic stays separate from LLM judgment.** Ordinary code owns
-   control flow and data manipulation; `?` and `think` mark generation, and `agent`
+   control flow and data manipulation; `ask` and `think` mark generation, and `agent`
    explicitly opts into model-directed actions. Use `fmt`, `schema`, `assert`,
    bounded `repairs`, and `restrict` to contain variance rather than trust a prompt.
 3. **Readable at a glance.** Familiar expressions, compact modifiers, and visible
@@ -38,6 +38,26 @@ spl example.spl
 
 From a checkout: `cd lang`, `npm install`, then `node dist/cli.js examples/hi.spl`.
 
+## Commands and modifiers
+
+Generation uses `ask`, reasoning uses `think`, and model-directed actions use `agent`.
+All three accept multiline named modifiers in parentheses, with the prompt outside:
+
+```spl
+let score = ask(
+    fmt = 'integer',
+    repairs = 1
+) 'Rate this issue'
+let explanation = think(reasoning='high') 'Explain this score: {score}'
+let report = agent(reasoning='low') 'Inspect the project and summarize its status'
+log(level=debug)(score)
+```
+
+No modifiers: `ask 'prompt'` or `ask() 'prompt'`. Options can have a trailing comma.
+Model headers use `@(model='model-id')`. Ordinary `log(value)` and raw tool calls
+are unchanged. The old `?`, brace modifiers, and `@{...}` headers are rejected with
+migration hints; replace them with `ask`, `command(...)`, and `@(...)`.
+
 ## Generation, validation, and exact I/O
 
 Read the workflow top to bottom: fetch the input explicitly, ask the model for a
@@ -51,7 +71,7 @@ let Invoice = {
     'additionalProperties': False,
 }
 let document = read_file('invoice.txt')
-let invoice = ?{schema=Invoice, reasoning='high', repairs=2} 'Extract the total: {document}'
+let invoice = ask(schema=Invoice, reasoning='high', repairs=2) 'Extract the total: {document}'
 assert invoice.total >= 0 'total must not be negative'
 restrict './out' {
     write_file('./out/invoice.json', json_stringify(invoice))
@@ -63,7 +83,7 @@ success invoice
   and `shell(command)` are ordinary positional functions. They never call a model.
   File/web reads return text, writes return a confirmation, search returns result text,
   and shell returns combined stdout/stderr or raises `tool_error` on nonzero exit.
-- `?` and `think` are **generation-only**: no runtime tools, built-in Copilot tools, or MCP servers.
+- `ask` and `think` are **generation-only**: no runtime tools, built-in Copilot tools, or MCP servers.
   `think` is shorthand for generation with default medium reasoning.
 - `agent 'Inspect the source and fix the bug'` explicitly allows model-directed actions.
   Runtime tools and configured MCP tools remain subject to active restrictions.
@@ -86,7 +106,7 @@ success invoice
 let answer = None
 enforce 'Answer in English' {
     forbid 'jokes' {
-        answer = ?{len='sentence'} 'Explain recursion'
+        answer = ask(len='sentence') 'Explain recursion'
     }
 }
 success answer
@@ -99,7 +119,7 @@ They and `len` do not verify compliance. `schema` and `assert` validate results.
 ```spl
 let findings = None
 restrict './src', exec 'git', mcp 'docs/search' {
-    findings = agent{reasoning='high'} 'Inspect the source and consult docs/search'
+    findings = agent(reasoning='high') 'Inspect the source and consult docs/search'
 }
 success findings
 ```
@@ -135,16 +155,16 @@ value; an empty block, a statement-ending block, or an unmatched conditional ret
 `{}` remains an empty dictionary; use `{ pass }` for a block returning `None`.
 
 ```spl
-let result = if ?{fmt='boolean'} 'Today is Friday?' {
-    ? 'Haiku on variance'
+let result = if ask(fmt='boolean') 'Today is Friday?' {
+    ask 'Haiku on variance'
 } else {
-    ? 'Sentence on passing time'
+    ask 'Sentence on passing time'
 }
-log{level=debug}(result)
+log(level=debug)(result)
 success result
 ```
 
-`log(value, ...)` defaults to info. `log{level=error|info|debug}(value, ...)` selects
+`log(value, ...)` defaults to info. `log(level=error|info|debug)(value, ...)` selects
 severity (one level, not a literal `|` expression); quoted levels and expressions are also
 accepted. Debug messages are emitted only with `--log-level debug`.
 
@@ -158,7 +178,7 @@ spl extraction.spl --trace responses.jsonl
 spl extraction.spl --replay responses.jsonl --silent
 ```
 
-Traces capture all `?`, `think`, and `agent` requests, raw responses, reasoning,
+Traces capture all `ask`, `think`, and `agent` requests, raw responses, reasoning,
 effective parameters, and failures in a versioned JSONL format. Existing files are
 never overwritten, and `--silent` does not suppress tracing. Replay matches ordered
 requests including the assembled prompt, call kind, requested model, reasoning, and display
@@ -196,7 +216,7 @@ spl login
 spl logout
 ```
 
-Model precedence: CLI override, per-call modifier, `@{model='...'}`, SDK default.
+Model precedence: CLI override, per-call modifier, `@(model='...')`, SDK default.
 The result goes to stdout; logs go to stderr. Non-silent logs include full LLM transcripts
 and statement traces. Exit codes: `0` success, `1` script failure, `2` syntax/usage error,
 `70` internal error. `--check` validates syntax and MCP configuration, not runtime expressions.
@@ -213,7 +233,7 @@ Persistence is opt-in with `--store`; snapshots are saved even after a script fa
 | `read_file{path='a.txt'} 'Return it'` | `read_file('a.txt')` |
 | Tool command with omitted parameters | Explicit `agent '...'` |
 | `instruct` / `avoid` | Use `enforce` / `forbid` for scoped prompt guidance |
-| `think{level='high'}` | `?{reasoning='high'}` or `think{reasoning='high'}` |
+| `think{level='high'}` | `ask(reasoning='high')` or `think(reasoning='high')` |
 | `let x += 1`, `let d.key = 2` | `x += 1`, `d.key = 2` |
 | Blocks share their function/script scope | Blocks create lexical scopes; use assignment to update an outer binding |
 | Unknown modifier values fail at parse time | Expression values are validated at runtime |

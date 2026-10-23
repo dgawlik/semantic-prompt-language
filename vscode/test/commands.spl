@@ -1,22 +1,22 @@
 # SYNTAX TEST "source.spl" "generation, agents, raw tools, guidance and restrictions"
 
-    @{model='gpt-5'}
+    @(model='gpt-5')
 #   ^ keyword.other.directive.spl
 #     ^^^^^ variable.parameter.directive.spl
-    let a = ?'hello'
-#           ^ keyword.operator.llm.spl
-#            ^^^^^^^ string.quoted.single.spl
-    let b = ?{len='sentence', fmt='json'} 'joke'
-#           ^ keyword.operator.llm.spl
-#             ^^^ variable.parameter.modifier.spl
-#                             ^^^ variable.parameter.modifier.spl
-    think{reasoning='low'} 'why'
+    let a = ask 'hello'
+#           ^^^ keyword.other.ask.spl
+#               ^^^^^^^ string.quoted.single.spl
+    let b = ask(len='sentence', fmt='json') 'joke'
+#           ^^^ keyword.other.ask.spl
+#               ^^^ variable.parameter.modifier.spl
+#                               ^^^ variable.parameter.modifier.spl
+    think(reasoning='low') 'why'
 #   ^^^^^ keyword.other.think.spl
 #         ^^^^^^^^^ variable.parameter.modifier.spl
-    think{show=True} 'why'
+    think(show=True) 'why'
 #         ^^^^ variable.parameter.modifier.spl
 #              ^^^^ constant.language.spl
-    agent{schema=Contract, repairs=0} 'work'
+    agent(schema=Contract, repairs=0) 'work'
 #   ^^^^^ keyword.other.agent.spl
 #         ^^^^^^ variable.parameter.modifier.spl
     agent 'work'
@@ -45,10 +45,25 @@
 #            ^^^^ storage.modifier.restrict-kind.spl
     content = 5
 #   ^^^^^^^ - variable.parameter.modifier.spl
-    log{level=debug}('details')
+    log(level=debug)('details')
 #   ^^^ support.function.builtin.spl
 #       ^^^^^ variable.parameter.modifier.spl
 #             ^^^^^ constant.language.spl
-    log{level='error'}('problem')
+    log(level='error')('problem')
 #   ^^^ support.function.builtin.spl
 #       ^^^^^ variable.parameter.modifier.spl
+
+    let multi = ask(
+#               ^^^ keyword.other.ask.spl
+        fmt = 'integer',
+#       ^^^ variable.parameter.modifier.spl
+        repairs = count(1),
+#       ^^^^^^^ variable.parameter.modifier.spl
+#                 ^^^^^ entity.name.function.call.spl
+    ) 'Rate this issue'
+#     ^^^^^^^^^^^^^^^^^ string.quoted.single.spl
+    log(
+        level=debug,
+#       ^^^^^ variable.parameter.modifier.spl
+#             ^^^^^ constant.language.spl
+    )('details')

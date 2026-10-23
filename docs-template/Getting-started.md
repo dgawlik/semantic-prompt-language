@@ -20,7 +20,7 @@ Create `hello.spl`:
 
 ```spl
 let report = 'Checkout fails for every customer after deployment.'
-let severity = ?{fmt='integer', repairs=1} 'Rate the impact from 1 to 5: {report}'
+let severity = ask(fmt='integer', repairs=1) 'Rate the impact from 1 to 5: {report}'
 assert severity >= 1 and severity <= 5 'severity must be between 1 and 5'
 let route = if severity >= 4 { 'urgent-review' } else { 'normal-review' }
 success {'severity': severity, 'route': route}
@@ -34,7 +34,7 @@ npx spl-lang login
 npx spl-lang hello.spl
 ```
 
-The `?` is the only model call; its result must be an integer. The assertion checks
+The `ask` is the only model call; its result must be an integer. The assertion checks
 the allowed range, then ordinary code chooses a route. `repairs=1` can correct one
 format failure, not a failed assertion. Use `--model <id>` to choose a model instead
 of the SDK default.
@@ -49,7 +49,7 @@ to stderr so results can be piped safely.
 ## A short iteration loop
 
 1. **Edit one decision at a time.** Keep data preparation and control flow in
-   ordinary code. Put model judgment behind a visible `?` or `think`; use `agent`
+   ordinary code. Put model judgment behind a visible `ask` or `think`; use `agent`
    only when the model should choose actions.
 2. **Check syntax cheaply.** `--check` parses the script without model calls or
    script side effects. It does not validate runtime modifier values or compile schemas.
@@ -131,7 +131,7 @@ let User = {
     'required': ['name', 'age'],
     'additionalProperties': False,
 }
-let user = ?{schema=User, reasoning='low', repairs=2} 'Invent a fictional adult user'
+let user = ask(schema=User, reasoning='low', repairs=2) 'Invent a fictional adult user'
 assert user.age >= 18 'expected an adult'
 success user
 ```
@@ -170,12 +170,18 @@ See [trace/replay](CLI.md#workflow-traces-and-replay).
 
 ## Breaking changes in 0.3
 
+**Current command syntax:** replace `?{fmt='integer'} 'prompt'` with
+`ask(fmt='integer') 'prompt'`, `think{...}` / `agent{...}` with
+`think(...)` / `agent(...)`, `log{level=debug}(value)` with
+`log(level=debug)(value)`, and `@{model='...'}` with `@(model='...')`.
+Blocks and dictionaries still use braces. See [command modifiers](LLM-commands.md#composable-modifiers).
+
 | Old | New |
 | --- | --- |
 | `read_file{path='a.txt'} 'Return it'` | `read_file('a.txt')`; interpret the result with a separate generation call. |
 | Tools with missing parameters | Required positional arguments, or explicit `agent '...'` for model-selected actions. |
 | `instruct` / `avoid` | Use `enforce` / `forbid` for scoped prompt guidance. |
-| `think{level='high'}` | `?{reasoning='high'}` or `think{reasoning='high'}`. |
+| `think{level='high'}` | `ask(reasoning='high')` or `think(reasoning='high')`. |
 | `let x += 1`, `let d.key = 2` | `x += 1`, `d.key = 2`; `let` declares or redeclares a name. |
 | Blocks share the function/script scope | Each block creates a lexical child scope. Use assignment, not inner `let`, to update an enclosing declaration. |
 | Modifier values checked by parsing | Values are expressions checked at runtime; unknown or duplicate names remain syntax errors. |
@@ -185,7 +191,7 @@ See [trace/replay](CLI.md#workflow-traces-and-replay).
 | Path | Contents |
 | --- | --- |
 | [LANG-PRD.md](../LANG-PRD.md) | Product requirements and language specification. |
-| [lang/](../lang/) | The interpreter: `src/`, `tests/`, `examples/` and `docs/syntax.ebnf`. |
+| [lang/](../lang/) | The interpreter: `src/`, `tests/` and `examples/`. The canonical grammar is in [Grammar](Grammar.md). |
 | [vscode/](../vscode/) | VS Code extension: language server, TextMate grammar, snippets and tests. |
 | [docs/](../docs/) | The HTML documentation site. |
 | [docs-template/](Introduction.md) | Markdown documentation, starting with the introduction. |

@@ -13,9 +13,9 @@ let chosen = 'debug'
 let n = 0
 def next() { n += 1; return n }
 log('plain', next())
-log{level=error}('problem', next())
-log{level='info'}('details', next())
-let logged = log{level=chosen}('trace', next())
+log(level=error)('problem', next())
+log(level='info')('details', next())
+let logged = log(level=chosen)('trace', next())
 success [n, logged]
 `), { backend: new NoLlm(), logger: new Logger(level, (line) => lines.push(line)) });
         expect(result).toMatchObject({ status: 'success', value: [4, null] });
@@ -30,7 +30,7 @@ success [n, logged]
 });
 
 it.each(["'trace'", '1', 'None', 'True'])('rejects invalid log level %s before evaluating arguments', async (level) => {
-    const result = await run(parse(`log{level=${level}}(missing)`), {
+    const result = await run(parse(`log(level=${level})(missing)`), {
         backend: new NoLlm(), logger: new Logger('silent'),
     });
     expect(result).toMatchObject({
@@ -40,7 +40,7 @@ it.each(["'trace'", '1', 'None', 'True'])('rejects invalid log level %s before e
 
 describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s', (level) => {
     it.each([
-        ['ask', `?'Ask prompt'`],
+        ['ask', `ask 'Ask prompt'`],
         ['think', `think 'Think prompt'`],
         ['agent', `agent 'Agent prompt'`],
     ])('logs the full %s request and raw response unless silent', async (kind, expression) => {
@@ -76,7 +76,7 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
             async call() { throw new LlmError('backend unavailable'); },
             async close() {},
         };
-        const result = await run(parse(`success ?'Failing prompt'`), {
+        const result = await run(parse(`success ask 'Failing prompt'`), {
             backend, logger: new Logger(level, (line) => lines.push(line)), cwd: process.cwd(),
         });
 

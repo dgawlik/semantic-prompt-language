@@ -24,7 +24,7 @@ Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
                           All levels include LLM transcripts and [deterministic] statement traces.
   --silent                suppress all logs; only the result is printed
-  --model <id>            model override (takes precedence over @{model=...})
+  --model <id>            model override (takes precedence over @(model=...))
   --arg <value>           script argument exposed in $args (repeatable; also --arg=value)
   --mcp <file.json>       MCP servers in VS Code mcp.json format
   --store <file.json>     persist top-level variables in a JSON file

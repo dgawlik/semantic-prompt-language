@@ -61,7 +61,7 @@ const backend = new CopilotBackend({
   logger, cwd: process.cwd(), timeoutMs: 300_000,
 });
 try {
-  const result = await run(parse("success ?'Hello'"), {
+  const result = await run(parse("success ask 'Hello'"), {
     backend, logger, cwd: process.cwd(),
   });
   if (result.status === 'success') console.log(result.value);
@@ -81,7 +81,7 @@ Other exports include authentication helpers, variable stores, MCP configuration
 
 Wrap a live backend with `new TraceBackend(backend, file)`, or use `new ReplayBackend(file)` without constructing a live backend. Close either backend after use; replay checks for unused entries on close. Do not publish a successful result until that check completes.
 
-Traces contain structured requests and raw backend responses (including reasoning and effective parameters), or failures with their status code and reason. Every `?`, `think`, and `agent` backend call is instrumented, including repairs and transport errors. Replay re-exercises parsing, schema checks, repairs, and deterministic code. Matching includes ordered assembled prompts, call kind, requested model, reasoning effort, and show-reasoning. See the [JSONL format](CLI.md#trace-format).
+Traces contain structured requests and raw backend responses (including reasoning and effective parameters), or failures with their status code and reason. Every `ask`, `think`, and `agent` backend call is instrumented, including repairs and transport errors. Replay re-exercises parsing, schema checks, repairs, and deterministic code. Matching includes ordered assembled prompts, call kind, requested model, reasoning effort, and show-reasoning. See the [JSONL format](CLI.md#trace-format).
 
 The backend's `mode` identifies execution capabilities: `trace` records all LLM operations; `workflow-replay` returns their recorded results/failures while leaving explicit script tools and stores enabled. Agent-owned actions are not repeated or restored. No Copilot client or MCP server is started by replay.
 

@@ -31,13 +31,45 @@ const exec = (source: string, backend: LlmBackend) => run(parse(source), { backe
 const schema = `{'type': 'object', 'properties': {'total': {'type': 'number'}}, 'required': ['total'], 'additionalProperties': False}`;
 
 describe('generation contracts', () => {
+    it('executes the requested multiline rating syntax with bounded repair', async () => {
+        const { backend, calls } = scripted('not an integer', '4');
+        expect(await exec(`let score = ask(
+    fmt = 'integer',
+    repairs = 1
+) 'Rate this issue'
+success score`, backend)).toMatchObject({ status: 'success', value: 4 });
+        expect(calls).toHaveLength(2);
+        expect(calls[1].prompt).toContain('Previous response:\nnot an integer');
+    });
+
+    it.each(['ask', 'think', 'agent'])('executes multiline %s options once and preserves call metadata', async (command) => {
+        const { backend, calls } = scripted('5');
+        const result = await exec(`@(
+    model = 'header',
+)
+let count = [0]
+def option(value) { count[0] += 1; return value }
+let score = ${command}(
+    fmt = option('integer'),
+    repairs = option(0),
+    reasoning = 'high',
+    model = 'per-call',
+    show = True,
+    schema = {'type': 'integer', 'minimum': 1, 'maximum': 5},
+) 'Rate this issue'
+success [score, count[0]]`, backend);
+        expect(result).toMatchObject({ status: 'success', value: [5, 2] });
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toMatchObject({ kind: command, model: 'per-call', reasoningEffort: 'high', showReasoning: true });
+    });
+
     it.each([true, false])('evaluates only the selected generation branch for %s', async (friday) => {
         const { backend, calls } = scripted(String(friday), 'selected answer');
         const result = await exec(`
-let result = if ?{fmt='boolean'} 'Today is friday? True/False' {
-    ? 'Haiku on variance'
+let result = if ask(fmt='boolean') 'Today is friday? True/False' {
+    ask 'Haiku on variance'
 } else {
-    ? 'Sentence on passing time'
+    ask 'Sentence on passing time'
 }
 success result
 `, backend);
@@ -51,7 +83,7 @@ success result
         const result = await exec(`
 let Contract = ${schema}
 let effort = 'high'
-success ?{schema=Contract, reasoning=effort, model='test-model', show=True} 'Extract'
+success ask(schema=Contract, reasoning=effort, model='test-model', show=True) 'Extract'
 `, backend);
         expect(result).toMatchObject({ status: 'success', value: { total: 42 } });
         expect(calls[0]).toMatchObject({ kind: 'ask', reasoningEffort: 'high', model: 'test-model', showReasoning: true });
@@ -60,13 +92,13 @@ success ?{schema=Contract, reasoning=effort, model='test-model', show=True} 'Ext
 
     it('makes think generation-only shorthand supporting schemas', async () => {
         const { backend, calls } = scripted('{"total": 2}');
-        expect(await exec(`success think{schema=${schema}} 'Extract'`, backend)).toMatchObject({ status: 'success', value: { total: 2 } });
+        expect(await exec(`success think(schema=${schema}) 'Extract'`, backend)).toMatchObject({ status: 'success', value: { total: 2 } });
         expect(calls[0]).toMatchObject({ kind: 'think', reasoningEffort: 'medium' });
     });
 
     it('gives the CLI/embedding model override precedence over per-call and header models', async () => {
         const { backend, calls } = scripted('answer');
-        await run(parse(`@{model='header'}\nsuccess ?{model='per-call'} 'Hi'`), {
+        await run(parse(`@(model='header')\nsuccess ask(model='per-call') 'Hi'`), {
             backend, cwd: dir, logger: new Logger('silent'), model: 'override',
         });
         expect(calls[0].model).toBe('override');
@@ -74,12 +106,12 @@ success ?{schema=Contract, reasoning=effort, model='test-model', show=True} 'Ext
 
     it.each(['```json\n{"total":1}\n```', 'Here: {"total":1}', '{"total":1} trailing'])('rejects non-JSON wrappers: %s', async (response) => {
         const { backend } = scripted(response);
-        expect(await exec(`success ?{fmt='json'} 'Extract'`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'invalid_format' } });
+        expect(await exec(`success ask(fmt='json') 'Extract'`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'invalid_format' } });
     });
 
     it.each(['42', 'null', 'true', '"hello"', '[1,2]'])('supports JSON values: %s', async (response) => {
         const { backend } = scripted(response);
-        expect(await exec(`success ?{fmt='json'} 'Extract'`, backend)).toMatchObject({ status: 'success', value: JSON.parse(response) });
+        expect(await exec(`success ask(fmt='json') 'Extract'`, backend)).toMatchObject({ status: 'success', value: JSON.parse(response) });
     });
 
     it.each([
@@ -100,9 +132,9 @@ success ?{schema=Contract, reasoning=effort, model='test-model', show=True} 'Ext
         ['text', 'true', 'true'],
         ['text', '```json\n{}\n```', '```json\n{}\n```'],
     ])('returns typed %s output from %s for all generation commands', async (fmt, response, expected) => {
-        for (const command of ['?', 'think', 'agent']) {
+        for (const command of ['ask', 'think', 'agent']) {
             const { backend, calls } = scripted(` \n${response}\n `);
-            expect(await exec(`let format = '${fmt}'\nsuccess ${command}{fmt=format} 'Generate'`, backend)).toMatchObject({
+            expect(await exec(`let format = '${fmt}'\nsuccess ${command}(fmt=format) 'Generate'`, backend)).toMatchObject({
                 status: 'success', value: expected,
             });
             expect(calls).toHaveLength(1);
@@ -122,7 +154,7 @@ success ?{schema=Contract, reasoning=effort, model='test-model', show=True} 'Ext
     ])('rejects incorrect %s output without coercion', async (fmt, responses) => {
         for (const response of responses) {
             const { backend } = scripted(response);
-            expect(await exec(`success ?{fmt='${fmt}'} 'Generate'`, backend)).toMatchObject({
+            expect(await exec(`success ask(fmt='${fmt}') 'Generate'`, backend)).toMatchObject({
                 status: 'failure', failure: { status_code: 'invalid_format' },
             });
         }
@@ -131,7 +163,7 @@ success ?{schema=Contract, reasoning=effort, model='test-model', show=True} 'Ext
     it.each(['integer', 'float', 'array', 'object', 'boolean'])('requires strict JSON for %s', async (fmt) => {
         for (const response of ['```json\n42\n```', 'Here: 42', '42 trailing', '']) {
             const { backend } = scripted(response);
-            expect(await exec(`success ?{fmt='${fmt}'} 'Generate'`, backend)).toMatchObject({
+            expect(await exec(`success ask(fmt='${fmt}') 'Generate'`, backend)).toMatchObject({
                 status: 'failure', failure: { status_code: 'invalid_format' },
             });
         }
@@ -149,7 +181,7 @@ success ?{schema=Contract, reasoning=effort, model='test-model', show=True} 'Ext
 let count = [0]
 def format() { count[0] += 1; return '${fmt}' }
 def prompt() { count[0] += 1; return 'Generate' }
-let result = ?{fmt=format(), repairs=1} prompt()
+let result = ask(fmt=format(), repairs=1) prompt()
 success [result, count[0]]
 `, backend);
         expect(result).toMatchObject({ status: 'success', value: [JSON.parse(valid), 2] });
@@ -160,7 +192,7 @@ success [result, count[0]]
 
     it('validates schemas after checking the explicit format', async () => {
         const { backend, calls } = scripted('"55"', '55', '89');
-        expect(await exec(`success ?{fmt='integer', schema={'type':'integer', 'minimum':80}, repairs=2} 'Fibonacci'`, backend)).toMatchObject({
+        expect(await exec(`success ask(fmt='integer', schema={'type':'integer', 'minimum':80}, repairs=2) 'Fibonacci'`, backend)).toMatchObject({
             status: 'success', value: 89,
         });
         expect(calls[1].prompt).toContain(`fmt='integer'`);
@@ -169,9 +201,9 @@ success [result, count[0]]
 
     it('reports nested field paths and missing required fields', async () => {
         const { backend } = scripted('{"lines":[{"quantity":"many"}]}', '{}');
-        const result = await exec(`success ?{schema={'type':'object','properties':{'lines':{'type':'array','items':{'type':'object','properties':{'quantity':{'type':'number'}},'required':['quantity']}}}}} 'Extract'`, backend);
+        const result = await exec(`success ask(schema={'type':'object','properties':{'lines':{'type':'array','items':{'type':'object','properties':{'quantity':{'type':'number'}},'required':['quantity']}}}}) 'Extract'`, backend);
         expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringContaining('lines[0].quantity') } });
-        expect(await exec(`success ?{schema=${schema}} 'Extract'`, backend)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('total:') } });
+        expect(await exec(`success ask(schema=${schema}) 'Extract'`, backend)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('total:') } });
     });
 
     it('repairs invalid format and shape, evaluating the prompt once', async () => {
@@ -179,7 +211,7 @@ success [result, count[0]]
         const result = await exec(`
 let count = [0]
 def prompt() { count[0] += 1; return 'Extract' }
-let result = ?{schema=${schema}, repairs=2} prompt()
+let result = ask(schema=${schema}, repairs=2) prompt()
 success [result, count[0]]
 `, backend);
         expect(result).toMatchObject({ status: 'success', value: [{ total: 42 }, 1] });
@@ -190,22 +222,22 @@ success [result, count[0]]
 
     it('never retries transport errors or exceeds the repair limit', async () => {
         const transport = scripted(new LlmError('unavailable'), '{"total":42}');
-        expect(await exec(`success ?{schema=${schema}, repairs=2} 'Extract'`, transport.backend)).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error' } });
+        expect(await exec(`success ask(schema=${schema}, repairs=2) 'Extract'`, transport.backend)).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error' } });
         expect(transport.calls).toHaveLength(1);
         const invalid = scripted('{}', '{}', '{"total":42}');
-        expect(await exec(`success ?{schema=${schema}, repairs=1} 'Extract'`, invalid.backend)).toMatchObject({ status: 'failure', failure: { status_code: 'validation_failed' } });
+        expect(await exec(`success ask(schema=${schema}, repairs=1) 'Extract'`, invalid.backend)).toMatchObject({ status: 'failure', failure: { status_code: 'validation_failed' } });
         expect(invalid.calls).toHaveLength(2);
     });
 
     it.each([0, 1, 2, 5])('permits exactly the configured %i additional attempts', async (repairs) => {
         const { backend, calls } = scripted(...Array.from({ length: repairs }, () => '{}'), '{"total":42}');
-        expect(await exec(`success ?{schema=${schema}, repairs=${repairs}} 'Extract'`, backend)).toMatchObject({ status: 'success', value: { total: 42 } });
+        expect(await exec(`success ask(schema=${schema}, repairs=${repairs}) 'Extract'`, backend)).toMatchObject({ status: 'success', value: { total: 42 } });
         expect(calls).toHaveLength(1 + repairs);
     });
 
     it('does not coerce or remove invalid fields', async () => {
         const { backend } = scripted('{"total":"42","extra":1}');
-        expect(await exec(`success ?{schema=${schema}} 'Extract'`, backend)).toMatchObject({
+        expect(await exec(`success ask(schema=${schema}) 'Extract'`, backend)).toMatchObject({
             status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringMatching(/extra:.*total:/) },
         });
     });
@@ -220,19 +252,19 @@ success [result, count[0]]
             },
             async close() {},
         };
-        expect(await exec(`agent{schema=${schema}} 'Write and report'`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'invalid_format' } });
+        expect(await exec(`agent(schema=${schema}) 'Write and report'`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'invalid_format' } });
         expect(calls).toBe(1);
         expect(fs.readFileSync(path.join(dir, 'agent.txt'), 'utf8')).toBe('written');
     });
 
     it.each([
-        `?{schema={'type':'imaginary'}} 'x'`, `?{schema={'typo':True}} 'x'`,
-        `?{schema={'$async':True, 'type':'number'}} 'x'`,
-        `?{repairs=6, fmt='json'} 'x'`, `?{repairs=-1, fmt='json'} 'x'`,
-        `?{show='yes'} 'x'`, `?{reasoning='extreme'} 'x'`,
-        `?{fmt='unsupported'} 'x'`, `?{fmt=42} 'x'`, `?{fmt=True} 'x'`,
-        `?{fmt='text', schema=${schema}} 'x'`, `agent{repairs=1, fmt='json'} 'x'`,
-        `?{fmt='text', repairs=1} 'x'`,
+        `ask(schema={'type':'imaginary'}) 'x'`, `ask(schema={'typo':True}) 'x'`,
+        `ask(schema={'$async':True, 'type':'number'}) 'x'`,
+        `ask(repairs=6, fmt='json') 'x'`, `ask(repairs=-1, fmt='json') 'x'`,
+        `ask(show='yes') 'x'`, `ask(reasoning='extreme') 'x'`,
+        `ask(fmt='unsupported') 'x'`, `ask(fmt=42) 'x'`, `ask(fmt=True) 'x'`,
+        `ask(fmt='text', schema=${schema}) 'x'`, `agent(repairs=1, fmt='json') 'x'`,
+        `ask(fmt='text', repairs=1) 'x'`,
     ])('validates configuration before calling a model: %s', async (expression) => {
         const { backend, calls } = scripted();
         expect(await exec(`success ${expression}`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'runtime_error' } });
@@ -241,14 +273,14 @@ success [result, count[0]]
 
     it('keeps guidance separate from validation and makes agent calls explicit', async () => {
         const { backend, calls } = scripted('contrary', 'done');
-        expect(await exec(`enforce 'Be polite' { forbid 'jokes' { let x = ?'Hi' } }\nsuccess agent 'Do the task'`, backend)).toMatchObject({ status: 'success', value: 'done' });
+        expect(await exec(`enforce 'Be polite' { forbid 'jokes' { let x = ask 'Hi' } }\nsuccess agent 'Do the task'`, backend)).toMatchObject({ status: 'success', value: 'done' });
         expect(calls[0].prompt).toContain('Follow: Be polite');
         expect(calls[0].prompt).toContain('Avoid: jokes');
         expect(calls[1]).toMatchObject({ kind: 'agent' });
         expect(calls[1].prompt).not.toContain('jokes');
     });
 
-    it.each(['?', 'think', 'agent'])('applies enforce/forbid to %s calls through functions and unwinds afterward', async (command) => {
+    it.each(['ask', 'think', 'agent'])('applies enforce/forbid to %s calls through functions and unwinds afterward', async (command) => {
         const { backend, calls } = scripted('inside', 'outside');
         const result = await exec(`
 def answer() { return ${command} 'inside' }
@@ -273,12 +305,12 @@ success [inside, outside]
 try {
     enforce 'Be polite' {
         forbid 'profanity' {
-            let answer = ?'inside'
+            let answer = ask 'inside'
             fail 'expected'
         }
     }
 } except err {
-    success ?'after'
+    success ask 'after'
 }
 `, backend);
         expect(result).toMatchObject({ status: 'success', value: 'after' });
@@ -301,7 +333,7 @@ describe('raw tools and bindings', () => {
 
     it('writes only once when a later generation requires repair', async () => {
         const { backend, calls } = scripted('{}', '{"total":2}');
-        expect(await exec(`write_file('out.txt', 'once')\nsuccess ?{schema=${schema}, repairs=1} 'Extract'`, backend)).toMatchObject({ status: 'success' });
+        expect(await exec(`write_file('out.txt', 'once')\nsuccess ask(schema=${schema}, repairs=1) 'Extract'`, backend)).toMatchObject({ status: 'success' });
         expect(calls).toHaveLength(2);
         expect(fs.readFileSync(path.join(dir, 'out.txt'), 'utf8')).toBe('once');
     });
@@ -339,7 +371,7 @@ describe('raw tools and bindings', () => {
 describe('offline generation record/replay', () => {
     it('matches ordered requests and replays repairs without a live backend', async () => {
         const file = path.join(dir, 'run.jsonl');
-        const source = `success ?{schema=${schema}, repairs=1} 'Extract'`;
+        const source = `success ask(schema=${schema}, repairs=1) 'Extract'`;
         const { backend, calls } = scripted('{}', '{"total":42}');
         const recording = new RecordingBackend(backend, file);
         const expected = await exec(source, recording);
@@ -354,14 +386,14 @@ describe('offline generation record/replay', () => {
     it('rejects mismatches, exhausted recordings, and unused entries', async () => {
         const file = path.join(dir, 'run.jsonl');
         const recording = new RecordingBackend(scripted('answer').backend, file);
-        await exec(`success ?'question'`, recording);
+        await exec(`success ask 'question'`, recording);
         await recording.close();
         const mismatch = new ReplayBackend(file);
-        expect(await exec(`success ?'different'`, mismatch)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('mismatch') } });
+        expect(await exec(`success ask 'different'`, mismatch)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('mismatch') } });
         await expect(mismatch.close()).rejects.toThrow(/unused/);
         const replay = new ReplayBackend(file);
-        await exec(`success ?'question'`, replay);
-        expect(await exec(`success ?'question'`, replay)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('exhausted') } });
+        await exec(`success ask 'question'`, replay);
+        expect(await exec(`success ask 'question'`, replay)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('exhausted') } });
         await replay.close();
     });
 
@@ -389,7 +421,7 @@ describe('offline generation record/replay', () => {
         const file = path.join(dir, 'run.jsonl');
         const { backend, calls } = scripted('answer');
         const recording = new RecordingBackend(backend, file);
-        await exec(`success ?'question'`, recording);
+        await exec(`success ask 'question'`, recording);
         await recording.close();
         const replay = new ReplayBackend(file);
         const original = calls[0];

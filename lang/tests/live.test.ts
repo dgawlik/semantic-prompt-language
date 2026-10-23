@@ -21,18 +21,18 @@ const exec = (source: string) => run(parse(source), { backend, logger: new Logge
 
 describe.skipIf(!live)('generation and explicit agents on Copilot', () => {
     it('generates text without tools', async () => {
-        expect(await exec(`success ?{len='word'} 'Name the color of a ripe banana'`)).toMatchObject({ status: 'success', value: expect.any(String) });
+        expect(await exec(`success ask(len='word') 'Name the color of a ripe banana'`)).toMatchObject({ status: 'success', value: expect.any(String) });
         expect(backend.calls[0].kind).toBe('ask');
     }, LIVE_TIMEOUT);
 
     it('combines reasoning and schema-validated output', async () => {
-        const result = await exec(`success ?{reasoning='low', schema={'type':'object','properties':{'answer':{'type':'number'}},'required':['answer'],'additionalProperties':False}, repairs=1} 'What is 6 times 7?'`);
+        const result = await exec(`success ask(reasoning='low', schema={'type':'object','properties':{'answer':{'type':'number'}},'required':['answer'],'additionalProperties':False}, repairs=1) 'What is 6 times 7?'`);
         expect(result).toMatchObject({ status: 'success', value: { answer: 42 } });
         expect(backend.calls[0].reasoningEffort).toBe('low');
     }, LIVE_TIMEOUT * 2);
 
     it('supports think shorthand with the same modifiers', async () => {
-        expect(await exec(`success think{reasoning='low', fmt='json'} 'What is 2+2? Reply with a JSON number'`)).toMatchObject({ status: 'success', value: 4 });
+        expect(await exec(`success think(reasoning='low', fmt='json') 'What is 2+2? Reply with a JSON number'`)).toMatchObject({ status: 'success', value: 4 });
     }, LIVE_TIMEOUT);
 
     it('keeps raw file and shell operations independent of the model', async () => {
@@ -49,6 +49,6 @@ describe.skipIf(!live)('generation and explicit agents on Copilot', () => {
     }, LIVE_TIMEOUT);
 
     it('rejects an unknown model instead of silently selecting a default', async () => {
-        expect(await exec(`success ?{model='no-such-model'} 'Hi'`)).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error' } });
+        expect(await exec(`success ask(model='no-such-model') 'Hi'`)).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error' } });
     }, LIVE_TIMEOUT);
 });

@@ -9,7 +9,7 @@ const analyses = new Map<string, Analysis>();
 connection.onInitialize(() => ({
     capabilities: {
         textDocumentSync: TextDocumentSyncKind.Incremental,
-        completionProvider: { triggerCharacters: ['{', ',', '$'] },
+        completionProvider: { triggerCharacters: ['(', '{', ',', '$'] },
         hoverProvider: true,
         definitionProvider: true,
         documentSymbolProvider: true,

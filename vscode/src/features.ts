@@ -91,7 +91,7 @@ export function analyze(document: TextDocument): Analysis {
     let tokens: Token[] = [];
     let names: NamedToken[] = [];
     try {
-        tokens = tokenize(source);
+        tokens = tokenize(source, { allowUnclosedBrackets: true });
         names = interpolationNames(tokens);
     } catch (error) {
         if (!(error instanceof SplSyntaxError)) throw error;
@@ -221,9 +221,15 @@ function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' |
         if (token.type !== 'op') continue;
         if (['{', '(', '['].includes(token.value)) {
             const previous = tokens[i - 1];
-            const context = token.value !== '{' ? undefined : isOp(previous, '@') ? 'directive' :
-                isName(previous) && previous.value === 'log' ? 'log' :
-                isOp(previous, '?') || (isName(previous) && ['think', 'agent'].includes(previous.value)) ? 'call' : undefined;
+            const beforePrevious = tokens[i - 2];
+            const first = tokens[i + 1];
+            const logOptions = isName(first)
+                ? isOp(tokens[i + 2], '=') || 'level'.startsWith(first.value)
+                : first?.type === 'eof' || isOp(first, ')');
+            const context = token.value !== '(' ? undefined : isOp(previous, '@') ? 'directive' :
+                isOp(beforePrevious, '.') ? undefined :
+                isName(previous) && previous.value === 'log' && logOptions ? 'log' :
+                isName(previous) && ['ask', 'think', 'agent'].includes(previous.value) ? 'call' : undefined;
             stack.push({ op: token.value, context });
         } else if (['}', ')', ']'].includes(token.value)) {
             stack.pop();
@@ -237,14 +243,17 @@ export function completions(analysis: Analysis, position: Position): CompletionI
     const prefix = /\$[A-Za-z0-9_]*$|[A-Za-z_][A-Za-z0-9_]*$/.exec(analysis.document.getText().slice(0, at))?.[0] ?? '';
     const range = { start: analysis.document.positionAt(at - prefix.length), end: position };
     const context = modifierContext(analysis, at - prefix.length);
-    if (context) {
-        return (context === 'directive' ? ['model'] : context === 'log' ? LOG_MODIFIER_NAMES : MODIFIER_NAMES).map((name) => ({
+    const modifierItems: CompletionItem[] = context
+        ? (context === 'directive' ? ['model'] : context === 'log' ? LOG_MODIFIER_NAMES : MODIFIER_NAMES).map((name) => ({
             label: name,
             kind: CompletionItemKind.Property,
             detail: modifiers[name].signature,
             documentation: modifiers[name].description,
             textEdit: { range, newText: `${name}=` },
-        }));
+        }))
+        : [];
+    if (context && (context !== 'log' || (prefix !== '' && 'level'.startsWith(prefix)))) {
+        return modifierItems;
     }
     const items = new Map<string, CompletionItem>();
     for (const [name, description] of Object.entries(keywords)) {
@@ -263,7 +272,7 @@ export function completions(analysis: Analysis, position: Position): CompletionI
             detail: binding.signature,
         });
     }
-    return [...items.values()].map((item) => ({ ...item, textEdit: { range, newText: item.label } }));
+    return [...modifierItems, ...[...items.values()].map((item) => ({ ...item, textEdit: { range, newText: item.label } }))];
 }
 
 function helpHover(help: Help, range: Range): Hover {

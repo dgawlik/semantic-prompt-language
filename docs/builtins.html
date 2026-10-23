@@ -6,11 +6,11 @@
 <meta name="description" content="A deliberately small, Python-flavoured standard library — enough to validate, reshape and report on LLM output without leaving the language.">
 <meta name="color-scheme" content="light dark">
 <title>Built-ins - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=061d61fcb352">
-<link rel="stylesheet" href="assets/style.css?v=061d61fcb352">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c4b3b2233122">
+<link rel="stylesheet" href="assets/style.css?v=c4b3b2233122">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=061d61fcb352"></script>
-<script defer src="assets/site.js?v=061d61fcb352"></script>
+<script defer src="assets/search-index.js?v=c4b3b2233122"></script>
+<script defer src="assets/site.js?v=c4b3b2233122"></script>
 </head>
 <body data-page="builtins">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -175,7 +175,7 @@ See <a href="language.html#runtime-inputs-env-and-args">runtime inputs</a> and <
 </tr>
 </thead>
 <tbody><tr>
-<td><code>log(a, b, …)</code>; <code>log{level=debug}(a, b, …)</code></td>
+<td><code>log(a, b, …)</code>; <code>log(level=debug)(a, b, …)</code></td>
 <td>Writes the <code>str()</code> of each argument, space-separated, to <strong>stderr</strong>. Plain calls default to info; the modifier selects <code>error</code>, <code>info</code> or <code>debug</code>, using a bare name, string or expression. The level is evaluated once and validated before arguments. Debug messages appear only at debug log level; silent suppresses all logs. Returns <code>None</code>. Never pollutes stdout.</td>
 </tr>
 </tbody></table>

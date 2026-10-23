@@ -8,13 +8,13 @@ SPL is designed around three priorities:
 
 1. **Short iteration loops:** check syntax, run, inspect, refine, and replay unchanged
    LLM requests while testing guards or deterministic logic.
-2. **Explicit boundaries and guards:** use ordinary code for computation, `?`/`think`
+2. **Explicit boundaries and guards:** use ordinary code for computation, `ask`/`think`
    for generation, `agent` for model-directed actions, and validation before accepting results.
 3. **Readable scripts:** keep inputs, prompts, checks, and outputs visible together,
    with familiar expressions and compact modifiers rather than orchestration plumbing.
 
 See the [project guide](../README.md), [language specification](../LANG-PRD.md),
-[EBNF](docs/syntax.ebnf), and [documentation site](../docs/index.html).
+[grammar](../docs-template/Grammar.md), and [documentation site](../docs/index.html).
 
 ## Run from a checkout
 
@@ -34,7 +34,7 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
 
 - **Exact tools:** `read_file(path)`, `write_file(path, content)`, `web_fetch(url)`,
   `web_search(query)`, `shell(command)` never call a model.
-- **Generation:** `?` and `think` have no tools or MCP access.
+- **Generation:** `ask` and `think` have no tools or MCP access.
 - **Agency:** `agent` explicitly enables model-directed runtime and configured MCP tools.
 - **Validation:** expression-valued `schema` uses strict synchronous JSON Schema draft-07;
   `fmt` supports `integer`, `float`, `array`, `object`, `text`, and `boolean`.
@@ -51,7 +51,7 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
   child locals, loop variables and caught failures do not leak to parents.
 - **Expressions:** blocks and conditionals yield their final expression, otherwise `None`.
   `{}` remains an empty dict. Functions still require explicit `return`.
-- **Logging:** `log(...)` defaults to info. `log{level=debug}(...)` selects error/info/debug;
+- **Logging:** `log(...)` defaults to info. `log(level=debug)(...)` selects error/info/debug;
   bare level names, strings and expressions are accepted and checked at runtime.
 - **Runtime inputs:** `$env.NAME` / `$env['NAME']` reads process environment strings;
   `$args[i]` reads repeated CLI `--arg` strings in order (empty list by default).
@@ -60,7 +60,7 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
 
 Common generation modifiers are `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`,
 and `model`. Values are evaluated once, then validated before calling the model.
-`think` and `agent` default to medium reasoning; `?` uses the model default.
+`think` and `agent` default to medium reasoning; `ask` uses the model default.
 CLI `--model` overrides per-call `model`, which overrides the header directive.
 
 ## Trace/replay for short iteration loops
@@ -120,7 +120,7 @@ See [embedding](../docs/internals.html#embedding).
 ## Migration
 
 Use `enforce` and `forbid` for scoped prompt guidance; `instruct` and `avoid` are not accepted.
-0.3 removes `think{level=...}`, tool-command syntax, and `let` before
+0.3 removes `think(level=...)`, tool-command syntax, and `let` before
 compound/member/index assignments. Use `reasoning`, ordinary raw functions, and explicit agents instead.
 Blocks create lexical child scopes; replace inner `let` with assignment when an outer
 binding must be updated. See the [migration table](../README.md#breaking-changes-in-03).

@@ -6,11 +6,11 @@
 <meta name="description" content="restrict narrows raw tools and explicit agent actions. Outside restrictions they are allow-by-default. Generation has no tools at all, and replay further restricts execution to local reads and recorded generation.">
 <meta name="color-scheme" content="light dark">
 <title>Restrictions - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=061d61fcb352">
-<link rel="stylesheet" href="assets/style.css?v=061d61fcb352">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c4b3b2233122">
+<link rel="stylesheet" href="assets/style.css?v=c4b3b2233122">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=061d61fcb352"></script>
-<script defer src="assets/site.js?v=061d61fcb352"></script>
+<script defer src="assets/search-index.js?v=c4b3b2233122"></script>
+<script defer src="assets/site.js?v=c4b3b2233122"></script>
 </head>
 <body data-page="restrictions">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -83,12 +83,12 @@
 
 <span class="hljs-keyword">restrict</span> net <span class="hljs-string">&#x27;news.ycombinator.com&#x27;</span> {
     <span class="hljs-keyword">let</span> page = <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://news.ycombinator.com&#x27;</span>)
-    <span class="hljs-keyword">let</span> headlines = <span class="hljs-keyword">?</span> <span class="hljs-string">&#x27;&#x27;&#x27;
+    <span class="hljs-keyword">let</span> headlines = <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;&#x27;&#x27;
 From this HTML list the 10 top stories as a Markdown bullet list: &quot;- title (domain)&quot;.
 Reply with ONLY the list.
 {page}&#x27;&#x27;&#x27;</span>
 
-    <span class="hljs-keyword">let</span> themes = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>} <span class="hljs-string">&#x27;What themes run through these headlines?\n{headlines}&#x27;</span>
+    <span class="hljs-keyword">let</span> themes = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>) <span class="hljs-string">&#x27;What themes run through these headlines?\n{headlines}&#x27;</span>
 
     <span class="hljs-keyword">try</span> {
         <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://example.org&#x27;</span>)
@@ -160,7 +160,7 @@ Reply with ONLY the list.
 <td>yes</td>
 </tr>
 <tr>
-<td>Generation (<code>?</code> / <code>think</code>)</td>
+<td>Generation (<code>ask</code> / <code>think</code>)</td>
 <td>No tools exposed; permission attempts abort the call.</td>
 </tr>
 <tr>

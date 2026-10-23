@@ -8,11 +8,11 @@ examples keep explicit I/O, LLM judgment, and acceptance checks together so you 
 scan the workflow and iterate without writing an orchestration layer.">
 <meta name="color-scheme" content="light dark">
 <title>Examples - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=061d61fcb352">
-<link rel="stylesheet" href="assets/style.css?v=061d61fcb352">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c4b3b2233122">
+<link rel="stylesheet" href="assets/style.css?v=c4b3b2233122">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=061d61fcb352"></script>
-<script defer src="assets/site.js?v=061d61fcb352"></script>
+<script defer src="assets/search-index.js?v=c4b3b2233122"></script>
+<script defer src="assets/site.js?v=c4b3b2233122"></script>
 </head>
 <body data-page="examples">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -120,7 +120,7 @@ spl path/to/commit-message.spl
     <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;wrapping the message in quotes or code fences&#x27;</span> {
         <span class="hljs-keyword">while</span> attempt &lt; <span class="hljs-number">3</span> {
             attempt += <span class="hljs-number">1</span>
-            <span class="hljs-keyword">let</span> msg = <span class="hljs-keyword">?</span> <span class="hljs-string">&#x27;&#x27;&#x27;
+            <span class="hljs-keyword">let</span> msg = <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;&#x27;&#x27;
 Write a Conventional Commit message for this diff: a subject line of at most 72 characters
 (&quot;type(scope): summary&quot;, type is one of {TYPES}), then a blank line and a short body.
 Reply with ONLY the message.
@@ -167,7 +167,7 @@ Reply with ONLY the message.
 ]
 
 <span class="hljs-keyword">def</span> <span class="hljs-title function_">triage</span>(<span class="hljs-params">issue</span>) {
-    <span class="hljs-keyword">let</span> r = <span class="hljs-keyword">?</span>{schema=Triage, reasoning=<span class="hljs-string">&#x27;low&#x27;</span>, repairs=<span class="hljs-number">2</span>} <span class="hljs-string">&#x27;&#x27;&#x27;
+    <span class="hljs-keyword">let</span> r = <span class="hljs-keyword">ask</span>(schema=Triage, reasoning=<span class="hljs-string">&#x27;low&#x27;</span>, repairs=<span class="hljs-number">2</span>) <span class="hljs-string">&#x27;&#x27;&#x27;
 Classify this GitHub issue.
 Title: {issue[&#x27;title&#x27;]}
 Body: {issue[&#x27;body&#x27;]}
@@ -194,7 +194,7 @@ Give a one-sentence reason.&#x27;&#x27;&#x27;</span>
     }
 }
 
-<span class="hljs-keyword">let</span> summary = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>} <span class="hljs-string">&#x27;Summarize this triage result for the team channel: {counts}. High priority: {urgent}.&#x27;</span>
+<span class="hljs-keyword">let</span> summary = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Summarize this triage result for the team channel: {counts}. High priority: {urgent}.&#x27;</span>
 <span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;counts&#x27;</span>: counts, <span class="hljs-string">&#x27;urgent&#x27;</span>: urgent, <span class="hljs-string">&#x27;results&#x27;</span>: results, <span class="hljs-string">&#x27;summary&#x27;</span>: summary}
 </code></pre></figure>
 <span id="extract-invoice" class="anchor-alias" aria-hidden="true"></span><h2 id="extract-an-invoice">Extract an invoice<a class="heading-anchor" href="#extract-an-invoice" aria-label="Link to Extract an invoice">#</a></h2>
@@ -236,7 +236,7 @@ Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
     <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;vendor&#x27;</span>, <span class="hljs-string">&#x27;number&#x27;</span>, <span class="hljs-string">&#x27;date&#x27;</span>, <span class="hljs-string">&#x27;currency&#x27;</span>, <span class="hljs-string">&#x27;lines&#x27;</span>, <span class="hljs-string">&#x27;subtotal&#x27;</span>, <span class="hljs-string">&#x27;total&#x27;</span>],
     <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
-<span class="hljs-keyword">let</span> invoice = <span class="hljs-keyword">?</span>{schema=Invoice, reasoning=<span class="hljs-string">&#x27;high&#x27;</span>, repairs=<span class="hljs-number">2</span>} <span class="hljs-string">&#x27;Extract this invoice: {document}&#x27;</span>
+<span class="hljs-keyword">let</span> invoice = <span class="hljs-keyword">ask</span>(schema=Invoice, reasoning=<span class="hljs-string">&#x27;high&#x27;</span>, repairs=<span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Extract this invoice: {document}&#x27;</span>
 <span class="hljs-keyword">let</span> computed = <span class="hljs-number">0</span>
 <span class="hljs-keyword">for</span> line <span class="hljs-keyword">in</span> invoice.lines {
     computed += line.quantity * line.unit_price
@@ -249,7 +249,7 @@ Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
 <p>An explicit agent inspects source under filesystem and git restrictions, then tool-free generation structures its findings. The report write is restricted to <code>./reports</code>, and high-severity findings fail the CI gate. A request to only review is guidance, not a read-only filesystem capability.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-5">spl examples/code-review.spl --cwd &lt;project&gt;
 </code></pre></figure>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">code-review.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy code-review.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="code-review.spl code example"><code class="language-spl" data-file="code-review.spl" id="code-6"><span class="hljs-meta">@{model=<span class="hljs-string">&#x27;gpt-5.6-luna&#x27;</span>}</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">code-review.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy code-review.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="code-review.spl code example"><code class="language-spl" data-file="code-review.spl" id="code-6"><span class="hljs-meta">@(<span class="hljs-params">model=<span class="hljs-string">&#x27;gpt-5.6-luna&#x27;</span></span>)</span>
 <span class="hljs-comment"># Two-stage code review that can gate CI: think deeply in prose, then structure the findings.</span>
 <span class="hljs-comment">#</span>
 <span class="hljs-comment"># Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd &lt;project&gt;</span>
@@ -260,7 +260,7 @@ Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
 
 <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;suggesting purely stylistic changes&#x27;</span> {
     <span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span>, exec <span class="hljs-string">&#x27;git&#x27;</span> {
-        notes = <span class="hljs-keyword">agent</span>{reasoning=<span class="hljs-string">&#x27;high&#x27;</span>} <span class="hljs-string">&#x27;&#x27;&#x27;
+        notes = <span class="hljs-keyword">agent</span>(reasoning=<span class="hljs-string">&#x27;high&#x27;</span>) <span class="hljs-string">&#x27;&#x27;&#x27;
 List source files with `git ls-files src`.
 Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 List each finding with its location, why it matters and a suggested fix.&#x27;&#x27;&#x27;</span>
@@ -287,7 +287,7 @@ List each finding with its location, why it matters and a suggested fix.&#x27;&#
     <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;findings&#x27;</span>],
     <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
-<span class="hljs-keyword">let</span> review = <span class="hljs-keyword">?</span>{schema=Review, repairs=<span class="hljs-number">2</span>} <span class="hljs-string">&#x27;Convert this review into structured findings, using an empty list when there are none: {notes}&#x27;</span>
+<span class="hljs-keyword">let</span> review = <span class="hljs-keyword">ask</span>(schema=Review, repairs=<span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Convert this review into structured findings, using an empty list when there are none: {notes}&#x27;</span>
 
 <span class="hljs-keyword">let</span> lines = [<span class="hljs-string">&quot;# Review of repository&quot;</span>, <span class="hljs-string">&#x27;&#x27;</span>]
 <span class="hljs-keyword">let</span> high = <span class="hljs-number">0</span>
@@ -322,7 +322,7 @@ lines.append(<span class="hljs-string">&quot;{len(review.findings)} finding(s), 
     <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;inventing changes that are not in the commit list&#x27;</span> {
         <span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble&#x27;</span> {
             <span class="hljs-keyword">let</span> commits = <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git log --oneline -n 40&#x27;</span>)
-            notes = <span class="hljs-keyword">?</span> <span class="hljs-string">&#x27;&#x27;&#x27;
+            notes = <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;&#x27;&#x27;
 Write release notes for end users from these commits (one per line: hash and subject).
 Rewrite technical subjects into clear user-facing sentences and drop merge/chore noise.
 {commits}&#x27;&#x27;&#x27;</span>
@@ -344,12 +344,12 @@ Rewrite technical subjects into clear user-facing sentences and drop merge/chore
 
 <span class="hljs-keyword">restrict</span> net <span class="hljs-string">&#x27;news.ycombinator.com&#x27;</span> {
     <span class="hljs-keyword">let</span> page = <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://news.ycombinator.com&#x27;</span>)
-    <span class="hljs-keyword">let</span> headlines = <span class="hljs-keyword">?</span> <span class="hljs-string">&#x27;&#x27;&#x27;
+    <span class="hljs-keyword">let</span> headlines = <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;&#x27;&#x27;
 From this HTML list the 10 top stories as a Markdown bullet list: &quot;- title (domain)&quot;.
 Reply with ONLY the list.
 {page}&#x27;&#x27;&#x27;</span>
 
-    <span class="hljs-keyword">let</span> themes = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>} <span class="hljs-string">&#x27;What themes run through these headlines?\n{headlines}&#x27;</span>
+    <span class="hljs-keyword">let</span> themes = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>) <span class="hljs-string">&#x27;What themes run through these headlines?\n{headlines}&#x27;</span>
 
     <span class="hljs-keyword">try</span> {
         <span class="hljs-built_in">web_fetch</span>(<span class="hljs-string">&#x27;https://example.org&#x27;</span>)
@@ -366,7 +366,7 @@ Reply with ONLY the list.
 <p>Run raw <code>npm test</code> in the project selected by <code>--cwd</code>, invoke an explicit repair agent after a failure, and repeat up to three rounds. Files are restricted to the project and executable names to npm. Avoiding test edits is guidance, not a filesystem write prohibition. This workflow intentionally performs actions; review its changes. <code>--trace</code> captures its LLM calls, but replay reruns explicit tests without repeating the agent&#39;s edits, so it requires suitable external state. Legacy <code>--record</code> does not support this workflow.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-9">spl lang/examples/fix-failing-tests.spl --cwd .
 </code></pre></figure>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">fix-failing-tests.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy fix-failing-tests.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="fix-failing-tests.spl code example"><code class="language-spl" data-file="fix-failing-tests.spl" id="code-10"><span class="hljs-meta">@{model=<span class="hljs-string">&#x27;mai-code-1.1-flash&#x27;</span>}</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">fix-failing-tests.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy fix-failing-tests.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="fix-failing-tests.spl code example"><code class="language-spl" data-file="fix-failing-tests.spl" id="code-10"><span class="hljs-meta">@(<span class="hljs-params">model=<span class="hljs-string">&#x27;mai-code-1.1-flash&#x27;</span></span>)</span>
 <span class="hljs-comment"># Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).</span>
 <span class="hljs-comment">#</span>
 <span class="hljs-comment">#   spl examples/fix-failing-tests.spl --cwd &lt;your npm project&gt;</span>
@@ -387,7 +387,7 @@ Reply with ONLY the list.
                 green = <span class="hljs-literal">True</span>
             } <span class="hljs-keyword">except</span> err {
                 <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;tests failing (round {attempt}): {err.status_code}&quot;</span>)
-                <span class="hljs-keyword">agent</span>{reasoning=<span class="hljs-string">&#x27;medium&#x27;</span>} <span class="hljs-string">&#x27;&#x27;&#x27;
+                <span class="hljs-keyword">agent</span>(reasoning=<span class="hljs-string">&#x27;medium&#x27;</span>) <span class="hljs-string">&#x27;&#x27;&#x27;
 The test run failed with this output:
 {err.reason}
 
@@ -429,7 +429,7 @@ Find the bug in the source code (not the tests), fix it with the file tools, and
     <span class="hljs-keyword">let</span> source = <span class="hljs-built_in">read_file</span>(<span class="hljs-string">&#x27;./examples/data/product-update.md&#x27;</span>)
     <span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Keep Markdown formatting, URLs and code identifiers untranslated&#x27;</span> {
         <span class="hljs-keyword">for</span> code, language <span class="hljs-keyword">in</span> <span class="hljs-built_in">items</span>(locales) {
-            <span class="hljs-keyword">let</span> translation = <span class="hljs-keyword">?</span>{reasoning=<span class="hljs-string">&#x27;medium&#x27;</span>} <span class="hljs-string">&#x27;Translate this document to {language}: {source}&#x27;</span>
+            <span class="hljs-keyword">let</span> translation = <span class="hljs-keyword">ask</span>(reasoning=<span class="hljs-string">&#x27;medium&#x27;</span>) <span class="hljs-string">&#x27;Translate this document to {language}: {source}&#x27;</span>
             <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&quot;./out/translations/product-update.{code}.md&quot;</span>, translation)
             written.append(<span class="hljs-string">&quot;./out/translations/product-update.{code}.md&quot;</span>)
         }
@@ -458,7 +458,7 @@ Find the bug in the source code (not the tests), fix it with the file tools, and
 <span class="hljs-keyword">let</span> history = stored_history()
 
 <span class="hljs-keyword">let</span> notes = <span class="hljs-built_in">read_file</span>(<span class="hljs-string">&#x27;./examples/data/notes.txt&#x27;</span>)
-<span class="hljs-keyword">let</span> todays = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>} <span class="hljs-string">&#x27;Summarize these notes: {notes}&#x27;</span>
+<span class="hljs-keyword">let</span> todays = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Summarize these notes: {notes}&#x27;</span>
 history.append({<span class="hljs-string">&#x27;run&#x27;</span>: runs, <span class="hljs-string">&#x27;summary&#x27;</span>: todays})
 <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(history) &gt; <span class="hljs-number">5</span> {
     history = history[<span class="hljs-number">1</span>:]
@@ -466,7 +466,7 @@ history.append({<span class="hljs-string">&#x27;run&#x27;</span>: runs, <span cl
 
 <span class="hljs-keyword">let</span> trend = <span class="hljs-string">&#x27;&#x27;</span>
 <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(history) &gt; <span class="hljs-number">1</span> {
-    trend = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>} <span class="hljs-string">&#x27;&#x27;&#x27;
+    trend = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>) <span class="hljs-string">&#x27;&#x27;&#x27;
 Here are my last journal summaries, oldest first: {history}
 What is changing from run to run? Be concrete.&#x27;&#x27;&#x27;</span>
 }
@@ -477,7 +477,7 @@ What is changing from run to run? Be concrete.&#x27;&#x27;&#x27;</span>
 <p>Small scripts that exercise one area each.</p>
 <span id="basics" class="anchor-alias" aria-hidden="true"></span><h3 id="basicsspl--functions-objects-and-llm-calls">basics.spl — functions, objects and LLM calls<a class="heading-anchor" href="#basicsspl--functions-objects-and-llm-calls" aria-label="Link to basics.spl — functions, objects and LLM calls">#</a></h3>
 <p>Compare a computed Fibonacci number with an integer model response, then request a structured joke and a pet story. This tour includes LLM calls and requires authentication.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">basics.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-17" aria-label="Copy basics.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="basics.spl code example"><code class="language-spl" data-file="basics.spl" id="code-17"><span class="hljs-meta">@{model=<span class="hljs-string">&#x27;gpt-6-luna&#x27;</span>}</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">basics.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-17" aria-label="Copy basics.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="basics.spl code example"><code class="language-spl" data-file="basics.spl" id="code-17"><span class="hljs-meta">@(<span class="hljs-params">model=<span class="hljs-string">&#x27;gpt-6-luna&#x27;</span></span>)</span>
 
 <span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
     <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">2</span> {
@@ -487,16 +487,16 @@ What is changing from run to run? Be concrete.&#x27;&#x27;&#x27;</span>
 }
 
 <span class="hljs-keyword">let</span> fib10 = fib(<span class="hljs-number">10</span>)
-<span class="hljs-keyword">let</span> modelFib10 = <span class="hljs-keyword">?</span>{fmt=<span class="hljs-string">&#x27;integer&#x27;</span>} <span class="hljs-string">&#x27;fibonacci of 10 is?&#x27;</span>
+<span class="hljs-keyword">let</span> modelFib10 = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;integer&#x27;</span>) <span class="hljs-string">&#x27;fibonacci of 10 is?&#x27;</span>
 
 <span class="hljs-keyword">assert</span> fib10 == modelFib10 <span class="hljs-string">&#x27;Oops model got it wrong&#x27;</span>
 
-<span class="hljs-keyword">let</span> joke = <span class="hljs-keyword">?</span>{fmt=<span class="hljs-string">&#x27;object&#x27;</span>} <span class="hljs-string">&#x27;A joke about programmers as {{&quot;setup&quot;: ..., &quot;punchline&quot;: ...}}&#x27;</span>
+<span class="hljs-keyword">let</span> joke = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;object&#x27;</span>) <span class="hljs-string">&#x27;A joke about programmers as {{&quot;setup&quot;: ..., &quot;punchline&quot;: ...}}&#x27;</span>
 
 <span class="hljs-keyword">let</span> animal = <span class="hljs-literal">None</span>
 <span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Answer in Chinese&#x27;</span> {
     <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;Mentioning the word cat&#x27;</span> {
-        animal = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>} <span class="hljs-string">&#x27;Funny story involving a pet animal&#x27;</span>
+        animal = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>) <span class="hljs-string">&#x27;Funny story involving a pet animal&#x27;</span>
     }
 }
 
@@ -504,7 +504,7 @@ What is changing from run to run? Be concrete.&#x27;&#x27;&#x27;</span>
 </code></pre></figure>
 <span id="hi" class="anchor-alias" aria-hidden="true"></span><h3 id="hispl--compact-end-to-end-tour">hi.spl — compact end-to-end tour<a class="heading-anchor" href="#hispl--compact-end-to-end-tour" aria-label="Link to hi.spl — compact end-to-end tour">#</a></h3>
 <p>Use <code>gpt-5.5</code> for a structured joke, reasoning and a greeting, then write the deterministic value <code>fib(10)</code> under <code>./out</code>.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">hi.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-18" aria-label="Copy hi.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="hi.spl code example"><code class="language-spl" data-file="hi.spl" id="code-18"><span class="hljs-meta">@{model=<span class="hljs-string">&#x27;gpt-5.5&#x27;</span>}</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">hi.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-18" aria-label="Copy hi.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="hi.spl code example"><code class="language-spl" data-file="hi.spl" id="code-18"><span class="hljs-meta">@(<span class="hljs-params">model=<span class="hljs-string">&#x27;gpt-5.5&#x27;</span></span>)</span>
 
 <span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
     <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">2</span> { <span class="hljs-keyword">return</span> n }
@@ -512,15 +512,15 @@ What is changing from run to run? Be concrete.&#x27;&#x27;&#x27;</span>
 }
 
 <span class="hljs-comment"># an LLM call, validated and parsed as JSON</span>
-<span class="hljs-keyword">let</span> joke = <span class="hljs-keyword">?</span>{<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>, fmt=<span class="hljs-string">&#x27;object&#x27;</span>} <span class="hljs-string">&#x27;A joke about programmers. Give setup and punchline.&#x27;</span>
+<span class="hljs-keyword">let</span> joke = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>, fmt=<span class="hljs-string">&#x27;object&#x27;</span>) <span class="hljs-string">&#x27;A joke about programmers. Give setup and punchline.&#x27;</span>
 
 <span class="hljs-comment"># deliberate before answering</span>
-<span class="hljs-keyword">let</span> why = <span class="hljs-keyword">think</span>{reasoning=<span class="hljs-string">&#x27;high&#x27;</span>} <span class="hljs-string">&#x27;Why is {joke.setup} funny?&#x27;</span>
+<span class="hljs-keyword">let</span> why = <span class="hljs-keyword">think</span>(reasoning=<span class="hljs-string">&#x27;high&#x27;</span>) <span class="hljs-string">&#x27;Why is {joke.setup} funny?&#x27;</span>
 
 <span class="hljs-comment"># Prompt guidance for calls inside the block (not runtime validation).</span>
 <span class="hljs-keyword">let</span> hi = <span class="hljs-literal">None</span>
 <span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Answer in English&#x27;</span> {
-    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;profanity&#x27;</span> { <span class="hljs-keyword">let</span> hi = <span class="hljs-keyword">?</span><span class="hljs-string">&#x27;Say hi&#x27;</span> }
+    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;profanity&#x27;</span> { <span class="hljs-keyword">let</span> hi = <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;Say hi&#x27;</span> }
 }
 
 <span class="hljs-comment"># Raw I/O does not call the model.</span>
@@ -533,9 +533,9 @@ What is changing from run to run? Be concrete.&#x27;&#x27;&#x27;</span>
 </code></pre></figure>
 <h3 id="live-tours">Live tours<a class="heading-anchor" href="#live-tours" aria-label="Link to Live tours">#</a></h3>
 <ul>
-<li><p><code>live.spl</code> — a quick smoke test of <code>?</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>enforce</code>/<code>forbid</code> and <code>assert</code> against the real model.</p>
+<li><p><code>live.spl</code> — a quick smoke test of <code>ask</code> with <code>len</code>/<code>fmt</code>, <code>think</code>, <code>enforce</code>/<code>forbid</code> and <code>assert</code> against the real model.</p>
 </li>
-<li><p><code>tools-live.spl</code> — <code>read_file</code>, <code>write_file</code> and <code>think{show=True}</code> inside <code>restrict &#39;./sandbox&#39;</code>. Run it after <code>mkdir sandbox; echo hello world &gt; sandbox/note.txt</code>.</p>
+<li><p><code>tools-live.spl</code> — <code>read_file</code>, <code>write_file</code> and <code>think(show=True)</code> inside <code>restrict &#39;./sandbox&#39;</code>. Run it after <code>mkdir sandbox; echo hello world &gt; sandbox/note.txt</code>.</p>
 </li>
 <li><p><code>restrict-live.spl</code> — asks the model to read <code>secret.txt</code> outside the sandbox and shows the runtime blocking it, returning a <code>restriction_violation</code> payload.</p>
 </li>

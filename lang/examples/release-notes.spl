@@ -7,7 +7,7 @@ restrict exec 'git' {
     forbid 'inventing changes that are not in the commit list' {
         enforce 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
             let commits = shell('git log --oneline -n 40')
-            notes = ? '''
+            notes = ask '''
 Write release notes for end users from these commits (one per line: hash and subject).
 Rewrite technical subjects into clear user-facing sentences and drop merge/chore noise.
 {commits}'''

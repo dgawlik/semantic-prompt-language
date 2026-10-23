@@ -1,4 +1,4 @@
-@{model='gpt-5.6-luna'}
+@(model='gpt-5.6-luna')
 # Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
 #
 # Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd <project>
@@ -9,7 +9,7 @@ let notes = ''
 
 forbid 'suggesting purely stylistic changes' {
     restrict './src', exec 'git' {
-        notes = agent{reasoning='high'} '''
+        notes = agent(reasoning='high') '''
 List source files with `git ls-files src`.
 Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 List each finding with its location, why it matters and a suggested fix.'''
@@ -36,7 +36,7 @@ let Review = {
     'required': ['findings'],
     'additionalProperties': False,
 }
-let review = ?{schema=Review, repairs=2} 'Convert this review into structured findings, using an empty list when there are none: {notes}'
+let review = ask(schema=Review, repairs=2) 'Convert this review into structured findings, using an empty list when there are none: {notes}'
 
 let lines = ["# Review of repository", '']
 let high = 0

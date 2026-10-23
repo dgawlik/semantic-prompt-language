@@ -1,6 +1,8 @@
 # Grammar (EBNF)
 
-SPL 0.3 syntax, synchronized from lang/docs/syntax.ebnf. Modifier names are checked while parsing; expression values and schemas are checked at runtime.
+The canonical SPL syntax reference. Commands use parenthesized named modifiers
+with the prompt outside the parentheses. Modifier names are checked while parsing;
+expression values and schemas are checked at runtime.
 
 ## Notation
 
@@ -9,13 +11,13 @@ SPL 0.3 syntax, synchronized from lang/docs/syntax.ebnf. Modifier names are chec
 ## Complete grammar
 
 ```ebnf
-(* SPL 0.3. { x } means repetition; [ x ] means optional.
+(* SPL. { x } means repetition; [ x ] means optional.
    Statements end at newline, ';', '}' or EOF. Newlines inside () and [] are ignored.
    '#' starts a comment. Opening block braces must be on the keyword's line. *)
 
 program        = { directive , separator } , { statement , separator } ;
 separator      = NL | ";" | end_of_block | EOF ;
-directive      = "@" , "{" , "model" , "=" , plain_string , [ "," ] , "}" ;
+directive      = "@" , "(" , "model" , "=" , plain_string , [ "," ] , ")" ;
 block          = "{" , { statement , separator } , "}" ;
 
 statement      = declaration | assignment | if_stmt | for_stmt | while_stmt
@@ -50,7 +52,7 @@ not_expr       = "not" , not_expr | comparison ;
 comparison     = sum , { ( "==" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not" , "in" ) , sum } ;
 sum            = term , { ( "+" | "-" ) , term } ;
 term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
-unary          = ( "-" | "+" ) , unary | "?" , [ modifiers ] , postfix | power ;
+unary          = ( "-" | "+" ) , unary | "ask" , [ modifiers ] , postfix | power ;
 power          = postfix , [ "**" , unary ] ;
 postfix        = primary , { call | index | slice | member } ;
 call           = "(" , [ expr , { "," , expr } , [ "," ] ] , ")" ;
@@ -63,9 +65,9 @@ primary        = NUMBER | string | "True" | "False" | "None" | NAME | special_va
 special_var    = "$env" | "$args" ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
-modifiers      = "{" , [ modifier , { "," , modifier } , [ "," ] ] , "}" ;
+modifiers      = "(" , [ modifier , { "," , modifier } , [ "," ] ] , ")" ;
 modifier       = ( "len" | "fmt" | "reasoning" | "show" | "schema" | "repairs" | "model" ) , "=" , expr ;
-log_expr       = "log" , "{" , [ "level" , "=" , log_level , [ "," ] ] , "}" , call ;
+log_expr       = "log" , "(" , [ "level" , "=" , log_level , [ "," ] ] , ")" , call ;
 log_level      = "error" | "info" | "debug" | expr ;
 
 (* Unknown/duplicate modifier names are syntax errors. Values are expressions, validated at runtime:
@@ -77,10 +79,10 @@ log_level      = "error" | "info" | "debug" | expr ;
    show: True/False; schema: synchronous strict JSON Schema draft-07 object or boolean
    repairs: integer 0..5 (additional generation attempts, default 0); agents require 0
    model: non-empty string; CLI override > per-call model > header > SDK default
-   Generation (? and think) has no tools. agent explicitly enables restricted runtime/MCP tools.
+   Generation (ask and think) has no tools. agent explicitly enables restricted runtime/MCP tools.
    Raw tools are ordinary positional functions: read_file(path), write_file(path, content),
    web_fetch(url), web_search(query), shell(command). They never invoke a model.
-   log{level=...}(args) selects error/info/debug severity; plain log(args) defaults to info.
+   log(level=...)(args) selects error/info/debug severity; plain log(args) defaults to info.
    Level values are bare names, strings or expressions, validated before evaluating arguments.
    Debug messages are emitted only at debug log level; silent suppresses all logs.
    enforce/forbid are scoped prompt guidance.
@@ -103,8 +105,9 @@ NL             = newline ;
    (including through aliases), and are not automatically persisted.
    Other $-prefixed names are syntax errors. Ordinary dict/list missing reads still fail.
    Reserved words: let if elif else for in while def return try except assert fail success
-   enforce forbid restrict think agent break continue pass and or not True False None.
-   Removed syntax: think{level=...}, tool{param=...} 'instructions',
+   enforce forbid restrict ask think agent break continue pass and or not True False None.
+   Removed syntax: ? 'prompt', ?{...} 'prompt', think{...}, agent{...}, log{...}, @{...},
+   think(level=...), tool{param=...} 'instructions',
    let x += ... and let d.key = ... . *)
 ```
 
@@ -112,4 +115,7 @@ NL             = newline ;
 
 `let` declares in the current block scope; reads and assignment search enclosing lexical scopes. Blocks and conditionals yield their final expression or `None`. Raw tools are ordinary function calls. Generation and agents share expression-valued modifiers; `log` has its own `level` modifier. See [language basics](Language.md) and [generation contracts](LLM-commands.md) for runtime rules.
 
-After changing the grammar or executable examples, update their Markdown copies in `docs-template/`. Run `npm run docs:build` from the repository root to regenerate all HTML pages and the search index. Documentation tests check that the embedded grammar and examples remain synchronized.
+Maintain the grammar in this Markdown page; there is no separate EBNF source file.
+After changing executable examples, update their Markdown copies in `docs-template/`.
+Run `npm run docs:build` from the repository root to regenerate all HTML pages and the
+search index. Documentation tests check that the rendered grammar and examples remain synchronized.

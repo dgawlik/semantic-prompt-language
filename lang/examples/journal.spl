@@ -14,7 +14,7 @@ let runs = stored_runs() + 1
 let history = stored_history()
 
 let notes = read_file('./examples/data/notes.txt')
-let todays = ?{len='sentence'} 'Summarize these notes: {notes}'
+let todays = ask(len='sentence') 'Summarize these notes: {notes}'
 history.append({'run': runs, 'summary': todays})
 if len(history) > 5 {
     history = history[1:]
@@ -22,7 +22,7 @@ if len(history) > 5 {
 
 let trend = ''
 if len(history) > 1 {
-    trend = ?{len='paragraph'} '''
+    trend = ask(len='paragraph') '''
 Here are my last journal summaries, oldest first: {history}
 What is changing from run to run? Be concrete.'''
 }

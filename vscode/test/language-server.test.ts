@@ -33,14 +33,14 @@ function at(source: string, text: string, occurrence = 0) {
 }
 
 test('diagnostics use the real parser with zero-based, UTF-16 positions', () => {
-    const source = "let emoji = '😀'; let x = ?{unknown=1} 'hello'";
+    const source = "let emoji = '😀'; let x = ask(unknown=1) 'hello'";
     const result = analysis(source);
     assert.equal(result.diagnostics.length, 1);
     assert.match(result.diagnostics[0].message, /unknown modifier 'unknown'/);
     assert.deepEqual(result.diagnostics[0].range.start, at(source, 'unknown'));
     assert.equal(result.diagnostics[0].source, 'spl');
     assert.equal(result.diagnostics[0].severity, 1);
-    assert.match(analysis("let x = ?{fmt='json', fmt='text'} 'x'").diagnostics[0].message, /duplicate modifier/);
+    assert.match(analysis("let x = ask(fmt='json', fmt='text') 'x'").diagnostics[0].message, /duplicate modifier/);
     assert.match(analysis("let x = '\\q'").diagnostics[0].message, /invalid escape/);
     assert.match(analysis('break').diagnostics[0].message, /outside of a loop/);
     assert.equal(analysis('let x = missing_name').diagnostics.length, 0, 'Do not invent runtime diagnostics');
@@ -56,11 +56,24 @@ test('all shipped examples parse without diagnostics', () => {
     }
 });
 
+test('all snippets expand to valid current SPL syntax', () => {
+    const snippets: Record<string, { body: string[] }> = JSON.parse(readFileSync(
+        path.resolve(root, 'snippets', 'spl.code-snippets'), 'utf8',
+    ));
+    for (const [name, snippet] of Object.entries(snippets)) {
+        const source = snippet.body.join('\n')
+            .replace(/\$\{\d+\|([^}]+)\|\}/g, (_, choices: string) => choices.split(',')[0])
+            .replace(/\$\{\d+:([^}]*)\}/g, '$1')
+            .replace(/\$\d+/g, '');
+        assert.deepEqual(analysis(source).diagnostics, [], name);
+    }
+});
+
 test('builtin completions stay aligned with the runtime', () => {
     const runtimeNames = [...makeBuiltins({ log() {} }).keys(), 'read_file', 'write_file', 'web_fetch', 'web_search', 'shell'];
     assert.deepEqual(Object.keys(builtins).sort(), runtimeNames.sort());
     const items = completions(analysis(''), { line: 0, character: 0 });
-    for (const name of [...runtimeNames, 'let', 'def', 'agent', 'enforce', 'forbid', 'restrict']) {
+    for (const name of [...runtimeNames, 'let', 'def', 'ask', 'think', 'agent', 'enforce', 'forbid', 'restrict']) {
         assert.ok(items.some((item) => item.label === name), name);
     }
     assert.ok(!items.some((item) => ['instruct', 'avoid', 'level'].includes(item.label)));
@@ -94,25 +107,25 @@ test('special variables have diagnostics, completion edits and hover without run
 });
 
 test('modifier and directive completions replace partial identifiers', () => {
-    const source = "let response = ?{rea} 'hello'";
+    const source = "let response = ask(rea) 'hello'";
     const items = completions(analysis(source), document(source).positionAt(source.indexOf('rea') + 3));
     assert.deepEqual(items.map((item) => item.label), [...MODIFIER_NAMES]);
     assert.deepEqual(items.find((item) => item.label === 'reasoning')?.textEdit, {
         range: { start: at(source, 'rea'), end: document(source).positionAt(source.indexOf('rea') + 3) },
         newText: 'reasoning=',
     });
-    for (const call of ['?', 'think', 'agent']) {
-        const text = `let x = ${call}{`;
+    for (const call of ['ask', 'think', 'agent']) {
+        const text = `let x = ${call}(`;
         assert.deepEqual(completions(analysis(text), document(text).positionAt(text.length)).map((item) => item.label), [...MODIFIER_NAMES]);
     }
-    assert.deepEqual(completions(analysis('@{'), { line: 0, character: 2 }).map((item) => item.label), ['model']);
-    const log = 'log{le';
+    assert.deepEqual(completions(analysis('@('), { line: 0, character: 2 }).map((item) => item.label), ['model']);
+    const log = 'log(le';
     assert.deepEqual(completions(analysis(log), document(log).positionAt(log.length)).map((item) => item.label), ['level']);
     assert.ok(completions(analysis('let value = ('), { line: 0, character: 13 }).some((item) => item.label === 'range'));
 });
 
 test('hover distinguishes builtin calls, generation modifiers, and user bindings', () => {
-    const source = "let values = []\nlet answer = ?{len='sentence'} 'hello'\nlog(len(values))";
+    const source = "let values = []\nlet answer = ask(len='sentence') 'hello'\nlog(len(values))";
     const result = analysis(source);
     const modifier = hover(result, at(source, 'len'));
     const builtin = hover(result, at(source, 'len', 1));
@@ -124,11 +137,52 @@ test('hover distinguishes builtin calls, generation modifiers, and user bindings
     assert.equal(hover(analysis("log('len')"), { line: 0, character: 5 }), undefined);
 });
 
+test('multiline modifiers preserve contexts through nested values and unfinished parentheses', () => {
+    const source = `let result = ask(
+    schema={'type': 'integer'},
+    model=choose('one', 'two'),
+    rea
+) 'prompt'`;
+    assert.deepEqual(
+        completions(analysis(source), document(source).positionAt(source.indexOf('rea') + 3)).map((item) => item.label),
+        [...MODIFIER_NAMES],
+    );
+    const incomplete = `let result = ask(
+    fmt='integer',
+    rep`;
+    assert.deepEqual(
+        completions(analysis(incomplete), document(incomplete).positionAt(incomplete.length)).map((item) => item.label),
+        [...MODIFIER_NAMES],
+    );
+    for (const source of ["let result = ask(model=choose(", "log(", "object.log("]) {
+        const items = completions(analysis(source), document(source).positionAt(source.length));
+        assert.ok(items.some((item) => item.label === 'range'), source);
+    }
+    for (const source of ["log('value', ", 'log(value, ']) {
+        const items = completions(analysis(source), document(source).positionAt(source.length));
+        assert.ok(items.some((item) => item.label === 'range'), source);
+        assert.ok(!items.some((item) => item.label === 'level'), source);
+    }
+    const log = 'log(\n    le';
+    assert.deepEqual(
+        completions(analysis(log), document(log).positionAt(log.length)).map((item) => item.label), ['level'],
+    );
+    assert.match(JSON.stringify(hover(analysis("ask(fmt='integer') 'prompt'"), { line: 0, character: 1 })?.contents), /Generation-only/);
+    for (const [source, expected] of [
+        ["?{fmt='integer'} 'prompt'", /use ask/],
+        ["agent{reasoning='high'} 'prompt'", /use agent/],
+        ["log{level=debug}(1)", /use log/],
+        ["@{model='test'}", /use @/],
+    ] as const) {
+        assert.match(analysis(source).diagnostics[0].message, expected);
+    }
+});
+
 test('format hover and completions describe every supported output type', () => {
-    const source = "let answer = ?{fmt='integer'} 'Fibonacci of 10'";
+    const source = "let answer = ask(fmt='integer') 'Fibonacci of 10'";
     const formats = ['integer', 'float', 'array', 'object', 'text', 'boolean', 'json'];
     const help = JSON.stringify(hover(analysis(source), at(source, 'fmt'))?.contents);
-    const partial = 'let answer = ?{fm';
+    const partial = 'let answer = ask(fm';
     const item = completions(analysis(partial), document(partial).positionAt(partial.length)).find((entry) => entry.label === 'fmt');
     for (const format of formats) {
         assert.ok(help.includes(`'${format}'`), format);
@@ -172,7 +226,7 @@ test('definitions restore shadowed names and hide loop and handler bindings', ()
         'log(i, err)',
         'let value = if True { let hidden = 3; hidden } else { 0 }',
         'log(hidden)',
-        'log{level=debug}(value)',
+        'log(level=debug)(value)',
     ].join('\n');
     const result = analysis(source);
     assert.deepEqual(result.diagnostics, []);
@@ -268,6 +322,7 @@ for (const transport of ['stdio', 'ipc'] as const) {
         assert.equal(initialized.capabilities.textDocumentSync, TextDocumentSyncKind.Incremental);
         assert.equal(initialized.capabilities.definitionProvider, true);
         assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('$'));
+        assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('('));
         await connection.sendNotification(InitializedNotification.type, {});
         const initialDiagnostics = nextDiagnostics();
         await connection.sendNotification(DidOpenTextDocumentNotification.type, {

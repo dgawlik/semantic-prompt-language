@@ -65,7 +65,7 @@ Use a separate generation expression to interpret output. Use explicit `agent` w
 
 | Signature | Description |
 | --- | --- |
-| `log(a, b, …)`; `log{level=debug}(a, b, …)` | Writes the `str()` of each argument, space-separated, to **stderr**. Plain calls default to info; the modifier selects `error`, `info` or `debug`, using a bare name, string or expression. The level is evaluated once and validated before arguments. Debug messages appear only at debug log level; silent suppresses all logs. Returns `None`. Never pollutes stdout. |
+| `log(a, b, …)`; `log(level=debug)(a, b, …)` | Writes the `str()` of each argument, space-separated, to **stderr**. Plain calls default to info; the modifier selects `error`, `info` or `debug`, using a bare name, string or expression. The level is evaluated once and validated before arguments. Debug messages appear only at debug log level; silent suppresses all logs. Returns `None`. Never pollutes stdout. |
 
 ## Methods
 

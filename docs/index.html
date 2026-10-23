@@ -8,11 +8,11 @@ deterministic code separate from LLM calls, contain model variance with explicit
 guards, and read the whole workflow at a glance.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=061d61fcb352">
-<link rel="stylesheet" href="assets/style.css?v=061d61fcb352">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c4b3b2233122">
+<link rel="stylesheet" href="assets/style.css?v=c4b3b2233122">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=061d61fcb352"></script>
-<script defer src="assets/site.js?v=061d61fcb352"></script>
+<script defer src="assets/search-index.js?v=c4b3b2233122"></script>
+<script defer src="assets/site.js?v=c4b3b2233122"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -36,12 +36,12 @@ guards, and read the whole workflow at a glance.</p></div><div class="hero-actio
 small script, run it, inspect the result, and refine the prompt or guard. The goal
 is a working solution in minutes rather than hours of glue code.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">guarded-triage.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy guarded-triage.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="guarded-triage.spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> report = <span class="hljs-string">&#x27;Checkout fails for every customer after deployment.&#x27;</span>
-<span class="hljs-keyword">let</span> severity = <span class="hljs-keyword">?</span>{fmt=<span class="hljs-string">&#x27;integer&#x27;</span>, repairs=<span class="hljs-number">1</span>} <span class="hljs-string">&#x27;Rate the impact from 1 to 5: {report}&#x27;</span>
+<span class="hljs-keyword">let</span> severity = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;integer&#x27;</span>, repairs=<span class="hljs-number">1</span>) <span class="hljs-string">&#x27;Rate the impact from 1 to 5: {report}&#x27;</span>
 <span class="hljs-keyword">assert</span> severity &gt;= <span class="hljs-number">1</span> <span class="hljs-keyword">and</span> severity &lt;= <span class="hljs-number">5</span> <span class="hljs-string">&#x27;severity must be between 1 and 5&#x27;</span>
 <span class="hljs-keyword">let</span> route = <span class="hljs-keyword">if</span> severity &gt;= <span class="hljs-number">4</span> { <span class="hljs-string">&#x27;urgent-review&#x27;</span> } <span class="hljs-keyword">else</span> { <span class="hljs-string">&#x27;normal-review&#x27;</span> }
 <span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;severity&#x27;</span>: severity, <span class="hljs-string">&#x27;route&#x27;</span>: route}
 </code></pre></figure>
-<p>The <code>?</code> is the only model call. <code>fmt</code> checks its output type; <code>assert</code> rejects an
+<p>The <code>ask</code> is the only model call. <code>fmt</code> checks its output type; <code>assert</code> rejects an
 out-of-range answer before ordinary code routes it. A reviewer can see the input,
 the variable part, the guard, and the result without tracing through callbacks.
 These checks constrain the answer; they do not prove the severity assessment is correct.</p>
@@ -52,7 +52,7 @@ Check syntax without a model, inspect explicit failures, then adjust the smalles
 prompt or guard. Trace/replay lets you retest deterministic logic and checks
 against the same LLM results when requests stay unchanged.</li>
 <li><strong>Separate deterministic logic from LLM judgment.</strong> Control flow, arithmetic,
-interpolation, and variables never call a model. <code>?</code> and <code>think</code> generate values
+interpolation, and variables never call a model. <code>ask</code> and <code>think</code> generate values
 without tools; <code>agent</code> explicitly enables model-directed actions. Validate
 outputs with <code>fmt</code>, <code>schema</code>, and <code>assert</code>; bound repairs and restrict actions
 instead of relying on prompt wording.</li>

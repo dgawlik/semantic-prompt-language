@@ -39,8 +39,8 @@
 
     "directive": {
       "name": "meta.directive.spl",
-      "begin": "(@)(\\{)",
-      "end": "\\}",
+      "begin": "(@)(\\()",
+      "end": "\\)",
       "beginCaptures": {
         "1": { "name": "keyword.other.directive.spl" },
         "2": { "name": "punctuation.section.directive.begin.spl" }
@@ -139,8 +139,8 @@
 
     "log-with-modifiers": {
       "name": "meta.log.spl",
-      "begin": "(?<![.\\w])(log)\\s*(\\{)",
-      "end": "\\}",
+      "begin": "(?<![.\\w])(log)\\s*(\\()(?=\\s*(?:[A-Za-z_]\\w*\\s*=(?!=)|\\)\\s*\\()|\\s*$)",
+      "end": "\\)",
       "beginCaptures": {
         "1": { "name": "support.function.builtin.spl" },
         "2": { "name": "punctuation.section.modifiers.begin.spl" }
@@ -155,10 +155,10 @@
 
     "command-with-modifiers": {
       "name": "meta.command.spl",
-      "begin": "(?:(\\?)|\\b(think)\\b|\\b(agent)\\b)\\s*(\\{)",
-      "end": "\\}",
+      "begin": "(?<![.\\w])(?:(ask)\\b|(think)\\b|(agent)\\b)\\s*(\\()",
+      "end": "\\)",
       "beginCaptures": {
-        "1": { "name": "keyword.operator.llm.spl" },
+        "1": { "name": "keyword.other.ask.spl" },
         "2": { "name": "keyword.other.think.spl" },
         "3": { "name": "keyword.other.agent.spl" },
         "4": { "name": "punctuation.section.modifiers.begin.spl" }
@@ -216,7 +216,7 @@
         { "name": "keyword.other.think.spl", "match": "\\bthink\\b" },
         { "name": "keyword.other.agent.spl", "match": "\\bagent\\b" },
         { "name": "support.function.tool.spl", "match": "\\b(?:read_file|write_file|web_fetch|web_search|shell)\\b" },
-        { "name": "keyword.operator.llm.spl", "match": "\\?" },
+        { "name": "keyword.other.ask.spl", "match": "\\bask\\b" },
         { "name": "keyword.operator.logical.spl", "match": "\\b(?:and|or|not|in)\\b" }
       ]
     },

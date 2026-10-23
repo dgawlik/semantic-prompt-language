@@ -8,13 +8,53 @@ const bad = (source: string, message: RegExp) => {
 };
 
 describe('parser: accepted syntax', () => {
+    it.each(['ask', 'think', 'agent'])('parses multiline %s modifiers, nested values, and trailing commas', (command) => {
+        const program = parse(`let score = ${command}(
+    fmt = 'integer',
+    repairs = 1,
+    schema = {
+        'type': 'integer',
+        'minimum': min([1, 2]),
+    },
+    model = choose('one', 'two'),
+) 'Rate this issue'`);
+        expect(program.body[0]).toMatchObject({ value: {
+            t: command,
+            mods: {
+                fmt: { t: 'str', parts: ['integer'] },
+                repairs: { t: 'num', v: 1 },
+                schema: { t: 'dict' },
+                model: { t: 'call' },
+            },
+            prompt: { t: 'str', parts: ['Rate this issue'] },
+        } });
+        parse(`${command} 'prompt'\n${command}() 'prompt'\n${command}() ('a' + 'b')`);
+        parse(`${command}(\n# modifiers can contain comments\nfmt='text',\n) get_prompt()`);
+    });
+
+    it('parses multiline headers and log options without changing positional calls', () => {
+        const program = parse(`@(
+    model = 'test',
+)
+log(
+    level = debug,
+)(
+    len([1, 2]),
+)
+log('ordinary positional call')
+log()`);
+        expect(program.directives).toEqual({ model: 'test' });
+        expect(program.body[0]).toMatchObject({ e: { t: 'log', level: { t: 'str', parts: ['debug'] } } });
+        expect(program.body[1]).toMatchObject({ e: { t: 'call', callee: { t: 'name', name: 'log' } } });
+    });
+
     it('accepts special variables in expressions, interpolation and modifiers', () => {
-        const program = parse(`let date = $env.date\nlog($args[0], '{$env.date}: {$args[1]}')\nsuccess ?{model=$args[2]} $env.PROMPT`);
+        const program = parse(`let date = $env.date\nlog($args[0], '{$env.date}: {$args[1]}')\nsuccess ask(model=$args[2]) $env.PROMPT`);
         expect(program.body[0]).toMatchObject({ value: { t: 'member', obj: { t: 'special', name: 'env' } } });
     });
 
     it('uses enforce/forbid for positive and negative scoped guidance', () => {
-        const program = parse(`enforce 'English' { forbid 'jokes' { let answer = ?'Hi' } }`);
+        const program = parse(`enforce 'English' { forbid 'jokes' { let answer = ask 'Hi' } }`);
         expect(program.body[0]).toMatchObject({
             t: 'constraint', kind: 'enforce', body: [{ t: 'constraint', kind: 'forbid' }],
         });
@@ -22,11 +62,11 @@ describe('parser: accepted syntax', () => {
 
     it('composes generation options and explicit agents', () => {
         parse(`
-@{model='test-model'}
+@(model='test-model')
 let Contract = {'type': 'object'}
-let response = ?{schema=Contract, reasoning='high', repairs=2, model='other'} 'Extract'
-let diagnosis = think{fmt='json', show=True} 'Diagnose'
-enforce 'Answer in English' { forbid 'jokes' { let result = ?'Hi' } }
+let response = ask(schema=Contract, reasoning='high', repairs=2, model='other') 'Extract'
+let diagnosis = think(fmt='json', show=True) 'Diagnose'
+enforce 'Answer in English' { forbid 'jokes' { let result = ask 'Hi' } }
 restrict './out', exec 'git', mcp 'docs/search' { agent 'Write the report' }
 let text = read_file('input.txt')
 write_file('output.txt', text)
@@ -66,7 +106,7 @@ let multi = {
     });
 
     it('retains prefix operator precedence', () => {
-        const program = parse(`let a = ?'x' + 'y'\nlet b = -?{len='word'} 'n'\nlet c = not ?'q'`);
+        const program = parse(`let a = ask 'x' + 'y'\nlet b = -ask(len='word') 'n'\nlet c = not ask 'q'`);
         expect(program.body[0]).toMatchObject({ value: { t: 'binary', l: { t: 'ask' } } });
         expect(program.body[1]).toMatchObject({ value: { t: 'unary', e: { t: 'ask' } } });
     });
@@ -86,11 +126,11 @@ let multi = {
     });
 
     it('accepts bare, quoted and expression-valued log levels', () => {
-        parse(`log{level=debug}('x')\nlog{level='error'}(1, 2)\nlog{level=chosen}('x')\nlog{}()`);
-        bad(`log{other=1}('x')`, /unknown modifier/);
-        bad(`log{level=info, level=debug}('x')`, /duplicate modifier/);
-        bad(`log{level=debug} 'x'`, /expected '\('/);
-        bad(`?{level=debug} 'x'`, /unknown modifier/);
+        parse(`log(level=debug)('x')\nlog(level='error')(1, 2)\nlog(level=chosen)('x')\nlog()()`);
+        bad(`log(other=1)('x')`, /unknown modifier/);
+        bad(`log(level=info, level=debug)('x')`, /duplicate modifier/);
+        bad(`log(level=debug) 'x'`, /expected '\('/);
+        bad(`ask(level=debug) 'x'`, /unknown modifier/);
     });
 
     it('treats escapes, raw strings and multiline interpolation', () => {
@@ -99,6 +139,31 @@ let multi = {
 });
 
 describe('parser: strict syntax errors', () => {
+    it('explains migration from removed command and modifier syntax', () => {
+        bad(`? 'prompt'`, /removed; use ask/);
+        bad(`?{fmt='integer'} 'prompt'`, /removed; use ask/);
+        bad(`ask{fmt='integer'} 'prompt'`, /use ask\(\.\.\.\)/);
+        bad(`think{reasoning='high'} 'prompt'`, /use think\(\.\.\.\)/);
+        bad(`agent{model='test'} 'prompt'`, /use agent\(\.\.\.\)/);
+        bad(`log{level=debug}(1)`, /use log\(level=debug\)\(value\)/);
+        bad(`@{model='test'}`, /use @\(model=/);
+    });
+
+    it.each(['ask', 'think', 'agent'])('requires named %s modifiers and an external prompt', (command) => {
+        bad(`${command}('prompt')`, /modifier name.*prompt belongs after/);
+        bad(`${command}(fmt='integer')`, /requires a prompt/);
+        bad(`${command}(fmt='integer' repairs=1) 'prompt'`, /expected ',' or '\)'/);
+        bad(`${command}(fmt='integer', fmt='text') 'prompt'`, /duplicate modifier/);
+        bad(`${command}(unknown=1) 'prompt'`, /unknown modifier/);
+        bad(`${command}(fmt='integer'\n 'prompt'`, /unclosed/);
+    });
+
+    it('reserves ask for generation rather than a variable or user function', () => {
+        bad(`let ask = 1`, /reserved word/);
+        bad(`def ask() { pass }`, /reserved word/);
+        bad(`def f(ask) { pass }`, /reserved word/);
+    });
+
     it('rejects unknown special variables and rebinding their names', () => {
         bad(`success $unknown`, /unknown special variable/);
         bad(`success $env_extra`, /unknown special variable/);
@@ -115,10 +180,10 @@ describe('parser: strict syntax errors', () => {
     });
 
     it('rejects unknown or duplicate modifiers, but allows expression values', () => {
-        bad(`?{verbose=True} 'x'`, /unknown modifier/);
-        bad(`think{level='high'} 'x'`, /unknown modifier/);
-        bad(`?{len='word', len='word'} 'x'`, /duplicate modifier/);
-        parse(`?{len=chosen_length, schema=make_schema(), repairs=1+1} 'x'`);
+        bad(`ask(verbose=True) 'x'`, /unknown modifier/);
+        bad(`think(level='high') 'x'`, /unknown modifier/);
+        bad(`ask(len='word', len='word') 'x'`, /duplicate modifier/);
+        parse(`ask(len=chosen_length, schema=make_schema(), repairs=1+1) 'x'`);
     });
 
     it('rejects removed tool-command syntax', () => {
@@ -145,9 +210,9 @@ describe('parser: strict syntax errors', () => {
         bad(`try { pass }`, /requires an 'except/);
         bad(`break`, /outside of a loop/);
         bad(`def f() { while True { def g() { break } } }`, /outside of a loop/);
-        bad(`pass\n@{model='x'}`, /only allowed at the top/);
-        bad(`@{colour='x'}`, /unknown directive/);
-        bad(`@{model=x}`, /quoted string/);
+        bad(`pass\n@(model='x')`, /only allowed at the top/);
+        bad(`@(colour='x')`, /unknown directive/);
+        bad(`@(model=x)`, /quoted string/);
         bad(`let if = 1`, /reserved word/);
         bad(`let enforce = 1`, /reserved word/);
         bad(`def f(forbid) { pass }`, /reserved word/);
@@ -165,7 +230,7 @@ describe('parser: strict syntax errors', () => {
 
     it('reports positions', () => {
         try {
-            parse(`let a = 1\nlet b = ?{x=1} 'q'`);
+            parse(`let a = 1\nlet b = ask(x=1) 'q'`);
         } catch (e) {
             expect(e).toMatchObject({ line: 2 });
             return;

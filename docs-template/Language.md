@@ -2,7 +2,7 @@
 
 The deterministic core of SPL: Python-flavoured expressions, braces, lexical block scopes, and explicit assignment. Model calls are distinct expressions, not implicit behavior of ordinary functions.
 
-Read a script by its boundaries: `let` names values, `?` and `think` mark model
+Read a script by its boundaries: `let` names values, `ask` and `think` mark model
 judgment, `agent` opts into model-selected actions, and `assert` exposes acceptance
 rules. Keep routine computation in ordinary code so the variable parts and their
 guards remain easy to spot.
@@ -21,12 +21,16 @@ guards remain easy to spot.
 
 * Unknown/duplicate modifier names, `break` outside loops, and `try` without `except` are syntax errors. Modifier values are expressions validated at runtime.
 
+* Model commands use `ask(options) 'prompt'`, `think(options) 'prompt'`, and
+  `agent(options) 'prompt'`. Named options support multiple lines and trailing commas.
+  With no options, omit the group or use `()`. Prompts remain outside the parentheses.
+
 ## Program structure
 
-A script is an optional `@{…}` directive header followed by statements. `#` starts a comment that runs to the end of the line.
+A script is an optional `@(…)` directive header followed by statements. `#` starts a comment that runs to the end of the line.
 
 ```spl
-@{model='gpt-5.5'}        # header: only allowed before the first statement
+@(model='gpt-5.5')        # header: only allowed before the first statement
 
 let greeting = 'hello'  # a statement
 log(greeting)           # an expression statement
@@ -34,7 +38,9 @@ log(greeting)           # an expression statement
 
 ### Directives
 
-The header directive is `model`, whose value must be a plain string without interpolation. Precedence is CLI `--model`, per-call `model`, header, then SDK default.
+The header directive is `@(model='...')`, whose value must be a plain string without
+interpolation. Parentheses may span lines and have a trailing comma.
+Precedence is CLI `--model`, per-call `model`, header, then SDK default.
 
 ## Variables
 
@@ -106,13 +112,13 @@ Conditionals, loops, exception handlers, and guidance/restriction blocks follow 
 ```spl
 let color = None
 enforce 'Your favorite color is blue' {
-    color = ?{len='word'} 'What is your favorite color?'
+    color = ask(len='word') 'What is your favorite color?'
 }
 log(color)                 # the answer
 
 let response = None
 try {
-    response = ?{fmt='object'} 'A joke about programmers'
+    response = ask(fmt='object') 'A joke about programmers'
 } except err {
     response = {'setup': 'none', 'punchline': err.reason}
 }
@@ -128,16 +134,16 @@ Functions close over their lexical defining scope. They can read or assign enclo
 A block or selected `if`/`elif`/`else` branch yields its final expression. An empty branch, a block ending in a statement, or an unmatched conditional returns `None`. Only the selected branch runs. `{}` remains an empty dictionary; use `{ pass }` for a block yielding `None`. Functions still require explicit `return`.
 
 ```spl
-let result = if ?{fmt='boolean'} 'Today is Friday?' {
-    ? 'Haiku on variance'
+let result = if ask(fmt='boolean') 'Today is Friday?' {
+    ask 'Haiku on variance'
 } else {
-    ? 'Sentence on passing time'
+    ask 'Sentence on passing time'
 }
 let length = {
     let text = result
     len(text)
 }
-log{level=debug}(length)
+log(level=debug)(length)
 success result
 ```
 

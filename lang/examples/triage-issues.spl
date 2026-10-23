@@ -22,7 +22,7 @@ let issues = [
 ]
 
 def triage(issue) {
-    let r = ?{schema=Triage, reasoning='low', repairs=2} '''
+    let r = ask(schema=Triage, reasoning='low', repairs=2) '''
 Classify this GitHub issue.
 Title: {issue['title']}
 Body: {issue['body']}
@@ -49,5 +49,5 @@ for t in results {
     }
 }
 
-let summary = ?{len='sentence'} 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
+let summary = ask(len='sentence') 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
 success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}

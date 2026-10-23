@@ -8,13 +8,13 @@ Use `fmt` and `schema` to constrain returned values, `assert` for acceptance rul
 and bounded `repairs` for format/schema corrections. These guards contain variance;
 they do not make the model deterministic or establish factual correctness.
 
-## Generation: `?`
+## Generation: `ask`
 
-`?` generates a value without runtime tools, built-in Copilot tools, or MCP access. It is a prefix operator: `?'a' + b` means `(?'a') + b`. Pass external information explicitly:
+`ask` generates a value without runtime tools, built-in Copilot tools, or MCP access. It is a prefix operator: `ask 'a' + b` means `(ask 'a') + b`. Pass external information explicitly:
 
 ```spl
 let notes = read_file('notes.txt')
-let summary = ?{len='sentence'} 'Summarize these notes: {notes}'
+let summary = ask(len='sentence') 'Summarize these notes: {notes}'
 success summary
 ```
 
@@ -22,7 +22,36 @@ Each call starts a fresh session; previous answers are not implicit conversation
 
 ## Composable modifiers
 
-`?`, `think`, and `agent` share these modifiers. Braces are optional. Values are expressions evaluated once; names must be known and unique. Invalid names are syntax errors; invalid values are catchable runtime errors before the model call.
+`ask`, `think`, and `agent` take named modifiers in parentheses, followed by a
+separate prompt expression. Parentheses can span lines, contain comments, and end
+with a trailing comma. Values are expressions evaluated once; names must be known
+and unique. Invalid names are syntax errors; invalid values are catchable runtime
+errors before the model call.
+
+```spl
+let score = ask(
+    fmt = 'integer',
+    repairs = 1
+) 'Rate this issue'
+let explanation = think(
+    reasoning = 'high',
+    len = 'paragraph',
+) 'Explain the rating {score}'
+let report = agent(
+    reasoning = 'low',
+) 'Inspect the project and summarize its status'
+```
+
+Without modifiers, both `ask 'prompt'` and `ask() 'prompt'` are valid; the same
+applies to `think` and `agent`. The prompt stays on the same line as the closing
+`)`, though the prompt itself may be a multiline string.
+For a grouped prompt expression, use `ask() ('first ' + 'second')`.
+`ask('prompt')` is not a positional function call: parentheses are for named
+modifiers only. Raw tools remain ordinary positional calls.
+
+Logging uses the same modifier notation with a second group for values:
+`log(level=debug)(value)`. Plain `log(value)` still logs at info level.
+Model headers use `@(model='model-id')`.
 
 | Modifier | Values | Meaning |
 | --- | --- | --- |
@@ -47,7 +76,7 @@ let Contract = {
     'additionalProperties': False,
 }
 let issue = 'The application crashes at startup.'
-let result = ?{schema=Contract, reasoning='high', repairs=2} 'Classify this issue: {issue}'
+let result = ask(schema=Contract, reasoning='high', repairs=2) 'Classify this issue: {issue}'
 assert result.confidence >= 0.5 'classification needs manual review'
 success result
 ```
@@ -69,12 +98,12 @@ A mismatch raises `validation_failed` with field paths, for example `lines[2].qu
 | `'json'` | Any JSON value, including scalars and `null`. | Parsed value |
 
 ```spl
-let fib = ?{fmt='integer'} 'Fibonacci of 10?'
-let pi = ?{fmt='float'} 'Pi to five decimal places?'
-let colors = ?{fmt='array'} 'Three primary colors'
-let joke = ?{fmt='object'} 'A joke with setup and punchline fields'
-let greeting = ?{fmt='text'} 'Say hello'
-let prime = ?{fmt='boolean'} 'Is 17 prime?'
+let fib = ask(fmt='integer') 'Fibonacci of 10?'
+let pi = ask(fmt='float') 'Pi to five decimal places?'
+let colors = ask(fmt='array') 'Three primary colors'
+let joke = ask(fmt='object') 'A joke with setup and punchline fields'
+let greeting = ask(fmt='text') 'Say hello'
+let prime = ask(fmt='boolean') 'Is 17 prime?'
 ```
 
 Non-text formats use strict JSON: neither prose nor Markdown fences are extracted, and values are never coerced. Malformed output or the wrong type raises `invalid_format` and can be corrected with `repairs`. An explicit format is checked before any supplied schema. A schema cannot be combined with `fmt='text'`.
@@ -89,11 +118,11 @@ Generation has no tools, so repair cannot repeat writes or commands. Agents reje
 
 ## Think shorthand
 
-`think` is generation-only shorthand with default medium reasoning. It accepts exactly the same modifiers as `?`, so reasoning and structured output no longer require two separate calls.
+`think` is generation-only shorthand with default medium reasoning. It accepts exactly the same modifiers as `ask`, so reasoning and structured output no longer require two separate calls.
 
 ```spl
 let Contract = {'type': 'integer'}
-success think{schema=Contract, reasoning='low'} 'What is 6 times 7?'
+success think(schema=Contract, reasoning='low') 'What is 6 times 7?'
 ```
 
 ## Explicit agents
@@ -102,7 +131,7 @@ success think{schema=Contract, reasoning='low'} 'What is 6 times 7?'
 
 ```spl
 restrict './src', exec 'git', mcp 'docs/search' {
-    let review = agent{reasoning='high'} 'Inspect source files and consult docs/search'
+    let review = agent(reasoning='high') 'Inspect source files and consult docs/search'
 }
 success review
 ```
@@ -117,7 +146,7 @@ Only agents expose tools to Copilot. Any permission request during generation is
 let answer = None
 enforce 'Answer in English' {
     forbid 'jokes' {
-        answer = ?{len='sentence'} 'Explain recursion'
+        answer = ask(len='sentence') 'Explain recursion'
     }
 }
 success answer
@@ -143,7 +172,7 @@ Arguments are positional, required strings. These functions never invoke a model
 
 ```spl
 let diff = shell('git diff --staged')
-let message = ? 'Draft a commit message from this diff: {diff}'
+let message = ask 'Draft a commit message from this diff: {diff}'
 write_file('commit-message.txt', message)
 success message
 ```

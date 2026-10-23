@@ -119,10 +119,14 @@ describe('documentation snippets', () => {
             }
         }
     }
-    it('includes the current grammar in Markdown', () => {
+    it('renders the canonical Markdown grammar without a separate EBNF source', () => {
         const markdown = fs.readFileSync(path.join(markdownDocs, 'Grammar.md'), 'utf8');
         const grammar = /```ebnf\s*\n([\s\S]*?)```/.exec(markdown);
-        expect(grammar?.[1] && normalize(grammar[1])).toBe(normalize(fs.readFileSync(path.join(root, 'lang', 'docs', 'syntax.ebnf'), 'utf8')));
+        const html = fs.readFileSync(path.join(docs, 'grammar.html'), 'utf8');
+        const rendered = /<code class="language-ebnf"[^>]*>([\s\S]*?)<\/code>/.exec(html);
+        expect(grammar).not.toBeNull();
+        expect(rendered).not.toBeNull();
+        expect(normalize(decode(rendered![1]))).toBe(normalize(grammar![1]));
     });
     for (const file of ['README.md', path.join('lang', 'README.md'), ...markdownFiles.map((file) => path.join('docs-template', file))]) {
         const markdown = fs.readFileSync(path.join(root, file), 'utf8');

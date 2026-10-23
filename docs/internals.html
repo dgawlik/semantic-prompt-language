@@ -6,11 +6,11 @@
 <meta name="description" content="A small tree-walking interpreter with explicit boundaries between raw I/O, generation, and agent actions.">
 <meta name="color-scheme" content="light dark">
 <title>Architecture - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=061d61fcb352">
-<link rel="stylesheet" href="assets/style.css?v=061d61fcb352">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c4b3b2233122">
+<link rel="stylesheet" href="assets/style.css?v=c4b3b2233122">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=061d61fcb352"></script>
-<script defer src="assets/site.js?v=061d61fcb352"></script>
+<script defer src="assets/search-index.js?v=c4b3b2233122"></script>
+<script defer src="assets/site.js?v=c4b3b2233122"></script>
 </head>
 <body data-page="internals">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -114,7 +114,7 @@
   logger, <span class="hljs-attr">cwd</span>: process.<span class="hljs-title function_">cwd</span>(), <span class="hljs-attr">timeoutMs</span>: <span class="hljs-number">300_000</span>,
 });
 <span class="hljs-keyword">try</span> {
-  <span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> <span class="hljs-title function_">run</span>(<span class="hljs-title function_">parse</span>(<span class="hljs-string">&quot;success ?&#x27;Hello&#x27;&quot;</span>), {
+  <span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> <span class="hljs-title function_">run</span>(<span class="hljs-title function_">parse</span>(<span class="hljs-string">&quot;success ask &#x27;Hello&#x27;&quot;</span>), {
     backend, logger, <span class="hljs-attr">cwd</span>: process.<span class="hljs-title function_">cwd</span>(),
   });
   <span class="hljs-keyword">if</span> (result.<span class="hljs-property">status</span> === <span class="hljs-string">&#x27;success&#x27;</span>) <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(result.<span class="hljs-property">value</span>);
@@ -128,7 +128,7 @@
 <p>Other exports include authentication helpers, variable stores, MCP configuration helpers, and related TypeScript types.</p>
 <span id="recording" class="anchor-alias" aria-hidden="true"></span><h2 id="recording-and-replay">Recording and replay<a class="heading-anchor" href="#recording-and-replay" aria-label="Link to Recording and replay">#</a></h2>
 <p>Wrap a live backend with <code>new TraceBackend(backend, file)</code>, or use <code>new ReplayBackend(file)</code> without constructing a live backend. Close either backend after use; replay checks for unused entries on close. Do not publish a successful result until that check completes.</p>
-<p>Traces contain structured requests and raw backend responses (including reasoning and effective parameters), or failures with their status code and reason. Every <code>?</code>, <code>think</code>, and <code>agent</code> backend call is instrumented, including repairs and transport errors. Replay re-exercises parsing, schema checks, repairs, and deterministic code. Matching includes ordered assembled prompts, call kind, requested model, reasoning effort, and show-reasoning. See the <a href="cli.html#trace-format">JSONL format</a>.</p>
+<p>Traces contain structured requests and raw backend responses (including reasoning and effective parameters), or failures with their status code and reason. Every <code>ask</code>, <code>think</code>, and <code>agent</code> backend call is instrumented, including repairs and transport errors. Replay re-exercises parsing, schema checks, repairs, and deterministic code. Matching includes ordered assembled prompts, call kind, requested model, reasoning effort, and show-reasoning. See the <a href="cli.html#trace-format">JSONL format</a>.</p>
 <p>The backend&#39;s <code>mode</code> identifies execution capabilities: <code>trace</code> records all LLM operations; <code>workflow-replay</code> returns their recorded results/failures while leaving explicit script tools and stores enabled. Agent-owned actions are not repeated or restored. No Copilot client or MCP server is started by replay.</p>
 <p><code>new RecordingBackend(backend, file)</code> retains the legacy generation-only <code>record</code> mode. <code>ReplayBackend</code> selects <code>replay</code> for <code>spl-generation</code> files and <code>workflow-replay</code> for <code>spl-trace</code> files. Legacy <code>replay</code> rejects agents, stores, and all raw tools except local reads, preserving existing behavior.</p>
 <span id="extending" class="anchor-alias" aria-hidden="true"></span><h2 id="extension-points">Extension points<a class="heading-anchor" href="#extension-points" aria-label="Link to Extension points">#</a></h2>

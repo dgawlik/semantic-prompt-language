@@ -1,8 +1,9 @@
-# Semantic Prompt Language: 0.3 specification
+# Semantic Prompt Language specification
 
 SPL is a small Python-like language for AI workflows. Braces delimit blocks; statements
-end at newlines or semicolons. The [EBNF](lang/docs/syntax.ebnf) specifies the syntax.
-This version intentionally breaks 0.2 syntax; see the [migration guide](README.md#breaking-changes-in-03).
+end at newlines or semicolons. The [grammar](docs-template/Grammar.md) specifies the syntax.
+Older tool-command and brace-modifier syntax is not accepted; see the
+[command syntax](README.md#commands-and-modifiers) and [migration guide](README.md#breaking-changes-in-03).
 
 ## Goals and boundaries
 
@@ -43,7 +44,7 @@ explicit `return` to return a value. Explicit return, break, continue, fail and 
 retain their normal control flow inside expression blocks.
 
 `log(value, ...)` writes at info severity and returns `None`.
-`log{level=debug}(value, ...)` selects error/info/debug severity. Levels may be bare
+`log(level=debug)(value, ...)` selects error/info/debug severity. Levels may be bare
 names, strings or expressions, evaluated once and validated before the arguments.
 Unknown/duplicate log modifiers are syntax errors. Debug messages are visible only at
 debug log level; `--silent` suppresses all logs.
@@ -87,7 +88,7 @@ Agent-facing tool results may be truncated with an explicit marker; raw I/O is n
 
 ## Generation and agency
 
-`? prompt` is a prefix expression at unary precedence. `think prompt` is generation
+`ask prompt` is a prefix expression at unary precedence. `think prompt` is generation
 with medium reasoning by default. Both have no runtime, built-in Copilot, or MCP tools,
 and unexpected permission requests abort the call.
 
@@ -95,8 +96,12 @@ and unexpected permission requests abort the call.
 Agents default to medium reasoning. Actions remain subject to active restrictions;
 agents are not automatically retried.
 
-All three accept a brace modifier list. Names are unique and checked at parse time;
-values are arbitrary expressions, evaluated once and checked at runtime before a call.
+All three accept a parenthesized named modifier list followed by a prompt:
+`ask(fmt='integer', repairs=1) 'Rate this issue'`. Lists can span lines, contain comments,
+and have a trailing comma. With no modifiers, omit the list or use `()`.
+The prompt stays outside the parentheses; a grouped prompt uses `ask() (expression)`.
+Names are unique and checked at parse time; values are arbitrary expressions,
+evaluated once and checked at runtime before a call.
 
 | Modifier | Contract |
 |---|---|
@@ -108,7 +113,7 @@ values are arbitrary expressions, evaluated once and checked at runtime before a
 | `repairs` | Integer 0..5; additional generation attempts, default 0 |
 | `model` | Nonempty model identifier |
 
-Model precedence: CLI override > per-call modifier > header `@{model='...'}` > SDK default.
+Model precedence: CLI override > per-call modifier > header `@(model='...')` > SDK default.
 Every call uses a fresh session; context must be passed explicitly through values.
 
 ### Structured output and repairs

@@ -24,7 +24,7 @@ restrict exec 'git' {
     forbid 'wrapping the message in quotes or code fences' {
         while attempt < 3 {
             attempt += 1
-            let msg = ? '''
+            let msg = ask '''
 Write a Conventional Commit message for this diff: a subject line of at most 72 characters
 ("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
 Reply with ONLY the message.

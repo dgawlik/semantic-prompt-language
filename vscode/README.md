@@ -13,13 +13,13 @@ this repository).
 * **Go to Definition** for bindings in the current document, including function parameters, nested functions,
   loop variables, caught failures, and references inside string interpolation.
 * **Document symbols** for functions and bindings, with nested function outlines.
-* **Highlighting** for the whole language: keywords, `let`/`def` declarations, numbers, comments, the `@{model=...}`
+* **Highlighting** for the whole language: keywords, `let`/`def` declarations, numbers, comments, the `@(model=...)`
   directive, and strings with `{expr}` interpolation, `{{ }}` and `\{ \}` brace escapes, raw `r'...'` strings and
   triple-quoted strings. Illegal escapes and stray `}` in strings are flagged with the `invalid` scope.
-* **Generation and agency**: generation-only `?` and `think`, explicit `agent`, and expression-valued modifiers
+* **Generation and agency**: generation-only `ask` and `think`, explicit `agent`, and expression-valued modifiers
   (`len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`). Raw tools are ordinary function calls.
 * **Block expressions and logging**: expression-valued blocks and conditionals, and
-  `log{level=debug}(value)` with separate log modifier completion, hover and highlighting.
+  `log(level=debug)(value)` with separate log modifier completion, hover and highlighting.
 * **Runtime inputs**: completion, hover and highlighting for read-only `$env` and `$args`,
   including inside interpolation. Typing `$` triggers special-variable completion.
 * **Guidance and failures**: `enforce`/`forbid`,
@@ -73,4 +73,5 @@ npm test
 * `test/check-examples.mjs` tokenizes every script in `../lang/examples` and fails on `invalid` scopes or on
   strings/blocks that are left open at the end of a file.
 
-Keep `syntaxes/spl.tmLanguage.json` in sync with `../lang/docs/syntax.ebnf` when the language changes.
+Keep `syntaxes/spl.tmLanguage.json` in sync with the
+[canonical Markdown grammar](../docs-template/Grammar.md) when the language changes.

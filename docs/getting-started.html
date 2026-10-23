@@ -8,11 +8,11 @@ SPL keeps deterministic logic, model calls, and validation visible in one readab
 script, so you can iterate on the solution rather than build orchestration glue.">
 <meta name="color-scheme" content="light dark">
 <title>Getting started - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=061d61fcb352">
-<link rel="stylesheet" href="assets/style.css?v=061d61fcb352">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c4b3b2233122">
+<link rel="stylesheet" href="assets/style.css?v=c4b3b2233122">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=061d61fcb352"></script>
-<script defer src="assets/site.js?v=061d61fcb352"></script>
+<script defer src="assets/search-index.js?v=c4b3b2233122"></script>
+<script defer src="assets/site.js?v=c4b3b2233122"></script>
 </head>
 <body data-page="getting-started">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -44,7 +44,7 @@ See <a href="cli.html#authentication">Authentication</a>.</li>
 <h2 id="quick-test">Quick test<a class="heading-anchor" href="#quick-test" aria-label="Link to Quick test">#</a></h2>
 <p>Create <code>hello.spl</code>:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> report = <span class="hljs-string">&#x27;Checkout fails for every customer after deployment.&#x27;</span>
-<span class="hljs-keyword">let</span> severity = <span class="hljs-keyword">?</span>{fmt=<span class="hljs-string">&#x27;integer&#x27;</span>, repairs=<span class="hljs-number">1</span>} <span class="hljs-string">&#x27;Rate the impact from 1 to 5: {report}&#x27;</span>
+<span class="hljs-keyword">let</span> severity = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;integer&#x27;</span>, repairs=<span class="hljs-number">1</span>) <span class="hljs-string">&#x27;Rate the impact from 1 to 5: {report}&#x27;</span>
 <span class="hljs-keyword">assert</span> severity &gt;= <span class="hljs-number">1</span> <span class="hljs-keyword">and</span> severity &lt;= <span class="hljs-number">5</span> <span class="hljs-string">&#x27;severity must be between 1 and 5&#x27;</span>
 <span class="hljs-keyword">let</span> route = <span class="hljs-keyword">if</span> severity &gt;= <span class="hljs-number">4</span> { <span class="hljs-string">&#x27;urgent-review&#x27;</span> } <span class="hljs-keyword">else</span> { <span class="hljs-string">&#x27;normal-review&#x27;</span> }
 <span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;severity&#x27;</span>: severity, <span class="hljs-string">&#x27;route&#x27;</span>: route}
@@ -54,7 +54,7 @@ See <a href="cli.html#authentication">Authentication</a>.</li>
 npx spl-lang login
 npx spl-lang hello.spl
 </code></pre></figure>
-<p>The <code>?</code> is the only model call; its result must be an integer. The assertion checks
+<p>The <code>ask</code> is the only model call; its result must be an integer. The assertion checks
 the allowed range, then ordinary code chooses a route. <code>repairs=1</code> can correct one
 format failure, not a failed assertion. Use <code>--model &lt;id&gt;</code> to choose a model instead
 of the SDK default.</p>
@@ -66,7 +66,7 @@ to stderr so results can be piped safely.</p>
 <h2 id="a-short-iteration-loop">A short iteration loop<a class="heading-anchor" href="#a-short-iteration-loop" aria-label="Link to A short iteration loop">#</a></h2>
 <ol>
 <li><strong>Edit one decision at a time.</strong> Keep data preparation and control flow in
-ordinary code. Put model judgment behind a visible <code>?</code> or <code>think</code>; use <code>agent</code>
+ordinary code. Put model judgment behind a visible <code>ask</code> or <code>think</code>; use <code>agent</code>
 only when the model should choose actions.</li>
 <li><strong>Check syntax cheaply.</strong> <code>--check</code> parses the script without model calls or
 script side effects. It does not validate runtime modifier values or compile schemas.</li>
@@ -125,7 +125,7 @@ a code and URL to confirm in the browser:</p>
     <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;name&#x27;</span>, <span class="hljs-string">&#x27;age&#x27;</span>],
     <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
-<span class="hljs-keyword">let</span> user = <span class="hljs-keyword">?</span>{schema=User, reasoning=<span class="hljs-string">&#x27;low&#x27;</span>, repairs=<span class="hljs-number">2</span>} <span class="hljs-string">&#x27;Invent a fictional adult user&#x27;</span>
+<span class="hljs-keyword">let</span> user = <span class="hljs-keyword">ask</span>(schema=User, reasoning=<span class="hljs-string">&#x27;low&#x27;</span>, repairs=<span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Invent a fictional adult user&#x27;</span>
 <span class="hljs-keyword">assert</span> user.age &gt;= <span class="hljs-number">18</span> <span class="hljs-string">&#x27;expected an adult&#x27;</span>
 <span class="hljs-keyword">success</span> user
 </code></pre></figure>
@@ -171,6 +171,11 @@ actions are not repeated. Traces contain prompts and raw responses; protect them
 sensitive data. Legacy <code>--record</code> files retain generation-only replay restrictions.
 See <a href="cli.html#workflow-traces-and-replay">trace/replay</a>.</p>
 <span id="migration" class="anchor-alias" aria-hidden="true"></span><h2 id="breaking-changes-in-03">Breaking changes in 0.3<a class="heading-anchor" href="#breaking-changes-in-03" aria-label="Link to Breaking changes in 0.3">#</a></h2>
+<p><strong>Current command syntax:</strong> replace <code>?{fmt=&#39;integer&#39;} &#39;prompt&#39;</code> with
+<code>ask(fmt=&#39;integer&#39;) &#39;prompt&#39;</code>, <code>think{...}</code> / <code>agent{...}</code> with
+<code>think(...)</code> / <code>agent(...)</code>, <code>log{level=debug}(value)</code> with
+<code>log(level=debug)(value)</code>, and <code>@{model=&#39;...&#39;}</code> with <code>@(model=&#39;...&#39;)</code>.
+Blocks and dictionaries still use braces. See <a href="llm-commands.html#composable-modifiers">command modifiers</a>.</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Breaking changes in 0.3 reference table"><table>
 <thead>
 <tr>
@@ -192,7 +197,7 @@ See <a href="cli.html#workflow-traces-and-replay">trace/replay</a>.</p>
 </tr>
 <tr>
 <td><code>think{level=&#39;high&#39;}</code></td>
-<td><code>?{reasoning=&#39;high&#39;}</code> or <code>think{reasoning=&#39;high&#39;}</code>.</td>
+<td><code>ask(reasoning=&#39;high&#39;)</code> or <code>think(reasoning=&#39;high&#39;)</code>.</td>
 </tr>
 <tr>
 <td><code>let x += 1</code>, <code>let d.key = 2</code></td>
@@ -222,7 +227,7 @@ See <a href="cli.html#workflow-traces-and-replay">trace/replay</a>.</p>
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/tree/HEAD/lang">lang/</a></td>
-<td>The interpreter: <code>src/</code>, <code>tests/</code>, <code>examples/</code> and <code>docs/syntax.ebnf</code>.</td>
+<td>The interpreter: <code>src/</code>, <code>tests/</code> and <code>examples/</code>. The canonical grammar is in <a href="grammar.html">Grammar</a>.</td>
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/tree/HEAD/vscode">vscode/</a></td>

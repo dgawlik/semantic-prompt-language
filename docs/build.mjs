@@ -44,7 +44,7 @@ const legacy = {
     index: { 'why-spl': 'why', 'design-tenets': 'tenets', 'how-a-run-works': 'how-it-works', 'where-to-next': 'explore' },
     'getting-started': { 'install--build': 'install', 'your-first-run': 'first-run', 'write-a-script': 'hello', 'replay-generation-offline': 'record-replay', 'breaking-changes-in-03': 'migration', 'repository-tour': 'repo-tour', 'run-the-tests': 'tests' },
     language: { 'program-structure': 'structure', 'block-and-conditional-expressions': 'block-expressions', 'types--values': 'types', 'strings--interpolation': 'strings', 'quote-styles--escapes': 'quotes', 'if--elif--else': 'if', 'for--while': 'loops', 'built-ins': 'builtins-brief' },
-    'llm-commands': { 'generation-': 'ask', 'composable-modifiers': 'modifiers', 'validated-structured-output': 'schema', 'output-formats': 'fmt-object', 'bounded-repair-not-action-retry': 'repairs', 'think-shorthand': 'think', 'explicit-agents': 'agent', 'scoped-guidance-enforce--forbid': 'constraints', 'exact-raw-tools': 'tools' },
+    'llm-commands': { 'generation-ask': ['ask', 'generation-'], 'composable-modifiers': 'modifiers', 'validated-structured-output': 'schema', 'output-formats': 'fmt-object', 'bounded-repair-not-action-retry': 'repairs', 'think-shorthand': 'think', 'explicit-agents': 'agent', 'scoped-guidance-enforce--forbid': 'constraints', 'exact-raw-tools': 'tools' },
     restrictions: { 'the-four-forms': 'forms', 'two-layers-of-enforcement': 'enforcement', 'matching-rules': 'rules', 'file-system': 'fs', network: 'net', executables: 'exec', 'mcp-servers-and-tools': 'mcp', 'what-is-covered': 'what-is-guarded' },
     failures: { 'failure-payload': 'payload', 'try--except': 'try-except', assertions: 'assert', 'explicit-failure': 'fail', 'successful-termination': 'success', 'bounded-generation-repair': 'retry', 'uncaught-failures-and-cli-errors': 'uncaught' },
     builtins: { 'raw-tools-no-model-round-trip': 'raw-tools', 'types--conversion': 'conversion', 'numbers--sequences': 'numbers', 'dicts--json': 'dict-fns', 'putting-it-together': 'example' },
@@ -84,11 +84,10 @@ const headingId = (value) => value.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, '
 hljs.registerLanguage('spl', (engine) => {
     const language = python(engine);
     language.keywords = {
-        keyword: 'let def if elif else for in while return try except assert fail success enforce forbid restrict think agent break continue pass and or not',
+        keyword: 'let def if elif else for in while return try except assert fail success enforce forbid restrict ask think agent break continue pass and or not',
         literal: 'True False None',
         built_in: 'len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log read_file write_file web_fetch web_search shell',
     };
-    language.contains.unshift({ scope: 'keyword', match: /\?(?=\{|\s|['"])/ });
     language.contains.unshift({ scope: 'variable', match: /\$(?:env|args)\b/ });
     return language;
 });
@@ -154,7 +153,7 @@ function renderPage(page, index) {
             currentEntry = { title: text, page: page.label, href: `${page.slug}.html#${id}`, text: '', group: page.group };
             entries.push(currentEntry);
             const alias = legacy[page.slug]?.[id];
-            const prefix = alias ? `<span id="${alias}" class="anchor-alias" aria-hidden="true"></span>` : '';
+            const prefix = alias ? [].concat(alias).map((id) => `<span id="${id}" class="anchor-alias" aria-hidden="true"></span>`).join('') : '';
             return `${prefix}<h${token.depth} id="${id}">${this.parser.parseInline(token.tokens)}<a class="heading-anchor" href="#${id}" aria-label="Link to ${escape(text)}">#</a></h${token.depth}>\n`;
         },
         paragraph(token) {

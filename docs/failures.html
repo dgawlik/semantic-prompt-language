@@ -6,11 +6,11 @@
 <meta name="description" content="Failures stop execution unless caught. Format, validation, transport, tool, and capability failures have distinct categories so recovery does not accidentally repeat external actions.">
 <meta name="color-scheme" content="light dark">
 <title>Failures &amp; errors - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=061d61fcb352">
-<link rel="stylesheet" href="assets/style.css?v=061d61fcb352">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c4b3b2233122">
+<link rel="stylesheet" href="assets/style.css?v=c4b3b2233122">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=061d61fcb352"></script>
-<script defer src="assets/site.js?v=061d61fcb352"></script>
+<script defer src="assets/search-index.js?v=c4b3b2233122"></script>
+<script defer src="assets/site.js?v=c4b3b2233122"></script>
 </head>
 <body data-page="failures">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -32,7 +32,7 @@
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-1"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">&quot;status&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;failure&quot;</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">&quot;reason&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;lines[2].quantity: must be number&quot;</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">&quot;command&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;let result = ?{schema=Contract} prompt&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;command&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;let result = ask(schema=Contract) prompt&quot;</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">&quot;line&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">12</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">&quot;status_code&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;validation_failed&quot;</span>
 <span class="hljs-punctuation">}</span>
@@ -109,7 +109,7 @@
     <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;label&#x27;</span>],
     <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
-<span class="hljs-keyword">success</span> <span class="hljs-keyword">?</span>{schema=Contract, repairs=<span class="hljs-number">2</span>} <span class="hljs-string">&#x27;Classify: application crashes on startup&#x27;</span>
+<span class="hljs-keyword">success</span> <span class="hljs-keyword">ask</span>(schema=Contract, repairs=<span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Classify: application crashes on startup&#x27;</span>
 </code></pre></figure>
 <p>This permits one initial call plus two corrections. Only invalid JSON and schema mismatches use that budget. Each correction receives the previous answer and validation errors. Prompt/modifier expressions run once, and generation exposes no tools. Transport/model errors are not retried; external assertions are not repaired. Agents reject nonzero repair budgets.</p>
 <p><strong>Do not retry entire side-effecting blocks blindly</strong></p>

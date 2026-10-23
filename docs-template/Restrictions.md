@@ -55,12 +55,12 @@ A blocked call raises a `restriction_violation` failure. It is catchable with `t
 
 restrict net 'news.ycombinator.com' {
     let page = web_fetch('https://news.ycombinator.com')
-    let headlines = ? '''
+    let headlines = ask '''
 From this HTML list the 10 top stories as a Markdown bullet list: "- title (domain)".
 Reply with ONLY the list.
 {page}'''
 
-    let themes = ?{len='paragraph'} 'What themes run through these headlines?\n{headlines}'
+    let themes = ask(len='paragraph') 'What themes run through these headlines?\n{headlines}'
 
     try {
         web_fetch('https://example.org')
@@ -130,7 +130,7 @@ MCP servers are trusted programs or remote services: `restrict mcp` controls whi
 | --- | --- |
 | Raw function calls (`read_file(...)`, `shell(...)`) | yes |
 | Tool calls during explicit `agent` operations | yes |
-| Generation (`?` / `think`) | No tools exposed; permission attempts abort the call. |
+| Generation (`ask` / `think`) | No tools exposed; permission attempts abort the call. |
 | MCP tools from `--mcp` | configuration and MCP scope checked |
 | Any other Copilot permission request | rejected |
 | Plain SPL code (arithmetic, `log`, variables) | nothing to restrict |

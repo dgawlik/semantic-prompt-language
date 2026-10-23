@@ -3,12 +3,12 @@
 
 restrict net 'news.ycombinator.com' {
     let page = web_fetch('https://news.ycombinator.com')
-    let headlines = ? '''
+    let headlines = ask '''
 From this HTML list the 10 top stories as a Markdown bullet list: "- title (domain)".
 Reply with ONLY the list.
 {page}'''
 
-    let themes = ?{len='paragraph'} 'What themes run through these headlines?\n{headlines}'
+    let themes = ask(len='paragraph') 'What themes run through these headlines?\n{headlines}'
 
     try {
         web_fetch('https://example.org')

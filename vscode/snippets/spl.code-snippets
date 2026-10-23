@@ -26,7 +26,7 @@
   },
   "Leveled log": {
     "prefix": "loglevel",
-    "body": ["log{level=${1|debug,info,error|}}(${0:value})"],
+    "body": ["log(level=${1|debug,info,error|})(${0:value})"],
     "description": "Write a script log at the selected severity"
   },
   "While loop": {
@@ -41,17 +41,17 @@
   },
   "LLM call": {
     "prefix": "ask",
-    "body": ["let ${1:answer} = ?{len='${2|word,sentence,paragraph,long|}'} '${0:prompt}'"],
+    "body": ["let ${1:answer} = ask(len='${2|word,sentence,paragraph,long|}') '${0:prompt}'"],
     "description": "LLM call with a length hint"
   },
   "LLM call (object)": {
     "prefix": "askobj",
-    "body": ["let ${1:result} = ?{fmt='object'} '''", "${2:prompt}", "", "Reply as JSON: {{\"${3:key}\": ${4:str}}}'''"],
+    "body": ["let ${1:result} = ask(fmt='object') '''", "${2:prompt}", "", "Reply as JSON: {{\"${3:key}\": ${4:str}}}'''"],
     "description": "LLM call whose JSON response is validated and parsed"
   },
   "Think": {
     "prefix": "think",
-    "body": ["let ${1:answer} = think{reasoning='${2|low,medium,high|}', show=${3|False,True|}} '${0:problem}'"],
+    "body": ["let ${1:answer} = think(", "\treasoning = '${2|low,medium,high|}',", "\tshow = ${3|False,True|},", ") '${0:problem}'"],
     "description": "Generation-only reasoning"
   },
   "Try / except": {
@@ -61,12 +61,12 @@
   },
   "Validated generation": {
     "prefix": ["askschema", "retry"],
-    "body": ["let ${1:result} = ?{schema=${2:Contract}, reasoning='${3|low,medium,high|}', repairs=${4:2}} '${0:prompt}'"],
+    "body": ["let ${1:result} = ask(", "\tschema = ${2:Contract},", "\treasoning = '${3|low,medium,high|}',", "\trepairs = ${4:2},", ") '${0:prompt}'"],
     "description": "Validate JSON and repair generation only, without repeating external actions"
   },
   "Agent": {
     "prefix": "agent",
-    "body": ["let ${1:result} = agent{reasoning='${2|medium,low,high|}'} '${0:task}'"],
+    "body": ["let ${1:result} = agent(reasoning='${2|medium,low,high|}') '${0:task}'"],
     "description": "Explicit model-directed runtime and MCP tool access"
   },
   "Enforce": {
@@ -146,7 +146,7 @@
   },
   "Model directive": {
     "prefix": "model",
-    "body": ["@{model='${0:model-id}'}"],
+    "body": ["@(model='${0:model-id}')"],
     "description": "Select the model (top of the script)"
   }
 }

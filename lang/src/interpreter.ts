@@ -33,7 +33,7 @@ export interface RunOptions {
     store?: VariableStore;
     /** Working directory for relative paths, `restrict` folders and tools. */
     cwd?: string;
-    /** Overrides the `@{model=...}` directive. */
+    /** Overrides the `@(model=...)` directive. */
     model?: string;
     /** Script arguments exposed as read-only `$args`; defaults to an empty list. */
     args?: readonly string[];

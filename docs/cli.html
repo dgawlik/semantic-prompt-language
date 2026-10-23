@@ -6,11 +6,11 @@
 <meta name="description" content="The interpreter runs one script file to completion. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=061d61fcb352">
-<link rel="stylesheet" href="assets/style.css?v=061d61fcb352">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c4b3b2233122">
+<link rel="stylesheet" href="assets/style.css?v=c4b3b2233122">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=061d61fcb352"></script>
-<script defer src="assets/site.js?v=061d61fcb352"></script>
+<script defer src="assets/search-index.js?v=c4b3b2233122"></script>
+<script defer src="assets/site.js?v=c4b3b2233122"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -183,7 +183,7 @@ Neither is evaluated by <code>--check</code>. See <a href="language.html#runtime
 </tr>
 <tr>
 <td><code>info</code> (default)</td>
-<td>Everything above plus warnings, one line per LLM call with its effective parameters and duration, <code>think{show=True}</code> reasoning, <code>log()</code> messages.</td>
+<td>Everything above plus warnings, one line per LLM call with its effective parameters and duration, <code>think(show=True)</code> reasoning, <code>log()</code> messages.</td>
 </tr>
 <tr>
 <td><code>debug</code></td>
@@ -325,7 +325,7 @@ spl script.spl --mcp mcp.json
 <span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">createStore</span>(<span class="hljs-params"></span>) {
   <span class="hljs-keyword">const</span> file = <span class="hljs-string">&#x27;./state.json&#x27;</span>;
   <span class="hljs-keyword">return</span> {
-    <span class="hljs-title function_">load</span>(<span class="hljs-params"></span>) { <span class="hljs-keyword">return</span> fs.<span class="hljs-title function_">existsSync</span>(file) ? <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(fs.<span class="hljs-title function_">readFileSync</span>(file, <span class="hljs-string">&#x27;utf8&#x27;</span>)) : {}; },
+    <span class="hljs-title function_">load</span>(<span class="hljs-params"></span>) { <span class="hljs-keyword">return</span> fs.<span class="hljs-title function_">existsSync</span>(file) ask <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(fs.<span class="hljs-title function_">readFileSync</span>(file, <span class="hljs-string">&#x27;utf8&#x27;</span>)) : {}; },
     <span class="hljs-title function_">save</span>(<span class="hljs-params">vars</span>) { fs.<span class="hljs-title function_">writeFileSync</span>(file, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(vars)); },
   };
 }
@@ -340,12 +340,12 @@ spl script.spl --mcp mcp.json
 </code></pre></figure>
 <p>A script that needs an LLM without credentials fails with <code>llm_error</code> and asks you to run <code>spl login</code>. Scripts that never call an LLM (and <code>--check</code>) need no login.</p>
 <span id="backends" class="anchor-alias" aria-hidden="true"></span><h2 id="backend">Backend<a class="heading-anchor" href="#backend" aria-label="Link to Backend">#</a></h2>
-<p>Each live call opens a fresh session through the GitHub Copilot SDK. Generation (<code>?</code> and <code>think</code>) exposes no tools and aborts unexpected permission requests. Only explicit <code>agent</code> sessions expose runtime and configured MCP tools under active restrictions. Pass context explicitly; previous calls are not implicit conversation history.</p>
+<p>Each live call opens a fresh session through the GitHub Copilot SDK. Generation (<code>ask</code> and <code>think</code>) exposes no tools and aborts unexpected permission requests. Only explicit <code>agent</code> sessions expose runtime and configured MCP tools under active restrictions. Pass context explicitly; previous calls are not implicit conversation history.</p>
 <h2 id="workflow-traces-and-replay">Workflow traces and replay<a class="heading-anchor" href="#workflow-traces-and-replay" aria-label="Link to Workflow traces and replay">#</a></h2>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-11">spl workflow.spl --trace workflow.jsonl
 spl workflow.spl --replay workflow.jsonl --silent
 </code></pre></figure>
-<p><code>--trace</code> creates a new file and never overwrites an existing one. It instruments every backend call from <code>?</code>, <code>think</code>, and <code>agent</code>, including repair attempts and failures that the script catches. Tracing is independent of log level and <code>--silent</code>. <code>--trace</code>, <code>--record</code>, and <code>--replay</code> are mutually exclusive. <code>--check</code> does not create a trace.</p>
+<p><code>--trace</code> creates a new file and never overwrites an existing one. It instruments every backend call from <code>ask</code>, <code>think</code>, and <code>agent</code>, including repair attempts and failures that the script catches. Tracing is independent of log level and <code>--silent</code>. <code>--trace</code>, <code>--record</code>, and <code>--replay</code> are mutually exclusive. <code>--check</code> does not create a trace.</p>
 <p>Replay needs no model credentials and never constructs a Copilot client or starts MCP servers. It supplies the recorded raw response or failure at each LLM call. JSON parsing, schemas, repairs, assertions, and normal control flow run again. Requests must match exactly and in order: call kind, assembled prompt (including schema/guidance), requested model, reasoning effort, and show-reasoning flag. Changed inputs, exhaustion, and unused entries fail explicitly.</p>
 <p><strong>Replay is not a dry run or a snapshot restore.</strong> Explicit script calls to <code>read_file</code>, <code>write_file</code>, <code>shell</code>, <code>web_fetch</code>, and <code>web_search</code> still execute under normal restrictions. Persistent stores also load and save normally, including after script failure. Environment variables, arguments, files, and explicit tool outputs come from the current run. Replay can therefore perform writes and network requests; those inputs must still produce matching LLM requests.</p>
 <p>Agent results are replayed without executing the agent or repeating its runtime tools or MCP calls. Only the completed agent call&#39;s request and result/failure are captured, not the SDK&#39;s internal conversation or individual tool exchanges. Replay does not recreate files or other side effects produced by the original agent; provision required state separately.</p>

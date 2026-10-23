@@ -12,7 +12,7 @@ import { tokenize, type StringPart, type Token } from './lexer.js';
 
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
-    'success', 'enforce', 'forbid', 'restrict', 'think', 'agent', 'break', 'continue', 'pass', 'and', 'or', 'not',
+    'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'break', 'continue', 'pass', 'and', 'or', 'not',
     'True', 'False', 'None',
 ]);
 
@@ -143,10 +143,11 @@ class Parser {
 
     private parseDirective(into: Directives): void {
         this.expectOp('@');
-        const open = this.expectOp('{');
+        if (this.isOp('{')) this.fail("brace directives have been removed; use @(model='...')");
+        const open = this.expectOp('(');
         this.skipNl();
         const seen = new Set<string>();
-        while (!this.isOp('}')) {
+        while (!this.isOp(')')) {
             const nameTok = this.tok;
             if (nameTok.type !== 'name') this.fail('expected directive name');
             const name = (nameTok as { value: string }).value;
@@ -163,8 +164,8 @@ class Parser {
             if (this.isOp(',')) {
                 this.next();
                 this.skipNl();
-            } else if (!this.isOp('}')) {
-                this.fail(`expected ',' or '}' in directive`);
+            } else if (!this.isOp(')')) {
+                this.fail(`expected ',' or ')' in directive`);
             }
         }
         this.next();
@@ -465,9 +466,13 @@ class Parser {
             return { t: 'unary', op, e: this.parseUnary() };
         }
         if (this.isOp('?')) {
+            this.fail("'?' generation syntax has been removed; use ask(...) 'prompt' or ask 'prompt'");
+        }
+        if (this.isName('ask')) {
             this.next();
-            const mods = this.isOp('{') ? this.parseMods('?') : {};
-            return { t: 'ask', mods, prompt: this.parsePrompt('?') };
+            this.rejectBraceMods('ask');
+            const mods = this.isOp('(') ? this.parseMods('ask') : {};
+            return { t: 'ask', mods, prompt: this.parsePrompt('ask') };
         }
         return this.parsePower();
     }
@@ -592,7 +597,7 @@ class Parser {
             return { t: 'dict', entries };
         }
         if (t.value === '?') {
-            return this.fail("'?' is a prefix operator and cannot be used here");
+            return this.fail("'?' generation syntax has been removed; use ask(...) 'prompt'");
         }
         return this.fail(`unexpected ${this.describe(t)}`);
     }
@@ -609,7 +614,11 @@ class Parser {
             case 'None': this.next(); return { t: 'none' };
             case 'if': return this.parseIf();
             case 'log':
-                if (this.isOp('{', this.peekAt(1))) {
+                if (this.isOp('{', this.peekAt(1))) this.fail("brace modifiers have been removed; use log(level=debug)(value)");
+                if (this.isOp('(', this.peekAt(1)) && (
+                    (this.peekAt(2).type === 'name' && this.isOp('=', this.peekAt(3))) ||
+                    (this.isOp(')', this.peekAt(2)) && this.isOp('(', this.peekAt(3)))
+                )) {
                     this.next();
                     const mods = this.parseMods('log');
                     const level = mods.level ?? { t: 'str', parts: ['info'] };
@@ -620,7 +629,8 @@ class Parser {
             case 'think':
             case 'agent': {
                 this.next();
-                const mods = this.isOp('{') ? this.parseMods(t.value) : {};
+                this.rejectBraceMods(t.value);
+                const mods = this.isOp('(') ? this.parseMods(t.value) : {};
                 return { t: t.value, mods, prompt: this.parsePrompt(t.value) };
             }
             default:
@@ -635,14 +645,18 @@ class Parser {
         return this.parsePostfix();
     }
 
-    private parseMods(cmd: '?' | 'think' | 'agent' | 'log'): Record<string, Expr> {
-        this.expectOp('{');
+    private rejectBraceMods(cmd: string): void {
+        if (this.isOp('{')) this.fail(`brace modifiers have been removed; use ${cmd}(...) 'prompt'`);
+    }
+
+    private parseMods(cmd: 'ask' | 'think' | 'agent' | 'log'): Record<string, Expr> {
+        this.expectOp('(');
         this.skipNl();
         const out: Record<string, Expr> = {};
         const allowed: readonly string[] = cmd === 'log' ? LOG_MODIFIER_NAMES : MODIFIER_NAMES;
-        while (!this.isOp('}')) {
+        while (!this.isOp(')')) {
             const nameTok = this.tok;
-            if (nameTok.type !== 'name') this.fail('expected a modifier name');
+            if (nameTok.type !== 'name') this.fail(`expected a modifier name in '${cmd}(...)'; the prompt belongs after ')'`);
             const name = (nameTok as { value: string }).value;
             this.next();
             if (!allowed.includes(name)) {
@@ -659,8 +673,8 @@ class Parser {
             if (this.isOp(',')) {
                 this.next();
                 this.skipNl();
-            } else if (!this.isOp('}')) {
-                this.fail("expected ',' or '}' in modifiers");
+            } else if (!this.isOp(')')) {
+                this.fail("expected ',' or ')' in modifiers");
             }
         }
         this.next();

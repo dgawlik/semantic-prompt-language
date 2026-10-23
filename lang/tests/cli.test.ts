@@ -88,7 +88,7 @@ describe('cli', () => {
     });
 
     it('reports syntax errors on stderr with exit code 2', () => {
-        const r = spl(`let a = ?{unknown='huge'} 'x'`);
+        const r = spl(`let a = ask(unknown='huge') 'x'`);
         expect(r.code).toBe(2);
         expect(r.out).toBe('');
         expect(r.err).toMatch(/s\.spl:1:\d+: syntax error: unknown modifier/);
@@ -100,7 +100,7 @@ describe('cli', () => {
     });
 
     it('validates expression-valued modifiers at runtime without contacting the model', () => {
-        const r = spl(`success ?{len='huge'} 'x'`, '--silent');
+        const r = spl(`success ask(len='huge') 'x'`, '--silent');
         expect(r.code).toBe(1);
         expect(JSON.parse(r.out)).toMatchObject({ status_code: 'runtime_error', reason: expect.stringContaining('len must be') });
     });
@@ -115,8 +115,8 @@ describe('cli', () => {
             }),
             '',
         ].join('\n'));
-        expect(spl(`success ?'question'`, '--replay', file, '--silent')).toEqual({ code: 0, out: 'offline answer\n', err: '' });
-        expect(spl(`success ?'changed'`, '--replay', file, '--silent').code).not.toBe(0);
+        expect(spl(`success ask 'question'`, '--replay', file, '--silent')).toEqual({ code: 0, out: 'offline answer\n', err: '' });
+        expect(spl(`success ask 'changed'`, '--replay', file, '--silent').code).not.toBe(0);
         const empty = path.join(dir, 'empty.jsonl');
         fs.writeFileSync(empty, '{"format":"spl-generation","version":1}\n');
         const inputs = spl(`success [$env.SPL_HOME, $args[0], $args[1]]`, '--arg=current', '--replay', empty, '--silent');

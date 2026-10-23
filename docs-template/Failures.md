@@ -8,7 +8,7 @@ Failures stop execution unless caught. Format, validation, transport, tool, and 
 {
   "status": "failure",
   "reason": "lines[2].quantity: must be number",
-  "command": "let result = ?{schema=Contract} prompt",
+  "command": "let result = ask(schema=Contract) prompt",
   "line": 12,
   "status_code": "validation_failed"
 }
@@ -73,7 +73,7 @@ let Contract = {
     'required': ['label'],
     'additionalProperties': False,
 }
-success ?{schema=Contract, repairs=2} 'Classify: application crashes on startup'
+success ask(schema=Contract, repairs=2) 'Classify: application crashes on startup'
 ```
 
 This permits one initial call plus two corrections. Only invalid JSON and schema mismatches use that budget. Each correction receives the previous answer and validation errors. Prompt/modifier expressions run once, and generation exposes no tools. Transport/model errors are not retried; external assertions are not repaired. Agents reject nonzero repair budgets.

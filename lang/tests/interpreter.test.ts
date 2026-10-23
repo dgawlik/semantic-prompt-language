@@ -494,7 +494,7 @@ try {
     });
 
     it('stops at the first failure and success stops immediately', async () => {
-        const { result } = await exec(`success 1\nlet a = ?'never'`); // NoLlm throws if the second line ever runs
+        const { result } = await exec(`success 1\nlet a = ask 'never'`); // NoLlm throws if the second line ever runs
         expect(value(result)).toBe(1);
         const r = await exec(`fail 'x'\nsuccess 1`);
         expect(r.result.status).toBe('failure');

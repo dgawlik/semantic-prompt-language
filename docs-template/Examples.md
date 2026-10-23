@@ -62,7 +62,7 @@ restrict exec 'git' {
     forbid 'wrapping the message in quotes or code fences' {
         while attempt < 3 {
             attempt += 1
-            let msg = ? '''
+            let msg = ask '''
 Write a Conventional Commit message for this diff: a subject line of at most 72 characters
 ("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
 Reply with ONLY the message.
@@ -117,7 +117,7 @@ let issues = [
 ]
 
 def triage(issue) {
-    let r = ?{schema=Triage, reasoning='low', repairs=2} '''
+    let r = ask(schema=Triage, reasoning='low', repairs=2) '''
 Classify this GitHub issue.
 Title: {issue['title']}
 Body: {issue['body']}
@@ -144,7 +144,7 @@ for t in results {
     }
 }
 
-let summary = ?{len='sentence'} 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
+let summary = ask(len='sentence') 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
 success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}
 ```
 
@@ -192,7 +192,7 @@ let Invoice = {
     'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'total'],
     'additionalProperties': False,
 }
-let invoice = ?{schema=Invoice, reasoning='high', repairs=2} 'Extract this invoice: {document}'
+let invoice = ask(schema=Invoice, reasoning='high', repairs=2) 'Extract this invoice: {document}'
 let computed = 0
 for line in invoice.lines {
     computed += line.quantity * line.unit_price
@@ -213,7 +213,7 @@ spl examples/code-review.spl --cwd <project>
 `code-review.spl`
 
 ```spl
-@{model='gpt-5.6-luna'}
+@(model='gpt-5.6-luna')
 # Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
 #
 # Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd <project>
@@ -224,7 +224,7 @@ let notes = ''
 
 forbid 'suggesting purely stylistic changes' {
     restrict './src', exec 'git' {
-        notes = agent{reasoning='high'} '''
+        notes = agent(reasoning='high') '''
 List source files with `git ls-files src`.
 Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 List each finding with its location, why it matters and a suggested fix.'''
@@ -251,7 +251,7 @@ let Review = {
     'required': ['findings'],
     'additionalProperties': False,
 }
-let review = ?{schema=Review, repairs=2} 'Convert this review into structured findings, using an empty list when there are none: {notes}'
+let review = ask(schema=Review, repairs=2) 'Convert this review into structured findings, using an empty list when there are none: {notes}'
 
 let lines = ["# Review of repository", '']
 let high = 0
@@ -292,7 +292,7 @@ restrict exec 'git' {
     forbid 'inventing changes that are not in the commit list' {
         enforce 'Group entries under: Features, Fixes, Other. Omit empty groups. Plain Markdown, no preamble' {
             let commits = shell('git log --oneline -n 40')
-            notes = ? '''
+            notes = ask '''
 Write release notes for end users from these commits (one per line: hash and subject).
 Rewrite technical subjects into clear user-facing sentences and drop merge/chore noise.
 {commits}'''
@@ -320,12 +320,12 @@ Summarize a web page with network access limited to a single host — and prove 
 
 restrict net 'news.ycombinator.com' {
     let page = web_fetch('https://news.ycombinator.com')
-    let headlines = ? '''
+    let headlines = ask '''
 From this HTML list the 10 top stories as a Markdown bullet list: "- title (domain)".
 Reply with ONLY the list.
 {page}'''
 
-    let themes = ?{len='paragraph'} 'What themes run through these headlines?\n{headlines}'
+    let themes = ask(len='paragraph') 'What themes run through these headlines?\n{headlines}'
 
     try {
         web_fetch('https://example.org')
@@ -350,7 +350,7 @@ spl lang/examples/fix-failing-tests.spl --cwd .
 `fix-failing-tests.spl`
 
 ```spl
-@{model='mai-code-1.1-flash'}
+@(model='mai-code-1.1-flash')
 # Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).
 #
 #   spl examples/fix-failing-tests.spl --cwd <your npm project>
@@ -371,7 +371,7 @@ restrict '.', exec 'npm' {
                 green = True
             } except err {
                 log("tests failing (round {attempt}): {err.status_code}")
-                agent{reasoning='medium'} '''
+                agent(reasoning='medium') '''
 The test run failed with this output:
 {err.reason}
 
@@ -431,7 +431,7 @@ restrict '.' {
     let source = read_file('./examples/data/product-update.md')
     enforce 'Keep Markdown formatting, URLs and code identifiers untranslated' {
         for code, language in items(locales) {
-            let translation = ?{reasoning='medium'} 'Translate this document to {language}: {source}'
+            let translation = ask(reasoning='medium') 'Translate this document to {language}: {source}'
             write_file("./out/translations/product-update.{code}.md", translation)
             written.append("./out/translations/product-update.{code}.md")
         }
@@ -468,7 +468,7 @@ let runs = stored_runs() + 1
 let history = stored_history()
 
 let notes = read_file('./examples/data/notes.txt')
-let todays = ?{len='sentence'} 'Summarize these notes: {notes}'
+let todays = ask(len='sentence') 'Summarize these notes: {notes}'
 history.append({'run': runs, 'summary': todays})
 if len(history) > 5 {
     history = history[1:]
@@ -476,7 +476,7 @@ if len(history) > 5 {
 
 let trend = ''
 if len(history) > 1 {
-    trend = ?{len='paragraph'} '''
+    trend = ask(len='paragraph') '''
 Here are my last journal summaries, oldest first: {history}
 What is changing from run to run? Be concrete.'''
 }
@@ -495,7 +495,7 @@ Compare a computed Fibonacci number with an integer model response, then request
 `basics.spl`
 
 ```spl
-@{model='gpt-6-luna'}
+@(model='gpt-6-luna')
 
 def fib(n) {
     if n < 2 {
@@ -505,16 +505,16 @@ def fib(n) {
 }
 
 let fib10 = fib(10)
-let modelFib10 = ?{fmt='integer'} 'fibonacci of 10 is?'
+let modelFib10 = ask(fmt='integer') 'fibonacci of 10 is?'
 
 assert fib10 == modelFib10 'Oops model got it wrong'
 
-let joke = ?{fmt='object'} 'A joke about programmers as {{"setup": ..., "punchline": ...}}'
+let joke = ask(fmt='object') 'A joke about programmers as {{"setup": ..., "punchline": ...}}'
 
 let animal = None
 enforce 'Answer in Chinese' {
     forbid 'Mentioning the word cat' {
-        animal = ?{len='paragraph'} 'Funny story involving a pet animal'
+        animal = ask(len='paragraph') 'Funny story involving a pet animal'
     }
 }
 
@@ -528,7 +528,7 @@ Use `gpt-5.5` for a structured joke, reasoning and a greeting, then write the de
 `hi.spl`
 
 ```spl
-@{model='gpt-5.5'}
+@(model='gpt-5.5')
 
 def fib(n) {
     if n < 2 { return n }
@@ -536,15 +536,15 @@ def fib(n) {
 }
 
 # an LLM call, validated and parsed as JSON
-let joke = ?{len='sentence', fmt='object'} 'A joke about programmers. Give setup and punchline.'
+let joke = ask(len='sentence', fmt='object') 'A joke about programmers. Give setup and punchline.'
 
 # deliberate before answering
-let why = think{reasoning='high'} 'Why is {joke.setup} funny?'
+let why = think(reasoning='high') 'Why is {joke.setup} funny?'
 
 # Prompt guidance for calls inside the block (not runtime validation).
 let hi = None
 enforce 'Answer in English' {
-    forbid 'profanity' { let hi = ?'Say hi' }
+    forbid 'profanity' { let hi = ask 'Say hi' }
 }
 
 # Raw I/O does not call the model.
@@ -558,8 +558,8 @@ success {'joke': joke, 'why': why, 'hi': hi}
 
 ### Live tours
 
-* `live.spl` — a quick smoke test of `?` with `len`/`fmt`, `think`, `enforce`/`forbid` and `assert` against the real model.
+* `live.spl` — a quick smoke test of `ask` with `len`/`fmt`, `think`, `enforce`/`forbid` and `assert` against the real model.
 
-* `tools-live.spl` — `read_file`, `write_file` and `think{show=True}` inside `restrict './sandbox'`. Run it after `mkdir sandbox; echo hello world > sandbox/note.txt`.
+* `tools-live.spl` — `read_file`, `write_file` and `think(show=True)` inside `restrict './sandbox'`. Run it after `mkdir sandbox; echo hello world > sandbox/note.txt`.
 
 * `restrict-live.spl` — asks the model to read `secret.txt` outside the sandbox and shows the runtime blocking it, returning a `restriction_violation` payload.

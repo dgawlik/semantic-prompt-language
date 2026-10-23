@@ -1,4 +1,4 @@
-@{model='mai-code-1.1-flash'}
+@(model='mai-code-1.1-flash')
 # Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).
 #
 #   spl examples/fix-failing-tests.spl --cwd <your npm project>
@@ -19,7 +19,7 @@ restrict '.', exec 'npm' {
                 green = True
             } except err {
                 log("tests failing (round {attempt}): {err.status_code}")
-                agent{reasoning='medium'} '''
+                agent(reasoning='medium') '''
 The test run failed with this output:
 {err.reason}
 

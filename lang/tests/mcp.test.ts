@@ -119,14 +119,14 @@ it('combined restrictions apply together, intersect, and restore after a caught 
 restrict '.', net 'example.com', exec 'git', mcp 'docs' {
     try {
         restrict mcp 'docs/search', exec 'node' {
-            let x = ?'inner'
+            let x = ask 'inner'
             fail 'caught'
         }
     } except err {
-        let x = ?'restored'
+        let x = ask 'restored'
     }
 }
-let x = ?'outside'
+let x = ask 'outside'
 success x`), {
         cwd, logger: new Logger('silent'),
         backend: {
@@ -150,7 +150,7 @@ it('restores scopes when a later clause fails to evaluate', async () => {
 try {
     restrict mcp 'docs/search', exec 42 { fail 'unreachable' }
 } except err {
-    success ?'after invalid clause'
+    success ask 'after invalid clause'
 }`), {
         cwd, logger: new Logger('silent'),
         backend: {

@@ -12,13 +12,13 @@ is a working solution in minutes rather than hours of glue code.
 
 ```spl
 let report = 'Checkout fails for every customer after deployment.'
-let severity = ?{fmt='integer', repairs=1} 'Rate the impact from 1 to 5: {report}'
+let severity = ask(fmt='integer', repairs=1) 'Rate the impact from 1 to 5: {report}'
 assert severity >= 1 and severity <= 5 'severity must be between 1 and 5'
 let route = if severity >= 4 { 'urgent-review' } else { 'normal-review' }
 success {'severity': severity, 'route': route}
 ```
 
-The `?` is the only model call. `fmt` checks its output type; `assert` rejects an
+The `ask` is the only model call. `fmt` checks its output type; `assert` rejects an
 out-of-range answer before ordinary code routes it. A reviewer can see the input,
 the variable part, the guard, and the result without tracing through callbacks.
 These checks constrain the answer; they do not prove the severity assessment is correct.
@@ -30,7 +30,7 @@ These checks constrain the answer; they do not prove the severity assessment is 
    prompt or guard. Trace/replay lets you retest deterministic logic and checks
    against the same LLM results when requests stay unchanged.
 2. **Separate deterministic logic from LLM judgment.** Control flow, arithmetic,
-   interpolation, and variables never call a model. `?` and `think` generate values
+   interpolation, and variables never call a model. `ask` and `think` generate values
    without tools; `agent` explicitly enables model-directed actions. Validate
    outputs with `fmt`, `schema`, and `assert`; bound repairs and restrict actions
    instead of relying on prompt wording.

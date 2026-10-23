@@ -78,7 +78,7 @@ Logs, `log()` output, syntax errors, and for every LLM call the effective model 
 | Level | Shows |
 | --- | --- |
 | `error` | Errors (for example a variable store that could not be saved), the full assembled prompt and raw response of every LLM call, and deterministic statement traces. |
-| `info` (default) | Everything above plus warnings, one line per LLM call with its effective parameters and duration, `think{show=True}` reasoning, `log()` messages. |
+| `info` (default) | Everything above plus warnings, one line per LLM call with its effective parameters and duration, `think(show=True)` reasoning, `log()` messages. |
 | `debug` | Everything above plus tool invocations, caught failures and active restrictions. |
 
 LLM requests and responses use the `[llm]` tag at every non-silent level. They may contain sensitive data; use `--silent` to suppress all logs.
@@ -208,7 +208,7 @@ import fs from 'node:fs';
 export function createStore() {
   const file = './state.json';
   return {
-    load() { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}; },
+    load() { return fs.existsSync(file) ask JSON.parse(fs.readFileSync(file, 'utf8')) : {}; },
     save(vars) { fs.writeFileSync(file, JSON.stringify(vars)); },
   };
 }
@@ -232,7 +232,7 @@ A script that needs an LLM without credentials fails with `llm_error` and asks y
 
 ## Backend
 
-Each live call opens a fresh session through the GitHub Copilot SDK. Generation (`?` and `think`) exposes no tools and aborts unexpected permission requests. Only explicit `agent` sessions expose runtime and configured MCP tools under active restrictions. Pass context explicitly; previous calls are not implicit conversation history.
+Each live call opens a fresh session through the GitHub Copilot SDK. Generation (`ask` and `think`) exposes no tools and aborts unexpected permission requests. Only explicit `agent` sessions expose runtime and configured MCP tools under active restrictions. Pass context explicitly; previous calls are not implicit conversation history.
 
 ## Workflow traces and replay
 
@@ -241,7 +241,7 @@ spl workflow.spl --trace workflow.jsonl
 spl workflow.spl --replay workflow.jsonl --silent
 ```
 
-`--trace` creates a new file and never overwrites an existing one. It instruments every backend call from `?`, `think`, and `agent`, including repair attempts and failures that the script catches. Tracing is independent of log level and `--silent`. `--trace`, `--record`, and `--replay` are mutually exclusive. `--check` does not create a trace.
+`--trace` creates a new file and never overwrites an existing one. It instruments every backend call from `ask`, `think`, and `agent`, including repair attempts and failures that the script catches. Tracing is independent of log level and `--silent`. `--trace`, `--record`, and `--replay` are mutually exclusive. `--check` does not create a trace.
 
 Replay needs no model credentials and never constructs a Copilot client or starts MCP servers. It supplies the recorded raw response or failure at each LLM call. JSON parsing, schemas, repairs, assertions, and normal control flow run again. Requests must match exactly and in order: call kind, assembled prompt (including schema/guidance), requested model, reasoning effort, and show-reasoning flag. Changed inputs, exhaustion, and unused entries fail explicitly.
 

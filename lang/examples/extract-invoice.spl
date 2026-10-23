@@ -35,7 +35,7 @@ let Invoice = {
     'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'total'],
     'additionalProperties': False,
 }
-let invoice = ?{schema=Invoice, reasoning='high', repairs=2} 'Extract this invoice: {document}'
+let invoice = ask(schema=Invoice, reasoning='high', repairs=2) 'Extract this invoice: {document}'
 let computed = 0
 for line in invoice.lines {
     computed += line.quantity * line.unit_price

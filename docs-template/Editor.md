@@ -6,11 +6,16 @@ Syntax highlighting, snippets and editing support for `.spl` scripts. The extens
 
 ### Highlighting
 
-Keywords, `let`/`def` declarations, numbers, comments, the `@{model=…}` directive and strings with `{expr}` interpolation.
+Keywords, `let`/`def` declarations, numbers, comments, the `@(model=…)` directive and strings with `{expr}` interpolation.
 
 ### Generation & agents
 
-`?`, `think`, explicit `agent`, and shared modifiers: `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`. Raw tools use ordinary calls.
+`ask`, `think`, explicit `agent`, and shared modifiers: `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`. Raw tools use ordinary calls.
+
+Command modifiers use parentheses, including multiline groups such as
+`ask(fmt='integer', repairs=1) 'prompt'`. Completions work inside unfinished
+modifier groups. Logging uses `log(level=debug)(value)` and model headers use
+`@(model='...')`.
 
 ### Runtime inputs
 
@@ -78,4 +83,5 @@ npm test
 
 **Keep the grammar in sync**
 
-When the language changes, update `syntaxes/spl.tmLanguage.json` together with `lang/docs/syntax.ebnf`.
+When the language changes, update `syntaxes/spl.tmLanguage.json` together with the
+canonical [Markdown grammar](Grammar.md).

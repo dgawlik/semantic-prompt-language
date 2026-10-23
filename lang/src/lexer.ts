@@ -28,6 +28,8 @@ export interface LexOptions {
     inExpr?: boolean;
     line?: number;
     col?: number;
+    /** Editor analysis may tokenize a document while a group is still being typed. */
+    allowUnclosedBrackets?: boolean;
 }
 
 export function tokenize(src: string, opts: LexOptions = {}): Token[] {
@@ -125,7 +127,7 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
         tokens.push({ type: 'op', value: op!, line: startLine, col: startCol });
     }
 
-    if (brackets.length) err(`unclosed '${brackets[brackets.length - 1]}'`);
+    if (brackets.length && !opts.allowUnclosedBrackets) err(`unclosed '${brackets[brackets.length - 1]}'`);
     tokens.push({ type: 'eof', line, col });
     return tokens;
 

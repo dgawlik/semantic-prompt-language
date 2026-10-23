@@ -42,7 +42,7 @@ describe('workflow trace/replay', () => {
     it('captures common structured inputs and complete responses for every LLM operation', async () => {
         const backend = scripted('answer', 'thought', 'agent result');
         const trace = new TraceBackend(backend, file);
-        const source = `success [?{model='chosen', reasoning='high', show=True} 'Ask', think 'Think', agent 'Act']`;
+        const source = `success [ask(model='chosen', reasoning='high', show=True) 'Ask', think 'Think', agent 'Act']`;
         const expected = await exec(source, trace);
         await trace.close();
         expect(expected).toMatchObject({ status: 'success', value: ['answer', 'thought', 'agent result'] });
@@ -90,7 +90,7 @@ describe('workflow trace/replay', () => {
 
     it('records every repair attempt and revalidates raw responses on replay', async () => {
         const backend = scripted('not JSON', '3');
-        const source = `success ?{fmt='integer', repairs=1} 'Count'`;
+        const source = `success ask(fmt='integer', repairs=1) 'Count'`;
         const trace = new TraceBackend(backend, file);
         expect(await exec(source, trace)).toMatchObject({ status: 'success', value: 3 });
         await trace.close();
@@ -101,7 +101,7 @@ describe('workflow trace/replay', () => {
         await replay.close();
     });
 
-    it.each(['?', 'think', 'agent'])('records and replays failures from %s', async (command) => {
+    it.each(['ask', 'think', 'agent'])('records and replays failures from %s', async (command) => {
         const backend = scripted(new LlmError('transport failed'));
         const trace = new TraceBackend(backend, file);
         const source = `success ${command} 'Fail'`;
@@ -121,7 +121,7 @@ try { agent 'Act' } except err {
     assert err.status_code == 'restriction_violation'
     assert err.reason == 'denied agent action'
 }
-success ? 'Recover'
+success ask 'Recover'
 `;
         const trace = new TraceBackend(backend, file);
         const expected = await exec(source, trace);
@@ -137,7 +137,7 @@ success ? 'Recover'
         const backend = scripted('answer');
         const source = `
 let input = web_fetch('https://example.com')
-let output = ? 'Process {input}'
+let output = ask 'Process {input}'
 write_file('output.txt', output)
 success [read_file('output.txt'), shell('echo traced')]
 `;
@@ -157,7 +157,7 @@ success [read_file('output.txt'), shell('echo traced')]
 
     it('loads and saves persistent variables during trace replay, including after failure', async () => {
         const backend = scripted('answer');
-        const source = `let output = ? 'Question'\nfail output`;
+        const source = `let output = ask 'Question'\nfail output`;
         const trace = new TraceBackend(backend, file);
         await exec(source, trace);
         await trace.close();
@@ -174,7 +174,7 @@ success [read_file('output.txt'), shell('echo traced')]
     it('matches all input fields in order and reports exhaustion and unused entries', async () => {
         const backend = scripted('one', 'two');
         const trace = new TraceBackend(backend, file);
-        await exec(`let first = ? 'First'\nsuccess ? 'Second'`, trace);
+        await exec(`let first = ask 'First'\nsuccess ask 'Second'`, trace);
         await trace.close();
         const replay = new ReplayBackend(file);
         const original = backend.call.mock.calls[0][0];
@@ -200,7 +200,7 @@ success [read_file('output.txt'), shell('echo traced')]
         const trace = new TraceBackend(backend, file);
         fs.unlinkSync(file);
         fs.mkdirSync(file);
-        expect(await exec(`success ? 'Question'`, trace)).toMatchObject({
+        expect(await exec(`success ask 'Question'`, trace)).toMatchObject({
             status: 'failure', failure: { status_code: 'llm_error', reason: expect.stringContaining('could not save trace') },
         });
         await trace.close();
