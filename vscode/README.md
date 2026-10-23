@@ -74,4 +74,7 @@ npm test
   strings/blocks that are left open at the end of a file.
 
 Keep `syntaxes/spl.tmLanguage.json` in sync with the
-[canonical Markdown grammar](../docs-template/Grammar.md) when the language changes.
+[canonical Markdown grammar](https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Grammar.md) when the language changes.
+
+Use absolute URLs for README links outside the extension folder so they resolve
+correctly in the packaged extension and Marketplace.

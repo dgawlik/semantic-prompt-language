@@ -2,9 +2,14 @@
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
   "description": "Language server, syntax highlighting and snippets for Semantic Prompt Language (.spl) scripts",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "publisher": "spl-lang",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dgawlik/semantic-prompt-language.git",
+    "directory": "vscode"
+  },
   "private": true,
   "engines": {
     "vscode": "^1.82.0"
@@ -56,7 +61,7 @@
     "typecheck": "tsc --noEmit",
     "vscode:prepublish": "npm run typecheck && npm run build",
     "test": "npm run typecheck && node build.mjs --test && node --test out/test/language-server.test.cjs && node test/run-assertions.mjs && node test/check-examples.mjs",
-    "package": "vsce package --allow-missing-repository --skip-license"
+    "package": "vsce package --skip-license"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
