@@ -12,7 +12,7 @@ import { tokenize, type StringPart, type Token } from './lexer.js';
 
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
-    'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'break', 'continue', 'pass', 'and', 'or', 'not',
+    'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass', 'and', 'or', 'not',
     'True', 'False', 'None',
 ]);
 
@@ -27,6 +27,15 @@ export function parse(source: string): Program {
     const lines = source.split(/\r?\n/);
     const parser = new Parser(tokenize(source), lines);
     return parser.parseProgram();
+}
+
+export function usesHuman(program: Program): boolean {
+    const visit = (value: unknown): boolean => {
+        if (Array.isArray(value)) return value.some(visit);
+        if (typeof value !== 'object' || value === null) return false;
+        return ('t' in value && value.t === 'human') || Object.values(value).some(visit);
+    };
+    return visit(program.body);
 }
 
 class Parser {
@@ -474,6 +483,7 @@ class Parser {
             const mods = this.isOp('(') ? this.parseMods('ask') : {};
             return { t: 'ask', mods, prompt: this.parsePrompt('ask') };
         }
+        if (this.isName('human')) return this.parseHuman();
         return this.parsePower();
     }
 
@@ -612,6 +622,7 @@ class Parser {
             case 'True': this.next(); return { t: 'bool', v: true };
             case 'False': this.next(); return { t: 'bool', v: false };
             case 'None': this.next(); return { t: 'none' };
+            case 'human': return this.parseHuman();
             case 'if': return this.parseIf();
             case 'log':
                 if (this.isOp('{', this.peekAt(1))) this.fail("brace modifiers have been removed; use log(level=debug)(value)");
@@ -638,6 +649,14 @@ class Parser {
                 this.next();
                 return { t: 'name', name: t.value, line: t.line };
         }
+    }
+
+    private parseHuman(): Expr {
+        const token = this.next();
+        if (this.isOp('(') && this.peekAt(1).type === 'name' && this.isOp('=', this.peekAt(2))) {
+            this.fail("human does not accept modifiers; use human 'question'");
+        }
+        return { t: 'human', prompt: this.parsePrompt('human'), line: token.line };
     }
 
     private parsePrompt(cmd: string): Expr {

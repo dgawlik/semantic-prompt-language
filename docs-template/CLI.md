@@ -1,6 +1,6 @@
 # CLI & runtime
 
-The interpreter runs one script file to completion. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.
+The interpreter runs one script file to completion or a human-input boundary. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.
 
 ## Usage
 
@@ -10,6 +10,8 @@ spl <script.spl> [--log-level error|info|debug] [--silent] [--model <id>]
                  [--timeout <s>] [--cwd <dir>] [--mcp <file.json>] [--check]
                  [--trace <file.jsonl> | --record <file.jsonl> | --replay <file.jsonl>]
                  [--arg <value> ...]
+spl <script.spl> --checkpoint <run.jsonl> [--silent]
+spl <script.spl> --resume <run.jsonl> [--answer-for <id> --answer <text> | --answer-for <id> --answer-file <file>]
 spl login
 spl logout
 ```
@@ -31,6 +33,11 @@ From a checkout use `node dist/cli.js` or `npx file:./lang`. The package install
 | `--trace <file.jsonl>` | none | Create a new workflow trace of all LLM requests, responses, and failures, including agents. Works with `--silent`. |
 | `--record <file.jsonl>` | none | Create a new generation recording. Rejects existing files and agent calls. |
 | `--replay <file.jsonl>` | none | Replay recorded LLM/agent results without Copilot or MCP. Explicit script tools and stores run normally for workflow traces; legacy generation recordings retain their restrictions. Mutually exclusive with `--trace` and `--record`. |
+| `--checkpoint <file>` | none | Create a new resumable-run journal; never overwrite an existing file. |
+| `--resume <file>` | none | Inspect pending human input, or continue with a matching answer. |
+| `--answer-for <id>` | none | Exact pending request ID; required with either answer flag. |
+| `--answer <text>` | none | Exact free-text answer, including `--answer=` for an empty string. Requires `--resume`. |
+| `--answer-file <file>` | none | UTF-8 answer file; preserves whitespace. Mutually exclusive with `--answer`. |
 | `--cwd <dir>` | current dir | Base directory for relative paths, `restrict` checks, and the working directory of tools and the model. |
 | `--check` | off | Parse the script and validate any `--mcp` config without starting servers or making LLM calls. |
 | `-v`, `--version` | — | Print the version. |
@@ -62,6 +69,9 @@ Neither is evaluated by `--check`. See [runtime inputs](Language.md#runtime-inpu
 
 The value of `success` or of a top-level `return`: strings raw, everything else as pretty-printed JSON. On an uncaught failure: the failure payload.
 
+Resumable runs instead emit a single [JSON protocol envelope](#resumable-human-input),
+including when `--silent` is enabled.
+
 ### stderr
 
 Logs, `log()` output, syntax errors, and for every LLM call the effective model and reasoning effort.
@@ -71,7 +81,8 @@ Logs, `log()` output, syntax errors, and for every LLM call the effective model 
 | `0` | Success. |
 | `1` | Uncaught script failure. |
 | `2` | Syntax or usage error. |
-| `70` | Internal error in the interpreter. |
+| `3` | Waiting for human input in a resumable run; not a script failure. |
+| `70` | Internal or checkpoint persistence/infrastructure error. |
 
 ## Logging
 
@@ -233,6 +244,22 @@ A script that needs an LLM without credentials fails with `llm_error` and asks y
 ## Backend
 
 Each live call opens a fresh session through the GitHub Copilot SDK. Generation (`ask` and `think`) exposes no tools and aborts unexpected permission requests. Only explicit `agent` sessions expose runtime and configured MCP tools under active restrictions. Pass context explicitly; previous calls are not implicit conversation history.
+
+## Resumable human input
+
+`human 'question'` emits JSON and exits `3`, without reading stdin or keeping a
+process waiting. Start with `--checkpoint`, inspect with `--resume`, and provide
+one answer bound to the pending request ID:
+
+```bash
+spl examples/human-review.spl --checkpoint run.jsonl --silent
+spl examples/human-review.spl --resume run.jsonl --silent
+spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+```
+
+See [Human in the loop](HITL.md) for the full protocol, no-repeat guarantees,
+same-workspace limits, sensitive-state handling, and GitHub Actions integration.
+Resumable mode cannot combine with stores or trace/record/replay.
 
 ## Workflow traces and replay
 

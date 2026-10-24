@@ -19,7 +19,7 @@ type Outcome =
     | { response: LlmResponse }
     | { error: { status_code: StatusCode; reason: string } };
 
-function traceRequest(req: LlmRequest | TraceRequest): TraceRequest {
+export function traceRequest(req: LlmRequest | TraceRequest): TraceRequest {
     return {
         kind: req.kind, prompt: req.prompt, model: req.model ?? null,
         reasoningEffort: req.reasoningEffort ?? null, showReasoning: req.showReasoning,
@@ -34,7 +34,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isResponse(value: unknown): value is LlmResponse {
+export function isResponse(value: unknown): value is LlmResponse {
     return isRecord(value) && typeof value.text === 'string' && isRecord(value.effective)
         && (value.reasoning === undefined || typeof value.reasoning === 'string');
 }
@@ -46,7 +46,7 @@ function isTraceRequest(value: unknown): value is TraceRequest {
         && typeof value.showReasoning === 'boolean';
 }
 
-function isTraceError(value: unknown): value is Extract<Outcome, { error: unknown }>['error'] {
+export function isTraceError(value: unknown): value is Extract<Outcome, { error: unknown }>['error'] {
     const codes: readonly StatusCode[] = [
         'assertion_failed', 'explicit_failure', 'invalid_format', 'validation_failed',
         'restriction_violation', 'llm_error', 'tool_error', 'runtime_error',

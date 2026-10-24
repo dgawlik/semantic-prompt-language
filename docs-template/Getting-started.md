@@ -152,9 +152,15 @@ Every non-raw string interpolates `{expr}`. For literal braces, double them
 | `0` | The script finished: it reached `success`, a top-level `return` or the end. |
 | `1` | Uncaught failure; the failure payload is printed to stdout. |
 | `2` | Syntax error or command-line usage error. |
+| `3` | A checkpoint run is waiting for noninteractive human input. |
 | `70` | Internal interpreter error. |
 
 ## Replay generation offline
+
+For human review, use a [resumable run](HITL.md) instead of
+ordinary replay: `human 'question'` emits JSON and exits `3`, then a later
+`--resume ... --answer-for ... --answer ...` invocation continues without repeating
+completed tools or model calls.
 
 ```sh
 npx spl-lang user.spl --trace user.jsonl

@@ -80,6 +80,7 @@ These checks constrain the answer; they do not prove the severity assessment is 
 * [CLI & runtime](CLI.md) - options, authentication, persistence and trace/replay.
 * [Grammar](Grammar.md) - the complete EBNF reference.
 * [Examples](Examples.md) - working scripts for extraction, triage, agents and CI gates.
+* [Human in the loop](HITL.md) - noninteractive questions, durable pause/resume and CI integration.
 * [VS Code extension](Editor.md) - installation, highlighting and snippets.
 * [Architecture](Internals.md) - execution boundaries, embedding and extension points.
 

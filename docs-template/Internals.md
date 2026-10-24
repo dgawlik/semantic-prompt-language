@@ -23,6 +23,7 @@ The lexer produces positioned tokens and string interpolation parts. The recursi
 | `schema.ts` | Strict synchronous draft-07 schema compilation and field-path validation errors. |
 | `copilot.ts` | Fresh SDK sessions, model/effort checks, agent-only tool exposure, permission enforcement. |
 | `recording.ts` | Versioned workflow traces, legacy generation recordings, and exact sequential replay. |
+| `checkpoint.ts` | Single-writer resumable effect journals, human-input requests, answer identity and durable pause/resume boundaries. |
 | `tools.ts / restrict.ts` | File, network, search, shell, path canonicalization, allowlists, and intersecting restrictions. |
 | `mcp.ts / auth.ts` | MCP configuration/filtering and Copilot device authentication. |
 | `cli.ts / store.ts / logger.ts / errors.ts` | CLI lifecycle, opt-in variable persistence, logs, failures and termination. |
@@ -65,13 +66,16 @@ try {
     backend, logger, cwd: process.cwd(),
   });
   if (result.status === 'success') console.log(result.value);
-  else console.error(result.failure);
+  else if (result.status === 'failure') console.error(result.failure);
 } finally {
   await backend.close();
 }
 ```
 
-`run` returns success with `value` and `hasValue`, or failure with its payload. Options include backend, logger, cwd, optional store, model override, `args?: readonly string[]`, and maximum call depth. For example, `run(parse('success $args[0]'), { backend, logger, args: ['first'] })` returns `'first'`. Omitted `args` defaults to an empty list, not `process.argv`.
+`run` returns success with `value` and `hasValue`, failure with its payload, or
+`waiting_for_input` with a human `request` when given a `Checkpoint`. Options include
+backend, logger, cwd, optional store, model override, `args?: readonly string[]`,
+checkpoint, and maximum call depth. For example, `run(parse('success $args[0]'), { backend, logger, args: ['first'] })` returns `'first'`. Omitted `args` defaults to an empty list, not `process.argv`.
 
 Each run copies arguments and the current `process.env` into read-only `$args` and `$env` snapshots. Special-variable expressions bypass lexical bindings and stores. Missing environment keys and out-of-range argument indexes return `None`; ordinary collections keep their existing errors. Assignment and mutating-method checks preserve read-only behavior through aliases. The snapshots are not automatically persisted, but a script can explicitly bind their values or aliases to saved top-level variables.
 
@@ -88,6 +92,28 @@ The backend's `mode` identifies execution capabilities: `trace` records all LLM 
 `new RecordingBackend(backend, file)` retains the legacy generation-only `record` mode. `ReplayBackend` selects `replay` for `spl-generation` files and `workflow-replay` for `spl-trace` files. Legacy `replay` rejects agents, stores, and all raw tools except local reads, preserving existing behavior.
 
 ## Extension points
+
+### Embedding resumable runs
+
+Create `Checkpoint.create(file, { source, runtime, cwd, args, configuration })` or
+open a waiting run with `Checkpoint.resume(file, context)`. `runtime` must identify
+the interpreter build and Node version; `configuration` fingerprints the effective
+model/MCP configuration. Use the same context when resuming. Original arguments are
+restored; observed environment fingerprints must match.
+
+Inspect `checkpoint.request` without executing the script, or call
+`checkpoint.answer(requestId, text)` to persist a matching answer. Pass `checkpoint`
+to `run`; do not supply a variable store or recording/replay backend. Always close
+the backend. For a nonwaiting result, call `checkpoint.finish(result.status)` only
+after successful cleanup, and always call `checkpoint.close()` to release the
+single-writer lock before publishing the result.
+
+The interpreter journals raw tools and backend calls, reconstructs ordinary
+computation from the beginning, and raises a noncatchable suspension signal at
+unanswered human expressions. `CheckpointError` bypasses script failure handlers.
+It must not be converted into a catchable backend/tool error or silently retried.
+Use a lazy backend so historical-prefix replay and pending inspection do not start
+external services. See [guarantees and limits](HITL.md#resume-guarantees-and-limits).
 
 ### Custom backend
 

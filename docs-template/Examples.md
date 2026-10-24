@@ -12,6 +12,7 @@ Authenticate before live generation or agents. Use `--model <id>` to override an
 
 | Script | Shows |
 | --- | --- |
+| [`human-review.spl`](#human-review) | Noninteractive question, checkpoint and resume without repeating the draft write |
 | [`commit-message.spl`](#commit-message) | `shell` under `restrict exec 'git'`, validation helper, retry loop |
 | [`mcp.spl`](#search-with-mcp) | Explicit agent using a configured docs/search MCP tool |
 | [`triage-issues.spl`](#triage-issues) | Schema-validated classification, bounded generation repair, aggregation |
@@ -23,6 +24,39 @@ Authenticate before live generation or agents. Use `--model <id>` to override an
 | [`translate-docs.spl`](#translate-docs) | Read once, generate translations, write exact output to script-chosen paths |
 | [`journal.spl`](#journal-with-persistent-state) | State across runs with `--store` |
 | [`basics`, `hi`, `live`, `restrict-live`, `tools-live`](#feature-tours) | Small feature tours |
+
+## Human review
+
+This example needs no model authentication. It writes a draft once, emits a question,
+and exits `3`. Save its JSON request ID and submit feedback in a later invocation in
+the same workspace. Earlier tool results are replayed without rewriting the draft.
+See [Human in the loop](HITL.md) for the protocol and CI integration.
+
+```bash
+spl examples/human-review.spl --checkpoint run.jsonl --silent
+spl examples/human-review.spl --resume run.jsonl --silent
+spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+```
+
+`human-review.spl`
+
+```spl
+# Write a draft once, then exit with a question instead of reading terminal input.
+# Start with --checkpoint run.jsonl; resume with --answer-for and --answer-file.
+
+let draft = 'Release 1.0: faster search and clearer error messages.'
+restrict './out' {
+    write_file('./out/review-draft.txt', draft)
+}
+
+let feedback = human 'Review this draft and provide feedback:\n{draft}'
+assert len(feedback.strip()) > 0 'feedback must not be blank'
+
+restrict './out' {
+    write_file('./out/review-feedback.txt', feedback)
+}
+success {'draft': draft, 'feedback': feedback}
+```
 
 ## Commit message
 

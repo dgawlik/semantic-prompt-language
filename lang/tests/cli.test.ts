@@ -29,6 +29,93 @@ function run(args: string[]) {
     return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
+describe('noninteractive checkpoint CLI', () => {
+    it('pauses, inspects without changing state, binds answers and completes without model authentication', () => {
+        const state = path.join(dir, 'run.jsonl');
+        const script = `write_file('output.txt', 'original')\nlet a = human 'First question'\nlet b = human 'Second question'\nsuccess [a, b, $args]`;
+        const first = spl(script, '--checkpoint', state, '--arg=initial', '--silent');
+        expect(first.code).toBe(3);
+        expect(first.err).toBe('');
+        const pending = JSON.parse(first.out);
+        expect(pending).toMatchObject({ status: 'waiting_for_input', question: 'First question', line: 2, checkpoint: state });
+        const before = fs.readFileSync(state, 'utf8');
+        expect(spl(script, '--resume', state, '--silent')).toEqual(first);
+        expect(fs.readFileSync(state, 'utf8')).toBe(before);
+        fs.writeFileSync(path.join(dir, 'output.txt'), 'not overwritten');
+        const stale = spl(script, '--resume', state, '--answer-for', 'wrong', '--answer=yes', '--silent');
+        expect(stale.code).toBe(2);
+        expect(stale.out).toBe('');
+        expect(fs.readFileSync(state, 'utf8')).toBe(before);
+        const second = spl(script, '--resume', state, '--answer-for', pending.request_id, '--answer=', '--silent');
+        expect(second.code).toBe(3);
+        const next = JSON.parse(second.out);
+        expect(next.request_id).not.toBe(pending.request_id);
+        expect(next.question).toBe('Second question');
+        expect(spl(script, '--resume', state, '--answer-for', pending.request_id, '--answer=yes').code).toBe(2);
+        const answer = '  "quoted"\nmultiline\n';
+        const answerFile = path.join(dir, 'answer.txt');
+        fs.writeFileSync(answerFile, answer);
+        const done = spl(script, '--resume', state, '--answer-for', next.request_id, '--answer-file', answerFile, '--silent');
+        expect(done.code).toBe(0);
+        expect(JSON.parse(done.out)).toEqual({
+            status: 'success', run_id: pending.run_id, has_value: true, value: ['', answer, ['initial']],
+        });
+        expect(fs.readFileSync(path.join(dir, 'output.txt'), 'utf8')).toBe('not overwritten');
+        expect(spl(script, '--resume', state, '--silent').code).toBe(2);
+        expect(fs.existsSync(`${state}.lock`)).toBe(false);
+    });
+
+    it('preflights human expressions but accepts --check without creating a checkpoint', () => {
+        const state = path.join(dir, 'check.jsonl');
+        const script = `write_file('bad.txt', 'x')\nif False { human 'later' }\nsuccess 1`;
+        expect(spl(script, '--silent').code).toBe(2);
+        expect(fs.existsSync(path.join(dir, 'bad.txt'))).toBe(false);
+        expect(spl(script, '--check', '--checkpoint', state)).toEqual({ code: 0, out: '', err: '' });
+        expect(fs.existsSync(state)).toBe(false);
+        expect(fs.existsSync(`${state}.lock`)).toBe(false);
+    });
+
+    it('returns terminal JSON failure/no-value envelopes and never treats waiting as failure', () => {
+        const state = path.join(dir, 'failure.jsonl');
+        const result = spl(`fail 'rejected'`, '--checkpoint', state, '--silent');
+        expect(result.code).toBe(1);
+        expect(JSON.parse(result.out)).toMatchObject({ status: 'failure', failure: { status_code: 'explicit_failure', reason: 'rejected' } });
+        const empty = spl(`pass`, '--checkpoint', path.join(dir, 'empty.jsonl'), '--silent');
+        expect(empty.code).toBe(0);
+        expect(JSON.parse(empty.out)).toMatchObject({ status: 'success', has_value: false, value: null });
+    });
+
+    it.each([
+        ['--answer=yes'],
+        ['--answer-for=id'],
+        ['--checkpoint=a', '--resume=b'],
+        ['--resume=a', '--answer=yes'],
+        ['--resume=a', '--answer-for=id'],
+        ['--resume=a', '--answer-for=id', '--answer=yes', '--answer-file=answer.txt'],
+        ['--checkpoint=a', '--trace=b'],
+        ['--checkpoint=a', '--record=b'],
+        ['--checkpoint=a', '--replay=b'],
+        ['--checkpoint=a', '--store=b'],
+        ['--checkpoint=a', '--store-module=b'],
+        ['--checkpoint='],
+    ])('rejects incompatible/invalid options: %j', (...options) => {
+        const result = spl(`success 1`, ...options);
+        expect(result.code).toBe(2);
+        expect(result.out).toBe('');
+        expect(fs.existsSync(path.join(dir, 'a'))).toBe(false);
+    });
+
+    it('rejects changed scripts and arguments without consuming the pending question', () => {
+        const state = path.join(dir, 'run.jsonl');
+        const first = spl(`success human 'question'`, '--checkpoint', state, '--arg=one', '--silent');
+        const id = JSON.parse(first.out).request_id;
+        const original = fs.readFileSync(state, 'utf8');
+        expect(spl(`success human 'changed'`, '--resume', state, '--answer-for', id, '--answer=yes', '--silent').code).toBe(2);
+        expect(spl(`success human 'question'`, '--resume', state, '--arg=two', '--answer-for', id, '--answer=yes', '--silent').code).toBe(2);
+        expect(fs.readFileSync(state, 'utf8')).toBe(original);
+    });
+});
+
 describe('cli', () => {
     it('passes repeated --arg values in order before and after the script path', () => {
         const file = path.join(dir, 'args.spl');

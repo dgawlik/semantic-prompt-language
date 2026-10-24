@@ -170,6 +170,13 @@ accepted. Debug messages are emitted only with `--log-level debug`.
 
 ## Replayable workflows
 
+For noninteractive human review, `human 'question'` emits JSON and exits `3`.
+Start with `spl workflow.spl --checkpoint run.jsonl`, then submit a matching request
+with `spl workflow.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt`.
+Completed tools/model calls are not repeated; preserve the same workspace and
+script/runtime/configuration. This is separate from ordinary trace replay below.
+See the [Human in the loop guide](docs-template/HITL.md) for the protocol and GitHub Actions recipe.
+
 Capture a live run, then iterate on guards and deterministic logic without another
 model call when the recorded LLM requests remain unchanged:
 

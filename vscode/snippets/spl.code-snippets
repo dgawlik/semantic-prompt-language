@@ -54,6 +54,11 @@
     "body": ["let ${1:answer} = think(", "\treasoning = '${2|low,medium,high|}',", "\tshow = ${3|False,True|},", ") '${0:problem}'"],
     "description": "Generation-only reasoning"
   },
+  "Human input": {
+    "prefix": "human",
+    "body": ["let ${1:answer} = human '${0:question}'"],
+    "description": "Pause a checkpoint run for noninteractive free-text input"
+  },
   "Try / except": {
     "prefix": "try",
     "body": ["try {", "\t$1", "} except ${2:err} {", "\t$0", "}"],

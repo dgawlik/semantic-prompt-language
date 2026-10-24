@@ -215,6 +215,7 @@
         { "name": "keyword.control.constraint.spl", "match": "\\b(?:enforce|forbid)\\b" },
         { "name": "keyword.other.think.spl", "match": "\\bthink\\b" },
         { "name": "keyword.other.agent.spl", "match": "\\bagent\\b" },
+        { "name": "keyword.other.human.spl", "match": "\\bhuman\\b" },
         { "name": "support.function.tool.spl", "match": "\\b(?:read_file|write_file|web_fetch|web_search|shell)\\b" },
         { "name": "keyword.other.ask.spl", "match": "\\bask\\b" },
         { "name": "keyword.operator.logical.spl", "match": "\\b(?:and|or|not|in)\\b" }

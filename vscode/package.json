@@ -2,7 +2,7 @@
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
   "description": "Language server, syntax highlighting and snippets for Semantic Prompt Language (.spl) scripts",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "spl-lang",
   "license": "ISC",
   "repository": {

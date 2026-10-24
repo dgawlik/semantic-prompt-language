@@ -52,7 +52,8 @@ not_expr       = "not" , not_expr | comparison ;
 comparison     = sum , { ( "==" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not" , "in" ) , sum } ;
 sum            = term , { ( "+" | "-" ) , term } ;
 term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
-unary          = ( "-" | "+" ) , unary | "ask" , [ modifiers ] , postfix | power ;
+unary          = ( "-" | "+" ) , unary | "ask" , [ modifiers ] , postfix
+               | human_expr | power ;
 power          = postfix , [ "**" , unary ] ;
 postfix        = primary , { call | index | slice | member } ;
 call           = "(" , [ expr , { "," , expr } , [ "," ] ] , ")" ;
@@ -60,7 +61,7 @@ index          = "[" , expr , "]" ;
 slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
 member         = "." , NAME ;
 primary        = NUMBER | string | "True" | "False" | "None" | NAME | special_var
-               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr
+               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr | human_expr
                | ( "think" | "agent" ) , [ modifiers ] , postfix ;
 special_var    = "$env" | "$args" ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
@@ -69,6 +70,7 @@ modifiers      = "(" , [ modifier , { "," , modifier } , [ "," ] ] , ")" ;
 modifier       = ( "len" | "fmt" | "reasoning" | "show" | "schema" | "repairs" | "model" ) , "=" , expr ;
 log_expr       = "log" , "(" , [ "level" , "=" , log_level , [ "," ] ] , ")" , call ;
 log_level      = "error" | "info" | "debug" | expr ;
+human_expr     = "human" , postfix ;
 
 (* Unknown/duplicate modifier names are syntax errors. Values are expressions, validated at runtime:
    len: word/sentence/paragraph/long (guidance only)
@@ -80,6 +82,10 @@ log_level      = "error" | "info" | "debug" | expr ;
    repairs: integer 0..5 (additional generation attempts, default 0); agents require 0
    model: non-empty string; CLI override > per-call model > header > SDK default
    Generation (ask and think) has no tools. agent explicitly enables restricted runtime/MCP tools.
+   human takes a string question without modifiers and returns an exact caller-provided string.
+   It suspends a checkpoint run, emits JSON and exits 3; it never reads stdin.
+   Questions in functions, loops and expressions resume through ordered effect-history replay.
+   Suspension is a control signal, not a catchable script failure.
    Raw tools are ordinary positional functions: read_file(path), write_file(path, content),
    web_fetch(url), web_search(query), shell(command). They never invoke a model.
    log(level=...)(args) selects error/info/debug severity; plain log(args) defaults to info.
@@ -105,7 +111,7 @@ NL             = newline ;
    (including through aliases), and are not automatically persisted.
    Other $-prefixed names are syntax errors. Ordinary dict/list missing reads still fail.
    Reserved words: let if elif else for in while def return try except assert fail success
-   enforce forbid restrict ask think agent break continue pass and or not True False None.
+   enforce forbid restrict ask think agent human break continue pass and or not True False None.
    Removed syntax: ? 'prompt', ?{...} 'prompt', think{...}, agent{...}, log{...}, @{...},
    think(level=...), tool{param=...} 'instructions',
    let x += ... and let d.key = ... . *)

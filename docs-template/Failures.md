@@ -31,6 +31,12 @@ Failures stop execution unless caught. Format, validation, transport, tool, and 
 
 ## try / except
 
+`human` suspension is not a failure: checkpoint runs emit `waiting_for_input` JSON
+and exit `3`. It bypasses `except`, unwinds policy scopes, and resumes only after a
+matching answer is submitted. Checkpoint integrity and persistence errors also
+bypass script handlers: SPL must not continue external actions after losing its
+durable history. See [Human in the loop](HITL.md).
+
 ```spl
 try {
     let data = read_file('optional.txt')

@@ -29,6 +29,7 @@ const pages = [
     ['CLI', 'cli', 'CLI & runtime', 'Reference', 'terminal'],
     ['Grammar', 'grammar', 'Grammar', 'Reference', 'braces'],
     ['Examples', 'examples', 'Examples', 'Guides', 'layers'],
+    ['HITL', 'hitl', 'Human in the loop', 'Guides', 'spark'],
     ['Editor', 'editor', 'VS Code extension', 'Guides', 'edit'],
     ['Internals', 'internals', 'Architecture', 'Guides', 'network'],
 ].map(([file, slug, label, group, icon]) => ({ file, slug, label, group, icon }));
@@ -84,7 +85,7 @@ const headingId = (value) => value.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, '
 hljs.registerLanguage('spl', (engine) => {
     const language = python(engine);
     language.keywords = {
-        keyword: 'let def if elif else for in while return try except assert fail success enforce forbid restrict ask think agent break continue pass and or not',
+        keyword: 'let def if elif else for in while return try except assert fail success enforce forbid restrict ask think agent human break continue pass and or not',
         literal: 'True False None',
         built_in: 'len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log read_file write_file web_fetch web_search shell',
     };

@@ -36,6 +36,8 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
   `web_search(query)`, `shell(command)` never call a model.
 - **Generation:** `ask` and `think` have no tools or MCP access.
 - **Agency:** `agent` explicitly enables model-directed runtime and configured MCP tools.
+- **Human input:** `human 'question'` suspends a checkpoint run and returns an exact
+  answer supplied by a later CLI invocation, never a terminal prompt.
 - **Validation:** expression-valued `schema` uses strict synchronous JSON Schema draft-07;
   `fmt` supports `integer`, `float`, `array`, `object`, `text`, and `boolean`.
   Non-text formats require strict JSON of the selected type; `float` accepts any finite
@@ -87,6 +89,19 @@ but blocks writes, shell, network, agents, and persistent stores.
 
 ## CLI
 
+For noninteractive human review:
+
+```sh
+spl examples/human-review.spl --checkpoint run.jsonl --silent
+spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+```
+
+Waiting emits a JSON request and exits `3`. Resume reconstructs ordinary computation
+but does not repeat completed tools/model/agent calls. Preserve the same workspace,
+script, runtime and configuration; uncertain interrupted effects require manual
+recovery, not automatic retry. Resumable mode cannot combine with stores or
+trace/record/replay. See the [Human in the loop guide](../docs/hitl.html).
+
 ```text
 spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
                [--store file.json | --store-module module]
@@ -97,7 +112,7 @@ spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
 
 Results are printed on stdout, logs on stderr. Full prompts/responses and statement traces
 appear at every non-silent log level. Exit codes are `0` success, `1` script failure,
-`2` syntax/usage error, and `70` internal error. `--check` does not execute modifier expressions
+`2` syntax/usage error, `3` waiting for human input, and `70` internal/infrastructure error. `--check` does not execute modifier expressions
 or compile schemas. See [CLI and MCP configuration](../docs/cli.html).
 
 ## Tests and embedding
@@ -111,6 +126,7 @@ The default suite is offline. In PowerShell, opt into authenticated live checks 
 
 The package exports `parse`, `run`, `Logger`, `CopilotBackend`, `TraceBackend`,
 `RecordingBackend`, `ReplayBackend`, variable stores, authentication helpers, and related types.
+Resumable embedding also exports `Checkpoint`, `CheckpointError`, and context/request types.
 Call `close()` on the backend after running; replay also checks for unused entries there.
 Custom backends must honor the request kind: only `agent` may execute tools.
 Embedding callers can pass `args: ['first', 'second']` in `RunOptions`; omitted
@@ -118,6 +134,8 @@ arguments default to `[]`, not the host's `process.argv`. Each run snapshots `pr
 See [embedding](../docs/internals.html#embedding).
 
 ## Migration
+
+`human` is a reserved keyword; rename previous bindings with that name.
 
 Use `enforce` and `forbid` for scoped prompt guidance; `instruct` and `avoid` are not accepted.
 0.3 removes `think(level=...)`, tool-command syntax, and `let` before

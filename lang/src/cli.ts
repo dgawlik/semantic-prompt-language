@@ -2,17 +2,20 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import type { Program } from './ast.js';
 import { CopilotBackend } from './copilot.js';
 import { AuthError, login, logout } from './auth.js';
 import { Failure, SplSyntaxError } from './errors.js';
 import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
-import { parse } from './parser.js';
+import { parse, usesHuman } from './parser.js';
 import { run, type RunResult } from './interpreter.js';
 import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
 import { toJson } from './values.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
 import { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
+import { Checkpoint, CheckpointError, checkpointFingerprint } from './checkpoint.js';
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
@@ -34,13 +37,20 @@ Options:
   --record <file.jsonl>   record generation responses (new file; no agents)
   --replay <file.jsonl>   replay LLM results without Copilot/MCP; explicit script tools still run
                           Legacy --record files allow only local reads and no stores.
+  --checkpoint <file>    start a new resumable run; never overwrite an existing file
+  --resume <file>        inspect pending input, or resume with an answer
+  --answer-for <id>      ID of the pending human request being answered
+  --answer <text>        exact free-text answer (requires --resume and --answer-for)
+  --answer-file <file>   read the answer from a UTF-8 file instead of --answer
   --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
   --check                 validate script syntax and any --mcp config without executing
   -v, --version           print version
   -h, --help              print this help
 
 The script result (the value of 'success' or 'return', or the failure payload) is written to stdout.
-Exit codes: 0 success, 1 uncaught script failure, 2 syntax or usage error.`;
+Resumable runs print JSON envelopes and never read stdin.
+Exit codes: 0 success, 1 uncaught script failure, 2 syntax or usage error,
+3 waiting for human input, 70 internal/infrastructure error.`;
 
 function version(): string {
     const pkg = new URL('../package.json', import.meta.url);
@@ -50,6 +60,81 @@ function version(): string {
 function usageError(msg: string): never {
     process.stderr.write(`spl: ${msg}\nTry 'spl --help'.\n`);
     process.exit(2);
+}
+
+interface CheckpointCliOptions {
+    checkpoint?: string;
+    resume?: string;
+    'answer-for'?: string;
+    answer?: string;
+    'answer-file'?: string;
+    model?: string;
+    arg?: string[];
+    timeout?: string;
+}
+
+async function checkpointCommand(
+    source: string, program: Program, values: CheckpointCliOptions,
+    cwd: string, logger: Logger, mcpServers: McpServers | undefined,
+): Promise<number> {
+    let checkpoint: Checkpoint | undefined;
+    try {
+        const directory = fileURLToPath(new URL('.', import.meta.url));
+        const runtime = checkpointFingerprint([
+            version(), process.version,
+            ...fs.readdirSync(directory).filter((name) => name.endsWith('.js')).sort()
+                .map((name) => [name, fs.readFileSync(path.join(directory, name), 'utf8')]),
+        ]);
+        const context = {
+            source, runtime, cwd, args: values.arg,
+            configuration: { model: values.model ?? null, mcp: mcpServers ?? null },
+        };
+        checkpoint = values.resume !== undefined
+            ? Checkpoint.resume(values.resume, context)
+            : Checkpoint.create(values.checkpoint!, context);
+        if (values.resume !== undefined) {
+            if (values.answer === undefined && values['answer-file'] === undefined) {
+                const envelope = { status: 'waiting_for_input', ...checkpoint.request };
+                checkpoint.close();
+                process.stdout.write(JSON.stringify(envelope) + '\n');
+                return 3;
+            }
+            let answer = values.answer;
+            if (values['answer-file'] !== undefined) {
+                try {
+                    answer = fs.readFileSync(values['answer-file'], 'utf8');
+                } catch (error) {
+                    throw new CheckpointError(`cannot read answer file: ${(error as Error).message}`);
+                }
+            }
+            checkpoint.answer(values['answer-for']!, answer!);
+        }
+        const backend = new CopilotBackend({ logger, cwd, timeoutMs: Number(values.timeout ?? 300) * 1000, mcpServers });
+        let result: RunResult;
+        try {
+            result = await run(program, { backend, logger, cwd, model: values.model, checkpoint });
+        } finally {
+            await backend.close();
+        }
+        if (result.status === 'waiting_for_input') {
+            checkpoint.close();
+            process.stdout.write(JSON.stringify({ status: result.status, ...result.request }) + '\n');
+            return 3;
+        }
+        checkpoint.finish(result.status);
+        const envelope = result.status === 'success'
+            ? { status: result.status, run_id: checkpoint.runId, has_value: result.hasValue, value: toJson(result.value) }
+            : { status: result.status, run_id: checkpoint.runId, failure: result.failure };
+        checkpoint.close();
+        process.stdout.write(JSON.stringify(envelope) + '\n');
+        return result.status === 'success' ? 0 : 1;
+    } catch (error) {
+        if (!(error instanceof CheckpointError) || error.kind !== 'usage') throw error;
+        process.stderr.write(`spl: ${error.message}\n`);
+        return 2;
+    } finally {
+        checkpoint?.close();
+    }
 }
 
 async function loginCommand(): Promise<number> {
@@ -92,6 +177,11 @@ async function main(): Promise<number> {
                 trace: { type: 'string' },
                 record: { type: 'string' },
                 replay: { type: 'string' },
+                checkpoint: { type: 'string' },
+                resume: { type: 'string' },
+                'answer-for': { type: 'string' },
+                answer: { type: 'string' },
+                'answer-file': { type: 'string' },
                 cwd: { type: 'string' },
                 check: { type: 'boolean' },
                 version: { type: 'boolean', short: 'v' },
@@ -129,6 +219,18 @@ async function main(): Promise<number> {
     if ([values.trace, values.record, values.replay].some((value) => value !== undefined && value.trim() === '')) {
         usageError('--trace, --record, and --replay require a non-empty file path');
     }
+    const resumable = values.checkpoint !== undefined || values.resume !== undefined;
+    if (values.checkpoint !== undefined && values.resume !== undefined) usageError('--checkpoint and --resume are mutually exclusive');
+    if ([values.checkpoint, values.resume, values['answer-for'], values['answer-file']].some((value) => value !== undefined && !value.trim())) {
+        usageError('checkpoint, resume, answer-for, and answer-file require non-empty values');
+    }
+    if (resumable && [values.store, values['store-module'], values.trace, values.record, values.replay].some((value) => value !== undefined)) {
+        usageError('resumable runs cannot use --store, --store-module, --trace, --record, or --replay');
+    }
+    const answering = values.answer !== undefined || values['answer-file'] !== undefined;
+    if (values.answer !== undefined && values['answer-file'] !== undefined) usageError('--answer and --answer-file are mutually exclusive');
+    if ((answering || values['answer-for'] !== undefined) && values.resume === undefined) usageError('answer flags require --resume');
+    if (answering !== (values['answer-for'] !== undefined)) usageError('an answer requires --answer-for, and --answer-for requires an answer');
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
     const file = positionals[0];
@@ -156,6 +258,8 @@ async function main(): Promise<number> {
         return usageError((e as Error).message);
     }
     if (values.check) return 0;
+    if (resumable) return checkpointCommand(source, program, values, cwd, logger, mcpServers);
+    if (usesHuman(program)) usageError('human input requires --checkpoint or --resume');
 
     let backend: LlmBackend;
     try {
@@ -194,6 +298,7 @@ async function main(): Promise<number> {
         process.stdout.write(JSON.stringify(result.failure, null, 4) + '\n');
         return 1;
     }
+    if (result.status === 'waiting_for_input') throw new CheckpointError('unexpected human suspension without a checkpoint', 'infrastructure');
     if (result.hasValue) {
         const v = result.value;
         process.stdout.write((typeof v === 'string' ? v : JSON.stringify(toJson(v), null, 2)) + '\n');

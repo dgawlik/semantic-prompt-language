@@ -62,6 +62,7 @@ export const keywords: Record<string, string> = {
     ask: "Generation-only call: ask(fmt='integer', repairs=1) 'prompt'. Modifiers are optional; the prompt stays outside parentheses. No tools or MCP access.",
     think: 'Generation-only model call with default medium reasoning. No tools or MCP access.',
     agent: 'Explicit model-directed actions using runtime/MCP tools subject to active restrictions.',
+    human: "Noninteractive human input: human 'question'. Suspend a checkpoint run, then resume with --answer-for and --answer or --answer-file. Returns exact text; no LLM modifiers.",
     break: 'Exit the innermost loop.',
     continue: 'Continue the innermost loop.',
     pass: 'No operation.',

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Pause an SPL workflow for external human review without making the CLI interactive.
+A question is durable JSON, not a terminal prompt: SPL exits, your orchestrator
+collects an answer, and a later invocation continues without repeating completed
+tools or model calls.">
+<meta name="color-scheme" content="light dark">
+<title>Human in the loop - SPL docs</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c0b76d8aeb54">
+<link rel="stylesheet" href="assets/style.css?v=c0b76d8aeb54">
+<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
+<script defer src="assets/search-index.js?v=c0b76d8aeb54"></script>
+<script defer src="assets/site.js?v=c0b76d8aeb54"></script>
+</head>
+<body data-page="hitl">
+<a class="skip-link" href="#page">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v0.7.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="hitl.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Human in the loop</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Human in the loop</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="hitl.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Human in the loop</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav></details>
+  <main id="page" tabindex="-1">
+    <div class="page-meta"><span>Guides</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Human in the loop</span><span class="reading-time">5 min read</span></div>
+    <header class="page-heading"><h1>Human in the loop</h1><div class="lead"><p>Pause an SPL workflow for external human review without making the CLI interactive.
+A question is durable JSON, not a terminal prompt: SPL exits, your orchestrator
+collects an answer, and a later invocation continues without repeating completed
+tools or model calls.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#write-a-question">Write a question</a></li><li class="toc-level-2"><a href="#start-inspect-and-answer">Start, inspect and answer</a></li><li class="toc-level-2"><a href="#automation-protocol">Automation protocol</a></li><li class="toc-level-2"><a href="#resume-guarantees-and-limits">Resume guarantees and limits</a></li><li class="toc-level-2"><a href="#github-actions-integration">GitHub Actions integration</a></li><li class="toc-level-2"><a href="#example-and-embedding">Example and embedding</a></li></ul></nav></details>
+    <article class="prose"><h2 id="write-a-question">Write a question<a class="heading-anchor" href="#write-a-question" aria-label="Link to Write a question">#</a></h2>
+<p><code>human</code> is a string-valued expression, distinct from model-only <code>ask</code>:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> feedback = <span class="hljs-keyword">human</span> <span class="hljs-string">&#x27;What should change in the release notes?&#x27;</span>
+<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(feedback.strip()) &gt; <span class="hljs-number">0</span> <span class="hljs-string">&#x27;feedback must not be blank&#x27;</span>
+<span class="hljs-keyword">success</span> feedback
+</code></pre></figure>
+<p>There are no LLM modifiers, schemas, automatic repairs, or scoped model guidance
+for human input. The expression returns the exact answer, including whitespace.
+Validate it with ordinary code or explicitly ask another question.</p>
+<p>Questions work inside functions, loops, nested expressions and policy blocks.
+Suspension bypasses <code>except</code>; it is not a script failure. Every dynamic question
+gets a distinct request ID, even when it comes from the same source line.
+Executable scripts containing <code>human</code> require checkpoint mode before any effects.
+<code>--check</code> remains syntax-only. <code>human</code> is reserved; rename existing bindings with
+that name.</p>
+<h2 id="start-inspect-and-answer">Start, inspect and answer<a class="heading-anchor" href="#start-inspect-and-answer" aria-label="Link to Start, inspect and answer">#</a></h2>
+<p>Start a run and inspect its pending question:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-2">spl examples/human-review.spl --checkpoint run.jsonl --silent
+spl examples/human-review.spl --resume run.jsonl --silent
+</code></pre></figure>
+<p>Both commands exit <code>3</code> while waiting and print the same pending request. SPL never
+reads stdin, opens an interactive prompt, polls, or leaves a process waiting:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-3"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;status&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;waiting_for_input&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;run_id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;run-identifier&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;request_id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;request-identifier&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;question&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Review this draft...&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;checkpoint&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;absolute-state-path&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;line&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">9</span>
+<span class="hljs-punctuation">}</span>
+</code></pre></figure>
+<p>Pending inspection does not execute the script, call tools, or require model
+authentication. Submit exactly one answer in a later invocation:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-4">spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer <span class="hljs-string">&quot;Make it shorter&quot;</span>
+spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+</code></pre></figure>
+<p>These are alternatives, not two submissions. <code>--answer-for</code> must match the current
+pending request. Stale, missing, duplicate, or mismatched submissions fail with code
+<code>2</code> without advancing the run. Empty answers are valid protocol values; scripts may
+reject them with an assertion. Answer files retain all whitespace, including their
+final newline. Neither form reads stdin. Prefer answer files for private or multiline
+text rather than putting it in process arguments.</p>
+<p>A valid answer is persisted before continuing. A run can ask more questions;
+do not automatically reuse an earlier answer for a new request ID.</p>
+<h2 id="automation-protocol">Automation protocol<a class="heading-anchor" href="#automation-protocol" aria-label="Link to Automation protocol">#</a></h2>
+<p>Resumable runs emit one JSON envelope on stdout, including with <code>--silent</code>.
+Logs and syntax/usage errors remain on stderr. Ordinary runs without checkpoint
+mode retain their existing output format.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Automation protocol reference table"><table>
+<thead>
+<tr>
+<th scope="col">Exit code</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>0</code></td>
+<td>Completed successfully.</td>
+</tr>
+<tr>
+<td><code>1</code></td>
+<td>Script failure.</td>
+</tr>
+<tr>
+<td><code>2</code></td>
+<td>Syntax, usage, incompatible state, or invalid answer submission.</td>
+</tr>
+<tr>
+<td><code>3</code></td>
+<td>Waiting for human input, not a script failure.</td>
+</tr>
+<tr>
+<td><code>70</code></td>
+<td>Internal or checkpoint persistence/infrastructure error.</td>
+</tr>
+</tbody></table>
+</div>
+<p>Completion uses the same run ID:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-5"><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;status&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;success&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;run_id&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;run-identifier&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;has_value&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">true</span></span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;value&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;accepted result&quot;</span><span class="hljs-punctuation">}</span>
+</code></pre></figure>
+<p>Failures use <code>{&quot;status&quot;:&quot;failure&quot;,&quot;run_id&quot;:&quot;...&quot;,&quot;failure&quot;:{...}}</code>, where <code>failure</code>
+is the ordinary <a href="failures.html#failure-payload">SPL failure payload</a>. A successful
+script with no result has <code>has_value: false</code> and <code>value: null</code>. State I/O failures
+never print success-shaped or waiting output. See <a href="cli.html#options">CLI options</a>
+for flag details.</p>
+<h2 id="resume-guarantees-and-limits">Resume guarantees and limits<a class="heading-anchor" href="#resume-guarantees-and-limits" aria-label="Link to Resume guarantees and limits">#</a></h2>
+<p>The <code>spl-checkpoint</code> version 1 JSONL journal is separate from trace/record files.
+It durably records external-effect intents and outcomes, human questions/answers,
+and observed runtime-input fingerprints. On resume, ordinary computation reruns
+to reconstruct scopes, closures, collections and loop positions. Completed raw
+tools, generation attempts, caught failures, and agent results use recorded
+outcomes without executing again. Historical script logs and model transcripts
+are suppressed. After the recorded prefix, new operations run live.</p>
+<p>This is not a filesystem or interpreter-stack snapshot. Preserve the same workspace,
+including earlier agent/tool-produced files. Historical reads return old recorded
+text; future reads see current files. The journal does not restore or undo actions.
+The guarantee is no repeat of durably recorded completed effects, not universal
+exactly-once execution: an interrupted action may have completed externally before
+its outcome could be saved. SPL rejects interrupted/uncertain runs for manual
+recovery instead of retrying. There is no force-retry or automatic crash recovery.</p>
+<p>Resume requires the same script contents, runtime build/Node version, canonical
+working directory, and model/MCP configuration. Repeat the original <code>--model</code> and
+<code>--mcp</code> options when applicable. Original <code>$args</code> are restored; conflicting <code>--arg</code>
+overrides fail. If the script has observed <code>$env</code>, the entire environment snapshot
+must match. SPL stores its fingerprint rather than all environment values in
+plaintext. Changed input/configuration and history mismatches fail explicitly.</p>
+<p>Only one writer can open a journal. Do not delete a stale <code>.lock</code> and retry an
+uncertain action. Terminal runs cannot resume. <code>--checkpoint</code> and <code>--resume</code> are
+mutually exclusive and cannot combine with <code>--trace</code>, <code>--record</code>, <code>--replay</code>,
+<code>--store</code>, or <code>--store-module</code>.</p>
+<p>Treat journals and answer files as sensitive, trusted control-plane data. Prompts,
+tool arguments/results and answers may contain secrets. New journal/lock files use
+owner-only permissions where the operating system supports them; do not commit or
+publish them. Request IDs prevent accidental stale answers, not unauthorized access.
+SPL does not authenticate the answerer or prove they are human.</p>
+<h2 id="github-actions-integration">GitHub Actions integration<a class="heading-anchor" href="#github-actions-integration" aria-label="Link to GitHub Actions integration">#</a></h2>
+<p>The orchestrator owns question delivery, approval authorization and subsequent
+invocation. Use a self-hosted runner or equivalent persistent workspace with a
+fixed working directory. A later fresh hosted runner is not supported by simply
+uploading the journal: it is not a workspace artifact or portable snapshot.
+Do not clean/recheckout away state or produced files between invocations.</p>
+<p>In a Bash <code>run</code> step, handle exit <code>3</code> explicitly rather than treating it as an error
+or hiding all failures with <code>continue-on-error</code>. Set <code>RUN_STATE</code> to an absolute
+path in the preserved workspace:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-6"><span class="hljs-built_in">set</span> +e
+spl examples/human-review.spl --checkpoint <span class="hljs-string">&quot;<span class="hljs-variable">$RUN_STATE</span>&quot;</span> --silent &gt; result.json
+code=$?
+<span class="hljs-built_in">set</span> -e
+<span class="hljs-keyword">case</span> <span class="hljs-string">&quot;<span class="hljs-variable">$code</span>&quot;</span> <span class="hljs-keyword">in</span>
+  0|3) ;;
+  *) <span class="hljs-built_in">cat</span> result.json; <span class="hljs-built_in">exit</span> <span class="hljs-string">&quot;<span class="hljs-variable">$code</span>&quot;</span> ;;
+<span class="hljs-keyword">esac</span>
+<span class="hljs-built_in">printf</span> <span class="hljs-string">&#x27;status=%s\n&#x27;</span> <span class="hljs-string">&quot;<span class="hljs-subst">$(jq -r &#x27;.status&#x27; result.json)</span>&quot;</span> &gt;&gt; <span class="hljs-string">&quot;<span class="hljs-variable">$GITHUB_OUTPUT</span>&quot;</span>
+<span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">$code</span>&quot;</span> -eq 3 ]; <span class="hljs-keyword">then</span>
+  <span class="hljs-built_in">printf</span> <span class="hljs-string">&#x27;request_id=%s\n&#x27;</span> <span class="hljs-string">&quot;<span class="hljs-subst">$(jq -r &#x27;.request_id&#x27; result.json)</span>&quot;</span> &gt;&gt; <span class="hljs-string">&quot;<span class="hljs-variable">$GITHUB_OUTPUT</span>&quot;</span>
+<span class="hljs-keyword">fi</span>
+</code></pre></figure>
+<p>Publish the question only to an authorized channel. After that system supplies
+<code>REQUEST_ID</code> and a UTF-8 <code>ANSWER_FILE</code>, invoke the following in the same workspace,
+with the same exit-code handling. Pass values through quoted environment variables
+or files, not interpolated shell source:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-7">spl examples/human-review.spl --resume <span class="hljs-string">&quot;<span class="hljs-variable">$RUN_STATE</span>&quot;</span> \
+  --answer-for <span class="hljs-string">&quot;<span class="hljs-variable">$REQUEST_ID</span>&quot;</span> --answer-file <span class="hljs-string">&quot;<span class="hljs-variable">$ANSWER_FILE</span>&quot;</span> --silent &gt; result.json
+</code></pre></figure>
+<p>An answer can lead to another question. Route each new pending request through the
+same external approval mechanism. SPL provides the durable handoff, not a built-in
+GitHub approval service.</p>
+<h2 id="example-and-embedding">Example and embedding<a class="heading-anchor" href="#example-and-embedding" aria-label="Link to Example and embedding">#</a></h2>
+<p>The <a href="examples.html#human-review">human review example</a> writes a draft once, asks for
+feedback without model authentication, and writes the exact accepted answer.
+For programmatic use, see <a href="internals.html#embedding-resumable-runs">embedding resumable runs</a>.</p>
+</article>
+    <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/HITL.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="examples.html"><span>Previous</span><strong>Examples</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="editor.html"><span>Next</span><strong>VS Code extension</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </main>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#write-a-question">Write a question</a></li><li class="toc-level-2"><a href="#start-inspect-and-answer">Start, inspect and answer</a></li><li class="toc-level-2"><a href="#automation-protocol">Automation protocol</a></li><li class="toc-level-2"><a href="#resume-guarantees-and-limits">Resume guarantees and limits</a></li><li class="toc-level-2"><a href="#github-actions-integration">GitHub Actions integration</a></li><li class="toc-level-2"><a href="#example-and-embedding">Example and embedding</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+</div>
+<dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
+<p class="visually-hidden" id="announcement" role="status"></p>
+<noscript><p class="noscript-note">Search, code copying, and the theme switch need JavaScript. All documentation and navigation work without it.</p></noscript>
+</body>
+</html>

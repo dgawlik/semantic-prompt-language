@@ -7,6 +7,9 @@ import type { Logger } from './logger.js';
 import { Restrictions, makeRestriction } from './restrict.js';
 import { MemoryStore, type VariableStore } from './store.js';
 import { ToolHost, TOOL_SPECS } from './tools.js';
+import { CheckpointError, SuspensionSignal, type Checkpoint, type HumanRequest } from './checkpoint.js';
+import { isResponse, traceRequest } from './recording.js';
+import { usesHuman } from './parser.js';
 import {
     assertMutable,
     compareValues,
@@ -38,11 +41,13 @@ export interface RunOptions {
     /** Script arguments exposed as read-only `$args`; defaults to an empty list. */
     args?: readonly string[];
     maxCallDepth?: number;
+    checkpoint?: Checkpoint;
 }
 
 export type RunResult =
     | { status: 'success'; value: Value; hasValue: boolean }
-    | { status: 'failure'; failure: FailurePayload };
+    | { status: 'failure'; failure: FailurePayload }
+    | { status: 'waiting_for_input'; request: HumanRequest };
 
 type Signal = { k: 'break' } | { k: 'continue' } | { k: 'return'; v: Value; hasValue: boolean };
 type Completion = Signal | { k: 'value'; v: Value } | undefined;
@@ -79,11 +84,13 @@ class Interpreter {
         for (const [name, value] of Object.entries(process.env)) {
             if (value !== undefined) setKey(this.runtimeEnv, name, value);
         }
-        this.runtimeArgs = [...(opts.args ?? [])];
+        this.runtimeArgs = [...(opts.checkpoint?.args ?? opts.args ?? [])];
         Object.freeze(this.runtimeEnv);
         Object.freeze(this.runtimeArgs);
         this.restrictions = new Restrictions(this.cwd);
-        this.builtins = makeBuiltins({ log: (m) => opts.logger.info(`log: ${m}`) });
+        this.builtins = makeBuiltins({ log: (m) => {
+            if (!opts.checkpoint?.replaying) opts.logger.info(`log: ${m}`);
+        } });
         for (const tool of Object.keys(TOOL_SPECS) as ToolName[]) {
             this.builtins.set(tool, { __fn: 'builtin', name: tool, call: (args) => this.callTool(tool, args) });
         }
@@ -92,24 +99,37 @@ class Interpreter {
     async run(): Promise<RunResult> {
         const { logger } = this.opts;
         try {
+            if (this.opts.checkpoint && (this.opts.store || this.opts.backend.mode)) {
+                throw new CheckpointError('checkpoint runs cannot use stores or recording/replay backends');
+            }
+            this.opts.checkpoint?.validateSource(this.program.lines.join('\n'), this.opts.args);
+            if (!this.opts.checkpoint && usesHuman(this.program)) {
+                throw runtimeError('human input requires a checkpoint; use --checkpoint or --resume');
+            }
             if (this.opts.backend.mode === 'replay' && this.opts.store) {
                 throw new Failure('restriction_violation', 'replay does not allow a persistent variable store');
             }
             for (const [k, v] of Object.entries(this.store.load())) this.globals.vars.set(k, v);
             const signal = await this.execBlock(this.program.body, this.globals);
+            this.opts.checkpoint?.assertConsumed();
             if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
             if (signal && signal.k !== 'value') throw runtimeError(`'${signal.k}' outside of a loop`);
             return { status: 'success', value: null, hasValue: false };
         } catch (e) {
-            if (e instanceof SuccessSignal) return { status: 'success', value: e.value as Value, hasValue: true };
+            if (e instanceof SuspensionSignal) return { status: 'waiting_for_input', request: e.request };
+            if (e instanceof SuccessSignal) {
+                this.opts.checkpoint?.assertConsumed();
+                return { status: 'success', value: e.value as Value, hasValue: true };
+            }
             if (e instanceof Failure) {
+                this.opts.checkpoint?.assertConsumed();
                 logger.error(`${e.statusCode}: ${e.reason} (line ${e.line})`);
                 return { status: 'failure', failure: e.payload() };
             }
             throw e;
         } finally {
             try {
-                if (this.opts.backend.mode !== 'replay') {
+                if (!this.opts.checkpoint && this.opts.backend.mode !== 'replay') {
                     const snapshot: Record<string, Value> = {};
                     for (const [k, v] of this.globals.vars) if (!isFunction(v)) snapshot[k] = v;
                     this.store.save(snapshot);
@@ -154,7 +174,9 @@ class Interpreter {
 
     private async execStmt(s: Stmt, env: Env): Promise<Completion> {
         try {
-            this.opts.logger.deterministic(`line ${s.line} (${s.t}): ${this.program.lines[s.line - 1]?.trim() ?? ''}`);
+            if (!this.opts.checkpoint?.replaying) {
+                this.opts.logger.deterministic(`line ${s.line} (${s.t}): ${this.program.lines[s.line - 1]?.trim() ?? ''}`);
+            }
             return await this.execStmtInner(s, env);
         } catch (e) {
             if (e instanceof ExpressionSignal) return e.signal;
@@ -228,7 +250,7 @@ class Interpreter {
                     this.constraints = savedConstraints;
                     this.restrictions = savedRestrictions;
                     this.depth = savedDepth;
-                    this.opts.logger.debug(`caught ${e.statusCode}: ${e.reason}`);
+                    if (!this.opts.checkpoint?.replaying) this.opts.logger.debug(`caught ${e.statusCode}: ${e.reason}`);
                     const scope = this.childScope(env);
                     scope.vars.set(s.errName, newDict(Object.entries(e.payload()) as [string, Value][]));
                     const completion = await this.execBlock(s.handler, scope);
@@ -261,7 +283,7 @@ class Interpreter {
                     for (const clause of s.clauses) {
                         const restriction = makeRestriction(clause.kind, await this.eval(clause.arg, env), this.cwd);
                         this.restrictions = this.restrictions.with(restriction);
-                        this.opts.logger.debug(`restrict ${clause.kind}: ${restriction.values.join(', ')}`);
+                        if (!this.opts.checkpoint?.replaying) this.opts.logger.debug(`restrict ${clause.kind}: ${restriction.values.join(', ')}`);
                     }
                     const completion = await this.execBlock(s.body, this.childScope(env));
                     return completion?.k === 'value' ? undefined : completion;
@@ -340,11 +362,19 @@ class Interpreter {
                     throw runtimeError("log level must be 'error', 'info' or 'debug'");
                 }
                 const args = await this.evalArgs(e.args, env);
-                this.opts.logger[level](`log: ${args.map(str).join(' ')}`);
+                if (!this.opts.checkpoint?.replaying) this.opts.logger[level](`log: ${args.map(str).join(' ')}`);
                 return null;
             }
             case 'name': return this.lookup(e.name, env);
-            case 'special': return e.name === 'env' ? this.runtimeEnv : this.runtimeArgs;
+            case 'special':
+                if (e.name === 'env') this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
+                return e.name === 'env' ? this.runtimeEnv : this.runtimeArgs;
+            case 'human': {
+                const question = await this.eval(e.prompt, env);
+                if (typeof question !== 'string') throw runtimeError('human question must be a string');
+                if (!this.opts.checkpoint) throw runtimeError('human input requires a checkpoint');
+                return this.opts.checkpoint.human(question, e.line);
+            }
             case 'list': {
                 const out: Value[] = [];
                 for (const it of e.items) out.push(await this.eval(it, env));
@@ -543,14 +573,28 @@ class Interpreter {
 
     private async callLlm(req: LlmRequest): Promise<string> {
         const { logger, backend } = this.opts;
-        logger.llm(`llm request (${req.kind}):\n${req.prompt}`);
+        const replaying = this.opts.checkpoint?.replaying;
+        if (!replaying) logger.llm(`llm request (${req.kind}):\n${req.prompt}`);
         const started = Date.now();
         try {
-            const res = await backend.call(req);
-            logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
-            logger.llm(`llm response:\n${res.text}`);
+            const perform = async () => {
+                try {
+                    return await backend.call(req);
+                } catch (error) {
+                    if (error instanceof Failure || error instanceof CheckpointError) throw error;
+                    throw new Failure('llm_error', error instanceof Error ? error.message : String(error));
+                }
+            };
+            const res = this.opts.checkpoint
+                ? await this.opts.checkpoint.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
+                : await perform();
+            if (!replaying) {
+                logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
+                logger.llm(`llm response:\n${res.text}`);
+            }
             return res.text.trim();
         } catch (e) {
+            if (e instanceof CheckpointError || e instanceof SuspensionSignal) throw e;
             if (e instanceof Failure) throw e;
             if (e instanceof LlmError) throw new Failure('llm_error', e.message);
             throw new Failure('llm_error', (e as Error).message ?? String(e));
@@ -565,7 +609,10 @@ class Interpreter {
             if (typeof args[i] !== 'string') throw runtimeError(`${tool}(): ${name} must be a string`);
             params[name] = args[i];
         });
-        return new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay', true).invoke(tool, params);
+        const perform = () => new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay', true).invoke(tool, params);
+        return this.opts.checkpoint
+            ? this.opts.checkpoint.effect({ kind: 'tool', tool, params, restrictions: this.restrictions.list }, perform, (value): value is string => typeof value === 'string')
+            : perform();
     }
 
     private async evalGeneration(kind: LlmRequest['kind'], mods: Record<string, Expr>, promptExpr: Expr, env: Env): Promise<Value> {
@@ -612,7 +659,7 @@ class Interpreter {
                 return value;
             } catch (e) {
                 if (!(e instanceof Failure) || (e.statusCode !== 'invalid_format' && e.statusCode !== 'validation_failed') || attempt >= repairs) throw e;
-                this.opts.logger.info(`repair ${attempt + 1}/${repairs}: ${e.reason}`);
+                if (!this.opts.checkpoint?.replaying) this.opts.logger.info(`repair ${attempt + 1}/${repairs}: ${e.reason}`);
                 prompt = `${basePrompt}\n\nPrevious response:\n${text}\n\nValidation failed: ${e.reason}\nReturn a corrected JSON value.`;
             }
         }

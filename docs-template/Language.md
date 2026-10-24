@@ -25,6 +25,31 @@ guards remain easy to spot.
   `agent(options) 'prompt'`. Named options support multiple lines and trailing commas.
   With no options, omit the group or use `()`. Prompts remain outside the parentheses.
 
+## Human input
+
+`human 'question'` requests text from the caller, not a model. It evaluates a string
+question, durably saves a pending request, and suspends a checkpoint run. SPL prints
+JSON and exits with code `3`; it never reads stdin or waits at a terminal.
+
+```spl
+let feedback = human 'What should change in the release notes?'
+assert len(feedback.strip()) > 0 'feedback must not be blank'
+success feedback
+```
+
+Start with `--checkpoint run.jsonl`, then submit the matching request ID with
+`--resume run.jsonl --answer-for <id> --answer "..."` or `--answer-file feedback.txt`.
+The expression returns the exact answer, including empty text and whitespace.
+There are no LLM modifiers, schemas, automatic repairs, or scoped model guidance
+for human input. Use ordinary assertions or explicitly ask again to validate text.
+
+Questions can occur inside functions, loops, nested expressions, and policy blocks.
+Suspension is not a failure and cannot be caught by `except`. Each dynamic question
+gets its own request ID, even when it comes from the same source line.
+Executable scripts containing `human` require checkpoint mode before any script
+effects; `--check` remains syntax-only. `human` is now reserved and cannot be used
+as a variable or function name. See [Human in the loop](HITL.md).
+
 ## Program structure
 
 A script is an optional `@(…)` directive header followed by statements. `#` starts a comment that runs to the end of the line.

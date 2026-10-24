@@ -1,9 +1,10 @@
-export { parse } from './parser.js';
+export { parse, usesHuman } from './parser.js';
 export { run, type RunOptions, type RunResult } from './interpreter.js';
 export { Failure, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
 export { Logger, type LogLevel } from './logger.js';
 export { CopilotBackend } from './copilot.js';
 export { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
+export { Checkpoint, CheckpointError, checkpointFingerprint, type CheckpointContext, type HumanRequest } from './checkpoint.js';
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError } from './auth.js';
 export { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';

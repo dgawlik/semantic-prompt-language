@@ -56,6 +56,17 @@ test('all shipped examples parse without diagnostics', () => {
     }
 });
 
+test('human input has keyword help and no model modifier completion', () => {
+    const source = "let answer = human 'Review this draft'";
+    assert.deepEqual(analysis(source).diagnostics, []);
+    assert.match(JSON.stringify(hover(analysis(source), at(source, 'human'))?.contents), /Noninteractive human input/);
+    assert.ok(completions(analysis(''), { line: 0, character: 0 }).some((item) => item.label === 'human'));
+    const incomplete = 'human (';
+    const items = completions(analysis(incomplete), document(incomplete).positionAt(incomplete.length));
+    for (const name of MODIFIER_NAMES) assert.ok(!items.some((item) => item.label === name && item.textEdit?.newText === `${name}=`));
+    assert.match(analysis("human(fmt='text') 'question'").diagnostics[0].message, /does not accept modifiers/);
+});
+
 test('all snippets expand to valid current SPL syntax', () => {
     const snippets: Record<string, { body: string[] }> = JSON.parse(readFileSync(
         path.resolve(root, 'snippets', 'spl.code-snippets'), 'utf8',
