@@ -173,6 +173,8 @@ accepted. Debug messages are emitted only with `--log-level debug`.
 For noninteractive human review, `human 'question'` emits JSON and exits `3`.
 Start with `spl workflow.spl --checkpoint run.jsonl`, then submit a matching request
 with `spl workflow.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt`.
+Equivalently, use `--resume --checkpoint run.jsonl`. Every further question appends
+to that same journal; answer its latest `request_id`, not the workflow's `run_id`.
 Completed tools/model calls are not repeated; preserve the same workspace and
 script/runtime/configuration. This is separate from ordinary trace replay below.
 See the [Human in the loop guide](docs-template/HITL.md) for the protocol and GitHub Actions recipe.

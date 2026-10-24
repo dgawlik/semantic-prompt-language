@@ -278,7 +278,9 @@ export class Checkpoint {
 
     answer(requestId: string, value: string): void {
         this.assertActive();
-        if (!this.pending || this.pending.request_id !== requestId) throw new CheckpointError('answer does not match the pending request ID');
+        if (!this.pending || this.pending.request_id !== requestId) {
+            throw new CheckpointError('answer does not match the pending request ID; use request_id from the latest waiting_for_input response, not run_id');
+        }
         this.append({ type: 'answer', request_id: requestId, value });
         this.pending = undefined;
     }

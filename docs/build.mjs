@@ -8,6 +8,7 @@ import python from 'highlight.js/lib/languages/python';
 import bash from 'highlight.js/lib/languages/bash';
 import json from 'highlight.js/lib/languages/json';
 import javascript from 'highlight.js/lib/languages/javascript';
+import powershell from 'highlight.js/lib/languages/powershell';
 import ebnf from 'highlight.js/lib/languages/ebnf';
 
 const output = path.dirname(fileURLToPath(import.meta.url));
@@ -92,7 +93,7 @@ hljs.registerLanguage('spl', (engine) => {
     language.contains.unshift({ scope: 'variable', match: /\$(?:env|args)\b/ });
     return language;
 });
-for (const [name, grammar] of Object.entries({ bash, sh: bash, json, js: javascript, javascript, ebnf })) hljs.registerLanguage(name, grammar);
+for (const [name, grammar] of Object.entries({ bash, sh: bash, json, js: javascript, javascript, powershell, ebnf })) hljs.registerLanguage(name, grammar);
 
 function rewriteLink(href, page) {
     if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith('#')) return href;

@@ -11,6 +11,7 @@ spl <script.spl> [--log-level error|info|debug] [--silent] [--model <id>]
                  [--trace <file.jsonl> | --record <file.jsonl> | --replay <file.jsonl>]
                  [--arg <value> ...]
 spl <script.spl> --checkpoint <run.jsonl> [--silent]
+spl <script.spl> --resume --checkpoint <run.jsonl> [--answer-for <id> --answer <text> | --answer-for <id> --answer-file <file>]
 spl <script.spl> --resume <run.jsonl> [--answer-for <id> --answer <text> | --answer-for <id> --answer-file <file>]
 spl login
 spl logout
@@ -33,9 +34,9 @@ From a checkout use `node dist/cli.js` or `npx file:./lang`. The package install
 | `--trace <file.jsonl>` | none | Create a new workflow trace of all LLM requests, responses, and failures, including agents. Works with `--silent`. |
 | `--record <file.jsonl>` | none | Create a new generation recording. Rejects existing files and agent calls. |
 | `--replay <file.jsonl>` | none | Replay recorded LLM/agent results without Copilot or MCP. Explicit script tools and stores run normally for workflow traces; legacy generation recordings retain their restrictions. Mutually exclusive with `--trace` and `--record`. |
-| `--checkpoint <file>` | none | Create a new resumable-run journal; never overwrite an existing file. |
-| `--resume <file>` | none | Inspect pending human input, or continue with a matching answer. |
-| `--answer-for <id>` | none | Exact pending request ID; required with either answer flag. |
+| `--checkpoint <file>` | none | Create a new resumable-run journal; never overwrite an existing file. With bare `--resume`, open and append to this existing journal instead. |
+| `--resume [file]` | none | Inspect pending human input, or continue with a matching answer. Omit the file when using `--checkpoint <file>`; `--resume <file>` remains supported. |
+| `--answer-for <id>` | none | Exact pending `request_id`, not `run_id`; required with either answer flag. |
 | `--answer <text>` | none | Exact free-text answer, including `--answer=` for an empty string. Requires `--resume`. |
 | `--answer-file <file>` | none | UTF-8 answer file; preserves whitespace. Mutually exclusive with `--answer`. |
 | `--cwd <dir>` | current dir | Base directory for relative paths, `restrict` checks, and the working directory of tools and the model. |
@@ -253,9 +254,13 @@ one answer bound to the pending request ID:
 
 ```bash
 spl examples/human-review.spl --checkpoint run.jsonl --silent
-spl examples/human-review.spl --resume run.jsonl --silent
-spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+spl examples/human-review.spl --resume --checkpoint run.jsonl --silent
+spl examples/human-review.spl --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
 ```
+
+`--resume run.jsonl` is equivalent to `--resume --checkpoint run.jsonl`. Each
+answer may pause again with a new `request_id`; keep using the same journal and
+the latest request ID, not the run ID. Completed runs cannot resume.
 
 See [Human in the loop](HITL.md) for the full protocol, no-repeat guarantees,
 same-workspace limits, sensitive-state handling, and GitHub Actions integration.

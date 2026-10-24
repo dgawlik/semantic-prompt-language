@@ -6,11 +6,11 @@
 <meta name="description" content="The interpreter runs one script file to completion or a human-input boundary. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=c0b76d8aeb54">
-<link rel="stylesheet" href="assets/style.css?v=c0b76d8aeb54">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=394c6d4b2097">
+<link rel="stylesheet" href="assets/style.css?v=394c6d4b2097">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=c0b76d8aeb54"></script>
-<script defer src="assets/site.js?v=c0b76d8aeb54"></script>
+<script defer src="assets/search-index.js?v=394c6d4b2097"></script>
+<script defer src="assets/site.js?v=394c6d4b2097"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -35,6 +35,7 @@
                  [--trace &lt;file.jsonl&gt; | --record &lt;file.jsonl&gt; | --replay &lt;file.jsonl&gt;]
                  [--arg &lt;value&gt; ...]
 spl &lt;script.spl&gt; --checkpoint &lt;run.jsonl&gt; [--silent]
+spl &lt;script.spl&gt; --resume --checkpoint &lt;run.jsonl&gt; [--answer-for &lt;<span class="hljs-built_in">id</span>&gt; --answer &lt;text&gt; | --answer-for &lt;<span class="hljs-built_in">id</span>&gt; --answer-file &lt;file&gt;]
 spl &lt;script.spl&gt; --resume &lt;run.jsonl&gt; [--answer-for &lt;<span class="hljs-built_in">id</span>&gt; --answer &lt;text&gt; | --answer-for &lt;<span class="hljs-built_in">id</span>&gt; --answer-file &lt;file&gt;]
 spl login
 spl <span class="hljs-built_in">logout</span>
@@ -107,17 +108,17 @@ spl <span class="hljs-built_in">logout</span>
 <tr>
 <td><code>--checkpoint &lt;file&gt;</code></td>
 <td>none</td>
-<td>Create a new resumable-run journal; never overwrite an existing file.</td>
+<td>Create a new resumable-run journal; never overwrite an existing file. With bare <code>--resume</code>, open and append to this existing journal instead.</td>
 </tr>
 <tr>
-<td><code>--resume &lt;file&gt;</code></td>
+<td><code>--resume [file]</code></td>
 <td>none</td>
-<td>Inspect pending human input, or continue with a matching answer.</td>
+<td>Inspect pending human input, or continue with a matching answer. Omit the file when using <code>--checkpoint &lt;file&gt;</code>; <code>--resume &lt;file&gt;</code> remains supported.</td>
 </tr>
 <tr>
 <td><code>--answer-for &lt;id&gt;</code></td>
 <td>none</td>
-<td>Exact pending request ID; required with either answer flag.</td>
+<td>Exact pending <code>request_id</code>, not <code>run_id</code>; required with either answer flag.</td>
 </tr>
 <tr>
 <td><code>--answer &lt;text&gt;</code></td>
@@ -379,9 +380,12 @@ spl script.spl --mcp mcp.json
 process waiting. Start with <code>--checkpoint</code>, inspect with <code>--resume</code>, and provide
 one answer bound to the pending request ID:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-11">spl examples/human-review.spl --checkpoint run.jsonl --silent
-spl examples/human-review.spl --resume run.jsonl --silent
-spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+spl examples/human-review.spl --resume --checkpoint run.jsonl --silent
+spl examples/human-review.spl --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
 </code></pre></figure>
+<p><code>--resume run.jsonl</code> is equivalent to <code>--resume --checkpoint run.jsonl</code>. Each
+answer may pause again with a new <code>request_id</code>; keep using the same journal and
+the latest request ID, not the run ID. Completed runs cannot resume.</p>
 <p>See <a href="hitl.html">Human in the loop</a> for the full protocol, no-repeat guarantees,
 same-workspace limits, sensitive-state handling, and GitHub Actions integration.
 Resumable mode cannot combine with stores or trace/record/replay.</p>

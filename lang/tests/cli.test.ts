@@ -30,8 +30,9 @@ function run(args: string[]) {
 }
 
 describe('noninteractive checkpoint CLI', () => {
-    it('pauses, inspects without changing state, binds answers and completes without model authentication', () => {
+    it.each(['file', 'checkpoint'] as const)('pauses, inspects, answers and completes with --resume %s', (syntax) => {
         const state = path.join(dir, 'run.jsonl');
+        const resume = syntax === 'file' ? ['--resume', state] : ['--resume', '--checkpoint', state];
         const script = `write_file('output.txt', 'original')\nlet a = human 'First question'\nlet b = human 'Second question'\nsuccess [a, b, $args]`;
         const first = spl(script, '--checkpoint', state, '--arg=initial', '--silent');
         expect(first.code).toBe(3);
@@ -39,30 +40,61 @@ describe('noninteractive checkpoint CLI', () => {
         const pending = JSON.parse(first.out);
         expect(pending).toMatchObject({ status: 'waiting_for_input', question: 'First question', line: 2, checkpoint: state });
         const before = fs.readFileSync(state, 'utf8');
-        expect(spl(script, '--resume', state, '--silent')).toEqual(first);
+        expect(spl(script, ...resume, '--silent')).toEqual(first);
         expect(fs.readFileSync(state, 'utf8')).toBe(before);
         fs.writeFileSync(path.join(dir, 'output.txt'), 'not overwritten');
-        const stale = spl(script, '--resume', state, '--answer-for', 'wrong', '--answer=yes', '--silent');
+        const stale = spl(script, ...resume, '--answer-for', pending.run_id, '--answer=yes', '--silent');
         expect(stale.code).toBe(2);
         expect(stale.out).toBe('');
+        expect(stale.err).toContain('use request_id from the latest waiting_for_input response, not run_id');
         expect(fs.readFileSync(state, 'utf8')).toBe(before);
-        const second = spl(script, '--resume', state, '--answer-for', pending.request_id, '--answer=', '--silent');
+        expect(spl(script, '--checkpoint', state, '--silent').code).toBe(2);
+        expect(fs.readFileSync(state, 'utf8')).toBe(before);
+        const second = spl(script, ...resume, '--answer-for', pending.request_id, '--answer=', '--silent');
         expect(second.code).toBe(3);
         const next = JSON.parse(second.out);
         expect(next.request_id).not.toBe(pending.request_id);
+        expect(next.run_id).toBe(pending.run_id);
+        expect(next.checkpoint).toBe(state);
         expect(next.question).toBe('Second question');
-        expect(spl(script, '--resume', state, '--answer-for', pending.request_id, '--answer=yes').code).toBe(2);
+        const afterSecond = fs.readFileSync(state, 'utf8');
+        expect(afterSecond.startsWith(before)).toBe(true);
+        expect(spl(script, ...resume, '--silent')).toEqual(second);
+        expect(spl(script, ...resume, '--answer-for', pending.request_id, '--answer=yes').code).toBe(2);
+        expect(fs.readFileSync(state, 'utf8')).toBe(afterSecond);
         const answer = '  "quoted"\nmultiline\n';
         const answerFile = path.join(dir, 'answer.txt');
         fs.writeFileSync(answerFile, answer);
-        const done = spl(script, '--resume', state, '--answer-for', next.request_id, '--answer-file', answerFile, '--silent');
+        const done = spl(script, ...resume, '--answer-for', next.request_id, '--answer-file', answerFile, '--silent');
         expect(done.code).toBe(0);
         expect(JSON.parse(done.out)).toEqual({
             status: 'success', run_id: pending.run_id, has_value: true, value: ['', answer, ['initial']],
         });
         expect(fs.readFileSync(path.join(dir, 'output.txt'), 'utf8')).toBe('not overwritten');
-        expect(spl(script, '--resume', state, '--silent').code).toBe(2);
+        expect(fs.readFileSync(state, 'utf8').startsWith(afterSecond)).toBe(true);
+        expect(spl(script, ...resume, '--silent').code).toBe(2);
         expect(fs.existsSync(`${state}.lock`)).toBe(false);
+    });
+
+    it.each([
+        ['--resume={state}'],
+        ['--resume', '{state}'],
+        ['--checkpoint={state}', '--resume'],
+        ['--resume', '--checkpoint={state}'],
+    ])('supports inline paths and either flag order: %j', (...options) => {
+        const state = path.join(dir, 'state with spaces.jsonl');
+        const script = `success human 'question'`;
+        const first = spl(script, '--checkpoint', state, '--silent');
+        const resume = options.map((option) => option.replace('{state}', state));
+        expect(spl(script, ...resume, '--silent')).toEqual(first);
+        const done = run([...resume, path.join(dir, 's.spl'), '--answer-for', JSON.parse(first.out).request_id, '--answer=--resume', '--silent']);
+        expect(done.code).toBe(0);
+        expect(JSON.parse(done.out).value).toBe('--resume');
+    });
+
+    it('does not interpret --resume after the option terminator as an option', () => {
+        fs.writeFileSync(path.join(dir, '--resume'), 'success 7');
+        expect(run(['--silent', '--', '--resume'])).toEqual({ code: 0, out: '7\n', err: '' });
     });
 
     it('preflights human expressions but accepts --check without creating a checkpoint', () => {
@@ -89,6 +121,14 @@ describe('noninteractive checkpoint CLI', () => {
         ['--answer=yes'],
         ['--answer-for=id'],
         ['--checkpoint=a', '--resume=b'],
+        ['--resume'],
+        ['--resume', '--silent'],
+        ['--resume', '--checkpoint='],
+        ['--resume', '--checkpoint=a', '--resume=b'],
+        ['--resume', '--checkpoint=a', '--answer=yes'],
+        ['--resume', '--checkpoint=a', '--answer-for=id'],
+        ['--resume', '--checkpoint=a', '--trace=b'],
+        ['--resume', '--checkpoint=a', '--store=b'],
         ['--resume=a', '--answer=yes'],
         ['--resume=a', '--answer-for=id'],
         ['--resume=a', '--answer-for=id', '--answer=yes', '--answer-file=answer.txt'],
@@ -105,14 +145,25 @@ describe('noninteractive checkpoint CLI', () => {
         expect(fs.existsSync(path.join(dir, 'a'))).toBe(false);
     });
 
-    it('rejects changed scripts and arguments without consuming the pending question', () => {
+    it.each(['file', 'checkpoint'] as const)('rejects changed scripts and arguments with --resume %s', (syntax) => {
         const state = path.join(dir, 'run.jsonl');
+        const resume = syntax === 'file' ? ['--resume', state] : ['--resume', '--checkpoint', state];
         const first = spl(`success human 'question'`, '--checkpoint', state, '--arg=one', '--silent');
         const id = JSON.parse(first.out).request_id;
         const original = fs.readFileSync(state, 'utf8');
-        expect(spl(`success human 'changed'`, '--resume', state, '--answer-for', id, '--answer=yes', '--silent').code).toBe(2);
-        expect(spl(`success human 'question'`, '--resume', state, '--arg=two', '--answer-for', id, '--answer=yes', '--silent').code).toBe(2);
+        expect(spl(`success human 'changed'`, ...resume, '--answer-for', id, '--answer=yes', '--silent').code).toBe(2);
+        expect(spl(`success human 'question'`, ...resume, '--arg=two', '--answer-for', id, '--answer=yes', '--silent').code).toBe(2);
         expect(fs.readFileSync(state, 'utf8')).toBe(original);
+    });
+
+    it('does not create a missing journal when resuming with --checkpoint', () => {
+        const state = path.join(dir, 'missing.jsonl');
+        const result = spl(`success human 'question'`, '--resume', '--checkpoint', state, '--silent');
+        expect(result.code).toBe(2);
+        expect(result.out).toBe('');
+        expect(result.err).toContain('cannot resume checkpoint');
+        expect(fs.existsSync(state)).toBe(false);
+        expect(fs.existsSync(`${state}.lock`)).toBe(false);
     });
 });
 

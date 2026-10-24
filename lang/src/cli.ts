@@ -37,8 +37,10 @@ Options:
   --record <file.jsonl>   record generation responses (new file; no agents)
   --replay <file.jsonl>   replay LLM results without Copilot/MCP; explicit script tools still run
                           Legacy --record files allow only local reads and no stores.
-  --checkpoint <file>    start a new resumable run; never overwrite an existing file
-  --resume <file>        inspect pending input, or resume with an answer
+  --checkpoint <file>    start a new resumable run; with --resume, continue that journal
+                          New runs never overwrite an existing file.
+  --resume [file]        inspect pending input, or resume with an answer
+                          Omit file when using --checkpoint <file>.
   --answer-for <id>      ID of the pending human request being answered
   --answer <text>        exact free-text answer (requires --resume and --answer-for)
   --answer-file <file>   read the answer from a UTF-8 file instead of --answer
@@ -162,31 +164,48 @@ function logoutCommand(): number {
 
 async function main(): Promise<number> {
     let parsed;
+    let resumeWithCheckpoint = false;
     try {
+        const options = {
+            'log-level': { type: 'string' },
+            silent: { type: 'boolean' },
+            model: { type: 'string' },
+            arg: { type: 'string', multiple: true },
+            mcp: { type: 'string' },
+            store: { type: 'string' },
+            'store-module': { type: 'string' },
+            timeout: { type: 'string' },
+            trace: { type: 'string' },
+            record: { type: 'string' },
+            replay: { type: 'string' },
+            checkpoint: { type: 'string' },
+            resume: { type: 'string' },
+            'answer-for': { type: 'string' },
+            answer: { type: 'string' },
+            'answer-file': { type: 'string' },
+            cwd: { type: 'string' },
+            check: { type: 'boolean' },
+            version: { type: 'boolean', short: 'v' },
+            help: { type: 'boolean', short: 'h' },
+        } as const;
+        const args = process.argv.slice(2);
+        // parseArgs has no optional string options; locate bare --resume using tokens.
+        const { tokens } = parseArgs({
+            args, options: { ...options, resume: { type: 'boolean' } },
+            allowPositionals: true, strict: false, tokens: true,
+        });
+        const checkpointHasScript = tokens.some((token) => token.kind === 'option' && token.name === 'checkpoint')
+            && tokens.filter((token) => token.kind === 'positional').length === 1;
+        const bareResume = new Set(tokens
+            .filter((token) => token.kind === 'option' && token.name === 'resume'
+                && token.value === undefined
+                && (checkpointHasScript || args[token.index + 1] === undefined || args[token.index + 1].startsWith('-')))
+            .map((token) => token.index));
+        resumeWithCheckpoint = bareResume.size > 0;
         parsed = parseArgs({
+            args: args.filter((_, index) => !bareResume.has(index)),
             allowPositionals: true,
-            options: {
-                'log-level': { type: 'string' },
-                silent: { type: 'boolean' },
-                model: { type: 'string' },
-                arg: { type: 'string', multiple: true },
-                mcp: { type: 'string' },
-                store: { type: 'string' },
-                'store-module': { type: 'string' },
-                timeout: { type: 'string' },
-                trace: { type: 'string' },
-                record: { type: 'string' },
-                replay: { type: 'string' },
-                checkpoint: { type: 'string' },
-                resume: { type: 'string' },
-                'answer-for': { type: 'string' },
-                answer: { type: 'string' },
-                'answer-file': { type: 'string' },
-                cwd: { type: 'string' },
-                check: { type: 'boolean' },
-                version: { type: 'boolean', short: 'v' },
-                help: { type: 'boolean', short: 'h' },
-            },
+            options,
         });
     } catch (e) {
         return usageError((e as Error).message);
@@ -218,6 +237,12 @@ async function main(): Promise<number> {
     }
     if ([values.trace, values.record, values.replay].some((value) => value !== undefined && value.trim() === '')) {
         usageError('--trace, --record, and --replay require a non-empty file path');
+    }
+    if (resumeWithCheckpoint) {
+        if (values.resume !== undefined) usageError('use either --resume <file> or --resume --checkpoint <file>');
+        if (values.checkpoint === undefined) usageError('--resume requires a file: use --resume <file> or --resume --checkpoint <file>');
+        values.resume = values.checkpoint;
+        delete values.checkpoint;
     }
     const resumable = values.checkpoint !== undefined || values.resume !== undefined;
     if (values.checkpoint !== undefined && values.resume !== undefined) usageError('--checkpoint and --resume are mutually exclusive');

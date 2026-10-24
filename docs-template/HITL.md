@@ -32,8 +32,14 @@ Start a run and inspect its pending question:
 
 ```bash
 spl examples/human-review.spl --checkpoint run.jsonl --silent
-spl examples/human-review.spl --resume run.jsonl --silent
+spl examples/human-review.spl --resume --checkpoint run.jsonl --silent
 ```
+
+`--checkpoint run.jsonl` alone creates a new journal and refuses an existing file.
+Adding `--resume` opens that existing journal instead. The original
+`--resume run.jsonl` syntax is equivalent to `--resume --checkpoint run.jsonl`;
+both inspect or continue the same file, and all later questions and answers append
+to it. Resuming a missing journal is an error, not a request to start over.
 
 Both commands exit `3` while waiting and print the same pending request. SPL never
 reads stdin, opens an interactive prompt, polls, or leaves a process waiting:
@@ -53,12 +59,18 @@ Pending inspection does not execute the script, call tools, or require model
 authentication. Submit exactly one answer in a later invocation:
 
 ```bash
-spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer "Make it shorter"
-spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+spl examples/human-review.spl --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer "Make it shorter"
+spl examples/human-review.spl --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
 ```
 
-These are alternatives, not two submissions. `--answer-for` must match the current
-pending request. Stale, missing, duplicate, or mismatched submissions fail with code
+These are alternatives, not two submissions. Replace `REQUEST_ID` with the
+**`request_id` from the latest `waiting_for_input` response, not its `run_id`**.
+The run ID identifies the whole workflow and stays constant; the request ID
+identifies one pending question and changes at each pause. Quoting a run ID does
+not turn it into a request ID.
+
+`--answer-for` must match the current pending request. Stale, missing, duplicate,
+or mismatched submissions fail with code
 `2` without advancing the run. Empty answers are valid protocol values; scripts may
 reject them with an assertion. Answer files retain all whitespace, including their
 final newline. Neither form reads stdin. Prefer answer files for private or multiline
@@ -66,6 +78,73 @@ text rather than putting it in process arguments.
 
 A valid answer is persisted before continuing. A run can ask more questions;
 do not automatically reuse an earlier answer for a new request ID.
+
+## Multi-step walkthrough in PowerShell
+
+From the checkout's `lang` directory, save this as `preferences.spl`. This example
+needs no model authentication; an `ask` after the questions would run only after
+both answers arrive.
+
+```spl
+let color = human 'What is your favorite color?'
+let fruit = human 'What is your favorite fruit?'
+success {'color': color, 'fruit': fruit}
+```
+
+### Start and capture the first question
+
+Use a new journal path. Capture stdout as JSON and check the exit code separately;
+exit `3` means a successful handoff to your human-input system, not completion.
+
+```powershell
+$pending = node .\dist\cli.js .\preferences.spl --checkpoint preferences-run.jsonl --silent | ConvertFrom-Json
+if ($LASTEXITCODE -ne 3) { throw "Expected exit 3 while waiting for the color" }
+$pending.question
+$pending.request_id
+```
+
+You can inspect this same question without submitting anything:
+
+```powershell
+node .\dist\cli.js .\preferences.spl --resume --checkpoint preferences-run.jsonl --silent
+```
+
+### Answer the color and capture the next question
+
+```powershell
+$next = node .\dist\cli.js .\preferences.spl --resume --checkpoint preferences-run.jsonl --silent --answer-for $pending.request_id --answer "Blue" | ConvertFrom-Json
+if ($LASTEXITCODE -ne 3) { throw "Expected exit 3 while waiting for the fruit" }
+$next.question
+$next.request_id
+```
+
+The second question has a new `request_id`, the same `run_id`, and the same
+checkpoint path. The first answer has already been saved; do not start a new
+checkpoint or reuse `$pending.request_id`.
+
+### Answer the fruit and complete
+
+```powershell
+$done = node .\dist\cli.js .\preferences.spl --resume --checkpoint preferences-run.jsonl --silent --answer-for $next.request_id --answer "Apple" | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw "Expected successful completion" }
+$done | ConvertTo-Json -Depth 10
+```
+
+The final envelope has `status: "success"` and
+`value: {"color":"Blue","fruit":"Apple"}`. For more questions, repeat the same
+resume command with each newly returned `request_id` until exit `0` or `1`.
+If you close PowerShell, inspect the journal again and capture its pending
+response; you do not need to retain these shell variables.
+
+### Common command mistakes
+
+| Mistake | Correction |
+| --- | --- |
+| `--answer-for RUN_ID` | Use the latest response's `request_id`, never `run_id`. |
+| Answer flags with only `--checkpoint run.jsonl` | Add `--resume` to continue the existing run. |
+| Bare `--resume` with no journal path | Use `--resume --checkpoint run.jsonl` or `--resume run.jsonl`. |
+| `--resume old.jsonl --checkpoint new.jsonl` | Choose one journal using either supported resume form; this does not fork a run. |
+| `--anwer "Blue"` | Spell the option `--answer`. |
 
 ## Automation protocol
 
@@ -119,9 +198,10 @@ must match. SPL stores its fingerprint rather than all environment values in
 plaintext. Changed input/configuration and history mismatches fail explicitly.
 
 Only one writer can open a journal. Do not delete a stale `.lock` and retry an
-uncertain action. Terminal runs cannot resume. `--checkpoint` and `--resume` are
-mutually exclusive and cannot combine with `--trace`, `--record`, `--replay`,
-`--store`, or `--store-module`.
+uncertain action. Terminal runs cannot resume. Use `--resume --checkpoint <file>`
+or `--resume <file>` to append to an existing journal; do not supply both a resume
+file and a checkpoint file. Resumable runs cannot combine with `--trace`,
+`--record`, `--replay`, `--store`, or `--store-module`.
 
 Treat journals and answer files as sensitive, trusted control-plane data. Prompts,
 tool arguments/results and answers may contain secrets. New journal/lock files use
