@@ -8,11 +8,11 @@ deterministic code separate from LLM calls, contain model variance with explicit
 guards, and read the whole workflow at a glance.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=394c6d4b2097">
-<link rel="stylesheet" href="assets/style.css?v=394c6d4b2097">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=4714d8a2d43f">
+<link rel="stylesheet" href="assets/style.css?v=4714d8a2d43f">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=394c6d4b2097"></script>
-<script defer src="assets/site.js?v=394c6d4b2097"></script>
+<script defer src="assets/search-index.js?v=4714d8a2d43f"></script>
+<script defer src="assets/site.js?v=4714d8a2d43f"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -35,11 +35,38 @@ guards, and read the whole workflow at a glance.</p></div><div class="hero-actio
     <article class="prose"><p>Spend time developing the solution, not wiring an orchestration layer. Write a
 small script, run it, inspect the result, and refine the prompt or guard. The goal
 is a working solution in minutes rather than hours of glue code.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">guarded-triage.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy guarded-triage.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="guarded-triage.spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> report = <span class="hljs-string">&#x27;Checkout fails for every customer after deployment.&#x27;</span>
-<span class="hljs-keyword">let</span> severity = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;integer&#x27;</span>, repairs=<span class="hljs-number">1</span>) <span class="hljs-string">&#x27;Rate the impact from 1 to 5: {report}&#x27;</span>
-<span class="hljs-keyword">assert</span> severity &gt;= <span class="hljs-number">1</span> <span class="hljs-keyword">and</span> severity &lt;= <span class="hljs-number">5</span> <span class="hljs-string">&#x27;severity must be between 1 and 5&#x27;</span>
-<span class="hljs-keyword">let</span> route = <span class="hljs-keyword">if</span> severity &gt;= <span class="hljs-number">4</span> { <span class="hljs-string">&#x27;urgent-review&#x27;</span> } <span class="hljs-keyword">else</span> { <span class="hljs-string">&#x27;normal-review&#x27;</span> }
-<span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;severity&#x27;</span>: severity, <span class="hljs-string">&#x27;route&#x27;</span>: route}
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">basics.spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy basics.spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="basics.spl code example"><code class="language-spl" data-file="basics.spl" id="code-1"><span class="hljs-meta">@(<span class="hljs-params">model=<span class="hljs-string">&#x27;gpt-6-luna&#x27;</span></span>)</span>
+
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
+    <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">2</span> {
+        <span class="hljs-keyword">return</span> n
+    }
+    <span class="hljs-keyword">return</span> fib(n - <span class="hljs-number">1</span>) + fib(n - <span class="hljs-number">2</span>)
+}
+
+<span class="hljs-keyword">let</span> fib10 = fib(<span class="hljs-number">10</span>)
+<span class="hljs-keyword">let</span> modelFib10 = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;integer&#x27;</span>) \
+    <span class="hljs-string">&#x27;fibonacci of 10 is?&#x27;</span>
+
+<span class="hljs-keyword">assert</span> fib10 == modelFib10 <span class="hljs-string">&#x27;Oops model got it wrong&#x27;</span>
+
+<span class="hljs-keyword">let</span> joke = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;object&#x27;</span>) \
+    <span class="hljs-string">&#x27;A joke about programmers as {{&quot;setup&quot;: ..., &quot;punchline&quot;: ...}}&#x27;</span>
+
+<span class="hljs-keyword">let</span> animal = <span class="hljs-literal">None</span>
+<span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Answer in Chinese&#x27;</span> {
+    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;Mentioning the word cat&#x27;</span> {
+        animal = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;paragraph&#x27;</span>) \
+         <span class="hljs-string">&#x27;Funny story involving a pet animal&#x27;</span>
+    }
+}
+
+<span class="hljs-keyword">success</span> {
+    <span class="hljs-string">&#x27;fib&#x27;</span>: fib10, 
+    <span class="hljs-string">&#x27;modelFib&#x27;</span>: modelFib10, 
+    <span class="hljs-string">&#x27;animal&#x27;</span>: animal, 
+    <span class="hljs-string">&#x27;joke&#x27;</span>: joke
+}
 </code></pre></figure>
 <p>The <code>ask</code> is the only model call. <code>fmt</code> checks its output type; <code>assert</code> rejects an
 out-of-range answer before ordinary code routes it. A reviewer can see the input,

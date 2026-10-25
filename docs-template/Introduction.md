@@ -8,14 +8,41 @@ Spend time developing the solution, not wiring an orchestration layer. Write a
 small script, run it, inspect the result, and refine the prompt or guard. The goal
 is a working solution in minutes rather than hours of glue code.
 
-`guarded-triage.spl`
+`basics.spl`
 
 ```spl
-let report = 'Checkout fails for every customer after deployment.'
-let severity = ask(fmt='integer', repairs=1) 'Rate the impact from 1 to 5: {report}'
-assert severity >= 1 and severity <= 5 'severity must be between 1 and 5'
-let route = if severity >= 4 { 'urgent-review' } else { 'normal-review' }
-success {'severity': severity, 'route': route}
+@(model='gpt-6-luna')
+
+def fib(n) {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+let fib10 = fib(10)
+let modelFib10 = ask(fmt='integer') \
+    'fibonacci of 10 is?'
+
+assert fib10 == modelFib10 'Oops model got it wrong'
+
+let joke = ask(fmt='object') \
+    'A joke about programmers as {{"setup": ..., "punchline": ...}}'
+
+let animal = None
+enforce 'Answer in Chinese' {
+    forbid 'Mentioning the word cat' {
+        animal = ask(len='paragraph') \
+         'Funny story involving a pet animal'
+    }
+}
+
+success {
+    'fib': fib10, 
+    'modelFib': modelFib10, 
+    'animal': animal, 
+    'joke': joke
+}
 ```
 
 The `ask` is the only model call. `fmt` checks its output type; `assert` rejects an
