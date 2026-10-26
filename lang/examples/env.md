@@ -1,5 +1,10 @@
-@(model='gpt-6-luna')
+---
+extension: semantic-prompt-language
+version: 1
+model: 'gpt-6-luna'
+---
 
+```spl
 let lhs1 = $env.LHS
 let rhs1 = $env.RHS
 
@@ -13,4 +18,4 @@ log(lhs2)
 log(rhs2)
 
 success ask(fmt='json') 'Sum of {lhs1} and {rhs1}'
-
+```

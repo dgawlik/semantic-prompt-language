@@ -7,6 +7,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
 import { LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
+import { extractMarkdown, isWorkflowMarkdown, parseMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
 import { builtins, keywords, modifiers, specialVariables, type Help } from './catalog';
 
 type NamedToken = Extract<Token, { type: 'name' }>;
@@ -34,6 +35,7 @@ export interface Analysis {
     names: NamedToken[];
     scopes: Scope[];
     bindings: Binding[];
+    blocks?: MarkdownBlock[];
 }
 
 function tokenRange(token: NamedToken): Range {
@@ -72,10 +74,24 @@ function interpolationNames(tokens: Token[]): NamedToken[] {
 }
 
 export function analyze(document: TextDocument): Analysis {
-    const source = document.getText();
+    let source = document.getText();
+    let blocks: MarkdownBlock[] | undefined;
+    if (document.languageId === 'markdown') {
+        if (!isWorkflowMarkdown(source)) {
+            return { document, diagnostics: [], tokens: [], names: [], scopes: [], bindings: [], blocks: [] };
+        }
+        blocks = [];
+    }
     const diagnostics: Diagnostic[] = [];
     try {
-        parse(source);
+        if (blocks) {
+            const extracted = extractMarkdown(source);
+            blocks = extracted.blocks;
+            source = extracted.code;
+            parseMarkdown(document.getText());
+        } else {
+            parse(source);
+        }
     } catch (error) {
         if (!(error instanceof SplSyntaxError)) throw error;
         const start = document.positionAt(document.offsetAt({ line: error.line - 1, character: error.col - 1 }));
@@ -91,8 +107,17 @@ export function analyze(document: TextDocument): Analysis {
     let tokens: Token[] = [];
     let names: NamedToken[] = [];
     try {
-        tokens = tokenize(source, { allowUnclosedBrackets: true });
+        tokens = blocks?.length === 0 ? [] : tokenize(source, { allowUnclosedBrackets: true });
         names = interpolationNames(tokens);
+        for (const block of blocks ?? []) {
+            if (block.kind !== 'natural') continue;
+            const lines = document.getText().split(/\r?\n/);
+            for (let line = block.line; line <= block.endLine; line++) {
+                for (const match of lines[line - 1].matchAll(/(?<![\w@])@([A-Za-z_]\w*)/g)) {
+                    names.push({ type: 'name', value: match[1], line, col: match.index + 2 });
+                }
+            }
+        }
     } catch (error) {
         if (!(error instanceof SplSyntaxError)) throw error;
         // Lexically incomplete documents still get parser diagnostics and static completions.
@@ -186,7 +211,7 @@ export function analyze(document: TextDocument): Analysis {
             for (const param of params) add(param, functionScope, `parameter ${param.value}`);
         }
     }
-    return { document, diagnostics, tokens, names, scopes, bindings };
+    return { document, diagnostics, tokens, names, scopes, bindings, blocks };
 }
 
 function scopeAt(analysis: Analysis, at: number): Scope {
@@ -239,6 +264,7 @@ function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' |
 }
 
 export function completions(analysis: Analysis, position: Position): CompletionItem[] {
+    if (analysis.blocks && !analysis.blocks.some((block) => position.line >= block.line - 1 && position.line < block.endLine)) return [];
     const at = analysis.document.offsetAt(position);
     const prefix = /\$[A-Za-z0-9_]*$|[A-Za-z_][A-Za-z0-9_]*$/.exec(analysis.document.getText().slice(0, at))?.[0] ?? '';
     const range = { start: analysis.document.positionAt(at - prefix.length), end: position };
@@ -308,6 +334,7 @@ export function definition(analysis: Analysis, position: Position): Location | u
 }
 
 export function documentSymbols(analysis: Analysis): DocumentSymbol[] {
+    if (!analysis.scopes.length) return [];
     const symbolScope = (scope: Scope): Scope => {
         while (scope.parent && !analysis.bindings.some((binding) => binding.functionScope === scope)) scope = scope.parent;
         return scope;

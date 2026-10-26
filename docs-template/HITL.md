@@ -31,8 +31,8 @@ that name.
 Start a run and inspect its pending question:
 
 ```bash
-spl examples/human-review.spl --checkpoint run.jsonl --silent
-spl examples/human-review.spl --resume --checkpoint run.jsonl --silent
+spl examples/human-review.md --checkpoint run.jsonl --silent
+spl examples/human-review.md --resume --checkpoint run.jsonl --silent
 ```
 
 `--checkpoint run.jsonl` alone creates a new journal and refuses an existing file.
@@ -59,8 +59,8 @@ Pending inspection does not execute the script, call tools, or require model
 authentication. Submit exactly one answer in a later invocation:
 
 ```bash
-spl examples/human-review.spl --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer "Make it shorter"
-spl examples/human-review.spl --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+spl examples/human-review.md --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer "Make it shorter"
+spl examples/human-review.md --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
 ```
 
 These are alternatives, not two submissions. Replace `REQUEST_ID` with the
@@ -81,7 +81,7 @@ do not automatically reuse an earlier answer for a new request ID.
 
 ## Multi-step walkthrough in PowerShell
 
-From the checkout's `lang` directory, save this as `preferences.spl`. This example
+From the checkout's `lang` directory, save this as `preferences.md`. This example
 needs no model authentication; an `ask` after the questions would run only after
 both answers arrive.
 
@@ -97,7 +97,7 @@ Use a new journal path. Capture stdout as JSON and check the exit code separatel
 exit `3` means a successful handoff to your human-input system, not completion.
 
 ```powershell
-$pending = node .\dist\cli.js .\preferences.spl --checkpoint preferences-run.jsonl --silent | ConvertFrom-Json
+$pending = node .\dist\cli.js .\preferences.md --checkpoint preferences-run.jsonl --silent | ConvertFrom-Json
 if ($LASTEXITCODE -ne 3) { throw "Expected exit 3 while waiting for the color" }
 $pending.question
 $pending.request_id
@@ -106,13 +106,13 @@ $pending.request_id
 You can inspect this same question without submitting anything:
 
 ```powershell
-node .\dist\cli.js .\preferences.spl --resume --checkpoint preferences-run.jsonl --silent
+node .\dist\cli.js .\preferences.md --resume --checkpoint preferences-run.jsonl --silent
 ```
 
 ### Answer the color and capture the next question
 
 ```powershell
-$next = node .\dist\cli.js .\preferences.spl --resume --checkpoint preferences-run.jsonl --silent --answer-for $pending.request_id --answer "Blue" | ConvertFrom-Json
+$next = node .\dist\cli.js .\preferences.md --resume --checkpoint preferences-run.jsonl --silent --answer-for $pending.request_id --answer "Blue" | ConvertFrom-Json
 if ($LASTEXITCODE -ne 3) { throw "Expected exit 3 while waiting for the fruit" }
 $next.question
 $next.request_id
@@ -125,7 +125,7 @@ checkpoint or reuse `$pending.request_id`.
 ### Answer the fruit and complete
 
 ```powershell
-$done = node .\dist\cli.js .\preferences.spl --resume --checkpoint preferences-run.jsonl --silent --answer-for $next.request_id --answer "Apple" | ConvertFrom-Json
+$done = node .\dist\cli.js .\preferences.md --resume --checkpoint preferences-run.jsonl --silent --answer-for $next.request_id --answer "Apple" | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw "Expected successful completion" }
 $done | ConvertTo-Json -Depth 10
 ```
@@ -223,7 +223,7 @@ path in the preserved workspace:
 
 ```bash
 set +e
-spl examples/human-review.spl --checkpoint "$RUN_STATE" --silent > result.json
+spl examples/human-review.md --checkpoint "$RUN_STATE" --silent > result.json
 code=$?
 set -e
 case "$code" in
@@ -242,7 +242,7 @@ with the same exit-code handling. Pass values through quoted environment variabl
 or files, not interpolated shell source:
 
 ```bash
-spl examples/human-review.spl --resume "$RUN_STATE" \
+spl examples/human-review.md --resume "$RUN_STATE" \
   --answer-for "$REQUEST_ID" --answer-file "$ANSWER_FILE" --silent > result.json
 ```
 

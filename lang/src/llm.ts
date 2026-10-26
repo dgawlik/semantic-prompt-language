@@ -20,6 +20,8 @@ export interface LlmRequest {
     showReasoning: boolean;
     restrictions: Restrictions;
     tools: ToolHost;
+    /** Submit a program for execution in the document's shared scope. */
+    naturalLanguage?: boolean;
 }
 
 export interface LlmResponse {
@@ -27,6 +29,7 @@ export interface LlmResponse {
     reasoning?: string;
     /** Effective model and parameters, recorded in the logs. */
     effective: Record<string, unknown>;
+    spl?: string;
 }
 
 export interface LlmBackend {

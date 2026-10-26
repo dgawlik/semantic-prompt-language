@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 let color = ask(len='word') \
  'What is the most common color of the sky on a clear day?'
 
@@ -16,3 +22,4 @@ enforce 'Reply in lowercase only' {
 
 assert 'blue' in color.lower() 'unexpected color'
 success {'color': color, 'setup': joke.setup, 'answer': answer, 'greeting': greeting}
+```

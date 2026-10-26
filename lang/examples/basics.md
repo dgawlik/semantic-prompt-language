@@ -1,5 +1,10 @@
-@(model='gpt-6-luna')
+---
+extension: semantic-prompt-language
+version: 1
+model: 'gpt-6-luna'
+---
 
+```spl
 def fib(n) {
     if n < 2 {
         return n
@@ -30,3 +35,4 @@ success {
     'animal': animal, 
     'joke': joke
 }
+```

@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # Summarize a web page with network access limited to a single host,
 # and prove the sandbox holds by catching a blocked request.
 
@@ -20,3 +26,4 @@ Reply with ONLY the list.
 }
 
 success "{headlines}\n\n{themes}"
+```

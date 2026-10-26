@@ -1,20 +1,24 @@
 # SPL - Semantic Prompt Language for VS Code
 
-Language server, syntax highlighting, snippets and editing support for `.spl` scripts run by the `spl` interpreter (the `lang/` folder of
-this repository).
+Language tooling for executable `.md` workflows run by the `spl` interpreter.
+Markdown remains the document language. Diagnostics, completion, navigation, and
+symbols activate only when initial YAML frontmatter declares
+`extension: semantic-prompt-language`; the runtime and server require `version: 1`.
+Ordinary Markdown is not diagnosed as SPL. `.spl` file association has been removed.
 
 ## Features
 
 * **Live syntax diagnostics** from the interpreter's actual lexer and parser, including invalid escapes,
   misplaced control flow, and unknown/duplicate generation modifiers.
 * **Completions** for language keywords, all built-in functions and raw tools, visible lexical bindings,
-  generation modifiers, log `level`, and the `model` header directive.
+  generation modifiers, log `level`, and `@name` references in blockquotes.
 * **Hover documentation** for keywords, built-ins, generation modifiers, and local declarations.
 * **Go to Definition** for bindings in the current document, including function parameters, nested functions,
   loop variables, caught failures, and references inside string interpolation.
 * **Document symbols** for functions and bindings, with nested function outlines.
-* **Highlighting** for the whole language: keywords, `let`/`def` declarations, numbers, comments, the `@(model=...)`
-  directive, and strings with `{expr}` interpolation, `{{ }}` and `\{ \}` brace escapes, raw `r'...'` strings and
+* **Highlighting** inside Markdown `spl` fences, plus `@name` markers in blockquotes.
+  Embedded SPL includes keywords, declarations, numbers, comments,
+  and strings with `{expr}` interpolation, `{{ }}` and `\{ \}` brace escapes, raw `r'...'` strings and
   triple-quoted strings. Illegal escapes and stray `}` in strings are flagged with the `invalid` scope.
 * **Generation and agency**: generation-only `ask` and `think`, explicit `agent`, and expression-valued modifiers
   (`len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`, `model`). Raw tools are ordinary function calls.
@@ -27,8 +31,8 @@ this repository).
 * **Snippets** (type the prefix): `def`, `if`, `ifelse`, `ifexpr`, `loglevel`, `for`, `while`, `let`, `ask`, `askobj`, `think`, `try`,
   `askschema`, `retry` (bounded schema repair), `agent`, `enforce`, `forbid`, `restrict`, `restrictnet`, `restrictexec`, `restrictmcp`, `restrictmulti`, `read_file`, `write_file`, `web_fetch`,
   `web_search`, `shell`, `assert`, `fail`, `success`, `model`.
-* **Editing**: `#` line comments (Ctrl+/), bracket matching and auto-closing for `{}` `[]` `()` and quotes
-  (including `'''`), auto-indent after `{`, `#region` / `#endregion` folding.
+* **Workflow snippet**: `splworkflow` creates version-1 frontmatter and mixed execution blocks.
+  Embedded SPL uses its language configuration; prose retains normal Markdown editing.
 
 Highlighting is lexical (TextMate); the language server separately checks syntax on open and after edits.
 Expression values, schemas, and whether a name exists on a particular execution path are validated at runtime,
@@ -53,7 +57,7 @@ code --install-extension spl-lang-vscode-0.3.0.vsix
 ```
 
 For development open this folder in VS Code, run `npm install`, and press F5 (Extension Development Host).
-The launch configuration builds the client and server first. Open any `.spl` file to activate the server.
+The launch configuration builds the client and server first. Open an opted-in `.md` file to use the server.
 
 ## Develop
 

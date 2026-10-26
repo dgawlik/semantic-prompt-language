@@ -1,0 +1,30 @@
+{
+  "scopeName": "spl.markdown.injection",
+  "injectionSelector": "L:text.html.markdown -comment -markup.fenced_code.block",
+  "patterns": [
+    {
+      "begin": "^ {0,3}(`{3,})spl\\s*$",
+      "end": "^ {0,3}\\1`*\\s*$",
+      "name": "markup.fenced_code.block.spl",
+      "contentName": "meta.embedded.block.spl",
+      "patterns": [{ "include": "source.spl" }]
+    },
+    {
+      "begin": "^ {0,3}(~{3,})spl\\s*$",
+      "end": "^ {0,3}\\1~*\\s*$",
+      "name": "markup.fenced_code.block.spl",
+      "contentName": "meta.embedded.block.spl",
+      "patterns": [{ "include": "source.spl" }]
+    },
+    {
+      "begin": "^ {0,3}>\\s?",
+      "end": "$",
+      "patterns": [
+        {
+          "match": "(?<![\\w@])@[A-Za-z_]\\w*",
+          "name": "variable.other.reference.spl"
+        }
+      ]
+    }
+  ]
+}

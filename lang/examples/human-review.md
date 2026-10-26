@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # Write a draft once, then exit with a question instead of reading terminal input.
 # Start with --checkpoint run.jsonl; resume with --answer-for and --answer-file.
 
@@ -13,3 +19,4 @@ restrict './out' {
     write_file('./out/review-feedback.txt', feedback)
 }
 success {'draft': draft, 'feedback': feedback}
+```

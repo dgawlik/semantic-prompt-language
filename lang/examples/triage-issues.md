@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # Triage a batch of issues into labels and priorities, with validated JSON and retries.
 # Schema repairs retry generation only; transport errors are not retried.
 
@@ -67,3 +73,4 @@ let summary = ask(len='sentence') \
 'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
 
 success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}
+```

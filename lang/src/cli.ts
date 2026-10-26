@@ -9,7 +9,8 @@ import { AuthError, login, logout } from './auth.js';
 import { Failure, SplSyntaxError } from './errors.js';
 import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
-import { parse, usesHuman } from './parser.js';
+import { usesHuman } from './parser.js';
+import { parseMarkdown } from './markdown.js';
 import { run, type RunResult } from './interpreter.js';
 import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
 import { toJson } from './values.js';
@@ -19,7 +20,7 @@ import { Checkpoint, CheckpointError, checkpointFingerprint } from './checkpoint
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
-Usage: spl <script.spl> [options]
+Usage: spl <workflow.md> [options]
        spl login               authenticate with GitHub Copilot (device flow in the browser)
        spl logout              remove the credentials saved by 'spl login'
 
@@ -27,7 +28,7 @@ Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
                           All levels include LLM transcripts and [deterministic] statement traces.
   --silent                suppress all logs; only the result is printed
-  --model <id>            model override (takes precedence over @(model=...))
+  --model <id>            model override (takes precedence over frontmatter)
   --arg <value>           script argument exposed in $args (repeatable; also --arg=value)
   --mcp <file.json>       MCP servers in VS Code mcp.json format
   --store <file.json>     persist top-level variables in a JSON file
@@ -259,6 +260,7 @@ async function main(): Promise<number> {
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
     const file = positionals[0];
+    if (!/\.md$/i.test(file)) usageError('only .md workflows are executable; wrap SPL in a fenced spl block and add extension/version frontmatter');
     let source: string;
     try {
         source = fs.readFileSync(file, 'utf8');
@@ -268,7 +270,7 @@ async function main(): Promise<number> {
 
     let program;
     try {
-        program = parse(source);
+        program = parseMarkdown(source);
     } catch (e) {
         if (e instanceof SplSyntaxError) {
             process.stderr.write(e.format(file) + '\n');

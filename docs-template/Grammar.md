@@ -4,6 +4,12 @@ The canonical SPL syntax reference. Commands use parenthesized named modifiers
 with the prompt outside the parentheses. Modifier names are checked while parsing;
 expression values and schemas are checked at runtime.
 
+This grammar describes the embedded SPL language and the compatible raw `parse`
+API. Executable files are Markdown documents with extension/version frontmatter;
+see [document structure](Language.md#program-structure). A fenced SPL unit uses
+`program` without `directive`; the document model belongs in frontmatter.
+Blockquotes are natural-language instructions, not SPL grammar productions.
+
 ## Notation
 
 `{ x }` means repetition, `[ x ]` means optional, and `|` separates alternatives. Statements end at a newline, semicolon, closing block, or end of input. Opening block braces must share the keyword's line. Comments begin with `#`.
@@ -80,7 +86,7 @@ human_expr     = "human" , postfix ;
    reasoning: low/medium/high; think and agent default to medium
    show: True/False; schema: synchronous strict JSON Schema draft-07 object or boolean
    repairs: integer 0..5 (additional generation attempts, default 0); agents require 0
-   model: non-empty string; CLI override > per-call model > header > SDK default
+   model: non-empty string; CLI override > per-call model > frontmatter (raw API: header) > SDK default
    Generation (ask and think) has no tools. agent explicitly enables restricted runtime/MCP tools.
    human takes a string question without modifiers and returns an exact caller-provided string.
    It suspends a checkpoint run, emits JSON and exits 3; it never reads stdin.

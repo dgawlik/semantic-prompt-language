@@ -1,7 +1,13 @@
-@(model='gpt-5.6-luna')
+---
+extension: semantic-prompt-language
+version: 1
+model: 'gpt-5.6-luna'
+---
+
+```spl
 # Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
 #
-# Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd <project>
+# Run from a project root with a ./src folder:  spl examples/code-review.md --cwd <project>
 # Exit code is 1 (failure payload on stdout) when high-severity findings exist.
 # The review phase may only touch ./src; the report is written under ./reports.
 
@@ -63,3 +69,4 @@ if high > 0 {
     fail "{high} high severity finding(s), see ./reports/review.md"
 }
 success '\n'.join(lines)
+```

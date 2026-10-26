@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { RUNTIME_PREAMBLE } from '../src/preamble.js';
 
 const CLI = path.resolve(__dirname, '..', 'dist', 'cli.js');
 let dir: string;
@@ -15,9 +16,13 @@ afterEach(() => {
 });
 
 function spl(script: string, ...args: string[]) {
-    const file = path.join(dir, 's.spl');
-    fs.writeFileSync(file, script);
+    const file = path.join(dir, 's.md');
+    fs.writeFileSync(file, markdown(script));
     return run([file, ...args]);
+}
+
+function markdown(script: string): string {
+    return `---\nextension: semantic-prompt-language\nversion: 1\n---\n\n\`\`\`spl\n${script}\n\`\`\`\n`;
 }
 
 function run(args: string[]) {
@@ -38,7 +43,7 @@ describe('noninteractive checkpoint CLI', () => {
         expect(first.code).toBe(3);
         expect(first.err).toBe('');
         const pending = JSON.parse(first.out);
-        expect(pending).toMatchObject({ status: 'waiting_for_input', question: 'First question', line: 2, checkpoint: state });
+        expect(pending).toMatchObject({ status: 'waiting_for_input', question: 'First question', line: 8, checkpoint: state });
         const before = fs.readFileSync(state, 'utf8');
         expect(spl(script, ...resume, '--silent')).toEqual(first);
         expect(fs.readFileSync(state, 'utf8')).toBe(before);
@@ -87,14 +92,14 @@ describe('noninteractive checkpoint CLI', () => {
         const first = spl(script, '--checkpoint', state, '--silent');
         const resume = options.map((option) => option.replace('{state}', state));
         expect(spl(script, ...resume, '--silent')).toEqual(first);
-        const done = run([...resume, path.join(dir, 's.spl'), '--answer-for', JSON.parse(first.out).request_id, '--answer=--resume', '--silent']);
+        const done = run([...resume, path.join(dir, 's.md'), '--answer-for', JSON.parse(first.out).request_id, '--answer=--resume', '--silent']);
         expect(done.code).toBe(0);
         expect(JSON.parse(done.out).value).toBe('--resume');
     });
 
     it('does not interpret --resume after the option terminator as an option', () => {
-        fs.writeFileSync(path.join(dir, '--resume'), 'success 7');
-        expect(run(['--silent', '--', '--resume'])).toEqual({ code: 0, out: '7\n', err: '' });
+        fs.writeFileSync(path.join(dir, '--resume.md'), markdown('success 7'));
+        expect(run(['--silent', '--', '--resume.md'])).toEqual({ code: 0, out: '7\n', err: '' });
     });
 
     it('preflights human expressions but accepts --check without creating a checkpoint', () => {
@@ -168,9 +173,34 @@ describe('noninteractive checkpoint CLI', () => {
 });
 
 describe('cli', () => {
+    it('rejects raw SPL files and Markdown without the exact opt-in', () => {
+        const raw = path.join(dir, 'legacy.spl');
+        fs.writeFileSync(raw, 'success 42');
+        const legacy = run([raw, '--check']);
+        expect(legacy.code).toBe(2);
+        expect(legacy.err).toContain('only .md workflows');
+        const file = path.join(dir, 'ordinary.md');
+        for (const source of [
+            '# Notes\n\n```spl\nsuccess 42\n```',
+            markdown('success 42').replace('semantic-prompt-language', 'other-extension'),
+            markdown('success 42').replace('version: 1', 'version: 2'),
+        ]) {
+            fs.writeFileSync(file, source);
+            expect(run([file, '--check']).code).toBe(2);
+        }
+    });
+
+    it('checks natural-language blocks offline and runs shared SPL fences in order', () => {
+        const file = path.join(dir, 'mixed.md');
+        fs.writeFileSync(file, markdown('let value = 20') + '\n> Double @value.\n');
+        expect(run([file, '--check'])).toEqual({ code: 0, out: '', err: '' });
+        fs.writeFileSync(file, markdown('let value = 20') + '\nIgnored prose\n\n```spl\nvalue *= 2\nsuccess value + 2\n```\n');
+        expect(run([file, '--silent'])).toEqual({ code: 0, out: '42\n', err: '' });
+    });
+
     it('passes repeated --arg values in order before and after the script path', () => {
-        const file = path.join(dir, 'args.spl');
-        fs.writeFileSync(file, `success [$args, $args[0], $args[3]]`);
+        const file = path.join(dir, 'args.md');
+        fs.writeFileSync(file, markdown(`success [$args, $args[0], $args[3]]`));
         const result = run(['--arg=first', file, '--arg', 'two words', '--silent', '--arg=--model=x']);
         expect(result.code).toBe(0);
         expect(JSON.parse(result.out)).toEqual([['first', 'two words', '--model=x'], 'first', null]);
@@ -216,20 +246,20 @@ describe('cli', () => {
     it('--log-level error hides info logs', () => {
         const r = spl(`log('hi')\nsuccess 1`, '--log-level', 'error');
         expect(r.err).not.toContain('[info]');
-        expect(r.err).toContain('[deterministic] line 2 (success): success 1');
+        expect(r.err).toContain('[deterministic] line 8 (success): success 1');
     });
 
     it('prints the failure payload to stdout and exits non-zero', () => {
         const r = spl(`let a = 1\nfail 'nope'`, '--silent');
         expect(r.code).toBe(1);
-        expect(JSON.parse(r.out)).toEqual({ status: 'failure', reason: 'nope', command: "fail 'nope'", line: 2, status_code: 'explicit_failure' });
+        expect(JSON.parse(r.out)).toEqual({ status: 'failure', reason: 'nope', command: "fail 'nope'", line: 8, status_code: 'explicit_failure' });
     });
 
     it('reports syntax errors on stderr with exit code 2', () => {
         const r = spl(`let a = ask(unknown='huge') 'x'`);
         expect(r.code).toBe(2);
         expect(r.out).toBe('');
-        expect(r.err).toMatch(/s\.spl:1:\d+: syntax error: unknown modifier/);
+        expect(r.err).toMatch(/s\.md:7:\d+: syntax error: unknown modifier/);
     });
 
     it('--check only parses', () => {
@@ -248,7 +278,7 @@ describe('cli', () => {
         fs.writeFileSync(file, [
             JSON.stringify({ format: 'spl-generation', version: 1 }),
             JSON.stringify({
-                request: JSON.stringify({ kind: 'ask', prompt: 'question', model: null, reasoningEffort: null, showReasoning: false }),
+                request: JSON.stringify({ kind: 'ask', prompt: `${RUNTIME_PREAMBLE}\n\nquestion`, model: null, reasoningEffort: null, showReasoning: false }),
                 response: { text: 'offline answer', effective: { model: 'test' } },
             }),
             '',
@@ -306,7 +336,7 @@ describe('cli', () => {
             JSON.stringify({ format: 'spl-trace', version: 1 }),
             JSON.stringify({
                 request: {
-                    kind: 'agent', prompt: 'Think carefully about the problem before giving the final answer.\n\nAct',
+                    kind: 'agent', prompt: `${RUNTIME_PREAMBLE}\n\nThink carefully about the problem before giving the final answer.\n\nAct`,
                     model: null, reasoningEffort: 'medium', showReasoning: false,
                 },
                 response: { text: 'offline agent', effective: { model: 'test' } },

@@ -4,10 +4,28 @@
 // previous source line at the caret columns. "- scope" asserts that a scope is absent. The first line is a header.
 import fs from 'node:fs';
 import path from 'node:path';
+import assert from 'node:assert/strict';
 import { loadGrammar, root, vsctm } from './load-grammar.mjs';
 
 const ASSERT = /^#(\s*)(\^+)\s+(.+?)\s*$/;
 const grammar = await loadGrammar();
+const markdown = await loadGrammar('spl.markdown.injection');
+for (const fence of ['```', '~~~~']) {
+    let stack = markdown.tokenizeLine(`${fence}spl`, vsctm.INITIAL).ruleStack;
+    const code = markdown.tokenizeLine('let count = 42', stack);
+    stack = code.ruleStack;
+    assert.ok(code.tokens.some(token => token.scopes.includes('meta.embedded.block.spl') &&
+        token.scopes.some(scope => scope.startsWith('keyword'))), 'SPL keywords are highlighted inside Markdown');
+    stack = markdown.tokenizeLine(fence, stack).ruleStack;
+    assert.equal(stack.depth, 1, 'closing fence exits embedded SPL');
+}
+const quote = '> Return @count using @success.';
+const markers = markdown.tokenizeLine(quote, vsctm.INITIAL).tokens
+    .filter(token => token.scopes.includes('variable.other.reference.spl'))
+    .map(token => quote.slice(token.startIndex, token.endIndex));
+assert.deepEqual(markers, ['@count', '@success']);
+assert.ok(!markdown.tokenizeLine('ordinary @count', vsctm.INITIAL).tokens
+    .some(token => token.scopes.includes('variable.other.reference.spl')));
 const dir = path.join(root, 'test');
 let failures = 0;
 let checks = 0;

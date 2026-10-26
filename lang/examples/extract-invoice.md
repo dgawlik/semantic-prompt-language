@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # Extract structured data from messy text and cross-check it with plain arithmetic.
 # Schemas validate shape; ordinary assertions validate the business rules.
 
@@ -49,3 +55,4 @@ assert abs(computed - invoice.subtotal) < 0.01 \
     "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
 assert invoice.total >= invoice.subtotal 'total is smaller than subtotal'
 success invoice
+```

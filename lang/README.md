@@ -21,7 +21,7 @@ See the [project guide](../README.md), [language specification](../LANG-PRD.md),
 ```sh
 npm install
 node dist/cli.js login
-node dist/cli.js examples/hi.spl
+node dist/cli.js examples/hi.md
 ```
 
 `npm install` runs the TypeScript build. Installed packages expose `spl` and `spl-lang`.
@@ -32,6 +32,15 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
 
 ## Language contract
 
+- **Markdown only:** `.md` workflows require `extension: semantic-prompt-language`
+  and `version: 1` in YAML frontmatter. Optional `model` and `preamble` fields configure
+  requests. SPL fences and blockquotes run in order in shared scope; everything else
+  is commentary. Raw `.spl` files no longer execute through the CLI.
+- **Natural language:** blockquotes submit full SPL programs through `submit_spl`,
+  making all runtime functionality available. `@name` marks a binding or operation.
+  See [document syntax and examples](../docs-template/Language.md#program-structure).
+- **Embedding:** `parseMarkdown` handles documents; existing raw-SPL `parse`/`run`
+  APIs remain compatible.
 - **Exact tools:** `read_file(path)`, `write_file(path, content)`, `web_fetch(url)`,
   `web_search(query)`, `shell(command)` never call a model.
 - **Generation:** `ask` and `think` have no tools or MCP access.
@@ -63,14 +72,14 @@ under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved cred
 Common generation modifiers are `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`,
 and `model`. Values are evaluated once, then validated before calling the model.
 `think` and `agent` default to medium reasoning; `ask` uses the model default.
-CLI `--model` overrides per-call `model`, which overrides the header directive.
+CLI `--model` overrides per-call `model`, which overrides frontmatter `model`.
 
 ## Trace/replay for short iteration loops
 
 ```sh
-node dist/cli.js examples/triage-issues.spl --check
-node dist/cli.js examples/triage-issues.spl --trace triage.jsonl
-node dist/cli.js examples/triage-issues.spl --replay triage.jsonl --silent
+node dist/cli.js examples/triage-issues.md --check
+node dist/cli.js examples/triage-issues.md --trace triage.jsonl
+node dist/cli.js examples/triage-issues.md --replay triage.jsonl --silent
 ```
 
 Trace captures all generation and agent requests, raw responses, reasoning, effective
@@ -92,8 +101,8 @@ but blocks writes, shell, network, agents, and persistent stores.
 For noninteractive human review:
 
 ```sh
-spl examples/human-review.spl --checkpoint run.jsonl --silent
-spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+spl examples/human-review.md --checkpoint run.jsonl --silent
+spl examples/human-review.md --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
 ```
 
 Waiting emits a JSON request and exits `3`. Resume reconstructs ordinary computation
@@ -103,7 +112,7 @@ recovery, not automatic retry. Resumable mode cannot combine with stores or
 trace/record/replay. See the [Human in the loop guide](../docs/hitl.html).
 
 ```text
-spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
+spl script.md [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
                [--store file.json | --store-module module]
                [--trace file.jsonl | --record file.jsonl | --replay file.jsonl]
                [--log-level error|info|debug] [--silent] [--check]

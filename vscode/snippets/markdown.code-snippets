@@ -1,0 +1,19 @@
+{
+  "SPL workflow": {
+    "prefix": "splworkflow",
+    "body": [
+      "---",
+      "extension: semantic-prompt-language",
+      "version: 1",
+      "---",
+      "",
+      "```spl",
+      "let ${1:answer} = ${2:42}",
+      "```",
+      "",
+      "> Return @${1:answer} using @success.",
+      "$0"
+    ],
+    "description": "An executable Markdown workflow with shared SPL and natural-language steps"
+  }
+}

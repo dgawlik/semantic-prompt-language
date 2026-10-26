@@ -5,16 +5,18 @@ import { describe, expect, it } from 'vitest';
 import { run } from '../src/interpreter.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
+import { extractMarkdown, parseMarkdown } from '../src/markdown.js';
 import { JsonFileStore } from '../src/store.js';
 import { LIVE_TIMEOUT, RecordingCopilot, live } from './live.js';
 
 const dir = path.resolve(__dirname, '..', 'examples');
 const load = (name: string) => fs.readFileSync(path.join(dir, name), 'utf8');
+const exampleCode = (name: string) => extractMarkdown(load(name)).blocks.filter((block) => block.kind === 'spl').map((block) => block.text).join('\n');
 
 describe('examples', () => {
-    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.spl'))) {
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.md'))) {
         it(`${file} is valid syntax`, () => {
-            expect(() => parse(load(file))).not.toThrow();
+            expect(() => parseMarkdown(load(file))).not.toThrow();
         });
     }
 });
@@ -59,10 +61,10 @@ describe('documentation snippets', () => {
                 expect(() => parse(decode(match[2]))).not.toThrow();
             });
             const name = /data-file="([^"]+)"/.exec(match[1])?.[1];
-            const source = name === 'quickstart.spl' ? 'hi.spl' : name;
+            const source = name === 'quickstart.md' ? 'hi.md' : name;
             if (source && fs.existsSync(path.join(dir, source))) {
                 it(`${file} embeds current ${source}`, () => {
-                    expect(normalize(decode(match[2]))).toBe(normalize(load(source)));
+                    expect(normalize(decode(match[2]))).toBe(normalize(exampleCode(source)));
                 });
             }
         });
@@ -110,11 +112,11 @@ describe('documentation snippets', () => {
                 }
             }
         });
-        for (const match of markdown.matchAll(/^`([^`\r\n]+\.spl)`\r?\n\r?\n```spl\r?\n([\s\S]*?)^```[ \t]*\r?$/gm)) {
+        for (const match of markdown.matchAll(/^`([^`\r\n]+\.md)`\r?\n\r?\n```spl\r?\n([\s\S]*?)^```[ \t]*\r?$/gm)) {
             const name = match[1];
             if (fs.existsSync(path.join(dir, name))) {
                 it(`${file} embeds current ${name}`, () => {
-                    expect(normalize(match[2])).toBe(normalize(load(name)));
+                    expect(normalize(match[2])).toBe(normalize(exampleCode(name)));
                 });
             }
         }
@@ -147,7 +149,7 @@ describe('examples with offline backends', () => {
             const file = path.join(cwd, 'journal.json');
             for (let i = 1; i <= 6; i++) {
                 let calls = 0;
-                const result = await run(parse(load('journal.spl')), {
+                const result = await run(parseMarkdown(load('journal.md')), {
                     cwd, logger: new Logger('silent'), store: new JsonFileStore(file),
                     backend: {
                         async call() { return { text: ++calls === 1 ? `Summary ${i}` : 'Steady progress.', effective: {} }; },
@@ -170,7 +172,7 @@ describe('examples with offline backends', () => {
     it('compares integer generation with deterministic Fibonacci in the basics example', async () => {
         const responses = ['55', '{"setup":"A programmer walks into a bar.","punchline":"It was a FooBar."}', 'A pet story.'];
         let calls = 0;
-        const result = await run(parse(load('basics.spl')), {
+        const result = await run(parseMarkdown(load('basics.md')), {
             logger: new Logger('silent'),
             backend: {
                 async call() {
@@ -194,7 +196,7 @@ describe('examples with offline backends', () => {
 
     it('triages every issue using validated output without live model calls', async () => {
         let calls = 0;
-        const result = await run(parse(load('triage-issues.spl')), {
+        const result = await run(parseMarkdown(load('triage-issues.md')), {
             cwd: path.dirname(dir), logger: new Logger('silent'),
             backend: {
                 async call() {
@@ -221,7 +223,7 @@ describe('examples with offline backends', () => {
             ],
             subtotal: 174.3, total: 207.42,
         };
-        const result = await run(parse(load('extract-invoice.spl')), {
+        const result = await run(parseMarkdown(load('extract-invoice.md')), {
             cwd: path.dirname(dir), logger: new Logger('silent'),
             backend: { async call() { return { text: JSON.stringify(invoice), effective: {} }; }, async close() {} },
         });
@@ -235,7 +237,7 @@ describe.skipIf(!live)('examples on Copilot', () => {
         async () => {
             const backend = new RecordingCopilot(path.dirname(dir));
             try {
-                const result = await run(parse(load('triage-issues.spl')), { backend, logger: new Logger('silent'), cwd: path.dirname(dir) });
+                const result = await run(parseMarkdown(load('triage-issues.md')), { backend, logger: new Logger('silent'), cwd: path.dirname(dir) });
                 expect(result.status).toBe('success');
                 const v = (result as { value: { counts: Record<string, number>; urgent: string[] } }).value;
                 expect(Object.values(v.counts).reduce((a, b) => a + b, 0)).toBe(4);

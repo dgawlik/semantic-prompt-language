@@ -1,17 +1,20 @@
 # Build AI workflows in minutes, not hours
 
-SPL is a compact Python-like language designed for fast iteration: keep
-deterministic code separate from LLM calls, contain model variance with explicit
-guards, and read the whole workflow at a glance.
+SPL executes Markdown workflows combining Python-like SPL fences and natural-language
+blockquotes. Both modes share variables and the full runtime; frontmatter explicitly
+opts the document in. Keep deterministic code separate from LLM calls and contain
+model variance with explicit guards.
 
 Spend time developing the solution, not wiring an orchestration layer. Write a
 small script, run it, inspect the result, and refine the prompt or guard. The goal
 is a working solution in minutes rather than hours of glue code.
 
-`basics.spl`
+The following shows the SPL fence from `basics.md`. Runnable documents also require
+[frontmatter](Language.md#program-structure); prose outside executable blocks is commentary.
+
+`basics.md`
 
 ```spl
-@(model='gpt-6-luna')
 
 def fib(n) {
     if n < 2 {

@@ -4,7 +4,9 @@ Start from a working script, adapt one prompt or guard, and run it again. These
 examples keep explicit I/O, LLM judgment, and acceptance checks together so you can
 scan the workflow and iterate without writing an orchestration layer.
 
-Scripts from `lang/examples/` are synchronized with their executable sources. Most
+The SPL fence contents below are synchronized with executable Markdown documents
+in `lang/examples/`. Download those documents, or add the required
+[frontmatter](Language.md#program-structure) around a copied fence. Most
 run from `lang/`; test repair runs against the npm project selected by `--cwd`.
 That option controls relative I/O and tool directories, not the script filename.
 
@@ -12,17 +14,18 @@ Authenticate before live generation or agents. Use `--model <id>` to override an
 
 | Script | Shows |
 | --- | --- |
-| [`human-review.spl`](#human-review) | Noninteractive question, checkpoint and resume without repeating the draft write |
-| [`commit-message.spl`](#commit-message) | `shell` under `restrict exec 'git'`, validation helper, retry loop |
-| [`mcp.spl`](#search-with-mcp) | Explicit agent using a configured docs/search MCP tool |
-| [`triage-issues.spl`](#triage-issues) | Schema-validated classification, bounded generation repair, aggregation |
-| [`extract-invoice.spl`](#extract-an-invoice) | Structured extraction cross-checked with arithmetic before it is accepted |
-| [`code-review.spl`](#code-review-as-a-ci-gate) | Three-file review, structured findings, restricted report write, `fail` as a CI gate |
-| [`release-notes.spl`](#release-notes) | Nested `forbid`/`enforce`, git history to a file inside `./out` |
-| [`web-digest.spl`](#web-digest) | `restrict net`, `web_fetch`, catching a blocked second host |
-| [`fix-failing-tests.spl`](#fix-failing-tests) | Raw npm test plus explicit repair agent, up to three rounds |
-| [`translate-docs.spl`](#translate-docs) | Read once, generate translations, write exact output to script-chosen paths |
-| [`journal.spl`](#journal-with-persistent-state) | State across runs with `--store` |
+| [`mixed-workflow.md`](../lang/examples/mixed-workflow.md) | Shared state between SPL fences and natural-language blockquotes |
+| [`human-review.md`](#human-review) | Noninteractive question, checkpoint and resume without repeating the draft write |
+| [`commit-message.md`](#commit-message) | `shell` under `restrict exec 'git'`, validation helper, retry loop |
+| [`mcp.md`](#search-with-mcp) | Explicit agent using a configured docs/search MCP tool |
+| [`triage-issues.md`](#triage-issues) | Schema-validated classification, bounded generation repair, aggregation |
+| [`extract-invoice.md`](#extract-an-invoice) | Structured extraction cross-checked with arithmetic before it is accepted |
+| [`code-review.md`](#code-review-as-a-ci-gate) | Three-file review, structured findings, restricted report write, `fail` as a CI gate |
+| [`release-notes.md`](#release-notes) | Nested `forbid`/`enforce`, git history to a file inside `./out` |
+| [`web-digest.md`](#web-digest) | `restrict net`, `web_fetch`, catching a blocked second host |
+| [`fix-failing-tests.md`](#fix-failing-tests) | Raw npm test plus explicit repair agent, up to three rounds |
+| [`translate-docs.md`](#translate-docs) | Read once, generate translations, write exact output to script-chosen paths |
+| [`journal.md`](#journal-with-persistent-state) | State across runs with `--store` |
 | [`basics`, `hi`, `live`, `restrict-live`, `tools-live`](#feature-tours) | Small feature tours |
 
 ## Human review
@@ -33,12 +36,12 @@ the same workspace. Earlier tool results are replayed without rewriting the draf
 See [Human in the loop](HITL.md) for the protocol and CI integration.
 
 ```bash
-spl examples/human-review.spl --checkpoint run.jsonl --silent
-spl examples/human-review.spl --resume run.jsonl --silent
-spl examples/human-review.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+spl examples/human-review.md --checkpoint run.jsonl --silent
+spl examples/human-review.md --resume run.jsonl --silent
+spl examples/human-review.md --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
 ```
 
-`human-review.spl`
+`human-review.md`
 
 ```spl
 # Write a draft once, then exit with a question instead of reading terminal input.
@@ -64,16 +67,16 @@ Read the staged diff with raw `shell`, restricted to git. Generation itself has 
 
 ```bash
 cd your-repo && git add -p
-spl path/to/commit-message.spl
+spl path/to/commit-message.md
 ```
 
-`commit-message.spl`
+`commit-message.md`
 
 ```spl
 # Draft a Conventional Commit message for the staged changes.
 #
 #   cd your-repo && git add -p
-#   spl path/to/commit-message.spl
+#   spl path/to/commit-message.md
 #
 # The script reads the diff with git once; tool-free generation gets at most three attempts.
 
@@ -124,7 +127,7 @@ The model proposes; `is_valid()` decides. The loop gives it three tries, and the
 
 Classify issues against a strict schema with enum labels/priorities and required reason text. Up to two repairs correct format/schema errors, without retrying transport errors. This generation-only example supports offline record/replay.
 
-`triage-issues.spl`
+`triage-issues.md`
 
 ```spl
 # Triage a batch of issues into labels and priorities, with validated JSON and retries.
@@ -202,7 +205,7 @@ success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summ
 
 Validate invoice shape with a nested schema and bounded repair, then independently check arithmetic with assertions. A business-rule failure is not automatically repaired.
 
-`extract-invoice.spl`
+`extract-invoice.md`
 
 ```spl
 # Extract structured data from messy text and cross-check it with plain arithmetic.
@@ -263,16 +266,15 @@ success invoice
 An explicit agent inspects source under filesystem and git restrictions, then tool-free generation structures its findings. The report write is restricted to `./reports`, and high-severity findings fail the CI gate. A request to only review is guidance, not a read-only filesystem capability.
 
 ```bash
-spl examples/code-review.spl --cwd <project>
+spl examples/code-review.md --cwd <project>
 ```
 
-`code-review.spl`
+`code-review.md`
 
 ```spl
-@(model='gpt-5.6-luna')
 # Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
 #
-# Run from a project root with a ./src folder:  spl examples/code-review.spl --cwd <project>
+# Run from a project root with a ./src folder:  spl examples/code-review.md --cwd <project>
 # Exit code is 1 (failure payload on stdout) when high-severity findings exist.
 # The review phase may only touch ./src; the report is written under ./reports.
 
@@ -340,7 +342,7 @@ success '\n'.join(lines)
 
 Generate release notes from recent git history and save them to `./out/RELEASE_NOTES.md`. The history-reading phase restricts executable names to `git`; the separate file-writing phase restricts filesystem access to `./out`. Note how rules and restrictions nest.
 
-`release-notes.spl`
+`release-notes.md`
 
 ```spl
 # Generate release notes from recent git history and save them to ./out/RELEASE_NOTES.md.
@@ -372,7 +374,7 @@ success notes
 
 Summarize a web page with network access limited to a single host — and prove the sandbox holds by catching a blocked request to a second host.
 
-`web-digest.spl`
+`web-digest.md`
 
 ```spl
 # Summarize a web page with network access limited to a single host,
@@ -404,16 +406,15 @@ success "{headlines}\n\n{themes}"
 Run raw `npm test` in the project selected by `--cwd`, invoke an explicit repair agent after a failure, and repeat up to three rounds. Files are restricted to the project and executable names to npm. Avoiding test edits is guidance, not a filesystem write prohibition. This workflow intentionally performs actions; review its changes. `--trace` captures its LLM calls, but replay reruns explicit tests without repeating the agent's edits, so it requires suitable external state. Legacy `--record` does not support this workflow.
 
 ```bash
-spl lang/examples/fix-failing-tests.spl --cwd .
+spl lang/examples/fix-failing-tests.md --cwd .
 ```
 
-`fix-failing-tests.spl`
+`fix-failing-tests.md`
 
 ```spl
-@(model='mai-code-1.1-flash')
 # Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).
 #
-#   spl examples/fix-failing-tests.spl --cwd <your npm project>
+#   spl examples/fix-failing-tests.md --cwd <your npm project>
 #
 # Raw test runs do not call the model. The repair agent is restricted to the project and npm.
 # Avoiding test edits is prompt guidance, not a filesystem write prohibition.
@@ -455,14 +456,14 @@ A failing `npm test` is a `tool_error` whose `reason` contains the test output. 
 Configure a trusted MCP server named `docs` exposing `search`, then run this explicit agent with `--mcp`. The exact `docs/search` selector narrows MCP access. Services are trusted; scopes limit calls, not their internal I/O. Generation-only calls never start MCP servers.
 
 ```bash
-spl examples/mcp.spl --mcp mcp/mcp.json
+spl examples/mcp.md --mcp mcp/mcp.json
 ```
 
-`mcp.spl`
+`mcp.md`
 
 ```spl
 # Configure a docs MCP server exposing search, then run:
-# spl examples/mcp.spl --mcp <your-mcp.json> --cwd <project>
+# spl examples/mcp.md --mcp <your-mcp.json> --cwd <project>
 # MCP servers are trusted services; scopes limit calls, not their internal I/O.
 
 restrict mcp 'docs/search' {
@@ -477,10 +478,10 @@ restrict mcp 'docs/search' {
 Read the document once, generate German, Polish, and Japanese translations without tools, and write each exact response to a script-chosen path. Run from `lang/` so the source document resolves correctly. No model is responsible for choosing or confirming the output path.
 
 ```bash
-spl examples/translate-docs.spl
+spl examples/translate-docs.md
 ```
 
-`translate-docs.spl`
+`translate-docs.md`
 
 ```spl
 # Translate a document into several languages, one file each, without leaving the project folder.
@@ -510,15 +511,15 @@ success written
 A rolling journal that remembers previous runs through the variable store. Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.
 
 ```bash
-spl examples/journal.spl --store journal.json
+spl examples/journal.md --store journal.json
 ```
 
-`journal.spl`
+`journal.md`
 
 ```spl
 # A rolling journal that remembers previous runs through the variable store:
 #
-#   spl examples/journal.spl --store journal.json
+#   spl examples/journal.md --store journal.json
 #
 # Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.
 
@@ -552,14 +553,13 @@ success {'run': runs, 'today': todays, 'trend': trend}
 
 Small scripts that exercise one area each.
 
-### basics.spl — functions, objects and LLM calls
+### basics.md — functions, objects and LLM calls
 
 Compare a computed Fibonacci number with an integer model response, then request a structured joke and a pet story. This tour includes LLM calls and requires authentication.
 
-`basics.spl`
+`basics.md`
 
 ```spl
-@(model='gpt-6-luna')
 
 def fib(n) {
     if n < 2 {
@@ -593,14 +593,13 @@ success {
 }
 ```
 
-### hi.spl — compact end-to-end tour
+### hi.md — compact end-to-end tour
 
 Use `gpt-5.5` for a structured joke, reasoning and a greeting, then write the deterministic value `fib(10)` under `./out`.
 
-`hi.spl`
+`hi.md`
 
 ```spl
-@(model='gpt-5.5')
 
 def fib(n) {
     if n < 2 { return n }
@@ -632,8 +631,8 @@ success {'joke': joke, 'why': why, 'hi': hi}
 
 ### Live tours
 
-* `live.spl` — a quick smoke test of `ask` with `len`/`fmt`, `think`, `enforce`/`forbid` and `assert` against the real model.
+* `live.md` — a quick smoke test of `ask` with `len`/`fmt`, `think`, `enforce`/`forbid` and `assert` against the real model.
 
-* `tools-live.spl` — `read_file`, `write_file` and `think(show=True)` inside `restrict './sandbox'`. Run it after `mkdir sandbox; echo hello world > sandbox/note.txt`.
+* `tools-live.md` — `read_file`, `write_file` and `think(show=True)` inside `restrict './sandbox'`. Run it after `mkdir sandbox; echo hello world > sandbox/note.txt`.
 
-* `restrict-live.spl` — asks the model to read `secret.txt` outside the sandbox and shows the runtime blocking it, returning a `restriction_violation` payload.
+* `restrict-live.md` — asks the model to read `secret.txt` outside the sandbox and shows the runtime blocking it, returning a `restriction_violation` payload.

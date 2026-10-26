@@ -13,6 +13,7 @@ interface TraceRequest {
     model: string | null;
     reasoningEffort: LlmRequest['reasoningEffort'] | null;
     showReasoning: boolean;
+    naturalLanguage?: boolean;
 }
 
 type Outcome =
@@ -23,6 +24,7 @@ export function traceRequest(req: LlmRequest | TraceRequest): TraceRequest {
     return {
         kind: req.kind, prompt: req.prompt, model: req.model ?? null,
         reasoningEffort: req.reasoningEffort ?? null, showReasoning: req.showReasoning,
+        ...(req.naturalLanguage ? { naturalLanguage: true } : {}),
     };
 }
 
@@ -36,14 +38,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function isResponse(value: unknown): value is LlmResponse {
     return isRecord(value) && typeof value.text === 'string' && isRecord(value.effective)
-        && (value.reasoning === undefined || typeof value.reasoning === 'string');
+        && (value.reasoning === undefined || typeof value.reasoning === 'string')
+        && (value.spl === undefined || typeof value.spl === 'string');
 }
 
 function isTraceRequest(value: unknown): value is TraceRequest {
     return isRecord(value) && (value.kind === 'ask' || value.kind === 'think' || value.kind === 'agent')
         && typeof value.prompt === 'string' && (value.model === null || typeof value.model === 'string')
         && (value.reasoningEffort === null || value.reasoningEffort === 'low' || value.reasoningEffort === 'medium' || value.reasoningEffort === 'high')
-        && typeof value.showReasoning === 'boolean';
+        && typeof value.showReasoning === 'boolean'
+        && (value.naturalLanguage === undefined || typeof value.naturalLanguage === 'boolean');
 }
 
 export function isTraceError(value: unknown): value is Extract<Outcome, { error: unknown }>['error'] {
@@ -72,7 +76,7 @@ export class RecordingBackend implements LlmBackend {
     }
 
     async call(req: LlmRequest): Promise<LlmResponse> {
-        if (req.kind === 'agent') throw new LlmError('agent actions cannot be recorded; record generation-only workflows');
+        if (req.kind === 'agent' && !req.naturalLanguage) throw new LlmError('agent actions cannot be recorded; record generation-only workflows');
         const request = requestKey(req);
         const response = await this.backend.call(req);
         try {
@@ -158,7 +162,7 @@ export class ReplayBackend implements LlmBackend {
     }
 
     async call(req: LlmRequest): Promise<LlmResponse> {
-        if (req.kind === 'agent' && this.mode === 'replay') throw new LlmError('agent actions cannot be replayed');
+        if (req.kind === 'agent' && !req.naturalLanguage && this.mode === 'replay') throw new LlmError('agent actions cannot be replayed');
         const entry = this.entries[this.position];
         if (!entry) throw new LlmError(`recording exhausted at call ${this.position + 1}`);
         if (entry.request !== requestKey(req)) throw new LlmError(`replay request mismatch at call ${this.position + 1}`);

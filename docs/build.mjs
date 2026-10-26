@@ -52,7 +52,7 @@ const legacy = {
     builtins: { 'raw-tools-no-model-round-trip': 'raw-tools', 'types--conversion': 'conversion', 'numbers--sequences': 'numbers', 'dicts--json': 'dict-fns', 'putting-it-together': 'example' },
     cli: { 'output-streams--exit-codes': 'streams', 'mcp-configuration': 'mcp', 'remote-http-or-sse-server': 'mcp-http', 'local-stdio-server': 'mcp-stdio', 'configuration-fields': 'mcp-fields', 'variables-paths-and-unsupported-settings': 'mcp-variables', 'validate-run-and-restrict-access': 'mcp-usage', 'variable-store': 'store', 'custom-stores': 'custom-store', authentication: 'login', backend: 'backends', 'offline-generation-recordreplay': 'record-replay' },
     grammar: { 'complete-grammar': 'program', 'syntax-versus-semantics': 'semantics' },
-    examples: { 'extract-an-invoice': 'extract-invoice', 'code-review-as-a-ci-gate': 'code-review', 'search-with-mcp': 'mcp', 'journal-with-persistent-state': 'journal', 'feature-tours': 'tours', 'basicsspl--functions-objects-and-llm-calls': 'basics', 'hispl--compact-end-to-end-tour': 'hi' },
+    examples: { 'extract-an-invoice': 'extract-invoice', 'code-review-as-a-ci-gate': 'code-review', 'search-with-mcp': 'mcp', 'journal-with-persistent-state': 'journal', 'feature-tours': 'tours', 'basicsmd--functions-objects-and-llm-calls': ['basics', 'basicsspl--functions-objects-and-llm-calls'], 'himd--compact-end-to-end-tour': ['hi', 'hispl--compact-end-to-end-tour'] },
     editor: { 'develop--test': 'develop' },
     internals: { 'execution-pipeline': 'pipeline', 'generation-and-repair-lifecycle': 'llm-call', 'recording-and-replay': 'recording', 'extension-points': 'extending', 'custom-backend': 'backend-interface', 'custom-store': 'variable-store', validation: 'tests' },
 };
@@ -167,7 +167,7 @@ function renderPage(page, index) {
             if (language !== 'text' && !hljs.getLanguage(language)) throw new Error(`${page.file}: unsupported code language ${language}`);
             const content = language === 'text' ? escape(token.text) : hljs.highlight(token.text, { language }).value;
             const filename = token.filename;
-            const synced = filename?.endsWith('.spl') && fs.existsSync(path.join(root, 'lang', 'examples', filename));
+            const synced = filename?.endsWith('.md') && fs.existsSync(path.join(root, 'lang', 'examples', filename));
             const id = `code-${++block}`;
             return `<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">${escape(filename || language)}</span><span class="code-language">${escape(language)}</span><button type="button" class="copy-button" data-copy="${id}" aria-label="Copy ${escape(filename || language)} code" hidden>${icon('copy')}<span>Copy</span></button></figcaption><pre tabindex="0" aria-label="${escape(filename || language)} code example"><code class="language-${escape(language)}"${synced ? ` data-file="${escape(filename)}"` : ''} id="${id}">${content}\n</code></pre></figure>\n`;
         },

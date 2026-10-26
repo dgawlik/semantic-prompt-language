@@ -2,7 +2,8 @@ import { CopilotClient, defineTool } from '@github/copilot-sdk';
 import type { CopilotSession, ModelInfo, PermissionRequest, PermissionRequestResult, Tool } from '@github/copilot-sdk';
 import { loadToken } from './auth.js';
 import type { ToolName } from './ast.js';
-import { Failure } from './errors.js';
+import { Failure, SplSyntaxError } from './errors.js';
+import { parse } from './parser.js';
 import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel } from './llm.js';
 import type { Logger } from './logger.js';
 import type { Restrictions } from './restrict.js';
@@ -97,7 +98,8 @@ export class CopilotBackend implements LlmBackend {
             void session?.abort().catch(() => undefined);
         };
 
-        const agent = req.kind === 'agent';
+        const agent = req.kind === 'agent' && !req.naturalLanguage;
+        let submitted: string | undefined;
         const tools: Tool[] = (agent ? TOOL_NAMES : []).map((name) => {
             const spec = TOOL_SPECS[name];
             return defineTool(name, {
@@ -119,17 +121,48 @@ export class CopilotBackend implements LlmBackend {
                 },
             });
         });
+        if (req.naturalLanguage) {
+            tools.push(defineTool('submit_spl', {
+                description: 'Submit one complete SPL program to execute after this request, in shared document scope. No actions occur during submission.',
+                parameters: {
+                    type: 'object', properties: { source: { type: 'string' } },
+                    required: ['source'], additionalProperties: false,
+                },
+                handler: async (args: unknown) => {
+                    if (!args || typeof args !== 'object' || !('source' in args) ||
+                        typeof args.source !== 'string' || !args.source.trim()) {
+                        return { resultType: 'failure' as const, textResultForLlm: 'source must be non-empty SPL code' };
+                    }
+                    if (submitted !== undefined) {
+                        return { resultType: 'failure' as const, textResultForLlm: 'a program has already been submitted' };
+                    }
+                    try {
+                        const program = parse(args.source);
+                        if (program.directives.model !== undefined) {
+                            return { resultType: 'failure' as const, textResultForLlm: 'use model modifiers, not a model header' };
+                        }
+                    } catch (error) {
+                        if (!(error instanceof SplSyntaxError)) throw error;
+                        return { resultType: 'failure' as const, textResultForLlm: error.message };
+                    }
+                    submitted = args.source;
+                    return 'Program accepted for execution after this request. Do not submit again.';
+                },
+            }));
+        }
 
         const mcpServers = agent ? filterMcpServers(this.opts.mcpServers ?? {}, req.restrictions) : {};
         const baseConfig = {
             model: req.model,
             tools,
-            availableTools: [...(agent ? TOOL_NAMES : []), ...Object.keys(mcpServers).map((name) => `mcp:${name}-*`)],
+            availableTools: [...tools.map((tool) => tool.name), ...Object.keys(mcpServers).map((name) => `mcp:${name}-*`)],
             mcpServers,
             systemMessage: { mode: 'append' as const, content: SYSTEM_MESSAGE },
             workingDirectory: this.opts.cwd,
-            onPermissionRequest: (r: PermissionRequest): PermissionRequestResult =>
-                agent ? decidePermission(r, req.restrictions, block, mcpServers) : this.denyGenerationPermission(block),
+            onPermissionRequest: (r: PermissionRequest): PermissionRequestResult => {
+                if (req.naturalLanguage && r.kind === 'custom-tool' && r.toolName === 'submit_spl') return { kind: 'approve-once' };
+                return agent ? decidePermission(r, req.restrictions, block, mcpServers) : this.denyGenerationPermission(block);
+            },
         };
 
         try {
@@ -156,11 +189,13 @@ export class CopilotBackend implements LlmBackend {
                 throw new LlmError((e as Error).message);
             }
             if (violation) throw violation;
-            const text = answer?.data?.content;
+            if (req.naturalLanguage && submitted === undefined) throw new LlmError('natural-language request did not call submit_spl');
+            const text = answer?.data?.content ?? (submitted !== undefined ? 'SPL program submitted.' : undefined);
             if (typeof text !== 'string' || text.trim() === '') throw new LlmError('the model returned an empty response');
             const usedModel = (answer?.data as { model?: string } | undefined)?.model;
             return {
                 text,
+                ...(submitted !== undefined ? { spl: submitted } : {}),
                 reasoning: reasoning.length ? reasoning.join('\n') : undefined,
                 effective: {
                     backend: 'copilot-sdk',

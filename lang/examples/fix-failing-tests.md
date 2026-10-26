@@ -1,7 +1,13 @@
-@(model='mai-code-1.1-flash')
+---
+extension: semantic-prompt-language
+version: 1
+model: 'mai-code-1.1-flash'
+---
+
+```spl
 # Keep failing tests fixed: run the suite, let the LLM repair the source, repeat (at most 3 rounds).
 #
-#   spl examples/fix-failing-tests.spl --cwd <your npm project>
+#   spl examples/fix-failing-tests.md --cwd <your npm project>
 #
 # Raw test runs do not call the model. The repair agent is restricted to the project and npm.
 # Avoiding test edits is prompt guidance, not a filesystem write prohibition.
@@ -32,3 +38,4 @@ fix it with the file tools, and describe the change in one sentence.'''
 
 assert green 'tests are still failing after 3 rounds'
 success "tests pass after {attempt} run(s)"
+```

@@ -149,9 +149,9 @@
     "body": ["success ${0:result}"],
     "description": "Stop successfully with a result"
   },
-  "Model directive": {
+  "Model override": {
     "prefix": "model",
-    "body": ["@(model='${0:model-id}')"],
-    "description": "Select the model (top of the script)"
+    "body": ["ask(model='${1:model-id}') '${0:prompt}'"],
+    "description": "Override the document model for this generation"
   }
 }

@@ -16,7 +16,13 @@ commands and recorded replay need no Copilot login.
 
 ## Quick test
 
-Create `hello.spl`:
+Create `hello.md`:
+
+````text
+---
+extension: semantic-prompt-language
+version: 1
+---
 
 ```spl
 let report = 'Checkout fails for every customer after deployment.'
@@ -25,13 +31,14 @@ assert severity >= 1 and severity <= 5 'severity must be between 1 and 5'
 let route = if severity >= 4 { 'urgent-review' } else { 'normal-review' }
 success {'severity': severity, 'route': route}
 ```
+````
 
 Check the syntax, log in and run it:
 
 ```sh
-npx spl-lang hello.spl --check
+npx spl-lang hello.md --check
 npx spl-lang login
-npx spl-lang hello.spl
+npx spl-lang hello.md
 ```
 
 The `ask` is the only model call; its result must be an integer. The assertion checks
@@ -61,9 +68,9 @@ to stderr so results can be piped safely.
    option, run live again with a new trace filename.
 
 ```sh
-npx spl-lang hello.spl --check
-npx spl-lang hello.spl --trace hello-v1.jsonl
-npx spl-lang hello.spl --replay hello-v1.jsonl
+npx spl-lang hello.md --check
+npx spl-lang hello.md --trace hello-v1.jsonl
+npx spl-lang hello.md --replay hello-v1.jsonl
 ```
 
 Replay never starts Copilot or MCP, but explicit script tools and stores still run.
@@ -77,7 +84,7 @@ For a global installation:
 ```sh
 npm install -g spl-lang
 spl login
-spl hello.spl
+spl hello.md
 ```
 
 From a checkout, the interpreter lives in `lang/`:
@@ -98,7 +105,7 @@ From `lang/` in a checkout:
 1. Check the syntax without model calls or script side effects:
 
    ```sh
-   node dist/cli.js examples/basics.spl --check
+   node dist/cli.js examples/basics.md --check
    ```
 
 2. Log in to Copilot. When authentication is needed, GitHub's device flow prints
@@ -111,18 +118,24 @@ From `lang/` in a checkout:
 3. Run against Copilot:
 
    ```sh
-   node dist/cli.js examples/live.spl
+   node dist/cli.js examples/live.md
    ```
 
 Alternatively, from the repository root, use the local package with `npx`:
 
 ```sh
-npx file:./lang lang/examples/live.spl
+npx file:./lang lang/examples/live.md
 ```
 
 ## Write a script
 
-For structured output, create `user.spl`:
+For structured output, create `user.md`:
+
+````text
+---
+extension: semantic-prompt-language
+version: 1
+---
 
 ```spl
 let User = {
@@ -135,9 +148,10 @@ let user = ask(schema=User, reasoning='low', repairs=2) 'Invent a fictional adul
 assert user.age >= 18 'expected an adult'
 success user
 ```
+````
 
 ```sh
-npx spl-lang user.spl --model gpt-6-luna
+npx spl-lang user.md --model gpt-6-luna
 ```
 
 **Literal braces in prompts**
@@ -163,8 +177,8 @@ ordinary replay: `human 'question'` emits JSON and exits `3`, then a later
 completed tools or model calls.
 
 ```sh
-npx spl-lang user.spl --trace user.jsonl
-npx spl-lang user.spl --replay user.jsonl --silent
+npx spl-lang user.md --trace user.jsonl
+npx spl-lang user.md --replay user.jsonl --silent
 ```
 
 Replay needs no model credentials. Requests must match exactly and in order.

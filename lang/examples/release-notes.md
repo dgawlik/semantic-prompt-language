@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # Generate release notes from recent git history and save them to ./out/RELEASE_NOTES.md.
 # Raw git reads precede tool-free generation; the final write is restricted to ./out.
 
@@ -21,3 +27,4 @@ restrict './out' {
     write_file('./out/RELEASE_NOTES.md', notes)
 }
 success notes
+```

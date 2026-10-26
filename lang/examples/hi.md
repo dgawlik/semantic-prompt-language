@@ -1,5 +1,10 @@
-@(model='gpt-5.5')
+---
+extension: semantic-prompt-language
+version: 1
+model: 'gpt-5.5'
+---
 
+```spl
 def fib(n) {
     if n < 2 { return n }
     return fib(n - 1) + fib(n - 2)
@@ -26,3 +31,4 @@ restrict './out' {
 
 try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
 success {'joke': joke, 'why': why, 'hi': hi}
+```

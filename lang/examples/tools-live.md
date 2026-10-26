@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # Run from this folder after: mkdir sandbox; echo hello world > sandbox/note.txt
 restrict './sandbox' {
     let content = read_file('./sandbox/note.txt')
@@ -9,3 +15,4 @@ restrict './sandbox' {
     write_file('./sandbox/out.txt', 'OK')
     success {'content': content, 'why': why, 'written': read_file('./sandbox/out.txt')}
 }
+```

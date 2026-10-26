@@ -51,7 +51,7 @@ modifiers only. Raw tools remain ordinary positional calls.
 
 Logging uses the same modifier notation with a second group for values:
 `log(level=debug)(value)`. Plain `log(value)` still logs at info level.
-Model headers use `@(model='model-id')`.
+Document defaults use frontmatter `model: model-id`; headers inside SPL fences are rejected.
 
 | Modifier | Values | Meaning |
 | --- | --- | --- |
@@ -61,7 +61,7 @@ Model headers use `@(model='model-id')`.
 | `show` | `True`, `False` (default) | Log available model reasoning at info level. |
 | `schema` | JSON Schema dict or boolean | Validate the result; implies JSON output. |
 | `repairs` | Integer `0..5`, default `0` | Additional generation attempts for format/schema errors only. Agents require zero. |
-| `model` | Nonempty string | Per-call model; CLI override wins, then this modifier, then the header, then the SDK default. |
+| `model` | Nonempty string | Per-call model; CLI override wins, then this modifier, then frontmatter, then the SDK default. |
 
 ## Validated structured output
 

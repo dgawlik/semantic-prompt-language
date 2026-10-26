@@ -14,7 +14,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             transport: TransportKind.ipc,
         },
         {
-            documentSelector: [{ language: 'spl' }],
+            documentSelector: [{ language: 'markdown' }],
             outputChannel,
         },
     );

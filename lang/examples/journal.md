@@ -1,6 +1,12 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # A rolling journal that remembers previous runs through the variable store:
 #
-#   spl examples/journal.spl --store journal.json
+#   spl examples/journal.md --store journal.json
 #
 # Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.
 
@@ -28,3 +34,4 @@ What is changing from run to run? Be concrete.'''
 }
 
 success {'run': runs, 'today': todays, 'trend': trend}
+```

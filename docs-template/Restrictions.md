@@ -47,7 +47,7 @@ The runtime intercepts *every* file, network and exec call and blocks any that v
 
 A blocked call raises a `restriction_violation` failure. It is catchable with `try/except`:
 
-`web-digest.spl`
+`web-digest.md`
 
 ```spl
 # Summarize a web page with network access limited to a single host,

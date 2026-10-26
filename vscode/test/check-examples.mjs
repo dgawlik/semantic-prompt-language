@@ -8,10 +8,11 @@ const examples = path.resolve(root, '..', 'lang', 'examples');
 const grammar = await loadGrammar();
 
 let problems = 0;
-const files = fs.readdirSync(examples).filter((f) => f.endsWith('.spl'));
+const files = fs.readdirSync(examples).filter((f) => f.endsWith('.md'));
 for (const file of files) {
     let stack = vsctm.INITIAL;
-    const lines = fs.readFileSync(path.join(examples, file), 'utf8').split(/\r?\n/);
+    const source = fs.readFileSync(path.join(examples, file), 'utf8');
+    const lines = [...source.matchAll(/^```spl\r?\n([\s\S]*?)^```/gm)].map((match) => match[1]).join('\n').split(/\r?\n/);
     lines.forEach((line, i) => {
         const r = grammar.tokenizeLine(line, stack);
         for (const t of r.tokens) {

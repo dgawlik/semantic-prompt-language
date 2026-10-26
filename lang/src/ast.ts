@@ -53,6 +53,7 @@ export type Stmt = Base &
         | { t: 'break' }
         | { t: 'continue' }
         | { t: 'pass' }
+        | { t: 'natural'; text: string }
         | { t: 'def'; name: string; params: string[]; body: Stmt[] }
         | { t: 'return'; value?: Expr }
         | { t: 'try'; body: Stmt[]; errName: string; handler: Stmt[] }
@@ -71,4 +72,5 @@ export interface Program {
     directives: Directives;
     body: Stmt[];
     lines: string[];
+    markdown?: { preamble?: string };
 }

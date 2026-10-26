@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 
 
 let color = human 'What is your favorite color?'
@@ -7,3 +13,4 @@ let fruit = human 'What is your favorite fruit?'
 success ask(fmt='text', 
   len="paragraph") '''
   Write a poem about the color {color} and the fruit {fruit}. '''
+```

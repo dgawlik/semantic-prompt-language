@@ -52,20 +52,77 @@ as a variable or function name. See [Human in the loop](HITL.md).
 
 ## Program structure
 
-A script is an optional `@(…)` directive header followed by statements. `#` starts a comment that runs to the end of the line.
+A workflow is a `.md` document with required YAML frontmatter. Only top-level
+`spl` code fences and blockquotes execute; headings, ordinary prose, HTML blocks,
+other code languages, and examples nested in lists are comments.
+Each fence must parse independently, but all executable blocks share one top-level
+scope and run in document order. No construct can span two fences.
+
+````text
+---
+extension: semantic-prompt-language
+version: 1
+model: gpt-6-luna
+preamble: Be concise.
+---
+
+# A mixed workflow
+```spl
+let count = 20
+```
+
+> Add two to @count.
 
 ```spl
-@(model='gpt-5.5')        # header: only allowed before the first statement
-
-let greeting = 'hello'  # a statement
-log(greeting)           # an expression statement
+success count
 ```
+````
+
+Inside SPL, `#` starts a line comment. `success`, `fail`, and top-level `return`
+end the entire document. Natural-language blockquotes are parsed using CommonMark
+rules, including multiline/lazy continuations; separate instructions with a blank
+line. Fences may use backticks or tildes.
 
 ### Directives
 
-The header directive is `@(model='...')`, whose value must be a plain string without
-interpolation. Parentheses may span lines and have a trailing comma.
-Precedence is CLI `--model`, per-call `model`, header, then SDK default.
+Frontmatter requires exactly `extension: semantic-prompt-language` and numeric
+`version: 1`. Optional fields are a nonempty string `model` and string `preamble`
+(including YAML multiline strings). Unknown fields, duplicate keys, and unsupported
+versions are errors. Precedence is CLI `--model`, per-call `model`, frontmatter,
+then SDK default. SPL model headers inside fences are rejected.
+
+The raw-SPL `parse` and `run` programmatic APIs still support the legacy
+`@(model='...')` header. Use `parseMarkdown` to embed document execution.
+
+### Natural-language instructions
+
+Each blockquote invokes a model with built-in runtime instructions, the optional
+document preamble, and current bindings/function signatures. The model must call
+the registered `submit_spl` hook with a complete SPL program. After the request
+finishes, that program executes in the same scope as handwritten SPL. It can use
+all language features: tools, functions, loops, conditions, validation, generation,
+agents/MCP, restrictions, failures, success, and human input. Submission itself
+performs no external actions; nested generation remains tool-free unless it uses
+`agent`. Missing/invalid submissions fail explicitly.
+
+`@name` references a variable, function, or operation semantically, for example
+`@count`, `@read_file`, or `@success`; it is not textual substitution or a new
+expression grammar. Markers are optional. The model decides how to translate
+natural language, so use explicit SPL for behavior that must not be interpreted.
+Natural-language blocks without an explicit terminal operation continue to the
+next block; their model commentary is not a document result.
+
+Every model request, including nested generation and repairs, receives the built-in
+runtime preamble and optional frontmatter preamble. Ordinary Markdown prose never
+becomes instructions. Tool access is allow-by-default: only run trusted documents.
+Shared values are sent to the model and can appear in logs/traces; do not put secrets
+in bindings unless you intend to disclose them.
+
+`--check` validates the document and handwritten SPL without translating blockquotes.
+Generated `human` code requires checkpoint mode before its effects can run.
+Checkpoint resume reuses the submitted code and skips completed effects.
+Trace replay reuses submitted code too, but reruns its explicit script effects
+like any other workflow replay. Generated errors point at the originating blockquote.
 
 ## Variables
 
@@ -96,7 +153,7 @@ interpolation. They are snapshots taken at the start of each run, not ordinary b
   negative indexes count from the end, as with ordinary lists. Non-integer indexes fail.
 
 ```bash
-spl --arg=first --arg="two words" example.spl
+spl --arg=first --arg="two words" example.md
 ```
 
 ```spl

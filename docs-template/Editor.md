@@ -1,12 +1,20 @@
 # VS Code extension
 
-Syntax highlighting, snippets and editing support for `.spl` scripts. The extension lives in the `vscode/` folder of the repository.
+Language tooling for `.md` workflows. Markdown remains the document language;
+frontmatter `extension: semantic-prompt-language` opts into SPL diagnostics,
+completion, navigation, and symbols. The server validates `version: 1`.
+Ordinary Markdown is left alone; `.spl` file association is removed.
+The extension lives in the `vscode/` folder of the repository.
 
 ## Features
 
 ### Highlighting
 
-Keywords, `let`/`def` declarations, numbers, comments, the `@(model=…)` directive and strings with `{expr}` interpolation.
+SPL fences embed the language grammar: keywords, declarations, numbers, comments,
+and strings with `{expr}` interpolation. `@name` references in blockquotes get
+distinct coloring. Bindings declared in earlier fences support navigation from
+natural-language markers. Lexical highlighting works independently of frontmatter;
+runtime execution and language-server features require the opt-in.
 
 ### Generation & agents
 
@@ -14,8 +22,8 @@ Keywords, `let`/`def` declarations, numbers, comments, the `@(model=…)` direct
 
 Command modifiers use parentheses, including multiline groups such as
 `ask(fmt='integer', repairs=1) 'prompt'`. Completions work inside unfinished
-modifier groups. Logging uses `log(level=debug)(value)` and model headers use
-`@(model='...')`.
+modifier groups. Logging uses `log(level=debug)(value)`. Document model defaults
+belong in frontmatter; the `model` snippet inserts a per-call override.
 
 ### Runtime inputs
 
@@ -32,7 +40,8 @@ See [runtime inputs](Language.md#runtime-inputs-env-and-args).
 
 ### Snippets
 
-Type a prefix and press Tab. Covers control flow, LLM commands, tools and scopes.
+Type `splworkflow` in Markdown for a complete document envelope. Embedded SPL
+snippets cover control flow, LLM commands, tools and scopes.
 
 ### Editing
 

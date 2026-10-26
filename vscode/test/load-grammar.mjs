@@ -9,7 +9,7 @@ const oniguruma = require('vscode-oniguruma');
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export async function loadGrammar() {
+export async function loadGrammar(scopeName = 'source.spl') {
     const wasm = fs.readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm')).buffer;
     await oniguruma.loadWASM(wasm);
     const registry = new vsctm.Registry({
@@ -17,10 +17,11 @@ export async function loadGrammar() {
             createOnigScanner: (p) => new oniguruma.OnigScanner(p),
             createOnigString: (s) => new oniguruma.OnigString(s),
         }),
-        loadGrammar: async (scope) =>
-            scope === 'source.spl'
-                ? vsctm.parseRawGrammar(fs.readFileSync(path.join(root, 'syntaxes', 'spl.tmLanguage.json'), 'utf8'), 'spl.tmLanguage.json')
-                : null,
+        loadGrammar: async (scope) => {
+            const filename = scope === 'source.spl' ? 'spl.tmLanguage.json'
+                : scope === 'spl.markdown.injection' ? 'markdown.tmLanguage.json' : undefined;
+            return filename ? vsctm.parseRawGrammar(fs.readFileSync(path.join(root, 'syntaxes', filename), 'utf8'), filename) : null;
+        },
     });
-    return registry.loadGrammar('source.spl');
+    return registry.loadGrammar(scopeName);
 }

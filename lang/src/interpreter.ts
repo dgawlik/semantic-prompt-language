@@ -1,7 +1,7 @@
 import type { AssignTarget, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
 import { callMethod, iterate, makeBuiltins } from './builtins.js';
-import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
-import { LlmError, buildPrompt, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest } from './llm.js';
+import { Failure, SplSyntaxError, SuccessSignal, type FailurePayload } from './errors.js';
+import { LlmError, buildPrompt, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse } from './llm.js';
 import { compileSchema } from './schema.js';
 import type { Logger } from './logger.js';
 import { Restrictions, makeRestriction } from './restrict.js';
@@ -9,7 +9,8 @@ import { MemoryStore, type VariableStore } from './store.js';
 import { ToolHost, TOOL_SPECS } from './tools.js';
 import { CheckpointError, SuspensionSignal, type Checkpoint, type HumanRequest } from './checkpoint.js';
 import { isResponse, traceRequest } from './recording.js';
-import { usesHuman } from './parser.js';
+import { parse, usesHuman } from './parser.js';
+import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
 import {
     assertMutable,
     compareValues,
@@ -202,6 +203,8 @@ class Interpreter {
                 return { k: 'value', v: await this.eval(s.e, env) };
             case 'pass':
                 return;
+            case 'natural':
+                return this.execNatural(s.text, s.line, env);
             case 'break':
                 return { k: 'break' };
             case 'continue':
@@ -572,7 +575,16 @@ class Interpreter {
     // ---- LLM and tools -------------------------------------------------
 
     private async callLlm(req: LlmRequest): Promise<string> {
+        return (await this.callLlmResponse(req)).text.trim();
+    }
+
+    private async callLlmResponse(req: LlmRequest): Promise<LlmResponse> {
         const { logger, backend } = this.opts;
+        if (this.program.markdown) {
+            req = { ...req, prompt: [
+                RUNTIME_PREAMBLE, this.program.markdown.preamble, req.prompt,
+            ].filter(Boolean).join('\n\n') };
+        }
         const replaying = this.opts.checkpoint?.replaying;
         if (!replaying) logger.llm(`llm request (${req.kind}):\n${req.prompt}`);
         const started = Date.now();
@@ -591,14 +603,69 @@ class Interpreter {
             if (!replaying) {
                 logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
                 logger.llm(`llm response:\n${res.text}`);
+                if (res.spl !== undefined) logger.llm(`submitted SPL:\n${res.spl}`);
             }
-            return res.text.trim();
+            return res;
         } catch (e) {
             if (e instanceof CheckpointError || e instanceof SuspensionSignal) throw e;
             if (e instanceof Failure) throw e;
             if (e instanceof LlmError) throw new Failure('llm_error', e.message);
             throw new Failure('llm_error', (e as Error).message ?? String(e));
         }
+    }
+
+    private async execNatural(text: string, line: number, env: Env): Promise<Completion> {
+        const bindings: Record<string, unknown> = Object.create(null);
+        const visiting = new Set<Value>();
+        const describe = (value: Value): unknown => {
+            if (isFunction(value)) {
+                return value.__fn === 'user' ? `def ${value.name}(${value.params.join(', ')})` : value.name;
+            }
+            if (!isList(value) && !isDict(value)) return toJson(value);
+            if (visiting.has(value)) return '<circular reference>';
+            visiting.add(value);
+            const result = isList(value) ? value.map(describe)
+                : Object.fromEntries(Object.entries(value).map(([key, child]) => [key, describe(child)]));
+            visiting.delete(value);
+            return result;
+        };
+        for (let scope: Env | undefined = env; scope; scope = scope.parent) {
+            for (const [name, value] of scope.vars) {
+                if (Object.hasOwn(bindings, name)) continue;
+                bindings[name] = describe(value);
+            }
+        }
+        const response = await this.callLlmResponse({
+            kind: 'agent', naturalLanguage: true,
+            prompt: buildPrompt({
+                prompt: `${NATURAL_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings:\n${JSON.stringify(bindings)}\n\nBlockquote:\n${text}`,
+                constraints: this.constraints, restrictions: this.restrictions,
+            }),
+            model: this.model, showReasoning: false,
+            restrictions: this.restrictions, tools: new ToolHost(this.restrictions, this.cwd),
+        });
+        if (typeof response.spl !== 'string' || !response.spl.trim()) {
+            throw new Failure('llm_error', 'natural-language execution requires a non-empty submit_spl program');
+        }
+        let generated: Program;
+        try {
+            generated = parse(response.spl);
+        } catch (error) {
+            if (!(error instanceof SplSyntaxError)) throw error;
+            throw new Failure('llm_error', `invalid submitted SPL: ${error.message}`);
+        }
+        if (generated.directives.model !== undefined) throw runtimeError('submitted SPL must use model modifiers, not a model header');
+        if (!this.opts.checkpoint && usesHuman(generated)) {
+            throw runtimeError('human input requires a checkpoint; use --checkpoint or --resume');
+        }
+        // Generated code has no document coordinates; attribute its statements to the blockquote.
+        const locate = (value: unknown): void => {
+            if (!value || typeof value !== 'object') return;
+            if ('line' in value) value.line = line;
+            for (const child of Object.values(value)) locate(child);
+        };
+        locate(generated.body);
+        return this.execBlock(generated.body, env);
     }
 
     private async callTool(tool: ToolName, args: Value[]): Promise<Value> {

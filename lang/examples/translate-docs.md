@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 
 # Translate a document into several languages, one file each, without leaving the project folder.
 # The script reads once and writes exact model responses; generation has no tools.
@@ -19,3 +25,4 @@ restrict '.' {
 }
 
 success written
+```

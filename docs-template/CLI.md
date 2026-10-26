@@ -1,18 +1,18 @@
 # CLI & runtime
 
-The interpreter runs one script file to completion or a human-input boundary. It prints the result on stdout, logs on stderr and reports the outcome through its exit code.
+The interpreter runs one opted-in Markdown file to completion or a human-input boundary. It prints the result on stdout, logs on stderr and reports the outcome through its exit code. Raw `.spl` files are rejected; add the required extension/version frontmatter and wrap the code in an SPL fence. See [document structure](Language.md#program-structure).
 
 ## Usage
 
 ```bash
-spl <script.spl> [--log-level error|info|debug] [--silent] [--model <id>]
+spl <script.md> [--log-level error|info|debug] [--silent] [--model <id>]
                  [--store <file.json> | --store-module <module>]
                  [--timeout <s>] [--cwd <dir>] [--mcp <file.json>] [--check]
                  [--trace <file.jsonl> | --record <file.jsonl> | --replay <file.jsonl>]
                  [--arg <value> ...]
-spl <script.spl> --checkpoint <run.jsonl> [--silent]
-spl <script.spl> --resume --checkpoint <run.jsonl> [--answer-for <id> --answer <text> | --answer-for <id> --answer-file <file>]
-spl <script.spl> --resume <run.jsonl> [--answer-for <id> --answer <text> | --answer-for <id> --answer-file <file>]
+spl <script.md> --checkpoint <run.jsonl> [--silent]
+spl <script.md> --resume --checkpoint <run.jsonl> [--answer-for <id> --answer <text> | --answer-for <id> --answer-file <file>]
+spl <script.md> --resume <run.jsonl> [--answer-for <id> --answer <text> | --answer-for <id> --answer-file <file>]
 spl login
 spl logout
 ```
@@ -25,14 +25,14 @@ From a checkout use `node dist/cli.js` or `npx file:./lang`. The package install
 | --- | --- | --- |
 | `--log-level <level>` | `info` | `error`, `info` or `debug`. Logs go to stderr. |
 | `--silent` | off | Suppress all logs; only the result is printed. |
-| `--model <id>` | SDK default | Overrides per-call model, then header model, then SDK default. |
+| `--model <id>` | SDK default | Overrides per-call model, then frontmatter model, then SDK default. |
 | `--arg <value>` | none | Repeatable string argument exposed through `$args`, in order. Also accepts `--arg=value`. |
 | `--mcp <file.json>` | none | MCP servers in VS Code `mcp.json` format; see [MCP configuration](#mcp-configuration). |
 | `--store <file.json>` | — | Persist top-level variables in a JSON file. |
 | `--store-module <path>` | — | Custom store module exporting `createStore()`. Mutually exclusive with `--store`. |
 | `--timeout <seconds>` | `300` | Per-LLM-call timeout. |
 | `--trace <file.jsonl>` | none | Create a new workflow trace of all LLM requests, responses, and failures, including agents. Works with `--silent`. |
-| `--record <file.jsonl>` | none | Create a new generation recording. Rejects existing files and agent calls. |
+| `--record <file.jsonl>` | none | Create a new generation recording, including natural-language code submissions. Rejects existing files and action-taking agent calls. |
 | `--replay <file.jsonl>` | none | Replay recorded LLM/agent results without Copilot or MCP. Explicit script tools and stores run normally for workflow traces; legacy generation recordings retain their restrictions. Mutually exclusive with `--trace` and `--record`. |
 | `--checkpoint <file>` | none | Create a new resumable-run journal; never overwrite an existing file. With bare `--resume`, open and append to this existing journal instead. |
 | `--resume [file]` | none | Inspect pending human input, or continue with a matching answer. Omit the file when using `--checkpoint <file>`; `--resume <file>` remains supported. |
@@ -47,9 +47,9 @@ From a checkout use `node dist/cli.js` or `npx file:./lang`. The package install
 ## Script arguments and environment
 
 ```bash
-spl --arg=first --arg="two words" example.spl
-spl example.spl --arg first --arg "two words"
-spl example.spl --arg= --arg=--literal-option
+spl --arg=first --arg="two words" example.md
+spl example.md --arg first --arg "two words"
+spl example.md --arg= --arg=--literal-option
 ```
 
 Options may appear before or after the single script file. Each `--arg` supplies exactly
@@ -98,8 +98,8 @@ LLM requests and responses use the `[llm]` tag at every non-silent level. They m
 Each executed SPL statement is traced to stderr under `[deterministic]`, with its line number, statement kind and source line, at every non-silent level. Loop bodies are traced for each iteration; skipped branches are not traced. This records control flow, including statements wrapping LLM calls, not intermediate expression values.
 
 ```bash
-spl script.spl --silent                    # result only
-spl script.spl --log-level debug 2> run.log   # keep the full transcript, pipe the result
+spl script.md --silent                    # result only
+spl script.md --log-level debug 2> run.log   # keep the full transcript, pipe the result
 ```
 
 ## MCP configuration
@@ -180,8 +180,8 @@ Server names use letters, digits, underscores, dots or hyphens. They are the nam
 With a script and config in the current directory:
 
 ```bash
-spl script.spl --mcp mcp.json --check
-spl script.spl --mcp mcp.json
+spl script.md --mcp mcp.json --check
+spl script.md --mcp mcp.json
 ```
 
 `--check` validates script syntax, JSON structure, settings and variable expansion without starting MCP servers or making LLM calls. It does not verify credentials, endpoint reachability, executable availability or tool names.
@@ -205,7 +205,7 @@ Stores are independent of traces and recordings. Workflow trace replay loads and
 Scripts can keep state between runs. `--store vars.json` loads top-level variables from the file at start and writes them back at exit — **also on failure**. Functions are not persisted. The file must contain a JSON object; writes are atomic (temp file + rename).
 
 ```bash
-spl examples/journal.spl --store journal.json
+spl examples/journal.md --store journal.json
 ```
 
 ### Custom stores
@@ -253,9 +253,9 @@ process waiting. Start with `--checkpoint`, inspect with `--resume`, and provide
 one answer bound to the pending request ID:
 
 ```bash
-spl examples/human-review.spl --checkpoint run.jsonl --silent
-spl examples/human-review.spl --resume --checkpoint run.jsonl --silent
-spl examples/human-review.spl --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+spl examples/human-review.md --checkpoint run.jsonl --silent
+spl examples/human-review.md --resume --checkpoint run.jsonl --silent
+spl examples/human-review.md --resume --checkpoint run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
 ```
 
 `--resume run.jsonl` is equivalent to `--resume --checkpoint run.jsonl`. Each
@@ -269,8 +269,8 @@ Resumable mode cannot combine with stores or trace/record/replay.
 ## Workflow traces and replay
 
 ```bash
-spl workflow.spl --trace workflow.jsonl
-spl workflow.spl --replay workflow.jsonl --silent
+spl workflow.md --trace workflow.jsonl
+spl workflow.md --replay workflow.jsonl --silent
 ```
 
 `--trace` creates a new file and never overwrites an existing one. It instruments every backend call from `ask`, `think`, and `agent`, including repair attempts and failures that the script catches. Tracing is independent of log level and `--silent`. `--trace`, `--record`, and `--replay` are mutually exclusive. `--check` does not create a trace.
@@ -305,8 +305,8 @@ Files contain assembled prompts and raw responses, including source data and rea
 ## Offline generation record/replay
 
 ```bash
-spl examples/triage-issues.spl --record triage.jsonl
-spl examples/triage-issues.spl --replay triage.jsonl --silent
+spl examples/triage-issues.md --record triage.jsonl
+spl examples/triage-issues.md --replay triage.jsonl --silent
 ```
 
 This legacy mode remains supported with its original `spl-generation`, version 1 format. Record creates a new JSONL file and never overwrites one. Replay needs no credentials and never constructs a Copilot client or starts MCP servers. Both modes reject agents. Recording captures successful backend responses, including invalid JSON that subsequently triggers a repair; transport errors are not recorded.

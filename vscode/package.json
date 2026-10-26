@@ -1,8 +1,8 @@
 {
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
-  "description": "Language server, syntax highlighting and snippets for Semantic Prompt Language (.spl) scripts",
-  "version": "0.8.0",
+  "description": "Executable Markdown with SPL blocks and natural-language workflows",
+  "version": "1.0.0",
   "publisher": "spl-lang",
   "license": "ISC",
   "repository": {
@@ -16,7 +16,7 @@
   },
   "main": "./out/extension.cjs",
   "activationEvents": [
-    "onLanguage:spl"
+    "onLanguage:markdown"
   ],
   "categories": [
     "Programming Languages",
@@ -36,9 +36,6 @@
           "SPL",
           "Semantic Prompt Language"
         ],
-        "extensions": [
-          ".spl"
-        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -47,12 +44,24 @@
         "language": "spl",
         "scopeName": "source.spl",
         "path": "./syntaxes/spl.tmLanguage.json"
+      },
+      {
+        "scopeName": "spl.markdown.injection",
+        "path": "./syntaxes/markdown.tmLanguage.json",
+        "injectTo": ["text.html.markdown"],
+        "embeddedLanguages": {
+          "meta.embedded.block.spl": "spl"
+        }
       }
     ],
     "snippets": [
       {
         "language": "spl",
         "path": "./snippets/spl.code-snippets"
+      },
+      {
+        "language": "markdown",
+        "path": "./snippets/markdown.code-snippets"
       }
     ]
   },

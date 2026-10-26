@@ -1,8 +1,7 @@
 # SPL: Semantic Prompt Language
 
-A compact Python-like language for building AI workflows in minutes, not hours of
-orchestration glue. Iterate in a small script, keep deterministic code separate from
-LLM calls, and contain model variance with explicit guards.
+Executable Markdown for AI workflows: mix Python-like SPL code with natural-language
+instructions, sharing variables, tools, validation, and control flow.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
 [Markdown documentation](docs-template/Introduction.md) |
@@ -33,10 +32,59 @@ syntax checks, and recorded LLM replay do not.
 ```sh
 npm install -g spl-lang
 spl login
-spl example.spl
+spl example.md
 ```
 
-From a checkout: `cd lang`, `npm install`, then `node dist/cli.js examples/hi.spl`.
+From a checkout: `cd lang`, `npm install`, then `node dist/cli.js examples/hi.md`.
+
+## Executable Markdown
+
+Only `.md` files execute. The following is a complete workflow:
+
+````text
+---
+extension: semantic-prompt-language
+version: 1
+preamble: Be concise.
+---
+
+# This heading and ordinary prose are comments.
+
+```spl
+let count = 20
+```
+
+> Add two to @count, then return it using @success.
+````
+
+The exact `extension` identifier and numeric `version: 1` are required.
+Optional frontmatter fields are `model` and `preamble`. CLI `--model` overrides
+per-call models and the frontmatter default. Unknown or invalid fields are errors.
+Built-in runtime instructions and the optional preamble precede every model request,
+including nested generation and repair attempts.
+
+Top-level `spl` fences and blockquotes execute in document order and share a scope.
+Each fence is a complete SPL unit; constructs cannot span fences. Other Markdown,
+including other code languages and nested examples in lists, is ignored.
+`success`, `fail`, and top-level `return` terminate the whole document.
+
+Blockquotes have access to the entire language through the registered `submit_spl`
+hook: the model submits a program, then the runtime executes it in the shared scope.
+`@name` denotes a binding or operation, such as `@count`, `@read_file`, or `@success`;
+markers are optional semantic hints, not string interpolation. Natural-language
+interpretation is model-dependent; generated code uses the same restrictions and
+validation as handwritten code. Tools are allow-by-default outside `restrict`.
+Use trusted workflow documents only.
+
+Natural-language human input requires `--checkpoint` just like SPL `human`.
+Traces record submitted code; replay executes that code without translating again,
+so explicit effects still run. Checkpoint resume skips completed effects.
+`--check` validates frontmatter and SPL syntax, but cannot validate natural-language
+intent without a model. See [Language basics](docs-template/Language.md#program-structure).
+
+Raw `parse(source)` / `run(program, options)` APIs remain compatible. Embedders use
+`parseMarkdown(source)` for the new document format. The SPL examples below show
+fence contents, not standalone executable files.
 
 ## Commands and modifiers
 
@@ -54,9 +102,9 @@ log(level=debug)(score)
 ```
 
 No modifiers: `ask 'prompt'` or `ask() 'prompt'`. Options can have a trailing comma.
-Model headers use `@(model='model-id')`. Ordinary `log(value)` and raw tool calls
+Document models use frontmatter `model: model-id`. Ordinary `log(value)` and raw tool calls
 are unchanged. The old `?`, brace modifiers, and `@{...}` headers are rejected with
-migration hints; replace them with `ask`, `command(...)`, and `@(...)`.
+migration hints; replace them with `ask`, `command(...)`, and frontmatter `model`.
 
 ## Generation, validation, and exact I/O
 
@@ -171,8 +219,8 @@ accepted. Debug messages are emitted only with `--log-level debug`.
 ## Replayable workflows
 
 For noninteractive human review, `human 'question'` emits JSON and exits `3`.
-Start with `spl workflow.spl --checkpoint run.jsonl`, then submit a matching request
-with `spl workflow.spl --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt`.
+Start with `spl workflow.md --checkpoint run.jsonl`, then submit a matching request
+with `spl workflow.md --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt`.
 Equivalently, use `--resume --checkpoint run.jsonl`. Every further question appends
 to that same journal; answer its latest `request_id`, not the workflow's `run_id`.
 Completed tools/model calls are not repeated; preserve the same workspace and
@@ -183,8 +231,8 @@ Capture a live run, then iterate on guards and deterministic logic without anoth
 model call when the recorded LLM requests remain unchanged:
 
 ```sh
-spl extraction.spl --trace responses.jsonl
-spl extraction.spl --replay responses.jsonl --silent
+spl extraction.md --trace responses.jsonl
+spl extraction.md --replay responses.jsonl --silent
 ```
 
 Traces capture all `ask`, `think`, and `agent` requests, raw responses, reasoning,
@@ -210,13 +258,13 @@ replay does not generate a new answer.
 
 Scripts can read process environment strings with `$env.NAME` or `$env['NAME']`,
 and arguments with `$args[0]`, `$args[1]`, etc. Pass each argument with
-`spl --arg=first --arg="two words" script.spl`. Missing environment names and
+`spl --arg=first --arg="two words" script.md`. Missing environment names and
 out-of-range argument indexes return `None`; a set-but-empty environment value stays `''`.
 Both values are read-only snapshots, including through aliases, and are not
 automatically persisted. See [runtime inputs](docs-template/Language.md#runtime-inputs-env-and-args).
 
 ```text
-spl script.spl [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
+spl script.md [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
                [--store file.json | --store-module module]
                [--trace file.jsonl | --record file.jsonl | --replay file.jsonl]
                [--log-level error|info|debug] [--silent] [--check]

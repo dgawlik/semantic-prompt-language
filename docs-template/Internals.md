@@ -4,7 +4,17 @@ A small tree-walking interpreter with explicit boundaries between raw I/O, gener
 
 ## Execution pipeline
 
-The lexer produces positioned tokens and string interpolation parts. The recursive-descent parser produces a typed AST and rejects invalid structure and unknown/duplicate modifier names. The interpreter evaluates modifier expressions, validates configuration, and runs the selected operation.
+The Markdown parser validates YAML frontmatter and extracts top-level SPL fences and
+natural-language blockquotes. SPL fences are independently parsed into one ordered
+program with original document line numbers and shared globals. The lexer produces
+positioned tokens and string interpolation parts. The recursive-descent parser
+rejects invalid structure and unknown/duplicate modifiers.
+
+Natural-language blocks use a submission-only model session. Its `submit_spl` hook
+validates and returns code, without running effects inside the model request.
+The interpreter then runs that code in shared scope. This separates translation
+from execution so trace replay and checkpoint resume can reuse the generated program
+without retranslating, nesting journal effects, or losing variable updates.
 
 * Raw function call: evaluate arguments, check restrictions, run ToolHost, return exact output.
 
@@ -16,6 +26,7 @@ The lexer produces positioned tokens and string interpolation parts. The recursi
 
 | Source | Responsibility |
 | --- | --- |
+| `markdown.ts / preamble.ts` | Frontmatter validation, Markdown extraction, document source positions, runtime and translation instructions. |
 | `lexer.ts / parser.ts / ast.ts` | Tokenization, syntax validation, typed statements and expressions. |
 | `interpreter.ts` | Lexical block scopes, expression-valued blocks/conditionals, leveled logging, control flow, raw built-ins, generation options, repair, scoped guidance/restrictions, source locations. |
 | `values.ts / builtins.ts` | Value model, conversions, ordinary functions and collection methods. |
@@ -48,9 +59,18 @@ Failures receive the innermost statement location once. Return/break/continue pr
 
 5. Parse strict JSON and validate the schema. Only format/schema failures may use the bounded repair budget.
 
-Agents use the same final-output validation but reject repairs. Custom backends must honor `req.kind`: only `agent` may invoke `req.tools` or other configured tools. The bundled Copilot backend enforces this through both tool exposure and permission callbacks.
+Agents use the same final-output validation but reject repairs. Custom backends must
+honor `req.kind`: only action-taking `agent` calls may invoke runtime/MCP tools.
+When `req.naturalLanguage` is true, return the submitted program in `response.spl`
+and do not execute tools; the interpreter owns execution after the response.
+The bundled Copilot backend exposes only `submit_spl` in these sessions.
 
 ## Embedding
+
+Raw `parse` and `run` remain backward compatible. Replace `parse` with
+`parseMarkdown` to run a full Markdown document with frontmatter, SPL fences,
+and blockquotes. Only Markdown programs receive the document runtime preamble.
+The CLI exclusively uses `parseMarkdown`.
 
 `embed.mjs`
 

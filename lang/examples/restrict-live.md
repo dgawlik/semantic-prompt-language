@@ -1,3 +1,9 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # Requires ./secret.txt next to where you run the script: the LLM is asked to read it, the runtime blocks it.
 restrict './sandbox' {
     try {
@@ -8,3 +14,4 @@ restrict './sandbox' {
         success err
     }
 }
+```

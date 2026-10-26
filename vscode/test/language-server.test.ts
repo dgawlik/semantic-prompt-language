@@ -22,6 +22,38 @@ const root = path.resolve(__dirname, '..', '..');
 const uri = 'file:///test.spl';
 const document = (source: string) => TextDocument.create(uri, 'spl', 1, source);
 const analysis = (source: string) => analyze(document(source));
+const markdownSource = (body: string) => `---\nextension: semantic-prompt-language\nversion: 1\n---\n\n${body}`;
+const markdownAnalysis = (source: string) => analyze(TextDocument.create('file:///workflow.md', 'markdown', 1, source));
+
+test('Markdown keeps ordinary documents quiet and gates features on frontmatter', () => {
+    const plain = markdownAnalysis('# Ordinary Markdown\n\n> @success\n\n```spl\ninvalid !\n```');
+    assert.deepEqual(plain.diagnostics, []);
+    assert.deepEqual(documentSymbols(plain), []);
+    assert.deepEqual(completions(plain, { line: 2, character: 5 }), []);
+    const wrongVersion = markdownSource('Text').replace('version: 1', 'version: 2');
+    assert.match(markdownAnalysis(wrongVersion).diagnostics[0].message, /version: 1/);
+});
+
+test('Markdown preserves positions and shared symbols across code and natural language', () => {
+    const source = markdownSource('```spl\nlet count = 1\n```\n\n> Increment @count.\n\nComment\n\n```spl\nsuccess count\n```');
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    assert.equal(documentSymbols(result)[0].selectionRange.start.line, 6);
+    const reference = at(source, '@count');
+    reference.character++;
+    assert.equal(definition(result, reference)?.range.start.line, 6);
+    assert.match(JSON.stringify(hover(result, reference)), /let count/);
+    assert.ok(completions(result, reference).some(item => item.label === 'count'));
+    assert.deepEqual(completions(result, at(source, 'Comment')), []);
+    const error = markdownAnalysis(markdownSource('Comment\n\n```spl\nask(unknown=1) \'x\'\n```'));
+    assert.equal(error.diagnostics[0].range.start.line, 8);
+    assert.match(error.diagnostics[0].message, /unknown modifier/);
+});
+
+test('Markdown validates each fence independently', () => {
+    const result = markdownAnalysis(markdownSource('```spl\nif True {\n```\n\n```spl\npass\n}\n```'));
+    assert.match(result.diagnostics[0].message, /unclosed block/);
+});
 
 function at(source: string, text: string, occurrence = 0) {
     let index = -1;
@@ -49,10 +81,10 @@ test('diagnostics use the real parser with zero-based, UTF-16 positions', () => 
 
 test('all shipped examples parse without diagnostics', () => {
     const examples = path.resolve(root, '..', 'lang', 'examples');
-    const files = readdirSync(examples).filter((file) => file.endsWith('.spl'));
+    const files = readdirSync(examples).filter((file) => file.endsWith('.md'));
     assert.ok(files.length > 0);
     for (const file of files) {
-        assert.deepEqual(analysis(readFileSync(path.join(examples, file), 'utf8')).diagnostics, [], file);
+        assert.deepEqual(analyze(TextDocument.create(`file:///${file}`, 'markdown', 1, readFileSync(path.join(examples, file), 'utf8'))).diagnostics, [], file);
     }
 });
 

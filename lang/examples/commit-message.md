@@ -1,7 +1,13 @@
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```spl
 # Draft a Conventional Commit message for the staged changes.
 #
 #   cd your-repo && git add -p
-#   spl path/to/commit-message.spl
+#   spl path/to/commit-message.md
 #
 # The script reads the diff with git once; tool-free generation gets at most three attempts.
 
@@ -42,3 +48,4 @@ Reply with ONLY the message.
 
 assert is_valid(msg) 'could not produce a valid commit message'
 success msg
+```
