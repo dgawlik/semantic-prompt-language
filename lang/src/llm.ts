@@ -22,6 +22,8 @@ export interface LlmRequest {
     tools: ToolHost;
     /** Submit a program for execution in the document's shared scope. */
     naturalLanguage?: boolean;
+    /** `@name` markers of a natural-language blockquote; submitted programs must keep these names visible. */
+    markers?: readonly string[];
 }
 
 export interface LlmResponse {

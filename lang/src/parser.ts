@@ -38,6 +38,23 @@ export function usesHuman(program: Program): boolean {
     return visit(program.body);
 }
 
+/**
+ * Names declared with `let` inside nested blocks (not function bodies). Such bindings vanish when
+ * their block ends, so a natural-language result saved this way is lost to later document steps.
+ */
+export function blockLocalDeclarations(program: Program): Set<string> {
+    const names = new Set<string>();
+    const visit = (value: unknown): void => {
+        if (Array.isArray(value)) return value.forEach(visit);
+        if (typeof value !== 'object' || value === null) return;
+        if ('t' in value && value.t === 'def') return;
+        if ('t' in value && value.t === 'let' && 'name' in value) names.add(value.name as string);
+        Object.values(value).forEach(visit);
+    };
+    for (const stmt of program.body) visit(stmt.t === 'let' ? stmt.value : stmt);
+    return names;
+}
+
 class Parser {
     private pos = 0;
     private loopDepth = 0;

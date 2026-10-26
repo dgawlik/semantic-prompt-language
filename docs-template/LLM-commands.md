@@ -33,7 +33,9 @@ conventions that the model maps onto language features:
 | `@SUCCESS`, `@fail` | end the document |
 
 Generated code is ordinary SPL: it runs under the same restrictions and validation as handwritten
-code, but the translation can be wrong. Follow important steps with an `spl` check:
+code, but the translation can be wrong. Before anything runs, the runtime rejects a submission that
+declares a marked result with `let` inside a block (where it would vanish), and it reminds the model
+once if it replies without submitting. Follow important steps with an `spl` check:
 
 ```spl
 assert len(summary) < 300 'summary is too long'

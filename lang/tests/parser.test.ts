@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { SplSyntaxError } from '../src/errors.js';
-import { parse } from '../src/parser.js';
+import { blockLocalDeclarations, parse } from '../src/parser.js';
 
 const bad = (source: string, message: RegExp) => {
     expect(() => parse(source)).toThrow(SplSyntaxError);
     expect(() => parse(source)).toThrow(message);
 };
+
+describe('blockLocalDeclarations', () => {
+    it('finds let declarations inside nested blocks, but not top-level or function locals', () => {
+        const program = parse(`let top = { let inner = 1; inner }
+if True { let branch = 1 } else { let other = 2 }
+for i in [1] { let looped = i }
+enforce 'x' { forbid 'y' { let guided = ask 'z' } }
+try { let attempted = 1 } except err { let handled = 2 }
+restrict './out' { let limited = 1 }
+def f() { let local = 1; if True { let deeper = 2 } }`);
+        expect([...blockLocalDeclarations(program)].sort()).toEqual(
+            ['attempted', 'branch', 'guided', 'handled', 'inner', 'limited', 'looped', 'other'],
+        );
+    });
+});
 
 describe('parser: accepted syntax', () => {
     it.each(['ask', 'think', 'agent'])('parses multiline %s modifiers, nested values, and trailing commas', (command) => {

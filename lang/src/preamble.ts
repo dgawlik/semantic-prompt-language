@@ -19,7 +19,8 @@ Strings interpolate {expression}; use doubled {{ and }} for literal braces.
 if condition { ... } elif condition { ... } else { ... }
 for item in sequence { ... }; while condition { ... }; break; continue
 def name(arg) { return expression }; functions have lexical scope.
-Blocks create child scopes; declare results outside a block before assigning within it.
+Blocks create child scopes: a let inside if/for/enforce/forbid/restrict/try disappears when the block ends.
+Declare every @name the instruction saves at the top level, then assign it inside blocks without let.
 Operators: + - * / // % **, == != < <= > >=, in, not in, and, or, not.
 Builtins include range, len, str, int, float, bool, keys, values, items, json_parse, json_stringify.
 log(value); log(level=debug)(value); assert condition 'message'; try { ... } except err { ... }
@@ -36,4 +37,7 @@ All existing runtime tools, functions, control flow, validation and human input 
 Submit a complete program, not Markdown fences, not an @(model=...) header.
 Example: "Read @path and store a summary in @summary" =>
 let content = read_file(path)
-let summary = ask 'Summarize: {content}'`;
+let summary = ask 'Summarize: {content}'
+Example: "@ENFORCE Be formal. Write a greeting for @name -> @greeting" =>
+let greeting = None
+enforce 'Be formal' { greeting = ask 'Write a greeting for {name}' }`;

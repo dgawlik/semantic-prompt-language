@@ -637,6 +637,7 @@ class Interpreter {
         }
         const response = await this.callLlmResponse({
             kind: 'agent', naturalLanguage: true,
+            markers: [...new Set([...text.matchAll(/@([A-Za-z_]\w*)/g)].map((match) => match[1]))],
             prompt: buildPrompt({
                 prompt: `${NATURAL_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings:\n${JSON.stringify(bindings)}\n\nBlockquote:\n${text}`,
                 constraints: this.constraints, restrictions: this.restrictions,
