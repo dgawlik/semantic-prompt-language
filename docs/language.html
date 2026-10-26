@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="The deterministic core of SPL: Python-flavoured expressions, braces, lexical block scopes, and explicit assignment. Model calls are distinct expressions, not implicit behavior of ordinary functions.">
+<meta name="description" content="SPL is a small Python-like language with brace-delimited blocks. This page covers the code inside
+spl fences: values, bindings, control flow, functions, built-ins and exact tools.">
 <meta name="color-scheme" content="light dark">
-<title>Language basics - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=842fdb94d159">
-<link rel="stylesheet" href="assets/style.css?v=842fdb94d159">
+<title>Language - SPL docs</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=222fac99706f">
+<link rel="stylesheet" href="assets/style.css?v=222fac99706f">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=842fdb94d159"></script>
-<script defer src="assets/site.js?v=842fdb94d159"></script>
+<script defer src="assets/search-index.js?v=222fac99706f"></script>
+<script defer src="assets/site.js?v=222fac99706f"></script>
 </head>
 <body data-page="language">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -22,386 +23,188 @@
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="hitl.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Human in the loop</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Language basics</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="hitl.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Human in the loop</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Language basics</span><span class="reading-time">11 min read</span></div>
-    <header class="page-heading"><h1>Language basics</h1><div class="lead"><p>The deterministic core of SPL: Python-flavoured expressions, braces, lexical block scopes, and explicit assignment. Model calls are distinct expressions, not implicit behavior of ordinary functions.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#human-input">Human input</a></li><li class="toc-level-2"><a href="#program-structure">Program structure</a></li><li class="toc-level-3"><a href="#directives">Directives</a></li><li class="toc-level-3"><a href="#natural-language-instructions">Natural-language instructions</a></li><li class="toc-level-2"><a href="#variables">Variables</a></li><li class="toc-level-3"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-3"><a href="#scope">Scope</a></li><li class="toc-level-3"><a href="#block-and-conditional-expressions">Block and conditional expressions</a></li><li class="toc-level-3"><a href="#persistence">Persistence</a></li><li class="toc-level-2"><a href="#types--values">Types &amp; values</a></li><li class="toc-level-3"><a href="#truthiness">Truthiness</a></li><li class="toc-level-2"><a href="#strings--interpolation">Strings &amp; interpolation</a></li><li class="toc-level-3"><a href="#quote-styles--escapes">Quote styles &amp; escapes</a></li><li class="toc-level-2"><a href="#operators">Operators</a></li><li class="toc-level-2"><a href="#control-flow">Control flow</a></li><li class="toc-level-3"><a href="#if--elif--else">if / elif / else</a></li><li class="toc-level-3"><a href="#for--while">for &amp; while</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#built-ins">Built-ins</a></li></ul></nav></details>
-    <article class="prose"><p>Read a script by its boundaries: <code>let</code> names values, <code>ask</code> and <code>think</code> mark model
-judgment, <code>agent</code> opts into model-selected actions, and <code>assert</code> exposes acceptance
-rules. Keep routine computation in ordinary code so the variable parts and their
-guards remain easy to spot.</p>
-<p><strong>Design decisions at a glance</strong></p>
-<ul>
-<li><p><strong>Blocks use braces</strong>; the opening <code>{</code> must be on the same line as its keyword. Statements end at a newline (or <code>;</code>).</p>
-</li>
-<li><p><strong><code>let</code> declares/redeclares a local</strong>; <code>x = …</code> and <code>x += …</code> update an existing local. Collection assignment uses <code>d[&#39;k&#39;] = 2</code>, without <code>let</code>.</p>
-</li>
-<li><p><strong>Block scoping:</strong> each block has a child scope. Reads and assignments search outward; <code>let</code> shadows enclosing names. See <a href="#scope">Scope</a>.</p>
-</li>
-<li><p><strong><code>return</code> exits immediately</strong> from any scope — the function, or the whole script at the top level.</p>
-</li>
-<li><p><strong>Every string interpolates</strong> <code>{expr}</code>.</p>
-</li>
-<li><p>Unknown/duplicate modifier names, <code>break</code> outside loops, and <code>try</code> without <code>except</code> are syntax errors. Modifier values are expressions validated at runtime.</p>
-</li>
-<li><p>Model commands use <code>ask(options) &#39;prompt&#39;</code>, <code>think(options) &#39;prompt&#39;</code>, and
-<code>agent(options) &#39;prompt&#39;</code>. Named options support multiple lines and trailing commas.
-With no options, omit the group or use <code>()</code>. Prompts remain outside the parentheses.</p>
-</li>
-</ul>
-<h2 id="human-input">Human input<a class="heading-anchor" href="#human-input" aria-label="Link to Human input">#</a></h2>
-<p><code>human &#39;question&#39;</code> requests text from the caller, not a model. It evaluates a string
-question, durably saves a pending request, and suspends a checkpoint run. SPL prints
-JSON and exits with code <code>3</code>; it never reads stdin or waits at a terminal.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> feedback = <span class="hljs-keyword">human</span> <span class="hljs-string">&#x27;What should change in the release notes?&#x27;</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(feedback.strip()) &gt; <span class="hljs-number">0</span> <span class="hljs-string">&#x27;feedback must not be blank&#x27;</span>
-<span class="hljs-keyword">success</span> feedback
+    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Language</span><span class="reading-time">4 min read</span></div>
+    <header class="page-heading"><h1>Language</h1><div class="lead"><p>SPL is a small Python-like language with brace-delimited blocks. This page covers the code inside
+<code>spl</code> fences: values, bindings, control flow, functions, built-ins and exact tools.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#values-and-strings">Values and strings</a></li><li class="toc-level-2"><a href="#bindings-and-scopes">Bindings and scopes</a></li><li class="toc-level-2"><a href="#control-flow-and-expressions">Control flow and expressions</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#built-in-functions">Built-in functions</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li></ul></nav></details>
+    <article class="prose"><h2 id="values-and-strings">Values and strings<a class="heading-anchor" href="#values-and-strings" aria-label="Link to Values and strings">#</a></h2>
+<p>Values are <code>None</code>, <code>True</code>/<code>False</code>, numbers, strings, lists, dicts with string keys, and functions.
+Statements end at a newline or <code>;</code>. <code>#</code> starts a comment, and a trailing <code>\</code> continues a line.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> name = <span class="hljs-string">&#x27;Ada&#x27;</span>
+<span class="hljs-keyword">let</span> greeting = <span class="hljs-string">&quot;Hello, {name.upper()}!&quot;</span>     <span class="hljs-comment"># {expr} interpolates in every quote style</span>
+<span class="hljs-keyword">let</span> literal = <span class="hljs-string">&#x27;Use {{name}} as a placeholder&#x27;</span> <span class="hljs-comment"># doubled braces are literal</span>
+<span class="hljs-keyword">let</span> raw = <span class="hljs-string">r&#x27;C:\temp\{not interpolated}&#x27;</span>     <span class="hljs-comment"># raw strings: no escapes or interpolation</span>
+<span class="hljs-keyword">let</span> block = <span class="hljs-string">&#x27;&#x27;&#x27;
+Triple-quoted strings span lines.
+&#x27;&#x27;&#x27;</span>
 </code></pre></figure>
-<p>Start with <code>--checkpoint run.jsonl</code>, then submit the matching request ID with
-<code>--resume run.jsonl --answer-for &lt;id&gt; --answer &quot;...&quot;</code> or <code>--answer-file feedback.txt</code>.
-The expression returns the exact answer, including empty text and whitespace.
-There are no LLM modifiers, schemas, automatic repairs, or scoped model guidance
-for human input. Use ordinary assertions or explicitly ask again to validate text.</p>
-<p>Questions can occur inside functions, loops, nested expressions, and policy blocks.
-Suspension is not a failure and cannot be caught by <code>except</code>. Each dynamic question
-gets its own request ID, even when it comes from the same source line.
-Executable scripts containing <code>human</code> require checkpoint mode before any script
-effects; <code>--check</code> remains syntax-only. <code>human</code> is now reserved and cannot be used
-as a variable or function name. See <a href="hitl.html">Human in the loop</a>.</p>
-<span id="structure" class="anchor-alias" aria-hidden="true"></span><h2 id="program-structure">Program structure<a class="heading-anchor" href="#program-structure" aria-label="Link to Program structure">#</a></h2>
-<p>A workflow is a <code>.md</code> document with required YAML frontmatter. Only top-level
-<code>spl</code> code fences and blockquotes execute; headings, ordinary prose, HTML blocks,
-other code languages, and examples nested in lists are comments.
-Each fence must parse independently, but all executable blocks share one top-level
-scope and run in document order. No construct can span two fences.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-2">---
-extension: semantic-prompt-language
-version: 1
-model: gpt-6-luna
-preamble: Be concise.
----
-
-# A mixed workflow
-```spl
-let count = 20
-```
-
-&gt; Add two to @count.
-
-```spl
-success count
-```
-</code></pre></figure>
-<p>Inside SPL, <code>#</code> starts a line comment. <code>success</code>, <code>fail</code>, and top-level <code>return</code>
-end the entire document. Natural-language blockquotes are parsed using CommonMark
-rules, including multiline/lazy continuations; separate instructions with a blank
-line. Fences may use backticks or tildes.</p>
-<h3 id="directives">Directives<a class="heading-anchor" href="#directives" aria-label="Link to Directives">#</a></h3>
-<p>Frontmatter requires exactly <code>extension: semantic-prompt-language</code> and numeric
-<code>version: 1</code>. Optional fields are a nonempty string <code>model</code> and string <code>preamble</code>
-(including YAML multiline strings). Unknown fields, duplicate keys, and unsupported
-versions are errors. Precedence is CLI <code>--model</code>, per-call <code>model</code>, frontmatter,
-then SDK default. SPL model headers inside fences are rejected.</p>
-<p>The raw-SPL <code>parse</code> and <code>run</code> programmatic APIs still support the legacy
-<code>@(model=&#39;...&#39;)</code> header. Use <code>parseMarkdown</code> to embed document execution.</p>
-<h3 id="natural-language-instructions">Natural-language instructions<a class="heading-anchor" href="#natural-language-instructions" aria-label="Link to Natural-language instructions">#</a></h3>
-<p>Each blockquote invokes a model with built-in runtime instructions, the optional
-document preamble, and current bindings/function signatures. The model must call
-the registered <code>submit_spl</code> hook with a complete SPL program. After the request
-finishes, that program executes in the same scope as handwritten SPL. It can use
-all language features: tools, functions, loops, conditions, validation, generation,
-agents/MCP, restrictions, failures, success, and human input. Submission itself
-performs no external actions; nested generation remains tool-free unless it uses
-<code>agent</code>. Missing/invalid submissions fail explicitly.</p>
-<p><code>@name</code> references a variable, function, or operation semantically, for example
-<code>@count</code>, <code>@read_file</code>, or <code>@success</code>; it is not textual substitution or a new
-expression grammar. Markers are optional. The model decides how to translate
-natural language, so use explicit SPL for behavior that must not be interpreted.
-Natural-language blocks without an explicit terminal operation continue to the
-next block; their model commentary is not a document result.</p>
-<p>Every model request, including nested generation and repairs, receives the built-in
-runtime preamble and optional frontmatter preamble. Ordinary Markdown prose never
-becomes instructions. Tool access is allow-by-default: only run trusted documents.
-Shared values are sent to the model and can appear in logs/traces; do not put secrets
-in bindings unless you intend to disclose them.</p>
-<p><code>--check</code> validates the document and handwritten SPL without translating blockquotes.
-Generated <code>human</code> code requires checkpoint mode before its effects can run.
-Checkpoint resume reuses the submitted code and skips completed effects.
-Trace replay reuses submitted code too, but reruns its explicit script effects
-like any other workflow replay. Generated errors point at the originating blockquote.</p>
-<h2 id="variables">Variables<a class="heading-anchor" href="#variables" aria-label="Link to Variables">#</a></h2>
-<p><code>let name = expression</code> declares or redeclares a local. Assignment and compound operators (<code>+= -= *= /= //= %=</code>) update existing locals; they do not use <code>let</code>. Member/item targets also omit <code>let</code>. Unknown reads and assignment to an undeclared local are catchable runtime errors.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">let</span> count = <span class="hljs-number">0</span>
-count += <span class="hljs-number">1</span>                <span class="hljs-comment"># same as: count = count + 1</span>
-count = <span class="hljs-number">5</span>                 <span class="hljs-comment"># assignment to an existing local</span>
-
-<span class="hljs-keyword">let</span> user = {<span class="hljs-string">&#x27;name&#x27;</span>: <span class="hljs-string">&#x27;Ada&#x27;</span>}
-user.name = <span class="hljs-string">&#x27;Grace&#x27;</span>    <span class="hljs-comment"># member assignment</span>
-user[<span class="hljs-string">&#x27;age&#x27;</span>] = <span class="hljs-number">36</span>       <span class="hljs-comment"># item assignment</span>
-</code></pre></figure>
-<h3 id="runtime-inputs-env-and-args">Runtime inputs: <code>$env</code> and <code>$args</code><a class="heading-anchor" href="#runtime-inputs-env-and-args" aria-label="Link to Runtime inputs: $env and $args">#</a></h3>
-<p>These special variables are available in every scope, including functions and string
-interpolation. They are snapshots taken at the start of each run, not ordinary bindings.</p>
-<ul>
-<li><code>$env</code> is a read-only dict of process environment variables. <code>$env.NAME</code> and
-<code>$env[&#39;NAME&#39;]</code> return a string, including <code>&#39;&#39;</code> for a set-but-empty variable.
-An absent name returns <code>None</code>. Bracket access also supports names containing punctuation.
-Environment names use the spelling exposed by the host process.</li>
-<li><code>$args</code> is a read-only list of strings supplied with repeated CLI <code>--arg</code> options,
-in command-line order. The script path and interpreter options are not included.
-Without <code>--arg</code>, it is empty. Out-of-range integer indexes return <code>None</code>;
-negative indexes count from the end, as with ordinary lists. Non-integer indexes fail.</li>
-</ul>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-4">spl --arg=first --arg=<span class="hljs-string">&quot;two words&quot;</span> example.md
-</code></pre></figure>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> date = <span class="hljs-variable">$env</span>.date
-<span class="hljs-built_in">log</span>(<span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>])             <span class="hljs-comment"># first</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-variable">$args</span>[<span class="hljs-number">1</span>])             <span class="hljs-comment"># two words</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-variable">$args</span>[<span class="hljs-number">2</span>])             <span class="hljs-comment"># None</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;date={date}, first={$args[0]}&quot;</span>)
-</code></pre></figure>
-<p>The special names cannot be declared, rebound, or used as parameters or loop variables.
-Assignments to their members/items and mutating methods raise catchable <code>runtime_error</code>,
-even through aliases such as <code>let args = $args</code>. Use <code>$args.copy()</code>, <code>list($args)</code>,
-<code>$args[:]</code>, or <code>$env.copy()</code> to create a normal mutable copy. Copies have ordinary
-missing-index/key errors; this does not change ordinary dict/list behavior.</p>
-<p>The runtime does not automatically add either value to a variable store. Explicitly
-assigning a value or alias to a top-level variable can persist it, so do not persist,
-log, or interpolate sensitive environment values into prompts unintentionally.
-Replay uses the current run&#39;s inputs, not recorded environment variables or arguments.
-Other <code>$</code>-prefixed variable names are syntax errors.</p>
-<h3 id="scope">Scope<a class="heading-anchor" href="#scope" aria-label="Link to Scope">#</a></h3>
-<p><code>let name = …</code> binds in the current scope. Every block creates a lexical child scope. Inner declarations shadow enclosing names and cannot be accessed from a parent scope. Reads and assignments search outward through the full lexical chain for the first declaration. There is no hoisting: a local appears when execution binds it.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">let</span> color = <span class="hljs-string">&#x27;Blue&#x27;</span>
-{
-    <span class="hljs-keyword">let</span> color = <span class="hljs-string">&#x27;Red&#x27;</span>
-    <span class="hljs-built_in">log</span>(color)             <span class="hljs-comment"># Red</span>
+<p>Escapes: <code>\n</code> <code>\t</code> <code>\r</code> <code>\0</code> <code>\\</code> <code>\&#39;</code> <code>\&quot;</code> <code>\{</code> <code>\}</code>. Python-style operators work as expected:
+<code>+ - * / // % **</code>, comparisons, <code>in</code>/<code>not in</code>, <code>and</code>/<code>or</code>/<code>not</code>, <code>a if cond else b</code>, indexing,
+slicing with negative indexes, and <code>d.key</code> as a shorthand for <code>d[&#39;key&#39;]</code>.</p>
+<h2 id="bindings-and-scopes">Bindings and scopes<a class="heading-anchor" href="#bindings-and-scopes" aria-label="Link to Bindings and scopes">#</a></h2>
+<p><code>let</code> declares a name in the current block; plain assignment updates the nearest existing declaration.
+Every block is a child scope, so inner <code>let</code> shadows outer names and does not leak out.
+Each loop iteration gets fresh variables.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> count = <span class="hljs-number">0</span>
+<span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">3</span>) {
+    count += i
 }
-<span class="hljs-built_in">log</span>(color)                 <span class="hljs-comment"># Blue: the child declaration did not change it</span>
+<span class="hljs-keyword">let</span> result = {
+    <span class="hljs-keyword">let</span> count = <span class="hljs-number">10</span>
+    count + <span class="hljs-number">1</span>
+}
+<span class="hljs-keyword">success</span> [count, result]  <span class="hljs-comment"># [3, 11]</span>
 </code></pre></figure>
-<p>Conditionals, loops, exception handlers, and guidance/restriction blocks follow the same rule. Each loop iteration has fresh locals, including its loop variables. Caught failure names belong to their handler. To keep a result, declare it outside and assign inside:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">let</span> color = <span class="hljs-literal">None</span>
-<span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Your favorite color is blue&#x27;</span> {
-    color = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;word&#x27;</span>) <span class="hljs-string">&#x27;What is your favorite color?&#x27;</span>
+<p>Declare a result before a block when the block should set it:
+<code>let answer = None</code> and then <code>answer = ...</code> inside.</p>
+<h2 id="control-flow-and-expressions">Control flow and expressions<a class="heading-anchor" href="#control-flow-and-expressions" aria-label="Link to Control flow and expressions">#</a></h2>
+<p><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>break</code>, <code>continue</code> and <code>pass</code> behave as in Python, with braces.
+<code>for k, v in items(d)</code> unpacks pairs. Blocks and <code>if</code> are expressions that yield their last
+expression, or <code>None</code>. <code>{}</code> is an empty dict; <code>{ pass }</code> is an empty block.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">let</span> score = <span class="hljs-number">6</span>
+<span class="hljs-keyword">let</span> label = <span class="hljs-keyword">if</span> score &gt; <span class="hljs-number">7</span> { <span class="hljs-string">&#x27;high&#x27;</span> } <span class="hljs-keyword">elif</span> score &gt; <span class="hljs-number">3</span> { <span class="hljs-string">&#x27;medium&#x27;</span> } <span class="hljs-keyword">else</span> { <span class="hljs-string">&#x27;low&#x27;</span> }
+<span class="hljs-keyword">for</span> key, value <span class="hljs-keyword">in</span> <span class="hljs-built_in">items</span>({<span class="hljs-string">&#x27;a&#x27;</span>: <span class="hljs-number">1</span>, <span class="hljs-string">&#x27;b&#x27;</span>: <span class="hljs-number">2</span>}) {
+    <span class="hljs-built_in">log</span>(key, value)
 }
-<span class="hljs-built_in">log</span>(color)                 <span class="hljs-comment"># the answer</span>
-
-<span class="hljs-keyword">let</span> response = <span class="hljs-literal">None</span>
-<span class="hljs-keyword">try</span> {
-    response = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;object&#x27;</span>) <span class="hljs-string">&#x27;A joke about programmers&#x27;</span>
-} <span class="hljs-keyword">except</span> err {
-    response = {<span class="hljs-string">&#x27;setup&#x27;</span>: <span class="hljs-string">&#x27;none&#x27;</span>, <span class="hljs-string">&#x27;punchline&#x27;</span>: err.reason}
-}
-<span class="hljs-built_in">log</span>(response)              <span class="hljs-comment"># visible here, whichever branch ran</span>
 </code></pre></figure>
-<p><code>enforce</code> provides positive scoped prompt guidance and <code>forbid</code> provides negative guidance. Both create child variable scopes, but neither verifies model compliance.</p>
-<p>Functions close over their lexical defining scope. They can read or assign enclosing declarations; <code>let</code> instead declares locally and shadows an enclosing name. Lists and dicts remain mutable across scopes.</p>
-<span id="block-expressions" class="anchor-alias" aria-hidden="true"></span><h3 id="block-and-conditional-expressions">Block and conditional expressions<a class="heading-anchor" href="#block-and-conditional-expressions" aria-label="Link to Block and conditional expressions">#</a></h3>
-<p>A block or selected <code>if</code>/<code>elif</code>/<code>else</code> branch yields its final expression. An empty branch, a block ending in a statement, or an unmatched conditional returns <code>None</code>. Only the selected branch runs. <code>{}</code> remains an empty dictionary; use <code>{ pass }</code> for a block yielding <code>None</code>. Functions still require explicit <code>return</code>.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">let</span> result = <span class="hljs-keyword">if</span> <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;boolean&#x27;</span>) <span class="hljs-string">&#x27;Today is Friday?&#x27;</span> {
-    <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;Haiku on variance&#x27;</span>
-} <span class="hljs-keyword">else</span> {
-    <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;Sentence on passing time&#x27;</span>
+<h2 id="functions">Functions<a class="heading-anchor" href="#functions" aria-label="Link to Functions">#</a></h2>
+<p><code>def</code> defines a function with lexical closures and recursion. Functions return <code>None</code>
+unless they use an explicit <code>return</code>.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
+    <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">2</span> {
+        <span class="hljs-keyword">return</span> n
+    }
+    <span class="hljs-keyword">return</span> fib(n - <span class="hljs-number">1</span>) + fib(n - <span class="hljs-number">2</span>)
 }
-<span class="hljs-keyword">let</span> length = {
-    <span class="hljs-keyword">let</span> text = result
-    <span class="hljs-built_in">len</span>(text)
-}
-<span class="hljs-built_in">log</span>(level=debug)(length)
-<span class="hljs-keyword">success</span> result
 </code></pre></figure>
-<h3 id="persistence">Persistence<a class="heading-anchor" href="#persistence" aria-label="Link to Persistence">#</a></h3>
-<p>Top-level variables can be saved between runs with opt-in <code>--store</code>, even after a script failure. Persistence is not a transaction or an action log. It is allowed during workflow trace replay, but forbidden during legacy generation replay. See <a href="cli.html#variable-store">CLI &amp; runtime</a>.</p>
-<span id="types" class="anchor-alias" aria-hidden="true"></span><h2 id="types--values">Types &amp; values<a class="heading-anchor" href="#types--values" aria-label="Link to Types &amp; values">#</a></h2>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Types &amp; values reference table"><table>
+<h2 id="runtime-inputs-env-and-args">Runtime inputs: $env and $args<a class="heading-anchor" href="#runtime-inputs-env-and-args" aria-label="Link to Runtime inputs: $env and $args">#</a></h2>
+<p><code>$env.NAME</code> or <code>$env[&#39;NAME&#39;]</code> reads a process environment variable as a string.
+<code>$args[0]</code>, <code>$args[1]</code>, … read the CLI&#39;s repeated <code>--arg</code> values. Missing variables and
+out-of-range indexes return <code>None</code>. Both are read-only snapshots and are never persisted by stores.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> target = <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
+<span class="hljs-keyword">if</span> target == <span class="hljs-literal">None</span> {
+    target = <span class="hljs-variable">$env</span>.USER
+}
+</code></pre></figure>
+<h2 id="logging">Logging<a class="heading-anchor" href="#logging" aria-label="Link to Logging">#</a></h2>
+<p><code>log(value, ...)</code> writes to stderr at info level. <code>log(level=debug)(value)</code> selects <code>error</code>, <code>info</code> or
+<code>debug</code>. Debug output appears only with <code>--log-level debug</code>; <code>--silent</code> hides all logs.</p>
+<h2 id="built-in-functions">Built-in functions<a class="heading-anchor" href="#built-in-functions" aria-label="Link to Built-in functions">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Built-in functions reference table"><table>
 <thead>
 <tr>
-<th scope="col"><code>type()</code></th>
-<th scope="col">Literals</th>
-<th scope="col">Notes</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>&#39;None&#39;</code></td>
-<td><code>None</code></td>
-<td>Falsy.</td>
-</tr>
-<tr>
-<td><code>&#39;bool&#39;</code></td>
-<td><code>True</code> <code>False</code></td>
-<td>Python spelling.</td>
-</tr>
-<tr>
-<td><code>&#39;number&#39;</code></td>
-<td><code>42</code> <code>3.14</code> <code>1e-3</code></td>
-<td>One numeric type. <code>int()</code> truncates, <code>float()</code> parses.</td>
-</tr>
-<tr>
-<td><code>&#39;str&#39;</code></td>
-<td><code>&#39;a&#39;</code> <code>&quot;a&quot;</code> <code>&#39;&#39;&#39;a&#39;&#39;&#39;</code> <code>r&#39;a&#39;</code></td>
-<td>Indexed by Unicode character.</td>
-</tr>
-<tr>
-<td><code>&#39;list&#39;</code></td>
-<td><code>[1, 2, 3]</code></td>
-<td>Mutable, trailing comma allowed.</td>
-</tr>
-<tr>
-<td><code>&#39;dict&#39;</code></td>
-<td><code>{&#39;a&#39;: 1}</code></td>
-<td>Keys must be strings. Insertion ordered. Also readable as <code>d.a</code>.</td>
-</tr>
-<tr>
-<td><code>&#39;function&#39;</code></td>
-<td><code>def f(x) { … }</code></td>
-<td>First-class values.</td>
-</tr>
-</tbody></table>
-</div>
-<p>Model calls can request typed output with <code>fmt=&#39;integer&#39;</code>, <code>&#39;float&#39;</code>, <code>&#39;array&#39;</code>, <code>&#39;object&#39;</code>, <code>&#39;text&#39;</code>, or <code>&#39;boolean&#39;</code>. Non-text formats validate strict JSON and return ordinary SPL values; <code>fmt=&#39;json&#39;</code> accepts any JSON value. See <a href="llm-commands.html#output-formats">output formats and examples</a>.</p>
-<p><strong><code>type()</code> returns a string</strong></p>
-<p>Compare it with a quoted name: <code>type(x) == &#39;list&#39;</code>. There is no separate <code>int</code>/<code>float</code> distinction — both report <code>&#39;number&#39;</code>.</p>
-<h3 id="truthiness">Truthiness<a class="heading-anchor" href="#truthiness" aria-label="Link to Truthiness">#</a></h3>
-<p><code>None</code>, <code>False</code>, <code>0</code>, empty strings, empty lists and empty dicts are falsy. Everything else (including functions) is truthy.</p>
-<span id="strings" class="anchor-alias" aria-hidden="true"></span><h2 id="strings--interpolation">Strings &amp; interpolation<a class="heading-anchor" href="#strings--interpolation" aria-label="Link to Strings &amp; interpolation">#</a></h2>
-<p>All four quote styles interpolate <code>{expression}</code>. Any expression is allowed, including calls and indexing. Substitution is <em>as is</em>: strings raw, <code>True</code>/<code>False</code>/<code>None</code> in Python spelling, lists and dicts as JSON.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-9"><span class="hljs-keyword">let</span> <span class="hljs-built_in">items</span> = [<span class="hljs-string">&#x27;a&#x27;</span>, <span class="hljs-string">&#x27;b&#x27;</span>]
-<span class="hljs-keyword">let</span> n = <span class="hljs-number">2</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;found {n} items: {items}&quot;</span>)          <span class="hljs-comment"># found 2 items: [&quot;a&quot;,&quot;b&quot;]</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;first is {items[0].upper()}&quot;</span>)       <span class="hljs-comment"># first is A</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;{{literal}} and \{also literal\}&quot;</span>)  <span class="hljs-comment"># {literal} and {also literal}</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">r&#x27;{&quot;raw&quot;: &quot;no {interpolation} here&quot;}&#x27;</span>)
-</code></pre></figure>
-<span id="quotes" class="anchor-alias" aria-hidden="true"></span><h3 id="quote-styles--escapes">Quote styles &amp; escapes<a class="heading-anchor" href="#quote-styles--escapes" aria-label="Link to Quote styles &amp; escapes">#</a></h3>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Quote styles &amp; escapes reference table"><table>
-<thead>
-<tr>
-<th scope="col">Form</th>
-<th scope="col">Behaviour</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>&#39;…&#39;</code> <code>&quot;…&quot;</code></td>
-<td>Single line; escapes and interpolation.</td>
-</tr>
-<tr>
-<td><code>&#39;&#39;&#39;…&#39;&#39;&#39;</code> <code>&quot;&quot;&quot;…&quot;&quot;&quot;</code></td>
-<td>May span lines; escapes and interpolation. Ideal for prompts.</td>
-</tr>
-<tr>
-<td><code>r&#39;…&#39;</code></td>
-<td>Raw: no escapes, no interpolation.</td>
-</tr>
-</tbody></table>
-</div>
-<p>Valid escapes: <code>\n \t \r \0 \\ \&#39; \&quot; \{ \}</code>. Anything else is a syntax error, and so is a stray single <code>}</code> in a string — write <code>}}</code> or <code>\}</code>.</p>
-<h2 id="operators">Operators<a class="heading-anchor" href="#operators" aria-label="Link to Operators">#</a></h2>
-<p>Lowest to highest precedence:</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Operators reference table"><table>
-<thead>
-<tr>
-<th scope="col">Operators</th>
+<th scope="col">Function</th>
 <th scope="col">Description</th>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>x if cond else y</code></td>
-<td>Conditional expression.</td>
+<td><code>len(x)</code> <code>type(x)</code></td>
+<td>Length; type name</td>
 </tr>
 <tr>
-<td><code>or</code></td>
-<td>Logical or (short-circuit).</td>
+<td><code>str(x)</code> <code>int(x)</code> <code>float(x)</code> <code>bool(x)</code> <code>list(x)</code></td>
+<td>Conversions</td>
 </tr>
 <tr>
-<td><code>and</code></td>
-<td>Logical and (short-circuit).</td>
+<td><code>range(stop)</code> <code>range(start, stop[, step])</code></td>
+<td>List of integers</td>
 </tr>
 <tr>
-<td><code>not</code></td>
-<td>Logical negation.</td>
+<td><code>abs(x)</code> <code>round(x[, digits])</code> <code>min(...)</code> <code>max(...)</code> <code>sum(list)</code></td>
+<td>Numbers</td>
 </tr>
 <tr>
-<td><code>== != &lt; &lt;= &gt; &gt;= in</code> <code>not in</code></td>
-<td>Comparison and membership. <code>==</code> is deep for lists and dicts. Ordering works on numbers, strings and lists.</td>
+<td><code>sorted(list[, reverse])</code> <code>reversed(list)</code> <code>enumerate(list)</code> <code>zip(a, b, ...)</code></td>
+<td>Sequences</td>
 </tr>
 <tr>
-<td><code>+ -</code></td>
-<td>Add / subtract. <code>+</code> also joins two strings or two lists — mixing types is an error (use interpolation or <code>str()</code>).</td>
+<td><code>any(list)</code> <code>all(list)</code></td>
+<td>Truthiness checks</td>
 </tr>
 <tr>
-<td><code>* / // %</code></td>
-<td>Multiply, divide, floor-divide, modulo. <code>*</code> repeats strings and lists. Division by zero is a failure.</td>
+<td><code>keys(d)</code> <code>values(d)</code> <code>items(d)</code></td>
+<td>Dict views as lists</td>
 </tr>
 <tr>
-<td><code>-x +x</code></td>
-<td>Unary sign.</td>
+<td><code>json_parse(text)</code> <code>json_stringify(value[, indent])</code></td>
+<td>Strict JSON</td>
 </tr>
 <tr>
-<td><code>**</code></td>
-<td>Power.</td>
-</tr>
-<tr>
-<td><code>f(x)</code> <code>a[i]</code> <code>a[i:j]</code> <code>a.b</code></td>
-<td>Call, index, slice, member. Negative indexes count from the end.</td>
+<td><code>log(...)</code></td>
+<td>Logging, see above</td>
 </tr>
 </tbody></table>
 </div>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-10"><span class="hljs-keyword">let</span> xs = [<span class="hljs-number">10</span>, <span class="hljs-number">20</span>, <span class="hljs-number">30</span>, <span class="hljs-number">40</span>]
-<span class="hljs-built_in">log</span>(xs[-<span class="hljs-number">1</span>])                  <span class="hljs-comment"># 40</span>
-<span class="hljs-built_in">log</span>(xs[<span class="hljs-number">1</span>:<span class="hljs-number">3</span>])                 <span class="hljs-comment"># [20,30]</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;ab&#x27;</span> * <span class="hljs-number">3</span>)                <span class="hljs-comment"># ababab</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;x&#x27;</span> <span class="hljs-keyword">in</span> <span class="hljs-string">&#x27;text&#x27;</span>)           <span class="hljs-comment"># True</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;role&#x27;</span> <span class="hljs-keyword">in</span> {<span class="hljs-string">&#x27;role&#x27;</span>: <span class="hljs-number">1</span>})   <span class="hljs-comment"># True  (dicts test keys)</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-number">7</span> // <span class="hljs-number">2</span>, <span class="hljs-number">7</span> % <span class="hljs-number">3</span>, <span class="hljs-number">2</span> ** <span class="hljs-number">10</span>)  <span class="hljs-comment"># 3 1 1024</span>
-<span class="hljs-keyword">let</span> label = <span class="hljs-string">&#x27;many&#x27;</span> <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(xs) &gt; <span class="hljs-number">3</span> <span class="hljs-keyword">else</span> <span class="hljs-string">&#x27;few&#x27;</span>
-</code></pre></figure>
-<h2 id="control-flow">Control flow<a class="heading-anchor" href="#control-flow" aria-label="Link to Control flow">#</a></h2>
-<span id="if" class="anchor-alias" aria-hidden="true"></span><h3 id="if--elif--else">if / elif / else<a class="heading-anchor" href="#if--elif--else" aria-label="Link to if / elif / else">#</a></h3>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-11"><span class="hljs-keyword">if</span> score &gt;= <span class="hljs-number">90</span> {
-    <span class="hljs-keyword">let</span> grade = <span class="hljs-string">&#x27;A&#x27;</span>
-} <span class="hljs-keyword">elif</span> score &gt;= <span class="hljs-number">80</span> {
-    <span class="hljs-keyword">let</span> grade = <span class="hljs-string">&#x27;B&#x27;</span>
-} <span class="hljs-keyword">else</span> {
-    <span class="hljs-keyword">let</span> grade = <span class="hljs-string">&#x27;C&#x27;</span>
+<p>Methods:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Built-in functions reference table"><table>
+<thead>
+<tr>
+<th scope="col">Type</th>
+<th scope="col">Methods</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>String</td>
+<td><code>upper</code> <code>lower</code> <code>strip</code> <code>lstrip</code> <code>rstrip</code> <code>title</code> <code>capitalize</code> <code>isdigit</code> <code>split</code> <code>splitlines</code> <code>join</code> <code>replace</code> <code>startswith</code> <code>endswith</code> <code>find</code> <code>count</code></td>
+</tr>
+<tr>
+<td>List</td>
+<td><code>append</code> <code>extend</code> <code>insert</code> <code>pop</code> <code>remove</code> <code>index</code> <code>count</code> <code>reverse</code> <code>sort</code> <code>copy</code> <code>clear</code></td>
+</tr>
+<tr>
+<td>Dict</td>
+<td><code>keys</code> <code>values</code> <code>items</code> <code>get</code> <code>pop</code> <code>update</code> <code>copy</code> <code>clear</code></td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="exact-tools">Exact tools<a class="heading-anchor" href="#exact-tools" aria-label="Link to Exact tools">#</a></h2>
+<p>Tools are ordinary functions that never call a model. Paths are relative to <code>--cwd</code>, and every
+call is checked against active <a href="safety.html#restrictions">restrictions</a>.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Exact tools reference table"><table>
+<thead>
+<tr>
+<th scope="col">Function</th>
+<th scope="col">Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>read_file(path)</code></td>
+<td>File contents as UTF-8 text</td>
+</tr>
+<tr>
+<td><code>write_file(path, content)</code></td>
+<td>Writes the file and returns a confirmation</td>
+</tr>
+<tr>
+<td><code>web_fetch(url)</code></td>
+<td>Response body as text (30 s timeout, up to 5 redirects)</td>
+</tr>
+<tr>
+<td><code>web_search(query)</code></td>
+<td>Search results as text</td>
+</tr>
+<tr>
+<td><code>shell(command)</code></td>
+<td>Combined stdout/stderr; a nonzero exit raises <code>tool_error</code> (120 s timeout)</td>
+</tr>
+</tbody></table>
+</div>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">let</span> diff = <span class="hljs-string">&#x27;&#x27;</span>
+<span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;git&#x27;</span> {
+    diff = <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git diff --cached&#x27;</span>)
 }
 </code></pre></figure>
-<span id="loops" class="anchor-alias" aria-hidden="true"></span><h3 id="for--while">for &amp; while<a class="heading-anchor" href="#for--while" aria-label="Link to for &amp; while">#</a></h3>
-<p><code>for</code> iterates lists, strings (characters) and dicts (keys). Several names unpack list items, which pairs well with <code>items()</code> and <code>enumerate()</code>. <code>break</code>, <code>continue</code> and <code>pass</code> work as in Python.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-12" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-12"><span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">3</span>) { <span class="hljs-built_in">log</span>(i) }
-
-<span class="hljs-keyword">for</span> code, language <span class="hljs-keyword">in</span> <span class="hljs-built_in">items</span>({<span class="hljs-string">&#x27;de&#x27;</span>: <span class="hljs-string">&#x27;German&#x27;</span>, <span class="hljs-string">&#x27;pl&#x27;</span>: <span class="hljs-string">&#x27;Polish&#x27;</span>}) {
-    <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;{code} = {language}&quot;</span>)
-}
-
-<span class="hljs-keyword">let</span> tries = <span class="hljs-number">0</span>
-<span class="hljs-keyword">while</span> tries &lt; <span class="hljs-number">3</span> {
-    tries += <span class="hljs-number">1</span>
-    <span class="hljs-keyword">if</span> tries == <span class="hljs-number">2</span> { <span class="hljs-keyword">continue</span> }
-}
-</code></pre></figure>
-<h2 id="functions">Functions<a class="heading-anchor" href="#functions" aria-label="Link to Functions">#</a></h2>
-<p>Define with <code>def</code>. Functions take positional arguments only (the count is checked), return <code>None</code> unless <code>return</code> is used, can recurse (up to a maximum call depth of 200) and close over their defining scope. <code>return</code> leaves the innermost function immediately, from inside any nested block, loop, <code>try</code> or constraint block; at the top level of a script it ends the script like <code>success</code>, optionally with a value.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-13" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-13"><span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
-    <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">2</span> { <span class="hljs-keyword">return</span> n }
-    <span class="hljs-keyword">return</span> fib(n - <span class="hljs-number">1</span>) + fib(n - <span class="hljs-number">2</span>)
-}
-
-<span class="hljs-keyword">def</span> <span class="hljs-title function_">is_valid</span>(<span class="hljs-params">msg</span>) {
-    <span class="hljs-keyword">let</span> first = msg.splitlines()[<span class="hljs-number">0</span>]
-    <span class="hljs-keyword">return</span> <span class="hljs-built_in">len</span>(first) &lt;= <span class="hljs-number">72</span> <span class="hljs-keyword">and</span> <span class="hljs-string">&#x27;: &#x27;</span> <span class="hljs-keyword">in</span> first
-}
-</code></pre></figure>
-<p>Functions are the right place for validators — the deterministic code that decides whether to trust an LLM answer. See <a href="examples.html#commit-message">commit-message</a>.</p>
-<span id="builtins-brief" class="anchor-alias" aria-hidden="true"></span><h2 id="built-ins">Built-ins<a class="heading-anchor" href="#built-ins" aria-label="Link to Built-ins">#</a></h2>
-<p>A compact standard library is available without imports: <code>len</code>, <code>range</code>, <code>sorted</code>, <code>json_parse</code>, <code>log</code>, and Python-style methods on strings, lists and dicts. The full list is on the <a href="builtins.html">Built-ins</a> page.</p>
+<p><code>shell</code> runs through the platform shell (<code>cmd.exe</code> on Windows, <code>/bin/sh</code> elsewhere).
+External state can still change between runs; &quot;exact&quot; means no model is involved.</p>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Language.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
-    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="getting-started.html"><span>Previous</span><strong>Getting started</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="llm-commands.html"><span>Next</span><strong>Generation & agents</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="getting-started.html"><span>Previous</span><strong>Getting started</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="llm-commands.html"><span>Next</span><strong>Natural language & models</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#human-input">Human input</a></li><li class="toc-level-2"><a href="#program-structure">Program structure</a></li><li class="toc-level-3"><a href="#directives">Directives</a></li><li class="toc-level-3"><a href="#natural-language-instructions">Natural-language instructions</a></li><li class="toc-level-2"><a href="#variables">Variables</a></li><li class="toc-level-3"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-3"><a href="#scope">Scope</a></li><li class="toc-level-3"><a href="#block-and-conditional-expressions">Block and conditional expressions</a></li><li class="toc-level-3"><a href="#persistence">Persistence</a></li><li class="toc-level-2"><a href="#types--values">Types &amp; values</a></li><li class="toc-level-3"><a href="#truthiness">Truthiness</a></li><li class="toc-level-2"><a href="#strings--interpolation">Strings &amp; interpolation</a></li><li class="toc-level-3"><a href="#quote-styles--escapes">Quote styles &amp; escapes</a></li><li class="toc-level-2"><a href="#operators">Operators</a></li><li class="toc-level-2"><a href="#control-flow">Control flow</a></li><li class="toc-level-3"><a href="#if--elif--else">if / elif / else</a></li><li class="toc-level-3"><a href="#for--while">for &amp; while</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#built-ins">Built-ins</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#values-and-strings">Values and strings</a></li><li class="toc-level-2"><a href="#bindings-and-scopes">Bindings and scopes</a></li><li class="toc-level-2"><a href="#control-flow-and-expressions">Control flow and expressions</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#built-in-functions">Built-in functions</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

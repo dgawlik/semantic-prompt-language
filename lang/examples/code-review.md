@@ -1,28 +1,19 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
-model: 'gpt-5.6-luna'
+model: 'gpt-6-luna'
 ---
 
+> @FORBID suggesting purely stylistic changes
+>
+> @RESTRICT fs['./src'] exec['git']
+>
+> List source files with `git ls-files src`.
+> Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
+> List each finding with its location, why it matters and a suggested fix. Save to @notes
+
+
 ```spl
-# Two-stage code review that can gate CI: think deeply in prose, then structure the findings.
-#
-# Run from a project root with a ./src folder:  spl examples/code-review.md --cwd <project>
-# Exit code is 1 (failure payload on stdout) when high-severity findings exist.
-# The review phase may only touch ./src; the report is written under ./reports.
-
-let notes = ''
-
-forbid 'suggesting purely stylistic changes' {
-    restrict './src', exec 'git' {
-        notes = agent(reasoning='high') '''
-List source files with `git ls-files src`.
-Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
-List each finding with its location, why it matters and a suggested fix.'''
-    }
-}
-
-
 let Review = {
     'type': 'object',
     'properties': {
@@ -42,11 +33,11 @@ let Review = {
     'required': ['findings'],
     'additionalProperties': False,
 }
-let review = ask(
-    schema=Review, 
-    repairs=2) '''Convert this review into structured findings, 
-    using an empty list when there are none: {notes}'''
+```
 
+> Convert @notes review into structured finding @validate[Review] @retries[2] save to @review
+
+```spl
 let lines = ["# Review of repository", '']
 let high = 0
 for f in review.findings {
@@ -60,13 +51,15 @@ for f in review.findings {
 }
 lines.append('')
 lines.append("{len(review.findings)} finding(s), {high} high severity")
+```
 
-restrict './reports' {
-    write_file('./reports/review.md', '\n'.join(lines))
-}
+> @RESTRICT fs['./reports']
+>
+> Write joined @lines to './reports/review.md'
 
+```spl
 if high > 0 {
-    fail "{high} high severity finding(s), see ./reports/review.md"
+    fail '{high} high severity finding(s), see ./reports/review.md'
 }
 success '\n'.join(lines)
 ```

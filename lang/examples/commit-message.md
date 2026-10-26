@@ -1,51 +1,65 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
+model: 'gpt-6-luna'
 ---
 
+# Conventional commit message for staged changes
+
+Drafts a commit message from `git diff --cached`, checks it against the Conventional Commits
+format, and commits only after a human accepts or edits it.
+
+    git add -p
+    spl examples/commit-message.md --checkpoint commit.jsonl
+
 ```spl
-# Draft a Conventional Commit message for the staged changes.
-#
-#   cd your-repo && git add -p
-#   spl path/to/commit-message.md
-#
-# The script reads the diff with git once; tool-free generation gets at most three attempts.
-
-let TYPES = ['feat', 'fix', 'docs', 'refactor', 'test', 'chore', 'perf']
-
-def is_valid(msg) {
-    let first = msg.splitlines()[0]
-    if len(first) > 72 or ': ' not in first {
-        return False
-    }
-    return first.split(':')[0].split('(')[0] in TYPES
-}
-
-let msg = ''
-let attempt = 0
-
+let diff = ''
+let stat = ''
 restrict exec 'git' {
-    let diff = shell('git diff --staged')
-    assert len(diff.strip()) > 0 'nothing is staged'
-    forbid 'wrapping the message in quotes or code fences' {
-        while attempt < 3 {
-            attempt += 1
-            let msg = ask '''
-Write a Conventional Commit message for this diff: a subject line of at most 72 characters
-("type(scope): summary", type is one of {TYPES}), then a blank line and a short body.
-Reply with ONLY the message.
-{diff}'''
-            if msg == 'NO_CHANGES' {
-                fail 'nothing is staged'
-            }
-            if is_valid(msg) {
-                break
-            }
-            log("attempt {attempt}: invalid message, retrying")
-        }
-    }
+    diff = shell('git diff --cached')
+    stat = shell('git diff --cached --stat')
 }
+if diff.strip() == '' {
+    fail 'Nothing is staged. Run git add first.'
+}
+let TYPES = ['feat', 'fix', 'docs', 'refactor', 'perf', 'test', 'build', 'ci', 'chore']
+```
 
-assert is_valid(msg) 'could not produce a valid commit message'
-success msg
+> @FORBID mentioning changes that are not in @diff
+>
+> @ENFORCE Explain why the change was made, not only what changed
+>
+> Write a Conventional Commits message for @diff (files: @stat).
+> First line is `type(scope): summary` with a type from @TYPES, imperative mood, no trailing period.
+> Then a blank line and a body of at most 5 lines wrapped at 72 characters. Save to @message
+
+```spl
+def check(text) {
+    let lines = text.strip().splitlines()
+    let subject = lines[0]
+    assert ': ' in subject "subject must look like type(scope): summary, got '{subject}'"
+    let kind = subject.split(':')[0].split('(')[0].replace('!', '')
+    assert kind in TYPES "unknown commit type '{kind}'"
+    assert len(subject) <= 72 "subject is {len(subject)} characters, limit is 72"
+    assert not subject.endswith('.') 'subject must not end with a period'
+    if len(lines) > 1 {
+        assert lines[1] == '' 'subject and body must be separated by a blank line'
+    }
+    return text.strip()
+}
+message = check(message)
+```
+
+> @HUMAN Show @message and ask the user to reply "ok" to accept it or paste a corrected message. Save the reply to @reply
+
+```spl
+let final = message
+if reply.strip().lower() != 'ok' {
+    final = check(reply)
+}
+restrict './.git', exec 'git' {
+    write_file('./.git/SPL_COMMIT_MSG', final + '\n')
+    shell('git commit -F .git/SPL_COMMIT_MSG')
+}
+success final
 ```

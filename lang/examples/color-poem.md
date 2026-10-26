@@ -1,16 +1,12 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
+model: 'gpt-6-luna'
 ---
 
-```spl
+> @HUMAN What is your favorite color? Save to @color
 
+> @HUMAN What is your favorite fruit? Save to @fruit
 
-let color = human 'What is your favorite color?'
+> Return @SUCCESS with a paragraph long poem about @color and @fruit
 
-let fruit = human 'What is your favorite fruit?'
-
-success ask(fmt='text', 
-  len="paragraph") '''
-  Write a poem about the color {color} and the fruit {fruit}. '''
-```

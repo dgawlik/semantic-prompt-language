@@ -1,0 +1,13 @@
+2026-10-25T13:58:02Z INFO  api       GET /v2/reports 200 in 84ms
+2026-10-25T13:59:40Z INFO  payments  Charge succeeded (order=8807)
+2026-10-25T14:01:12Z WARN  payments  Slow response from payment provider: 8200ms (order=8809)
+2026-10-25T14:02:11Z ERROR payments  Timeout calling payment provider after 30000ms (order=8812)
+2026-10-25T14:02:15Z ERROR api       POST /v2/checkout returned 502 (request=a91f)
+2026-10-25T14:02:48Z ERROR payments  Timeout calling payment provider after 30000ms (order=8813)
+2026-10-25T14:03:02Z WARN  db        Connection pool at 95% capacity (pool=primary)
+2026-10-25T14:03:30Z ERROR payments  Timeout calling payment provider after 30000ms (order=8815)
+2026-10-25T14:03:31Z ERROR api       POST /v2/checkout returned 502 (request=b20c)
+2026-10-25T14:04:10Z ERROR db        Connection pool exhausted (pool=primary)
+2026-10-25T14:05:55Z INFO  ops       Payment provider status page reports degraded performance
+2026-10-25T14:09:20Z INFO  payments  Charge succeeded (order=8816)
+2026-10-25T14:10:02Z INFO  api       GET /v2/reports 200 in 91ms

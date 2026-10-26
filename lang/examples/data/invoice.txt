@@ -1,0 +1,11 @@
+ACME Industrial Supplies GmbH            Invoice No. INV-2026-0042
+Industriestr. 12, 70565 Stuttgart        Date: 14.03.2026
+                                          Currency: EUR
+
+  3 x Hex bolt M8 (box of 100)        @ 12.50     37.50
+  2 x Safety gloves, size L           @  8.90     17.80
+  1 x Cordless drill                  @ 119.00   119.00
+
+Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
+
+Payment within 14 days. IBAN DE00 0000 0000 0000 0000 00

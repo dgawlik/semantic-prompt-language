@@ -1,8 +1,9 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
 model: 'gpt-6-luna'
 ---
+
 
 ```spl
 let isFriday = ask(fmt='json') \

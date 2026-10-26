@@ -120,6 +120,14 @@ describe('documentation snippets', () => {
                 });
             }
         }
+        for (const match of markdown.matchAll(/^`([^`\r\n]+\.md)`\r?\n\r?\n````markdown\r?\n([\s\S]*?)^````[ \t]*\r?$/gm)) {
+            const name = match[1];
+            if (fs.existsSync(path.join(dir, name))) {
+                it(`${file} embeds the full current ${name}`, () => {
+                    expect(normalize(match[2])).toBe(normalize(load(name)));
+                });
+            }
+        }
     }
     it('renders the canonical Markdown grammar without a separate EBNF source', () => {
         const markdown = fs.readFileSync(path.join(markdownDocs, 'Grammar.md'), 'utf8');
@@ -141,24 +149,42 @@ describe('documentation snippets', () => {
 });
 
 describe('examples with offline backends', () => {
+    /** Answers natural-language blockquotes with the next scripted program and generation calls with the next text. */
+    function scriptedBackend(programs: string[], texts: string[]) {
+        const counts = { programs: 0, texts: 0 };
+        return {
+            counts,
+            backend: {
+                async call(req: { naturalLanguage?: boolean }) {
+                    const queue = req.naturalLanguage ? programs : texts;
+                    const next = queue[req.naturalLanguage ? counts.programs++ : counts.texts++];
+                    if (next === undefined) throw new Error('unexpected model call');
+                    return req.naturalLanguage ? { text: '', spl: next, effective: {} } : { text: next, effective: {} };
+                },
+                async close() {},
+            },
+        };
+    }
+
     it('preserves journal state and bounds its history across runs with block scopes', async () => {
         const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-journal-'));
         try {
             fs.mkdirSync(path.join(cwd, 'examples', 'data'), { recursive: true });
             fs.writeFileSync(path.join(cwd, 'examples', 'data', 'notes.txt'), 'Today we shipped.');
             const file = path.join(cwd, 'journal.json');
+            const programs = [
+                `let today = ask(len='sentence') 'Summarize: {notes}'`,
+                `if len(history) > 1 { trend = ask(len='paragraph') 'What changes: {history}' }`,
+            ];
             for (let i = 1; i <= 6; i++) {
-                let calls = 0;
+                const { backend, counts } = scriptedBackend(programs, [`Summary ${i}`, 'Steady progress.']);
                 const result = await run(parseMarkdown(load('journal.md')), {
-                    cwd, logger: new Logger('silent'), store: new JsonFileStore(file),
-                    backend: {
-                        async call() { return { text: ++calls === 1 ? `Summary ${i}` : 'Steady progress.', effective: {} }; },
-                        async close() {},
-                    },
+                    cwd, logger: new Logger('silent'), store: new JsonFileStore(file), backend,
                 });
                 expect(result).toMatchObject({
                     status: 'success', value: { run: i, today: `Summary ${i}`, trend: i === 1 ? '' : 'Steady progress.' },
                 });
+                expect(counts).toEqual({ programs: 2, texts: i === 1 ? 1 : 2 });
                 const state = JSON.parse(fs.readFileSync(file, 'utf8'));
                 expect(state.runs).toBe(i);
                 expect(state.history).toHaveLength(Math.min(i, 5));
@@ -170,19 +196,13 @@ describe('examples with offline backends', () => {
     });
 
     it('compares integer generation with deterministic Fibonacci in the basics example', async () => {
-        const responses = ['55', '{"setup":"A programmer walks into a bar.","punchline":"It was a FooBar."}', 'A pet story.'];
-        let calls = 0;
-        const result = await run(parseMarkdown(load('basics.md')), {
-            logger: new Logger('silent'),
-            backend: {
-                async call() {
-                    const text = responses[calls++];
-                    if (text === undefined) throw new Error('unexpected extra generation');
-                    return { text, effective: {} };
-                },
-                async close() {},
-            },
-        });
+        const { backend, counts } = scriptedBackend([
+            `let modelFib10 = ask(fmt='integer') 'What is the 10th Fibonacci number?'`,
+            `let joke = ask(fmt='object') 'A joke about programmers with setup and punchline'`,
+            `let animal = None
+enforce 'Answer in Chinese' { forbid 'Mentioning the word cat' { animal = ask(len='paragraph') 'A funny pet story' } }`,
+        ], ['55', '{"setup":"A programmer walks into a bar.","punchline":"It was a FooBar."}', 'A pet story.']);
+        const result = await run(parseMarkdown(load('basics.md')), { logger: new Logger('silent'), backend });
         expect(result).toMatchObject({
             status: 'success',
             value: {
@@ -191,59 +211,106 @@ describe('examples with offline backends', () => {
                 animal: 'A pet story.',
             },
         });
-        expect(calls).toBe(3);
+        expect(counts).toEqual({ programs: 3, texts: 3 });
     });
 
-    it('triages every issue using validated output without live model calls', async () => {
-        let calls = 0;
-        const result = await run(parseMarkdown(load('triage-issues.md')), {
-            cwd: path.dirname(dir), logger: new Logger('silent'),
-            backend: {
-                async call() {
-                    calls++;
-                    return {
-                        text: calls <= 4 ? '{"label":"bug","priority":"high","reason":"Needs attention"}' : 'Four urgent bugs.',
-                        effective: {},
-                    };
-                },
-                async close() {},
-            },
-        });
-        expect(result).toMatchObject({ status: 'success', value: { counts: { bug: 4 }, urgent: expect.any(Array) } });
-        expect(calls).toBe(5);
+    it('rejects a wrong model answer in the basics example', async () => {
+        const { backend } = scriptedBackend([`let modelFib10 = 54`], []);
+        const result = await run(parseMarkdown(load('basics.md')), { logger: new Logger('silent'), backend });
+        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
     });
+    /**
+     * Runs an example in a scratch copy of the examples data, answering each blockquote with the next
+     * scripted SPL program, and returns the requested output files before the scratch folder is removed.
+     */
+    async function runScripted(file: string, programs: string[], args: string[] = [], outputs: string[] = []) {
+        const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-example-'));
+        fs.cpSync(path.join(dir, 'data'), path.join(cwd, 'examples', 'data'), { recursive: true });
+        let calls = 0;
+        try {
+            const result = await run(parseMarkdown(load(file)), {
+                cwd, args, logger: new Logger('silent'),
+                backend: {
+                    async call(req) {
+                        const spl = programs[calls++];
+                        if (!req.naturalLanguage || spl === undefined) throw new Error('unexpected model call');
+                        return { text: '', spl, effective: {} };
+                    },
+                    async close() {},
+                },
+            });
+            expect(calls).toBe(programs.length);
+            const files = Object.fromEntries(outputs.map((name) => [name, fs.readFileSync(path.join(cwd, name), 'utf8')]));
+            return { result, files };
+        } finally {
+            fs.rmSync(cwd, { recursive: true, force: true });
+        }
+    }
+
+    const invoice = {
+        vendor: 'ACME Industrial Supplies GmbH', number: 'INV-2026-0042', date: '2026-03-14', currency: 'EUR',
+        lines: [
+            { description: 'Hex bolt M8 (box of 100)', quantity: 3, unit_price: 12.5 },
+            { description: 'Safety gloves, size L', quantity: 2, unit_price: 8.9 },
+            { description: 'Cordless drill', quantity: 1, unit_price: 119 },
+        ],
+        subtotal: 174.3, tax: 33.12, total: 207.42,
+    };
 
     it('checks invoice structure and arithmetic offline', async () => {
-        const invoice = {
-            vendor: 'ACME', number: 'INV-2026-0042', date: '2026-03-14', currency: 'EUR',
-            lines: [
-                { description: 'Bolts', quantity: 3, unit_price: 12.5 },
-                { description: 'Gloves', quantity: 2, unit_price: 8.9 },
-                { description: 'Drill', quantity: 1, unit_price: 119 },
-            ],
-            subtotal: 174.3, total: 207.42,
-        };
-        const result = await run(parseMarkdown(load('extract-invoice.md')), {
-            cwd: path.dirname(dir), logger: new Logger('silent'),
-            backend: { async call() { return { text: JSON.stringify(invoice), effective: {} }; }, async close() {} },
-        });
+        const output = 'out/invoices/INV-2026-0042.json';
+        const { result, files } = await runScripted('extract-invoice.md', [`let invoice = ${JSON.stringify(invoice)}`], [], [output]);
         expect(result).toMatchObject({ status: 'success', value: invoice });
+        expect(JSON.parse(files[output])).toEqual(invoice);
+    });
+
+    it('rejects an invoice whose line items do not add up', async () => {
+        const wrong = { ...invoice, subtotal: 180, total: 213.12 };
+        const { result } = await runScripted('extract-invoice.md', [`let invoice = ${JSON.stringify(wrong)}`]);
+        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
+    });
+
+    it('counts and groups log errors deterministically for the incident report', async () => {
+        const output = 'reports/incident-2026-10-25.md';
+        const report = ['Summary', 'Timeline', 'Impact', 'Likely root cause', 'Follow-ups'].map((s) => `## ${s}\\n`).join('');
+        const { result, files } = await runScripted('incident-report.md', [`let report = '${report}'`], [], [output]);
+        expect(result).toMatchObject({ status: 'success', value: { errors: 6, groups: 3, report: `./${output}` } });
+        expect(files[output]).toContain('## Likely root cause');
+    });
+
+    it('verifies that translations keep links, code spans and headings', async () => {
+        const translation = (title: string) => [
+            `# ${title}`, '', '## New', '', '- `GET /v2/reports` supports `limit` and `cursor`.', '',
+            '## Fixes', '', 'See https://example.com/help or write to support@example.com.',
+        ].join('\\n');
+        const good = `let translations = {'en': '${translation('Product update')}', 'de': '${translation('Produktupdate')}'}`;
+        const output = 'out/translations/product-update.de.md';
+        const { result, files } = await runScripted('translate-docs.md', [good], ['en', 'de'], [output]);
+        expect(result).toMatchObject({ status: 'success', value: ['en', 'de'] });
+        expect(files[output]).toContain('# Produktupdate');
+
+        const broken = `let translations = {'en': '${translation('Product update').replace('support@example.com', 'support')}'}`;
+        const failed = await runScripted('translate-docs.md', [broken], ['en']);
+        expect(failed.result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
+        expect((failed.result as { failure: { reason: string } }).failure.reason).toContain('support@example.com');
     });
 });
 
 describe.skipIf(!live)('examples on Copilot', () => {
     it(
-        'triage-issues labels every issue and aggregates the counts',
+        'extract-invoice extracts a balanced invoice from the sample document',
         async () => {
-            const backend = new RecordingCopilot(path.dirname(dir));
+            const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-live-invoice-'));
+            fs.cpSync(path.join(dir, 'data'), path.join(cwd, 'examples', 'data'), { recursive: true });
+            const backend = new RecordingCopilot(cwd);
             try {
-                const result = await run(parseMarkdown(load('triage-issues.md')), { backend, logger: new Logger('silent'), cwd: path.dirname(dir) });
-                expect(result.status).toBe('success');
-                const v = (result as { value: { counts: Record<string, number>; urgent: string[] } }).value;
-                expect(Object.values(v.counts).reduce((a, b) => a + b, 0)).toBe(4);
-                expect(Array.isArray(v.urgent)).toBe(true);
+                const result = await run(parseMarkdown(load('extract-invoice.md')), { backend, logger: new Logger('silent'), cwd });
+                expect(result).toMatchObject({
+                    status: 'success', value: { number: 'INV-2026-0042', currency: 'EUR', total: 207.42 },
+                });
             } finally {
                 await backend.close();
+                fs.rmSync(cwd, { recursive: true, force: true });
             }
         },
         LIVE_TIMEOUT * 3,

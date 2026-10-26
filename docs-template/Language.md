@@ -1,361 +1,135 @@
-# Language basics
+# Language
 
-The deterministic core of SPL: Python-flavoured expressions, braces, lexical block scopes, and explicit assignment. Model calls are distinct expressions, not implicit behavior of ordinary functions.
+SPL is a small Python-like language with brace-delimited blocks. This page covers the code inside
+`spl` fences: values, bindings, control flow, functions, built-ins and exact tools.
 
-Read a script by its boundaries: `let` names values, `ask` and `think` mark model
-judgment, `agent` opts into model-selected actions, and `assert` exposes acceptance
-rules. Keep routine computation in ordinary code so the variable parts and their
-guards remain easy to spot.
+## Values and strings
 
-**Design decisions at a glance**
-
-* **Blocks use braces**; the opening `{` must be on the same line as its keyword. Statements end at a newline (or `;`).
-
-* **`let` declares/redeclares a local**; `x = …` and `x += …` update an existing local. Collection assignment uses `d['k'] = 2`, without `let`.
-
-* **Block scoping:** each block has a child scope. Reads and assignments search outward; `let` shadows enclosing names. See [Scope](#scope).
-
-* **`return` exits immediately** from any scope — the function, or the whole script at the top level.
-
-* **Every string interpolates** `{expr}`.
-
-* Unknown/duplicate modifier names, `break` outside loops, and `try` without `except` are syntax errors. Modifier values are expressions validated at runtime.
-
-* Model commands use `ask(options) 'prompt'`, `think(options) 'prompt'`, and
-  `agent(options) 'prompt'`. Named options support multiple lines and trailing commas.
-  With no options, omit the group or use `()`. Prompts remain outside the parentheses.
-
-## Human input
-
-`human 'question'` requests text from the caller, not a model. It evaluates a string
-question, durably saves a pending request, and suspends a checkpoint run. SPL prints
-JSON and exits with code `3`; it never reads stdin or waits at a terminal.
+Values are `None`, `True`/`False`, numbers, strings, lists, dicts with string keys, and functions.
+Statements end at a newline or `;`. `#` starts a comment, and a trailing `\` continues a line.
 
 ```spl
-let feedback = human 'What should change in the release notes?'
-assert len(feedback.strip()) > 0 'feedback must not be blank'
-success feedback
+let name = 'Ada'
+let greeting = "Hello, {name.upper()}!"     # {expr} interpolates in every quote style
+let literal = 'Use {{name}} as a placeholder' # doubled braces are literal
+let raw = r'C:\temp\{not interpolated}'     # raw strings: no escapes or interpolation
+let block = '''
+Triple-quoted strings span lines.
+'''
 ```
 
-Start with `--checkpoint run.jsonl`, then submit the matching request ID with
-`--resume run.jsonl --answer-for <id> --answer "..."` or `--answer-file feedback.txt`.
-The expression returns the exact answer, including empty text and whitespace.
-There are no LLM modifiers, schemas, automatic repairs, or scoped model guidance
-for human input. Use ordinary assertions or explicitly ask again to validate text.
+Escapes: `\n` `\t` `\r` `\0` `\\` `\'` `\"` `\{` `\}`. Python-style operators work as expected:
+`+ - * / // % **`, comparisons, `in`/`not in`, `and`/`or`/`not`, `a if cond else b`, indexing,
+slicing with negative indexes, and `d.key` as a shorthand for `d['key']`.
 
-Questions can occur inside functions, loops, nested expressions, and policy blocks.
-Suspension is not a failure and cannot be caught by `except`. Each dynamic question
-gets its own request ID, even when it comes from the same source line.
-Executable scripts containing `human` require checkpoint mode before any script
-effects; `--check` remains syntax-only. `human` is now reserved and cannot be used
-as a variable or function name. See [Human in the loop](HITL.md).
+## Bindings and scopes
 
-## Program structure
-
-A workflow is a `.md` document with required YAML frontmatter. Only top-level
-`spl` code fences and blockquotes execute; headings, ordinary prose, HTML blocks,
-other code languages, and examples nested in lists are comments.
-Each fence must parse independently, but all executable blocks share one top-level
-scope and run in document order. No construct can span two fences.
-
-````text
----
-extension: semantic-prompt-language
-version: 1
-model: gpt-6-luna
-preamble: Be concise.
----
-
-# A mixed workflow
-```spl
-let count = 20
-```
-
-> Add two to @count.
-
-```spl
-success count
-```
-````
-
-Inside SPL, `#` starts a line comment. `success`, `fail`, and top-level `return`
-end the entire document. Natural-language blockquotes are parsed using CommonMark
-rules, including multiline/lazy continuations; separate instructions with a blank
-line. Fences may use backticks or tildes.
-
-### Directives
-
-Frontmatter requires exactly `extension: semantic-prompt-language` and numeric
-`version: 1`. Optional fields are a nonempty string `model` and string `preamble`
-(including YAML multiline strings). Unknown fields, duplicate keys, and unsupported
-versions are errors. Precedence is CLI `--model`, per-call `model`, frontmatter,
-then SDK default. SPL model headers inside fences are rejected.
-
-The raw-SPL `parse` and `run` programmatic APIs still support the legacy
-`@(model='...')` header. Use `parseMarkdown` to embed document execution.
-
-### Natural-language instructions
-
-Each blockquote invokes a model with built-in runtime instructions, the optional
-document preamble, and current bindings/function signatures. The model must call
-the registered `submit_spl` hook with a complete SPL program. After the request
-finishes, that program executes in the same scope as handwritten SPL. It can use
-all language features: tools, functions, loops, conditions, validation, generation,
-agents/MCP, restrictions, failures, success, and human input. Submission itself
-performs no external actions; nested generation remains tool-free unless it uses
-`agent`. Missing/invalid submissions fail explicitly.
-
-`@name` references a variable, function, or operation semantically, for example
-`@count`, `@read_file`, or `@success`; it is not textual substitution or a new
-expression grammar. Markers are optional. The model decides how to translate
-natural language, so use explicit SPL for behavior that must not be interpreted.
-Natural-language blocks without an explicit terminal operation continue to the
-next block; their model commentary is not a document result.
-
-Every model request, including nested generation and repairs, receives the built-in
-runtime preamble and optional frontmatter preamble. Ordinary Markdown prose never
-becomes instructions. Tool access is allow-by-default: only run trusted documents.
-Shared values are sent to the model and can appear in logs/traces; do not put secrets
-in bindings unless you intend to disclose them.
-
-`--check` validates the document and handwritten SPL without translating blockquotes.
-Generated `human` code requires checkpoint mode before its effects can run.
-Checkpoint resume reuses the submitted code and skips completed effects.
-Trace replay reuses submitted code too, but reruns its explicit script effects
-like any other workflow replay. Generated errors point at the originating blockquote.
-
-## Variables
-
-`let name = expression` declares or redeclares a local. Assignment and compound operators (`+= -= *= /= //= %=`) update existing locals; they do not use `let`. Member/item targets also omit `let`. Unknown reads and assignment to an undeclared local are catchable runtime errors.
+`let` declares a name in the current block; plain assignment updates the nearest existing declaration.
+Every block is a child scope, so inner `let` shadows outer names and does not leak out.
+Each loop iteration gets fresh variables.
 
 ```spl
 let count = 0
-count += 1                # same as: count = count + 1
-count = 5                 # assignment to an existing local
-
-let user = {'name': 'Ada'}
-user.name = 'Grace'    # member assignment
-user['age'] = 36       # item assignment
-```
-
-### Runtime inputs: `$env` and `$args`
-
-These special variables are available in every scope, including functions and string
-interpolation. They are snapshots taken at the start of each run, not ordinary bindings.
-
-* `$env` is a read-only dict of process environment variables. `$env.NAME` and
-  `$env['NAME']` return a string, including `''` for a set-but-empty variable.
-  An absent name returns `None`. Bracket access also supports names containing punctuation.
-  Environment names use the spelling exposed by the host process.
-* `$args` is a read-only list of strings supplied with repeated CLI `--arg` options,
-  in command-line order. The script path and interpreter options are not included.
-  Without `--arg`, it is empty. Out-of-range integer indexes return `None`;
-  negative indexes count from the end, as with ordinary lists. Non-integer indexes fail.
-
-```bash
-spl --arg=first --arg="two words" example.md
-```
-
-```spl
-let date = $env.date
-log($args[0])             # first
-log($args[1])             # two words
-log($args[2])             # None
-log("date={date}, first={$args[0]}")
-```
-
-The special names cannot be declared, rebound, or used as parameters or loop variables.
-Assignments to their members/items and mutating methods raise catchable `runtime_error`,
-even through aliases such as `let args = $args`. Use `$args.copy()`, `list($args)`,
-`$args[:]`, or `$env.copy()` to create a normal mutable copy. Copies have ordinary
-missing-index/key errors; this does not change ordinary dict/list behavior.
-
-The runtime does not automatically add either value to a variable store. Explicitly
-assigning a value or alias to a top-level variable can persist it, so do not persist,
-log, or interpolate sensitive environment values into prompts unintentionally.
-Replay uses the current run's inputs, not recorded environment variables or arguments.
-Other `$`-prefixed variable names are syntax errors.
-
-### Scope
-
-`let name = …` binds in the current scope. Every block creates a lexical child scope. Inner declarations shadow enclosing names and cannot be accessed from a parent scope. Reads and assignments search outward through the full lexical chain for the first declaration. There is no hoisting: a local appears when execution binds it.
-
-```spl
-let color = 'Blue'
-{
-    let color = 'Red'
-    log(color)             # Red
+for i in range(3) {
+    count += i
 }
-log(color)                 # Blue: the child declaration did not change it
+let result = {
+    let count = 10
+    count + 1
+}
+success [count, result]  # [3, 11]
 ```
 
-Conditionals, loops, exception handlers, and guidance/restriction blocks follow the same rule. Each loop iteration has fresh locals, including its loop variables. Caught failure names belong to their handler. To keep a result, declare it outside and assign inside:
+Declare a result before a block when the block should set it:
+`let answer = None` and then `answer = ...` inside.
+
+## Control flow and expressions
+
+`if`/`elif`/`else`, `for`, `while`, `break`, `continue` and `pass` behave as in Python, with braces.
+`for k, v in items(d)` unpacks pairs. Blocks and `if` are expressions that yield their last
+expression, or `None`. `{}` is an empty dict; `{ pass }` is an empty block.
 
 ```spl
-let color = None
-enforce 'Your favorite color is blue' {
-    color = ask(len='word') 'What is your favorite color?'
-}
-log(color)                 # the answer
-
-let response = None
-try {
-    response = ask(fmt='object') 'A joke about programmers'
-} except err {
-    response = {'setup': 'none', 'punchline': err.reason}
-}
-log(response)              # visible here, whichever branch ran
-```
-
-`enforce` provides positive scoped prompt guidance and `forbid` provides negative guidance. Both create child variable scopes, but neither verifies model compliance.
-
-Functions close over their lexical defining scope. They can read or assign enclosing declarations; `let` instead declares locally and shadows an enclosing name. Lists and dicts remain mutable across scopes.
-
-### Block and conditional expressions
-
-A block or selected `if`/`elif`/`else` branch yields its final expression. An empty branch, a block ending in a statement, or an unmatched conditional returns `None`. Only the selected branch runs. `{}` remains an empty dictionary; use `{ pass }` for a block yielding `None`. Functions still require explicit `return`.
-
-```spl
-let result = if ask(fmt='boolean') 'Today is Friday?' {
-    ask 'Haiku on variance'
-} else {
-    ask 'Sentence on passing time'
-}
-let length = {
-    let text = result
-    len(text)
-}
-log(level=debug)(length)
-success result
-```
-
-### Persistence
-
-Top-level variables can be saved between runs with opt-in `--store`, even after a script failure. Persistence is not a transaction or an action log. It is allowed during workflow trace replay, but forbidden during legacy generation replay. See [CLI & runtime](CLI.md#variable-store).
-
-## Types & values
-
-| `type()` | Literals | Notes |
-| --- | --- | --- |
-| `'None'` | `None` | Falsy. |
-| `'bool'` | `True` `False` | Python spelling. |
-| `'number'` | `42` `3.14` `1e-3` | One numeric type. `int()` truncates, `float()` parses. |
-| `'str'` | `'a'` `"a"` `'''a'''` `r'a'` | Indexed by Unicode character. |
-| `'list'` | `[1, 2, 3]` | Mutable, trailing comma allowed. |
-| `'dict'` | `{'a': 1}` | Keys must be strings. Insertion ordered. Also readable as `d.a`. |
-| `'function'` | `def f(x) { … }` | First-class values. |
-
-Model calls can request typed output with `fmt='integer'`, `'float'`, `'array'`, `'object'`, `'text'`, or `'boolean'`. Non-text formats validate strict JSON and return ordinary SPL values; `fmt='json'` accepts any JSON value. See [output formats and examples](LLM-commands.md#output-formats).
-
-**`type()` returns a string**
-
-Compare it with a quoted name: `type(x) == 'list'`. There is no separate `int`/`float` distinction — both report `'number'`.
-
-### Truthiness
-
-`None`, `False`, `0`, empty strings, empty lists and empty dicts are falsy. Everything else (including functions) is truthy.
-
-## Strings & interpolation
-
-All four quote styles interpolate `{expression}`. Any expression is allowed, including calls and indexing. Substitution is *as is*: strings raw, `True`/`False`/`None` in Python spelling, lists and dicts as JSON.
-
-```spl
-let items = ['a', 'b']
-let n = 2
-log("found {n} items: {items}")          # found 2 items: ["a","b"]
-log("first is {items[0].upper()}")       # first is A
-log("{{literal}} and \{also literal\}")  # {literal} and {also literal}
-log(r'{"raw": "no {interpolation} here"}')
-```
-
-### Quote styles & escapes
-
-| Form | Behaviour |
-| --- | --- |
-| `'…'` `"…"` | Single line; escapes and interpolation. |
-| `'''…'''` `"""…"""` | May span lines; escapes and interpolation. Ideal for prompts. |
-| `r'…'` | Raw: no escapes, no interpolation. |
-
-Valid escapes: `\n \t \r \0 \\ \' \" \{ \}`. Anything else is a syntax error, and so is a stray single `}` in a string — write `}}` or `\}`.
-
-## Operators
-
-Lowest to highest precedence:
-
-| Operators | Description |
-| --- | --- |
-| `x if cond else y` | Conditional expression. |
-| `or` | Logical or (short-circuit). |
-| `and` | Logical and (short-circuit). |
-| `not` | Logical negation. |
-| `== != < <= > >= in` `not in` | Comparison and membership. `==` is deep for lists and dicts. Ordering works on numbers, strings and lists. |
-| `+ -` | Add / subtract. `+` also joins two strings or two lists — mixing types is an error (use interpolation or `str()`). |
-| `* / // %` | Multiply, divide, floor-divide, modulo. `*` repeats strings and lists. Division by zero is a failure. |
-| `-x +x` | Unary sign. |
-| `**` | Power. |
-| `f(x)` `a[i]` `a[i:j]` `a.b` | Call, index, slice, member. Negative indexes count from the end. |
-
-```spl
-let xs = [10, 20, 30, 40]
-log(xs[-1])                  # 40
-log(xs[1:3])                 # [20,30]
-log('ab' * 3)                # ababab
-log('x' in 'text')           # True
-log('role' in {'role': 1})   # True  (dicts test keys)
-log(7 // 2, 7 % 3, 2 ** 10)  # 3 1 1024
-let label = 'many' if len(xs) > 3 else 'few'
-```
-
-## Control flow
-
-### if / elif / else
-
-```spl
-if score >= 90 {
-    let grade = 'A'
-} elif score >= 80 {
-    let grade = 'B'
-} else {
-    let grade = 'C'
-}
-```
-
-### for & while
-
-`for` iterates lists, strings (characters) and dicts (keys). Several names unpack list items, which pairs well with `items()` and `enumerate()`. `break`, `continue` and `pass` work as in Python.
-
-```spl
-for i in range(3) { log(i) }
-
-for code, language in items({'de': 'German', 'pl': 'Polish'}) {
-    log("{code} = {language}")
-}
-
-let tries = 0
-while tries < 3 {
-    tries += 1
-    if tries == 2 { continue }
+let score = 6
+let label = if score > 7 { 'high' } elif score > 3 { 'medium' } else { 'low' }
+for key, value in items({'a': 1, 'b': 2}) {
+    log(key, value)
 }
 ```
 
 ## Functions
 
-Define with `def`. Functions take positional arguments only (the count is checked), return `None` unless `return` is used, can recurse (up to a maximum call depth of 200) and close over their defining scope. `return` leaves the innermost function immediately, from inside any nested block, loop, `try` or constraint block; at the top level of a script it ends the script like `success`, optionally with a value.
+`def` defines a function with lexical closures and recursion. Functions return `None`
+unless they use an explicit `return`.
 
 ```spl
 def fib(n) {
-    if n < 2 { return n }
+    if n < 2 {
+        return n
+    }
     return fib(n - 1) + fib(n - 2)
-}
-
-def is_valid(msg) {
-    let first = msg.splitlines()[0]
-    return len(first) <= 72 and ': ' in first
 }
 ```
 
-Functions are the right place for validators — the deterministic code that decides whether to trust an LLM answer. See [commit-message](Examples.md#commit-message).
+## Runtime inputs: $env and $args
 
-## Built-ins
+`$env.NAME` or `$env['NAME']` reads a process environment variable as a string.
+`$args[0]`, `$args[1]`, … read the CLI's repeated `--arg` values. Missing variables and
+out-of-range indexes return `None`. Both are read-only snapshots and are never persisted by stores.
 
-A compact standard library is available without imports: `len`, `range`, `sorted`, `json_parse`, `log`, and Python-style methods on strings, lists and dicts. The full list is on the [Built-ins](Builtins.md) page.
+```spl
+let target = $args[0]
+if target == None {
+    target = $env.USER
+}
+```
+
+## Logging
+
+`log(value, ...)` writes to stderr at info level. `log(level=debug)(value)` selects `error`, `info` or
+`debug`. Debug output appears only with `--log-level debug`; `--silent` hides all logs.
+
+## Built-in functions
+
+| Function | Description |
+| --- | --- |
+| `len(x)` `type(x)` | Length; type name |
+| `str(x)` `int(x)` `float(x)` `bool(x)` `list(x)` | Conversions |
+| `range(stop)` `range(start, stop[, step])` | List of integers |
+| `abs(x)` `round(x[, digits])` `min(...)` `max(...)` `sum(list)` | Numbers |
+| `sorted(list[, reverse])` `reversed(list)` `enumerate(list)` `zip(a, b, ...)` | Sequences |
+| `any(list)` `all(list)` | Truthiness checks |
+| `keys(d)` `values(d)` `items(d)` | Dict views as lists |
+| `json_parse(text)` `json_stringify(value[, indent])` | Strict JSON |
+| `log(...)` | Logging, see above |
+
+Methods:
+
+| Type | Methods |
+| --- | --- |
+| String | `upper` `lower` `strip` `lstrip` `rstrip` `title` `capitalize` `isdigit` `split` `splitlines` `join` `replace` `startswith` `endswith` `find` `count` |
+| List | `append` `extend` `insert` `pop` `remove` `index` `count` `reverse` `sort` `copy` `clear` |
+| Dict | `keys` `values` `items` `get` `pop` `update` `copy` `clear` |
+
+## Exact tools
+
+Tools are ordinary functions that never call a model. Paths are relative to `--cwd`, and every
+call is checked against active [restrictions](Safety.md#restrictions).
+
+| Function | Result |
+| --- | --- |
+| `read_file(path)` | File contents as UTF-8 text |
+| `write_file(path, content)` | Writes the file and returns a confirmation |
+| `web_fetch(url)` | Response body as text (30 s timeout, up to 5 redirects) |
+| `web_search(query)` | Search results as text |
+| `shell(command)` | Combined stdout/stderr; a nonzero exit raises `tool_error` (120 s timeout) |
+
+```spl
+let diff = ''
+restrict exec 'git' {
+    diff = shell('git diff --cached')
+}
+```
+
+`shell` runs through the platform shell (`cmd.exe` on Windows, `/bin/sh` elsewhere).
+External state can still change between runs; "exact" means no model is involved.

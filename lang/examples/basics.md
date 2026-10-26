@@ -1,8 +1,12 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
 model: 'gpt-6-luna'
 ---
+
+# Basics
+
+SPL fences run exact code. Blockquotes are natural-language steps. Both share one scope.
 
 ```spl
 def fib(n) {
@@ -11,28 +15,22 @@ def fib(n) {
     }
     return fib(n - 1) + fib(n - 2)
 }
+```
 
-let fib10 = fib(10)
-let modelFib10 = ask(fmt='integer') \
-    'fibonacci of 10 is?'
+> Ask the model for the 10th Fibonacci number as an integer, without using @fib. Save it to @modelFib10
 
-assert fib10 == modelFib10 'Oops model got it wrong'
+```spl
+assert fib(10) == modelFib10 'Oops, the model got it wrong'
+```
 
-let joke = ask(fmt='object') \
-    'A joke about programmers as {{"setup": ..., "punchline": ...}}'
+> @joke = a joke about programmers as an object with "setup" and "punchline"
 
-let animal = None
-enforce 'Answer in Chinese' {
-    forbid 'Mentioning the word cat' {
-        animal = ask(len='paragraph') \
-         'Funny story involving a pet animal'
-    }
-}
+> @ENFORCE Answer in Chinese
+>
+> @FORBID Mentioning the word cat
+>
+> Paragraph of funny story about a pet animal -> @animal
 
-success {
-    'fib': fib10, 
-    'modelFib': modelFib10, 
-    'animal': animal, 
-    'joke': joke
-}
+```spl
+success {'fib': fib(10), 'modelFib': modelFib10, 'joke': joke, 'animal': animal}
 ```

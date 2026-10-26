@@ -1,29 +1,35 @@
-# Grammar (EBNF)
+# Grammar
 
-The canonical SPL syntax reference. Commands use parenthesized named modifiers
-with the prompt outside the parentheses. Modifier names are checked while parsing;
-expression values and schemas are checked at runtime.
-
-This grammar describes the embedded SPL language and the compatible raw `parse`
-API. Executable files are Markdown documents with extension/version frontmatter;
-see [document structure](Language.md#program-structure). A fenced SPL unit uses
-`program` without `directive`; the document model belongs in frontmatter.
-Blockquotes are natural-language instructions, not SPL grammar productions.
+The complete syntax of SPL documents and the code inside `spl` fences, in EBNF. Modifier names are
+checked while parsing; modifier values and schemas are checked at runtime.
 
 ## Notation
 
-`{ x }` means repetition, `[ x ]` means optional, and `|` separates alternatives. Statements end at a newline, semicolon, closing block, or end of input. Opening block braces must share the keyword's line. Comments begin with `#`.
+`{ x }` repeats, `[ x ]` is optional, `|` separates alternatives. Statements end at a newline, `;`,
+a closing `}` or the end of input. Newlines inside `()` and `[]` are ignored, and a trailing `\`
+continues a line. Opening braces must be on the same line as their keyword. `#` starts a comment.
 
 ## Complete grammar
 
 ```ebnf
-(* SPL. { x } means repetition; [ x ] means optional.
-   Statements end at newline, ';', '}' or EOF. Newlines inside () and [] are ignored.
-   '#' starts a comment. Opening block braces must be on the keyword's line. *)
+(* Documents *)
+document       = frontmatter , { markdown_block } ;
+frontmatter    = "---" , NL , yaml_mapping , ( "---" | "..." ) , NL ;
+                 (* extension: semantic-prompt-language and version: 1 are required;
+                    model and preamble are optional; other keys are errors *)
+markdown_block = spl_fence | blockquote | commentary ;
+spl_fence      = fence , "spl" , NL , program , fence ;
+fence          = 3 * "`" , { "`" } | 3 * "~" , { "~" } ;
+                 (* each fence is a complete program without directives *)
+blockquote     = ">" , text , { NL , ">" , text } ;
+                 (* natural language; the model submits one program for it *)
+commentary     = ? any other Markdown ? ;
 
+(* Programs *)
 program        = { directive , separator } , { statement , separator } ;
 separator      = NL | ";" | end_of_block | EOF ;
 directive      = "@" , "(" , "model" , "=" , plain_string , [ "," ] , ")" ;
+                 (* raw parse API only; documents use frontmatter model *)
 block          = "{" , { statement , separator } , "}" ;
 
 statement      = declaration | assignment | if_stmt | for_stmt | while_stmt
@@ -43,13 +49,9 @@ guidance_stmt  = ( "enforce" | "forbid" ) , expr , block ;
 restrict_stmt  = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
 restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;
 
-(* Every block creates a lexical child scope. let declares/redeclares locally and shadows parents.
-   Reads and assignments search outward for the first declaration; undeclared names are errors.
-   Each loop iteration has fresh locals; caught failure names belong to the handler scope.
-   Blocks/if yield their final expression, otherwise None. An unmatched if yields None.
-   {} remains an empty dict; { pass } is a block yielding None. Functions need explicit return.
-   return exits the innermost function, or the script at top level.
-   success exits the script, including when used in a function. *)
+(* Every block is a lexical child scope; let declares locally, assignment updates the
+   nearest declaration. Blocks and if yield their final expression, otherwise None.
+   {} is an empty dict; { pass } is an empty block. Functions need an explicit return. *)
 
 expr           = or_expr , [ "if" , or_expr , "else" , expr ] ;
 or_expr        = and_expr , { "or" , and_expr } ;
@@ -78,27 +80,9 @@ log_expr       = "log" , "(" , [ "level" , "=" , log_level , [ "," ] ] , ")" , c
 log_level      = "error" | "info" | "debug" | expr ;
 human_expr     = "human" , postfix ;
 
-(* Unknown/duplicate modifier names are syntax errors. Values are expressions, validated at runtime:
-   len: word/sentence/paragraph/long (guidance only)
-   fmt: integer/float/array/object/text/boolean/json; schema implies json unless fmt is explicit
-   Non-text formats require strict JSON of the selected type; float accepts finite numbers,
-   object excludes arrays, and json accepts any JSON value.
-   reasoning: low/medium/high; think and agent default to medium
-   show: True/False; schema: synchronous strict JSON Schema draft-07 object or boolean
-   repairs: integer 0..5 (additional generation attempts, default 0); agents require 0
-   model: non-empty string; CLI override > per-call model > frontmatter (raw API: header) > SDK default
-   Generation (ask and think) has no tools. agent explicitly enables restricted runtime/MCP tools.
-   human takes a string question without modifiers and returns an exact caller-provided string.
-   It suspends a checkpoint run, emits JSON and exits 3; it never reads stdin.
-   Questions in functions, loops and expressions resume through ordered effect-history replay.
-   Suspension is a control signal, not a catchable script failure.
-   Raw tools are ordinary positional functions: read_file(path), write_file(path, content),
-   web_fetch(url), web_search(query), shell(command). They never invoke a model.
-   log(level=...)(args) selects error/info/debug severity; plain log(args) defaults to info.
-   Level values are bare names, strings or expressions, validated before evaluating arguments.
-   Debug messages are emitted only at debug log level; silent suppresses all logs.
-   enforce/forbid are scoped prompt guidance.
-   schema/assert validate data; restrict checks actions. *)
+(* Unknown or duplicate modifiers are syntax errors. human takes no modifiers and
+   requires a checkpoint run. Tools are ordinary functions: read_file, write_file,
+   web_fetch, web_search, shell. *)
 
 string         = [ "r" ] , quote , { char | escape | interpolation } , closing_quote ;
 quote          = "'" | '"' | "'''" | '"""' ;
@@ -109,25 +93,14 @@ NUMBER         = digit+ , [ "." , digit+ ] , [ ( "e" | "E" ) , [ "+" | "-" ] , d
 NAME           = ( letter | "_" ) , { letter | digit | "_" } ;
 NL             = newline ;
 
-(* "{{"/"}}" are literal braces; raw strings have no interpolation or escapes.
-   $env is a read-only process-environment dict snapshot; missing keys return None.
-   $args is a read-only list of repeated CLI --arg strings (empty by default);
-   out-of-range integer indexes return None, and negative indexes count from the end.
-   Both are available in every scope and interpolation, cannot be rebound or mutated
-   (including through aliases), and are not automatically persisted.
-   Other $-prefixed names are syntax errors. Ordinary dict/list missing reads still fail.
+(* "{{" and "}}" are literal braces; raw strings have no escapes or interpolation.
+   $env and $args are read-only; other $-names are syntax errors.
    Reserved words: let if elif else for in while def return try except assert fail success
-   enforce forbid restrict ask think agent human break continue pass and or not True False None.
-   Removed syntax: ? 'prompt', ?{...} 'prompt', think{...}, agent{...}, log{...}, @{...},
-   think(level=...), tool{param=...} 'instructions',
-   let x += ... and let d.key = ... . *)
+   enforce forbid restrict ask think agent human break continue pass and or not True False None. *)
 ```
 
-## Syntax versus semantics
+## Maintaining the grammar
 
-`let` declares in the current block scope; reads and assignment search enclosing lexical scopes. Blocks and conditionals yield their final expression or `None`. Raw tools are ordinary function calls. Generation and agents share expression-valued modifiers; `log` has its own `level` modifier. See [language basics](Language.md) and [generation contracts](LLM-commands.md) for runtime rules.
-
-Maintain the grammar in this Markdown page; there is no separate EBNF source file.
-After changing executable examples, update their Markdown copies in `docs-template/`.
-Run `npm run docs:build` from the repository root to regenerate all HTML pages and the
-search index. Documentation tests check that the rendered grammar and examples remain synchronized.
+This page is the only copy of the grammar. When the syntax changes, update it together with the
+VS Code TextMate grammar, then run `npm run docs:build` from the repository root. The documentation
+tests check that the rendered grammar and the example listings stay in sync.

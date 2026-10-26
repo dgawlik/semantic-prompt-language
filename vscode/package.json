@@ -29,6 +29,7 @@
     "copilot"
   ],
   "contributes": {
+    "markdown.markdownItPlugins": true,
     "languages": [
       {
         "id": "spl",
@@ -48,7 +49,9 @@
       {
         "scopeName": "spl.markdown.injection",
         "path": "./syntaxes/markdown.tmLanguage.json",
-        "injectTo": ["text.html.markdown"],
+        "injectTo": [
+          "text.html.markdown"
+        ],
         "embeddedLanguages": {
           "meta.embedded.block.spl": "spl"
         }
@@ -73,6 +76,7 @@
     "package": "vsce package --skip-license"
   },
   "dependencies": {
+    "highlight.js": "^11.12.0",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"

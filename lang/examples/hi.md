@@ -1,34 +1,34 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
-model: 'gpt-5.5'
+model: 'gpt-6-luna'
+preamble: 'Be concise.'
 ---
 
+# Hello, SPL
+
+Prose like this is commentary. Only `spl` fences and blockquotes run, top to bottom, in one shared scope.
+
 ```spl
-def fib(n) {
-    if n < 2 { return n }
-    return fib(n - 1) + fib(n - 2)
+let topics = ['recursion', 'closures', 'regular expressions']
+let Card = {
+    'type': 'object',
+    'properties': {'term': {'type': 'string'}, 'definition': {'type': 'string'}},
+    'required': ['term', 'definition'],
+    'additionalProperties': False,
 }
-
-# an LLM call, validated and parsed as JSON
-let joke = ask(len='sentence', fmt='object') \
- 'A joke about programmers. Give setup and punchline.'
-
-# deliberate before answering
-let why = think(reasoning='high') \
-    'Why is {joke.setup} funny?'
-
-# Prompt guidance for calls inside the block (not runtime validation).
-let hi = None
-enforce 'Answer in English' {
-    forbid 'profanity' { let hi = ask 'Say hi' }
+let cards = []
+for topic in topics {
+    cards.append(ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}')
 }
+```
 
-# Raw I/O does not call the model.
+> Pick the topic from @topics whose card in @cards a beginner would find hardest. Save it to @hardest
+
+```spl
+assert hardest in topics "unexpected topic '{hardest}'"
 restrict './out' {
-    write_file('./out/a.txt', '{fib(10)}')
+    write_file('./out/cards.json', json_stringify(cards, 2))
 }
-
-try { assert fib(5) == 5 'wrong' } except err { log(err.reason) }
-success {'joke': joke, 'why': why, 'hi': hi}
+success {'cards': len(cards), 'hardest': hardest}
 ```

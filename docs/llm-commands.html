@@ -3,16 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Keep deterministic logic in ordinary code and put LLM judgment at visible boundaries.
-Exact I/O, generation, and model-directed actions are distinct operations, so you can
-iterate on a prompt or guard without hiding which parts can vary or perform actions.">
+<meta name="description" content="Blockquotes let you write a step in plain language; ask, think and agent call the model from code.
+This page covers both, and how to check what comes back.">
 <meta name="color-scheme" content="light dark">
-<title>Generation &amp; agents - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=842fdb94d159">
-<link rel="stylesheet" href="assets/style.css?v=842fdb94d159">
+<title>Natural language &amp; models - SPL docs</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=222fac99706f">
+<link rel="stylesheet" href="assets/style.css?v=222fac99706f">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=842fdb94d159"></script>
-<script defer src="assets/site.js?v=842fdb94d159"></script>
+<script defer src="assets/search-index.js?v=222fac99706f"></script>
+<script defer src="assets/site.js?v=222fac99706f"></script>
 </head>
 <body data-page="llm-commands">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -24,246 +23,206 @@ iterate on a prompt or guard without hiding which parts can vary or perform acti
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="hitl.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Human in the loop</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Generation &amp; agents</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="hitl.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Human in the loop</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Natural language &amp; models</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Generation &amp; agents</span><span class="reading-time">7 min read</span></div>
-    <header class="page-heading"><h1>Generation, agents &amp; tools</h1><div class="lead"><p>Keep deterministic logic in ordinary code and put LLM judgment at visible boundaries.
-Exact I/O, generation, and model-directed actions are distinct operations, so you can
-iterate on a prompt or guard without hiding which parts can vary or perform actions.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#generation-ask">Generation: ask</a></li><li class="toc-level-2"><a href="#composable-modifiers">Composable modifiers</a></li><li class="toc-level-2"><a href="#validated-structured-output">Validated structured output</a></li><li class="toc-level-3"><a href="#output-formats">Output formats</a></li><li class="toc-level-3"><a href="#bounded-repair-not-action-retry">Bounded repair, not action retry</a></li><li class="toc-level-2"><a href="#think-shorthand">Think shorthand</a></li><li class="toc-level-2"><a href="#explicit-agents">Explicit agents</a></li><li class="toc-level-2"><a href="#scoped-guidance-enforce--forbid">Scoped guidance: enforce &amp; forbid</a></li><li class="toc-level-2"><a href="#exact-raw-tools">Exact raw tools</a></li></ul></nav></details>
-    <article class="prose"><p>Use <code>fmt</code> and <code>schema</code> to constrain returned values, <code>assert</code> for acceptance rules,
-and bounded <code>repairs</code> for format/schema corrections. These guards contain variance;
-they do not make the model deterministic or establish factual correctness.</p>
-<span id="ask" class="anchor-alias" aria-hidden="true"></span><span id="generation-" class="anchor-alias" aria-hidden="true"></span><h2 id="generation-ask">Generation: <code>ask</code><a class="heading-anchor" href="#generation-ask" aria-label="Link to Generation: ask">#</a></h2>
-<p><code>ask</code> generates a value without runtime tools, built-in Copilot tools, or MCP access. It is a prefix operator: <code>ask &#39;a&#39; + b</code> means <code>(ask &#39;a&#39;) + b</code>. Pass external information explicitly:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> notes = <span class="hljs-built_in">read_file</span>(<span class="hljs-string">&#x27;notes.txt&#x27;</span>)
-<span class="hljs-keyword">let</span> summary = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Summarize these notes: {notes}&#x27;</span>
-<span class="hljs-keyword">success</span> summary
+    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Natural language &amp; models</span><span class="reading-time">4 min read</span></div>
+    <header class="page-heading"><h1>Natural language &amp; models</h1><div class="lead"><p>Blockquotes let you write a step in plain language; <code>ask</code>, <code>think</code> and <code>agent</code> call the model from code.
+This page covers both, and how to check what comes back.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-2"><a href="#generation-ask-and-think">Generation: ask and think</a></li><li class="toc-level-2"><a href="#agents">Agents</a></li><li class="toc-level-2"><a href="#modifiers">Modifiers</a></li><li class="toc-level-2"><a href="#output-formats">Output formats</a></li><li class="toc-level-2"><a href="#schemas-and-repairs">Schemas and repairs</a></li><li class="toc-level-2"><a href="#guidance-enforce-and-forbid">Guidance: enforce and forbid</a></li></ul></nav></details>
+    <article class="prose"><h2 id="blockquotes">Blockquotes<a class="heading-anchor" href="#blockquotes" aria-label="Link to Blockquotes">#</a></h2>
+<p>A blockquote is an instruction the model translates into SPL. The model sees the text, the current
+bindings and function signatures, active guidance and restrictions, and a preamble that teaches it SPL.
+It must submit exactly one program, which the runtime then executes in the shared document scope,
+just like a fence.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-1"><span class="hljs-quote">&gt; Summarize @notes in one sentence and save it to @summary</span>
 </code></pre></figure>
-<p>Each call starts a fresh session; previous answers are not implicit conversation history. Generated text is trimmed; raw tool output is not.</p>
-<span id="modifiers" class="anchor-alias" aria-hidden="true"></span><h2 id="composable-modifiers">Composable modifiers<a class="heading-anchor" href="#composable-modifiers" aria-label="Link to Composable modifiers">#</a></h2>
-<p><code>ask</code>, <code>think</code>, and <code>agent</code> take named modifiers in parentheses, followed by a
-separate prompt expression. Parentheses can span lines, contain comments, and end
-with a trailing comma. Values are expressions evaluated once; names must be known
-and unique. Invalid names are syntax errors; invalid values are catchable runtime
-errors before the model call.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> score = <span class="hljs-keyword">ask</span>(
-    fmt = <span class="hljs-string">&#x27;integer&#x27;</span>,
-    repairs = <span class="hljs-number">1</span>
-) <span class="hljs-string">&#x27;Rate this issue&#x27;</span>
-<span class="hljs-keyword">let</span> explanation = <span class="hljs-keyword">think</span>(
-    reasoning = <span class="hljs-string">&#x27;high&#x27;</span>,
-    <span class="hljs-built_in">len</span> = <span class="hljs-string">&#x27;paragraph&#x27;</span>,
-) <span class="hljs-string">&#x27;Explain the rating {score}&#x27;</span>
-<span class="hljs-keyword">let</span> report = <span class="hljs-keyword">agent</span>(
-    reasoning = <span class="hljs-string">&#x27;low&#x27;</span>,
-) <span class="hljs-string">&#x27;Inspect the project and summarize its status&#x27;</span>
+<p>The same step written as code:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> summary = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Summarize: {notes}&#x27;</span>
 </code></pre></figure>
-<p>Without modifiers, both <code>ask &#39;prompt&#39;</code> and <code>ask() &#39;prompt&#39;</code> are valid; the same
-applies to <code>think</code> and <code>agent</code>. The prompt stays on the same line as the closing
-<code>)</code>, though the prompt itself may be a multiline string.
-For a grouped prompt expression, use <code>ask() (&#39;first &#39; + &#39;second&#39;)</code>.
-<code>ask(&#39;prompt&#39;)</code> is not a positional function call: parentheses are for named
-modifiers only. Raw tools remain ordinary positional calls.</p>
-<p>Logging uses the same modifier notation with a second group for values:
-<code>log(level=debug)(value)</code>. Plain <code>log(value)</code> still logs at info level.
-Document defaults use frontmatter <code>model: model-id</code>; headers inside SPL fences are rejected.</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Composable modifiers reference table"><table>
+<p><code>@name</code> marks a binding or an operation (<code>@notes</code>, <code>@success</code>, <code>@read_file</code>). Markers are hints
+for the model, not text substitution, and plain language works too. The examples use a few
+conventions that the model maps onto language features:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquotes reference table"><table>
+<thead>
+<tr>
+<th scope="col">Marker</th>
+<th scope="col">Becomes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>@ENFORCE text</code> / <code>@FORBID text</code></td>
+<td><code>enforce</code> / <code>forbid</code> guidance around the step</td>
+</tr>
+<tr>
+<td><code>@RESTRICT fs[&#39;./src&#39;] exec[&#39;git&#39;]</code></td>
+<td>a <code>restrict</code> block</td>
+</tr>
+<tr>
+<td><code>@validate[Schema] @retries[2]</code></td>
+<td><code>schema=Schema, repairs=2</code></td>
+</tr>
+<tr>
+<td><code>@HUMAN question</code></td>
+<td>a <code>human</code> question (needs <code>--checkpoint</code>)</td>
+</tr>
+<tr>
+<td><code>@SUCCESS</code>, <code>@fail</code></td>
+<td>end the document</td>
+</tr>
+</tbody></table>
+</div>
+<p>Generated code is ordinary SPL: it runs under the same restrictions and validation as handwritten
+code, but the translation can be wrong. Follow important steps with an <code>spl</code> check:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(summary) &lt; <span class="hljs-number">300</span> <span class="hljs-string">&#x27;summary is too long&#x27;</span>
+</code></pre></figure>
+<p><code>--check</code> validates syntax only; it cannot validate a blockquote&#39;s intent. Traces record the
+submitted program, and replay executes it without asking the model again. Run only trusted documents.</p>
+<h2 id="generation-ask-and-think">Generation: ask and think<a class="heading-anchor" href="#generation-ask-and-think" aria-label="Link to Generation: ask and think">#</a></h2>
+<p><code>ask prompt</code> returns the model&#39;s answer as a value. <code>think</code> is the same with medium reasoning by default.
+Neither has tools: they cannot read files, browse or run commands.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">let</span> title = <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;Suggest a title for: {draft}&#x27;</span>
+<span class="hljs-keyword">let</span> plan = <span class="hljs-keyword">think</span>(reasoning=<span class="hljs-string">&#x27;high&#x27;</span>) <span class="hljs-string">&#x27;Plan the migration of {service}&#x27;</span>
+</code></pre></figure>
+<p>Each call starts a fresh session. Pass context explicitly, usually through interpolation.</p>
+<h2 id="agents">Agents<a class="heading-anchor" href="#agents" aria-label="Link to Agents">#</a></h2>
+<p><code>agent prompt</code> lets the model act with the runtime tools (<code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>,
+<code>web_search</code>, <code>shell</code>) and any configured MCP tools. Actions are checked against active restrictions.
+Agents default to medium reasoning and never use repairs, so a failed check never repeats their actions.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> report = <span class="hljs-string">&#x27;&#x27;</span>
+<span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span>, exec <span class="hljs-string">&#x27;npm&#x27;</span> {
+    report = <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Run the tests, fix the failing source file, and describe the fix&#x27;</span>
+}
+</code></pre></figure>
+<h2 id="modifiers">Modifiers<a class="heading-anchor" href="#modifiers" aria-label="Link to Modifiers">#</a></h2>
+<p>All three commands take named modifiers in parentheses before the prompt. Values are expressions,
+evaluated once and validated before the call. Unknown or duplicate names are syntax errors.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Modifiers reference table"><table>
 <thead>
 <tr>
 <th scope="col">Modifier</th>
 <th scope="col">Values</th>
-<th scope="col">Meaning</th>
+<th scope="col">Effect</th>
 </tr>
 </thead>
 <tbody><tr>
 <td><code>len</code></td>
-<td><code>&#39;word&#39;</code>, <code>&#39;sentence&#39;</code>, <code>&#39;paragraph&#39;</code>, <code>&#39;long&#39;</code></td>
-<td>Prompt hint, not a hard length limit.</td>
+<td><code>word</code> <code>sentence</code> <code>paragraph</code> <code>long</code></td>
+<td>Length hint (guidance only)</td>
 </tr>
 <tr>
 <td><code>fmt</code></td>
-<td><code>&#39;integer&#39;</code>, <code>&#39;float&#39;</code>, <code>&#39;array&#39;</code>, <code>&#39;object&#39;</code>, <code>&#39;text&#39;</code>, <code>&#39;boolean&#39;</code>, <code>&#39;json&#39;</code></td>
-<td>Text by default; JSON when a schema is supplied and no explicit format is given.</td>
-</tr>
-<tr>
-<td><code>reasoning</code></td>
-<td><code>&#39;low&#39;</code>, <code>&#39;medium&#39;</code>, <code>&#39;high&#39;</code></td>
-<td>Requested model reasoning effort. Unsupported effort logs a warning and uses the model default.</td>
-</tr>
-<tr>
-<td><code>show</code></td>
-<td><code>True</code>, <code>False</code> (default)</td>
-<td>Log available model reasoning at info level.</td>
+<td>see <a href="#output-formats">Output formats</a></td>
+<td>Parse and check the answer</td>
 </tr>
 <tr>
 <td><code>schema</code></td>
-<td>JSON Schema dict or boolean</td>
-<td>Validate the result; implies JSON output.</td>
+<td>JSON Schema draft-07</td>
+<td>Validate the answer; implies JSON</td>
 </tr>
 <tr>
 <td><code>repairs</code></td>
-<td>Integer <code>0..5</code>, default <code>0</code></td>
-<td>Additional generation attempts for format/schema errors only. Agents require zero.</td>
+<td><code>0</code>–<code>5</code></td>
+<td>Extra attempts after a format or schema error</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td><code>low</code> <code>medium</code> <code>high</code></td>
+<td>Reasoning effort, if the model supports it</td>
+</tr>
+<tr>
+<td><code>show</code></td>
+<td><code>True</code> <code>False</code></td>
+<td>Stream reasoning to the info log</td>
 </tr>
 <tr>
 <td><code>model</code></td>
-<td>Nonempty string</td>
-<td>Per-call model; CLI override wins, then this modifier, then frontmatter, then the SDK default.</td>
+<td>model id</td>
+<td>Per-call model</td>
 </tr>
 </tbody></table>
 </div>
-<span id="schema" class="anchor-alias" aria-hidden="true"></span><h2 id="validated-structured-output">Validated structured output<a class="heading-anchor" href="#validated-structured-output" aria-label="Link to Validated structured output">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">let</span> Contract = {
-    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
-    <span class="hljs-string">&#x27;properties&#x27;</span>: {
-        <span class="hljs-string">&#x27;label&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>, <span class="hljs-string">&#x27;enum&#x27;</span>: [<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;feature&#x27;</span>]},
-        <span class="hljs-string">&#x27;confidence&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;number&#x27;</span>, <span class="hljs-string">&#x27;minimum&#x27;</span>: <span class="hljs-number">0</span>, <span class="hljs-string">&#x27;maximum&#x27;</span>: <span class="hljs-number">1</span>},
-    },
-    <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;label&#x27;</span>, <span class="hljs-string">&#x27;confidence&#x27;</span>],
-    <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
-}
-<span class="hljs-keyword">let</span> issue = <span class="hljs-string">&#x27;The application crashes at startup.&#x27;</span>
-<span class="hljs-keyword">let</span> result = <span class="hljs-keyword">ask</span>(schema=Contract, reasoning=<span class="hljs-string">&#x27;high&#x27;</span>, repairs=<span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Classify this issue: {issue}&#x27;</span>
-<span class="hljs-keyword">assert</span> result.confidence &gt;= <span class="hljs-number">0.5</span> <span class="hljs-string">&#x27;classification needs manual review&#x27;</span>
-<span class="hljs-keyword">success</span> result
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">let</span> score = <span class="hljs-keyword">ask</span>(
+    fmt=<span class="hljs-string">&#x27;integer&#x27;</span>,
+    repairs=<span class="hljs-number">1</span>,
+) <span class="hljs-string">&#x27;Rate this issue from 1 to 5: {issue}&#x27;</span>
 </code></pre></figure>
-<p>Schemas use synchronous JSON Schema draft-07 with Ajv strict mode. Types, enums, nested properties, required fields, arrays, numeric/string limits, and standard synchronous composition are supported. Unknown keywords, invalid schemas, unresolved remote references, and asynchronous schemas fail before generation. There is no coercion, default insertion, or removal of extra fields. Custom formats/plugins are not installed.</p>
-<p>A mismatch raises <code>validation_failed</code> with field paths, for example <code>lines[2].quantity: must be number</code>. Missing fields and additional properties also identify the offending path. Schemas validate structure; ordinary <code>assert</code> statements validate business rules.</p>
-<span id="fmt-object" class="anchor-alias" aria-hidden="true"></span><h3 id="output-formats">Output formats<a class="heading-anchor" href="#output-formats" aria-label="Link to Output formats">#</a></h3>
+<p>Model precedence: CLI <code>--model</code>, then the per-call <code>model</code>, then frontmatter <code>model</code>, then the SDK default.</p>
+<span id="fmt-object" class="anchor-alias" aria-hidden="true"></span><h2 id="output-formats">Output formats<a class="heading-anchor" href="#output-formats" aria-label="Link to Output formats">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Output formats reference table"><table>
 <thead>
 <tr>
-<th scope="col">Format</th>
-<th scope="col">Required response</th>
-<th scope="col">SPL value</th>
+<th scope="col"><code>fmt</code></th>
+<th scope="col">Accepts</th>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>&#39;integer&#39;</code></td>
-<td>A JSON number with no fractional part, such as <code>55</code>.</td>
-<td>number</td>
+<td><code>text</code> (default)</td>
+<td>Trimmed text, no parsing</td>
 </tr>
 <tr>
-<td><code>&#39;float&#39;</code></td>
-<td>Any finite JSON number, such as <code>3.14</code> or <code>42</code>.</td>
-<td>number</td>
+<td><code>integer</code></td>
+<td>JSON number without a fraction</td>
 </tr>
 <tr>
-<td><code>&#39;array&#39;</code></td>
-<td>A JSON array, such as <code>[1, 2, 3]</code>.</td>
-<td>list</td>
+<td><code>float</code></td>
+<td>Any finite JSON number</td>
 </tr>
 <tr>
-<td><code>&#39;object&#39;</code></td>
-<td>A JSON object, such as <code>{&quot;ok&quot;: true}</code>. Arrays are rejected.</td>
-<td>dict</td>
+<td><code>boolean</code></td>
+<td>JSON <code>true</code> or <code>false</code></td>
 </tr>
 <tr>
-<td><code>&#39;text&#39;</code></td>
-<td>Plain text, trimmed without JSON parsing. This is the default.</td>
-<td>str</td>
+<td><code>array</code></td>
+<td>JSON array (a list)</td>
 </tr>
 <tr>
-<td><code>&#39;boolean&#39;</code></td>
-<td>JSON <code>true</code> or <code>false</code>, not quoted strings or Python spelling.</td>
-<td>bool</td>
+<td><code>object</code></td>
+<td>JSON object (a dict, not an array)</td>
 </tr>
 <tr>
-<td><code>&#39;json&#39;</code></td>
-<td>Any JSON value, including scalars and <code>null</code>.</td>
-<td>Parsed value</td>
+<td><code>json</code></td>
+<td>Any JSON value</td>
 </tr>
 </tbody></table>
 </div>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">let</span> fib = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;integer&#x27;</span>) <span class="hljs-string">&#x27;Fibonacci of 10?&#x27;</span>
-<span class="hljs-keyword">let</span> pi = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;float&#x27;</span>) <span class="hljs-string">&#x27;Pi to five decimal places?&#x27;</span>
-<span class="hljs-keyword">let</span> colors = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;array&#x27;</span>) <span class="hljs-string">&#x27;Three primary colors&#x27;</span>
-<span class="hljs-keyword">let</span> joke = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;object&#x27;</span>) <span class="hljs-string">&#x27;A joke with setup and punchline fields&#x27;</span>
-<span class="hljs-keyword">let</span> greeting = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;text&#x27;</span>) <span class="hljs-string">&#x27;Say hello&#x27;</span>
-<span class="hljs-keyword">let</span> prime = <span class="hljs-keyword">ask</span>(fmt=<span class="hljs-string">&#x27;boolean&#x27;</span>) <span class="hljs-string">&#x27;Is 17 prime?&#x27;</span>
-</code></pre></figure>
-<p>Non-text formats use strict JSON: neither prose nor Markdown fences are extracted, and values are never coerced. Malformed output or the wrong type raises <code>invalid_format</code> and can be corrected with <code>repairs</code>. An explicit format is checked before any supplied schema. A schema cannot be combined with <code>fmt=&#39;text&#39;</code>.</p>
-<p><strong>Migration:</strong> <code>fmt=&#39;object&#39;</code> is now object-only. Scripts expecting lists should use <code>fmt=&#39;array&#39;</code>, or <code>fmt=&#39;json&#39;</code> to accept any JSON value.</p>
-<span id="repairs" class="anchor-alias" aria-hidden="true"></span><h3 id="bounded-repair-not-action-retry">Bounded repair, not action retry<a class="heading-anchor" href="#bounded-repair-not-action-retry" aria-label="Link to Bounded repair, not action retry">#</a></h3>
-<p><code>repairs=2</code> permits at most three model calls: the initial call plus two corrections. Only <code>invalid_format</code> and <code>validation_failed</code> trigger correction. The next prompt contains the prior answer and validation errors. Prompt/modifier expressions are not reevaluated. Authentication, timeout, transport, tool, and restriction errors are not repaired; assertions outside the call are not repaired either.</p>
-<p>Generation has no tools, so repair cannot repeat writes or commands. Agents reject nonzero repairs, even when they also validate their final answer against a schema.</p>
-<span id="think" class="anchor-alias" aria-hidden="true"></span><h2 id="think-shorthand">Think shorthand<a class="heading-anchor" href="#think-shorthand" aria-label="Link to Think shorthand">#</a></h2>
-<p><code>think</code> is generation-only shorthand with default medium reasoning. It accepts exactly the same modifiers as <code>ask</code>, so reasoning and structured output no longer require two separate calls.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> Contract = {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;integer&#x27;</span>}
-<span class="hljs-keyword">success</span> <span class="hljs-keyword">think</span>(schema=Contract, reasoning=<span class="hljs-string">&#x27;low&#x27;</span>) <span class="hljs-string">&#x27;What is 6 times 7?&#x27;</span>
-</code></pre></figure>
-<span id="agent" class="anchor-alias" aria-hidden="true"></span><h2 id="explicit-agents">Explicit agents<a class="heading-anchor" href="#explicit-agents" aria-label="Link to Explicit agents">#</a></h2>
-<p><code>agent</code> enables model-directed runtime tools and configured MCP tools. It defaults to medium reasoning. Restrict its capabilities deliberately; raw tools and agents are allow-by-default outside restrictions.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span>, exec <span class="hljs-string">&#x27;git&#x27;</span>, mcp <span class="hljs-string">&#x27;docs/search&#x27;</span> {
-    <span class="hljs-keyword">let</span> review = <span class="hljs-keyword">agent</span>(reasoning=<span class="hljs-string">&#x27;high&#x27;</span>) <span class="hljs-string">&#x27;Inspect source files and consult docs/search&#x27;</span>
+<p>Parsing is strict: prose around JSON and Markdown code fences are rejected, and values are never
+coerced. A malformed or wrong-typed answer raises <code>invalid_format</code>.</p>
+<h2 id="schemas-and-repairs">Schemas and repairs<a class="heading-anchor" href="#schemas-and-repairs" aria-label="Link to Schemas and repairs">#</a></h2>
+<p><code>schema</code> validates the parsed answer with Ajv in strict mode: no coercion, no defaults, no removal of
+extra fields. A mismatch raises <code>validation_failed</code> with field paths.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">let</span> Triage = {
+    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
+    <span class="hljs-string">&#x27;properties&#x27;</span>: {
+        <span class="hljs-string">&#x27;label&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>, <span class="hljs-string">&#x27;enum&#x27;</span>: [<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;feature&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>]},
+        <span class="hljs-string">&#x27;reason&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>},
+    },
+    <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;label&#x27;</span>, <span class="hljs-string">&#x27;reason&#x27;</span>],
+    <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
-<span class="hljs-keyword">success</span> review
+<span class="hljs-keyword">let</span> triage = <span class="hljs-keyword">ask</span>(schema=Triage, repairs=<span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Classify: {issue}&#x27;</span>
+<span class="hljs-keyword">assert</span> triage.label != <span class="hljs-string">&#x27;bug&#x27;</span> <span class="hljs-keyword">or</span> <span class="hljs-built_in">len</span>(triage.reason) &gt; <span class="hljs-number">0</span> <span class="hljs-string">&#x27;bugs need a reason&#x27;</span>
 </code></pre></figure>
-<p>Only agents expose tools to Copilot. Any permission request during generation is rejected and aborts the call. Agent tools still use the runtime restriction checks; unconfigured MCP servers and other Copilot tools are not approved. Agent actions are not transactional. <code>--trace</code> captures agent results and failures; replay returns them without repeating agent-owned actions. Legacy <code>--record</code> does not support agents.</p>
-<span id="constraints" class="anchor-alias" aria-hidden="true"></span><h2 id="scoped-guidance-enforce--forbid">Scoped guidance: enforce &amp; forbid<a class="heading-anchor" href="#scoped-guidance-enforce--forbid" aria-label="Link to Scoped guidance: enforce &amp; forbid">#</a></h2>
-<p><code>enforce</code> adds positive guidance and <code>forbid</code> adds negative guidance for every model call inside the block. These are the language&#39;s scoped prompt-guidance keywords.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">let</span> answer = <span class="hljs-literal">None</span>
+<p><code>repairs=n</code> allows up to <code>n</code> more attempts, each with the previous answer and the validation errors.
+Only <code>invalid_format</code> and <code>validation_failed</code> are repaired; transport and tool errors are not.
+The prompt is not re-evaluated. Put business rules in <code>assert</code>, after the call.</p>
+<h2 id="guidance-enforce-and-forbid">Guidance: enforce and forbid<a class="heading-anchor" href="#guidance-enforce-and-forbid" aria-label="Link to Guidance: enforce and forbid">#</a></h2>
+<p><code>enforce text { ... }</code> and <code>forbid text { ... }</code> add instructions to every model call inside the
+block, including calls in functions it invokes. Nested guidance combines. Guidance shapes prompts;
+it does not check the answer.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">let</span> answer = <span class="hljs-literal">None</span>
 <span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Answer in English&#x27;</span> {
     <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;jokes&#x27;</span> {
         answer = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Explain recursion&#x27;</span>
     }
 }
-<span class="hljs-keyword">success</span> answer
 </code></pre></figure>
-<p>Guidance applies dynamically to calls made inside the block, including called functions, and unwinds afterward. Each block has a child variable scope, so declare <code>answer</code> outside and assign inside when it must remain visible.</p>
-<p><strong>Guidance is not validation</strong></p>
-<p><code>enforce</code>, <code>forbid</code>, and <code>len</code> influence a prompt; they do not verify compliance. Use schemas and assertions for output guarantees, and <a href="restrictions.html">restrict</a> for runtime action checks.</p>
-<span id="tools" class="anchor-alias" aria-hidden="true"></span><h2 id="exact-raw-tools">Exact raw tools<a class="heading-anchor" href="#exact-raw-tools" aria-label="Link to Exact raw tools">#</a></h2>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Exact raw tools reference table"><table>
-<thead>
-<tr>
-<th scope="col">Function</th>
-<th scope="col">Result</th>
-<th scope="col">Restriction</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>read_file(path)</code></td>
-<td>Exact UTF-8 contents</td>
-<td>fs</td>
-</tr>
-<tr>
-<td><code>write_file(path, content)</code></td>
-<td>Write confirmation text</td>
-<td>fs</td>
-</tr>
-<tr>
-<td><code>web_fetch(url)</code></td>
-<td>HTTP response body text</td>
-<td>net</td>
-</tr>
-<tr>
-<td><code>web_search(query)</code></td>
-<td>Search result text</td>
-<td>net</td>
-</tr>
-<tr>
-<td><code>shell(command)</code></td>
-<td>Combined stdout/stderr; nonzero exit raises tool_error</td>
-<td>exec, plus inspected fs/net arguments</td>
-</tr>
-</tbody></table>
-</div>
-<p>Arguments are positional, required strings. These functions never invoke a model, never ask it to fill missing arguments, and do not truncate raw results. Agent-facing tool text may be truncated with an explicit marker. Network and shell operations retain their normal external variability; raw means no model interpretation.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">let</span> diff = <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git diff --staged&#x27;</span>)
-<span class="hljs-keyword">let</span> message = <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;Draft a commit message from this diff: {diff}&#x27;</span>
-<span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;commit-message.txt&#x27;</span>, message)
-<span class="hljs-keyword">success</span> message
-</code></pre></figure>
-<p><a href="cli.html#workflow-traces-and-replay">Workflow trace replay</a> still executes these explicit raw tools and persistent stores under normal restrictions, but does not repeat agent-owned actions. The older <a href="cli.html#offline-generation-recordreplay">generation record/replay</a> mode permits local reads only and blocks writes, network, shell, agents, and persistent stores.</p>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/LLM-commands.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
-    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="language.html"><span>Previous</span><strong>Language basics</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="restrictions.html"><span>Next</span><strong>Restrictions</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="language.html"><span>Previous</span><strong>Language</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="safety.html"><span>Next</span><strong>Guards & failures</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#generation-ask">Generation: ask</a></li><li class="toc-level-2"><a href="#composable-modifiers">Composable modifiers</a></li><li class="toc-level-2"><a href="#validated-structured-output">Validated structured output</a></li><li class="toc-level-3"><a href="#output-formats">Output formats</a></li><li class="toc-level-3"><a href="#bounded-repair-not-action-retry">Bounded repair, not action retry</a></li><li class="toc-level-2"><a href="#think-shorthand">Think shorthand</a></li><li class="toc-level-2"><a href="#explicit-agents">Explicit agents</a></li><li class="toc-level-2"><a href="#scoped-guidance-enforce--forbid">Scoped guidance: enforce &amp; forbid</a></li><li class="toc-level-2"><a href="#exact-raw-tools">Exact raw tools</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-2"><a href="#generation-ask-and-think">Generation: ask and think</a></li><li class="toc-level-2"><a href="#agents">Agents</a></li><li class="toc-level-2"><a href="#modifiers">Modifiers</a></li><li class="toc-level-2"><a href="#output-formats">Output formats</a></li><li class="toc-level-2"><a href="#schemas-and-repairs">Schemas and repairs</a></li><li class="toc-level-2"><a href="#guidance-enforce-and-forbid">Guidance: enforce and forbid</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

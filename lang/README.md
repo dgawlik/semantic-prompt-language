@@ -1,154 +1,77 @@
 # spl-lang
 
-A compact Python-like language for building AI workflows in minutes, not hours of
-orchestration glue. Iterate in a small script, separate deterministic code from
-LLM judgment, and contain model variance with explicit guards. Requires Node.js 20+.
+The SPL interpreter and CLI. Runs Markdown workflows that mix Python-like `spl` fences with
+natural-language blockquotes. Requires Node.js 20+. See the
+[documentation](https://dgawlik.github.io/semantic-prompt-language/) for the full guide.
 
-SPL is designed around three priorities:
-
-1. **Short iteration loops:** check syntax, run, inspect, refine, and replay unchanged
-   LLM requests while testing guards or deterministic logic.
-2. **Explicit boundaries and guards:** use ordinary code for computation, `ask`/`think`
-   for generation, `agent` for model-directed actions, and validation before accepting results.
-3. **Readable scripts:** keep inputs, prompts, checks, and outputs visible together,
-   with familiar expressions and compact modifiers rather than orchestration plumbing.
-
-See the [project guide](../README.md), [language specification](../LANG-PRD.md),
-[grammar](../docs-template/Grammar.md), and [documentation site](../docs/index.html).
-
-## Run from a checkout
+## Run
 
 ```sh
-npm install
-node dist/cli.js login
-node dist/cli.js examples/hi.md
+npm install -g spl-lang      # or, in this folder: npm install && node dist/cli.js
+spl login
+spl examples/hi.md
 ```
 
-`npm install` runs the TypeScript build. Installed packages expose `spl` and `spl-lang`.
-Authentication is needed only for live generation and explicit agents; raw tools and replay
-work without Copilot. Existing Copilot/CLI credentials and supported GitHub token environment
-variables are reused. `spl login` otherwise runs device authentication and saves credentials
-under `~/.spl` (override with `SPL_HOME`); `spl logout` removes those saved credentials.
-
-## Language contract
-
-- **Markdown only:** `.md` workflows require `extension: semantic-prompt-language`
-  and `version: 1` in YAML frontmatter. Optional `model` and `preamble` fields configure
-  requests. SPL fences and blockquotes run in order in shared scope; everything else
-  is commentary. Raw `.spl` files no longer execute through the CLI.
-- **Natural language:** blockquotes submit full SPL programs through `submit_spl`,
-  making all runtime functionality available. `@name` marks a binding or operation.
-  See [document syntax and examples](../docs-template/Language.md#program-structure).
-- **Embedding:** `parseMarkdown` handles documents; existing raw-SPL `parse`/`run`
-  APIs remain compatible.
-- **Exact tools:** `read_file(path)`, `write_file(path, content)`, `web_fetch(url)`,
-  `web_search(query)`, `shell(command)` never call a model.
-- **Generation:** `ask` and `think` have no tools or MCP access.
-- **Agency:** `agent` explicitly enables model-directed runtime and configured MCP tools.
-- **Human input:** `human 'question'` suspends a checkpoint run and returns an exact
-  answer supplied by a later CLI invocation, never a terminal prompt.
-- **Validation:** expression-valued `schema` uses strict synchronous JSON Schema draft-07;
-  `fmt` supports `integer`, `float`, `array`, `object`, `text`, and `boolean`.
-  Non-text formats require strict JSON of the selected type; `float` accepts any finite
-  number, including whole numbers, and `object` requires a dict, not a list.
-  `fmt='json'` still accepts any JSON value. Prose and code fences are not silently extracted.
-- **Repairs:** `repairs=0..5` retries only malformed/invalid generation, not transport errors
-  or external actions. Agents require `repairs=0`. Use `assert` for business rules.
-- **Guidance:** `enforce`/`forbid` and `len` influence prompts, not runtime guarantees.
-- **Capabilities:** nested `restrict fs/net/exec/mcp` clauses intersect. Shell command
-  inspection is best effort; MCP servers are trusted services, not OS-sandboxed.
-- **Bindings:** every block has a lexical child scope. `let` declares/redeclares locally
-  and shadows outer names. Reads and assignments search outward for the first declaration;
-  child locals, loop variables and caught failures do not leak to parents.
-- **Expressions:** blocks and conditionals yield their final expression, otherwise `None`.
-  `{}` remains an empty dict. Functions still require explicit `return`.
-- **Logging:** `log(...)` defaults to info. `log(level=debug)(...)` selects error/info/debug;
-  bare level names, strings and expressions are accepted and checked at runtime.
-- **Runtime inputs:** `$env.NAME` / `$env['NAME']` reads process environment strings;
-  `$args[i]` reads repeated CLI `--arg` strings in order (empty list by default).
-  Missing environment names and out-of-range argument indexes return `None`.
-  Both are read-only snapshots, including through aliases, and are not automatically persisted.
-
-Common generation modifiers are `len`, `fmt`, `reasoning`, `show`, `schema`, `repairs`,
-and `model`. Values are evaluated once, then validated before calling the model.
-`think` and `agent` default to medium reasoning; `ask` uses the model default.
-CLI `--model` overrides per-call `model`, which overrides frontmatter `model`.
-
-## Trace/replay for short iteration loops
-
-```sh
-node dist/cli.js examples/triage-issues.md --check
-node dist/cli.js examples/triage-issues.md --trace triage.jsonl
-node dist/cli.js examples/triage-issues.md --replay triage.jsonl --silent
-```
-
-Trace captures all generation and agent requests, raw responses, reasoning, effective
-parameters, and backend failures in a new JSONL file. Replay performs exact, ordered
-request matching without starting Copilot or MCP. Use it to retest deterministic
-logic and guards with the same answers. Changed requests require a new live trace;
-mismatched, missing, or unused entries fail explicitly.
-
-Explicit script tools and stores still run normally during workflow replay.
-Agent-owned actions are not repeated or restored, so replay is not a dry run.
-External inputs can still vary, and guards validate only the rules you specify.
-Protect traces like logs: they contain sensitive prompts and raw responses.
-
-Legacy `--record` remains generation-only. Replaying those files allows local reads
-but blocks writes, shell, network, agents, and persistent stores.
-
-## CLI
-
-For noninteractive human review:
-
-```sh
-spl examples/human-review.md --checkpoint run.jsonl --silent
-spl examples/human-review.md --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
-```
-
-Waiting emits a JSON request and exits `3`. Resume reconstructs ordinary computation
-but does not repeat completed tools/model/agent calls. Preserve the same workspace,
-script, runtime and configuration; uncertain interrupted effects require manual
-recovery, not automatic retry. Resumable mode cannot combine with stores or
-trace/record/replay. See the [Human in the loop guide](../docs/hitl.html).
+`spl login` reuses Copilot CLI, `gh` or `GH_TOKEN`/`GITHUB_TOKEN` credentials, or runs GitHub's device
+flow. Workflows without model calls, `--check` and replay work without signing in.
 
 ```text
-spl script.md [--model id] [--mcp file.json] [--cwd dir] [--timeout seconds]
-               [--store file.json | --store-module module]
-               [--trace file.jsonl | --record file.jsonl | --replay file.jsonl]
-               [--log-level error|info|debug] [--silent] [--check]
-               [--arg value ...]
+spl workflow.md [--arg value ...] [--model id] [--cwd dir] [--mcp file.json] [--timeout s]
+                [--store file.json | --store-module module]
+                [--trace file.jsonl | --record file.jsonl | --replay file.jsonl]
+                [--log-level error|info|debug] [--silent] [--check]
+spl workflow.md --checkpoint run.jsonl
+spl workflow.md --resume run.jsonl [--answer-for ID (--answer text | --answer-file file)]
+spl login | logout
 ```
 
-Results are printed on stdout, logs on stderr. Full prompts/responses and statement traces
-appear at every non-silent log level. Exit codes are `0` success, `1` script failure,
-`2` syntax/usage error, `3` waiting for human input, and `70` internal/infrastructure error. `--check` does not execute modifier expressions
-or compile schemas. See [CLI and MCP configuration](../docs/cli.html).
+The result goes to stdout and logs to stderr. Exit codes: `0` success, `1` script failure,
+`2` syntax or usage error, `3` waiting for human input, `70` internal error.
+See [CLI & runtime](../docs-template/CLI.md).
 
-## Tests and embedding
+## Language in brief
+
+```spl
+let Rating = {'type': 'object', 'properties': {'score': {'type': 'integer'}}, 'required': ['score']}
+let review = read_file('review.txt')
+let rating = ask(schema=Rating, repairs=2) 'Rate this review from 1 to 5: {review}'
+assert 1 <= rating.score and rating.score <= 5 'score out of range'
+restrict './out' {
+    write_file('./out/rating.json', json_stringify(rating))
+}
+success rating
+```
+
+* Exact tools `read_file`, `write_file`, `web_fetch`, `web_search` and `shell` never call a model.
+* `ask` and `think` generate values without tools; `agent` can act, within `restrict` scopes.
+* Blockquotes are translated into SPL by the model and run in the same scope.
+* `fmt`, `schema`, `repairs` and `assert` check output; `enforce`/`forbid` only guide prompts.
+
+See [Language](../docs-template/Language.md), [Natural language & models](../docs-template/LLM-commands.md)
+and [Guards & failures](../docs-template/Safety.md).
+
+## Embedding
+
+```js
+import { parseMarkdown, run, Logger, CopilotBackend } from 'spl-lang';
+
+const logger = new Logger('silent');
+const backend = new CopilotBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
+try {
+  const result = await run(parseMarkdown(source), { backend, logger, args: ['first'] });
+  console.log(result);
+} finally {
+  await backend.close();
+}
+```
+
+Also exported: `parse` (raw SPL), `TraceBackend`, `ReplayBackend`, `RecordingBackend`, variable stores,
+`Checkpoint`, authentication helpers and types. See [Embedding](../docs-template/CLI.md#embedding).
+
+## Tests
 
 ```sh
 npm test
 ```
 
-The default suite is offline. In PowerShell, opt into authenticated live checks with
-`$env:SPL_LIVE_TESTS='1'; npm test`, then remove the environment variable.
-
-The package exports `parse`, `run`, `Logger`, `CopilotBackend`, `TraceBackend`,
-`RecordingBackend`, `ReplayBackend`, variable stores, authentication helpers, and related types.
-Resumable embedding also exports `Checkpoint`, `CheckpointError`, and context/request types.
-Call `close()` on the backend after running; replay also checks for unused entries there.
-Custom backends must honor the request kind: only `agent` may execute tools.
-Embedding callers can pass `args: ['first', 'second']` in `RunOptions`; omitted
-arguments default to `[]`, not the host's `process.argv`. Each run snapshots `process.env`.
-See [embedding](../docs/internals.html#embedding).
-
-## Migration
-
-`human` is a reserved keyword; rename previous bindings with that name.
-
-Use `enforce` and `forbid` for scoped prompt guidance; `instruct` and `avoid` are not accepted.
-0.3 removes `think(level=...)`, tool-command syntax, and `let` before
-compound/member/index assignments. Use `reasoning`, ordinary raw functions, and explicit agents instead.
-Blocks create lexical child scopes; replace inner `let` with assignment when an outer
-binding must be updated. See the [migration table](../README.md#breaking-changes-in-03).
-`fmt='object'` is now object-only; use `fmt='array'` for lists or `fmt='json'` for any JSON value.
+Tests are offline. In PowerShell, `$env:SPL_LIVE_TESTS='1'; npm test` adds authenticated live tests.

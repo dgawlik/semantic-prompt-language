@@ -10,6 +10,7 @@ import json from 'highlight.js/lib/languages/json';
 import javascript from 'highlight.js/lib/languages/javascript';
 import powershell from 'highlight.js/lib/languages/powershell';
 import ebnf from 'highlight.js/lib/languages/ebnf';
+import markdown from 'highlight.js/lib/languages/markdown';
 
 const output = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(output);
@@ -22,17 +23,12 @@ if (process.argv.slice(2).some((arg) => arg !== '--check')) throw new Error('Usa
 const pages = [
     ['Introduction', 'index', 'Introduction', 'Start here', 'book'],
     ['Getting-started', 'getting-started', 'Getting started', 'Start here', 'arrow'],
-    ['Language', 'language', 'Language basics', 'The language', 'code'],
-    ['LLM-commands', 'llm-commands', 'Generation & agents', 'The language', 'spark'],
-    ['Restrictions', 'restrictions', 'Restrictions', 'The language', 'shield'],
-    ['Failures', 'failures', 'Failures & errors', 'The language', 'warning'],
-    ['Builtins', 'builtins', 'Built-ins', 'Reference', 'blocks'],
+    ['Language', 'language', 'Language', 'The language', 'code'],
+    ['LLM-commands', 'llm-commands', 'Natural language & models', 'The language', 'spark'],
+    ['Safety', 'safety', 'Guards & failures', 'The language', 'shield'],
     ['CLI', 'cli', 'CLI & runtime', 'Reference', 'terminal'],
     ['Grammar', 'grammar', 'Grammar', 'Reference', 'braces'],
     ['Examples', 'examples', 'Examples', 'Guides', 'layers'],
-    ['HITL', 'hitl', 'Human in the loop', 'Guides', 'spark'],
-    ['Editor', 'editor', 'VS Code extension', 'Guides', 'edit'],
-    ['Internals', 'internals', 'Architecture', 'Guides', 'network'],
 ].map(([file, slug, label, group, icon]) => ({ file, slug, label, group, icon }));
 const fingerprint = createHash('sha256');
 for (const file of [
@@ -42,19 +38,9 @@ for (const file of [
 ]) fingerprint.update(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n'));
 const revision = fingerprint.digest('hex').slice(0, 12);
 
+// Published anchors that must keep resolving after headings are renamed.
 const legacy = {
-    index: { 'why-spl': 'why', 'design-tenets': 'tenets', 'how-a-run-works': 'how-it-works', 'where-to-next': 'explore' },
-    'getting-started': { 'install--build': 'install', 'your-first-run': 'first-run', 'write-a-script': 'hello', 'replay-generation-offline': 'record-replay', 'breaking-changes-in-03': 'migration', 'repository-tour': 'repo-tour', 'run-the-tests': 'tests' },
-    language: { 'program-structure': 'structure', 'block-and-conditional-expressions': 'block-expressions', 'types--values': 'types', 'strings--interpolation': 'strings', 'quote-styles--escapes': 'quotes', 'if--elif--else': 'if', 'for--while': 'loops', 'built-ins': 'builtins-brief' },
-    'llm-commands': { 'generation-ask': ['ask', 'generation-'], 'composable-modifiers': 'modifiers', 'validated-structured-output': 'schema', 'output-formats': 'fmt-object', 'bounded-repair-not-action-retry': 'repairs', 'think-shorthand': 'think', 'explicit-agents': 'agent', 'scoped-guidance-enforce--forbid': 'constraints', 'exact-raw-tools': 'tools' },
-    restrictions: { 'the-four-forms': 'forms', 'two-layers-of-enforcement': 'enforcement', 'matching-rules': 'rules', 'file-system': 'fs', network: 'net', executables: 'exec', 'mcp-servers-and-tools': 'mcp', 'what-is-covered': 'what-is-guarded' },
-    failures: { 'failure-payload': 'payload', 'try--except': 'try-except', assertions: 'assert', 'explicit-failure': 'fail', 'successful-termination': 'success', 'bounded-generation-repair': 'retry', 'uncaught-failures-and-cli-errors': 'uncaught' },
-    builtins: { 'raw-tools-no-model-round-trip': 'raw-tools', 'types--conversion': 'conversion', 'numbers--sequences': 'numbers', 'dicts--json': 'dict-fns', 'putting-it-together': 'example' },
-    cli: { 'output-streams--exit-codes': 'streams', 'mcp-configuration': 'mcp', 'remote-http-or-sse-server': 'mcp-http', 'local-stdio-server': 'mcp-stdio', 'configuration-fields': 'mcp-fields', 'variables-paths-and-unsupported-settings': 'mcp-variables', 'validate-run-and-restrict-access': 'mcp-usage', 'variable-store': 'store', 'custom-stores': 'custom-store', authentication: 'login', backend: 'backends', 'offline-generation-recordreplay': 'record-replay' },
-    grammar: { 'complete-grammar': 'program', 'syntax-versus-semantics': 'semantics' },
-    examples: { 'extract-an-invoice': 'extract-invoice', 'code-review-as-a-ci-gate': 'code-review', 'search-with-mcp': 'mcp', 'journal-with-persistent-state': 'journal', 'feature-tours': 'tours', 'basicsmd--functions-objects-and-llm-calls': ['basics', 'basicsspl--functions-objects-and-llm-calls'], 'himd--compact-end-to-end-tour': ['hi', 'hispl--compact-end-to-end-tour'] },
-    editor: { 'develop--test': 'develop' },
-    internals: { 'execution-pipeline': 'pipeline', 'generation-and-repair-lifecycle': 'llm-call', 'recording-and-replay': 'recording', 'extension-points': 'extending', 'custom-backend': 'backend-interface', 'custom-store': 'variable-store', validation: 'tests' },
+    'llm-commands': { 'output-formats': 'fmt-object' },
 };
 
 const paths = {
@@ -93,7 +79,19 @@ hljs.registerLanguage('spl', (engine) => {
     language.contains.unshift({ scope: 'variable', match: /\$(?:env|args)\b/ });
     return language;
 });
-for (const [name, grammar] of Object.entries({ bash, sh: bash, json, js: javascript, javascript, powershell, ebnf })) hljs.registerLanguage(name, grammar);
+for (const [name, grammar] of Object.entries({ bash, sh: bash, json, js: javascript, javascript, powershell, ebnf, markdown })) hljs.registerLanguage(name, grammar);
+
+/** Highlights a full workflow document: Markdown around its embedded `spl` fences, SPL inside them. */
+function highlightMarkdown(text) {
+    let html = '';
+    let last = 0;
+    for (const match of text.matchAll(/^(```spl\n)([\s\S]*?\n)(```)$/gm)) {
+        html += hljs.highlight(text.slice(last, match.index), { language: 'markdown' }).value;
+        html += `<span class="hljs-code">${escape(match[1])}</span>${hljs.highlight(match[2], { language: 'spl' }).value}<span class="hljs-code">${escape(match[3])}</span>`;
+        last = match.index + match[0].length;
+    }
+    return html + hljs.highlight(text.slice(last), { language: 'markdown' }).value;
+}
 
 function rewriteLink(href, page) {
     if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith('#')) return href;
@@ -165,7 +163,9 @@ function renderPage(page, index) {
         code(token) {
             const language = token.lang?.split(/\s/)[0] || 'text';
             if (language !== 'text' && !hljs.getLanguage(language)) throw new Error(`${page.file}: unsupported code language ${language}`);
-            const content = language === 'text' ? escape(token.text) : hljs.highlight(token.text, { language }).value;
+            const content = language === 'text' ? escape(token.text)
+                : language === 'markdown' ? highlightMarkdown(token.text)
+                : hljs.highlight(token.text, { language }).value;
             const filename = token.filename;
             const synced = filename?.endsWith('.md') && fs.existsSync(path.join(root, 'lang', 'examples', filename));
             const id = `code-${++block}`;

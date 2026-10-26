@@ -1,121 +1,81 @@
 # Build AI workflows in minutes, not hours
 
-SPL executes Markdown workflows combining Python-like SPL fences and natural-language
-blockquotes. Both modes share variables and the full runtime; frontmatter explicitly
-opts the document in. Keep deterministic code separate from LLM calls and contain
-model variance with explicit guards.
+SPL runs Markdown documents. `spl` code fences hold exact, Python-like code; blockquotes hold
+natural-language steps that the model turns into code. Both share one scope, the same tools
+and the same guards, so each step can be written in whichever form reads best.
 
-Spend time developing the solution, not wiring an orchestration layer. Write a
-small script, run it, inspect the result, and refine the prompt or guard. The goal
-is a working solution in minutes rather than hours of glue code.
+`hi.md`
 
-The following shows the SPL fence from `basics.md`. Runnable documents also require
-[frontmatter](Language.md#program-structure); prose outside executable blocks is commentary.
+````markdown
+---
+extension: 'semantic-prompt-language'
+version: 1
+model: 'gpt-6-luna'
+preamble: 'Be concise.'
+---
 
-`basics.md`
+# Hello, SPL
+
+Prose like this is commentary. Only `spl` fences and blockquotes run, top to bottom, in one shared scope.
 
 ```spl
-
-def fib(n) {
-    if n < 2 {
-        return n
-    }
-    return fib(n - 1) + fib(n - 2)
+let topics = ['recursion', 'closures', 'regular expressions']
+let Card = {
+    'type': 'object',
+    'properties': {'term': {'type': 'string'}, 'definition': {'type': 'string'}},
+    'required': ['term', 'definition'],
+    'additionalProperties': False,
 }
-
-let fib10 = fib(10)
-let modelFib10 = ask(fmt='integer') \
-    'fibonacci of 10 is?'
-
-assert fib10 == modelFib10 'Oops model got it wrong'
-
-let joke = ask(fmt='object') \
-    'A joke about programmers as {{"setup": ..., "punchline": ...}}'
-
-let animal = None
-enforce 'Answer in Chinese' {
-    forbid 'Mentioning the word cat' {
-        animal = ask(len='paragraph') \
-         'Funny story involving a pet animal'
-    }
-}
-
-success {
-    'fib': fib10, 
-    'modelFib': modelFib10, 
-    'animal': animal, 
-    'joke': joke
+let cards = []
+for topic in topics {
+    cards.append(ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}')
 }
 ```
 
-The `ask` is the only model call. `fmt` checks its output type; `assert` rejects an
-out-of-range answer before ordinary code routes it. A reviewer can see the input,
-the variable part, the guard, and the result without tracing through callbacks.
-These checks constrain the answer; they do not prove the severity assessment is correct.
+> Pick the topic from @topics whose card in @cards a beginner would find hardest. Save it to @hardest
+
+```spl
+assert hardest in topics "unexpected topic '{hardest}'"
+restrict './out' {
+    write_file('./out/cards.json', json_stringify(cards, 2))
+}
+success {'cards': len(cards), 'hardest': hardest}
+```
+````
+
+The loop is ordinary code; each `ask` must return JSON matching `Card`, with one repair attempt.
+The blockquote is translated into SPL and executed, and the `assert` after it checks the result.
+Writing is limited to `./out`.
 
 ## Why SPL?
 
-1. **Fast iteration loops.** Start with one file and run it directly with `npx`.
-   Check syntax without a model, inspect explicit failures, then adjust the smallest
-   prompt or guard. Trace/replay lets you retest deterministic logic and checks
-   against the same LLM results when requests stay unchanged.
-2. **Separate deterministic logic from LLM judgment.** Control flow, arithmetic,
-   interpolation, and variables never call a model. `ask` and `think` generate values
-   without tools; `agent` explicitly enables model-directed actions. Validate
-   outputs with `fmt`, `schema`, and `assert`; bound repairs and restrict actions
-   instead of relying on prompt wording.
-3. **Clean syntax that scans quickly.** Familiar expressions, brace-delimited
-   blocks, and compact call modifiers keep the workflow visible. Prompts return
-   values you can name, test, and pass to ordinary functions, rather than hiding
-   control flow in string-building and callback plumbing.
-
-## Design tenets
-
-* Keep ordinary code ordinary. Raw file, web, and shell tools execute explicit
-  requests without model interpretation. Their external inputs can still vary;
-  model-free I/O is not a promise of reproducible external state.
-* Guard before accepting output. Formats and schemas check type and structure;
-  assertions check the rules you write. Neither proves factual correctness.
-* Repair generation, not actions. Bounded `repairs` correct only format/schema
-  failures. Agents reject repair retries so a validation failure cannot
-  automatically repeat their external actions.
-* Make capabilities visible. `restrict` narrows file, network, executable, and MCP
-  access. Tools and agents are allow-by-default outside those scopes. Shell
-  inspection and trusted MCP services are not OS sandboxes.
-* Reuse results deliberately. Workflow traces capture LLM inputs, outputs, and
-  failures. Replay skips the model and agent-owned actions, but explicit script
-  tools and stores still execute; it is not a dry run or a state restore.
-
-`enforce`, `forbid` and `len` provide prompt guidance, not validation. Use
-`schema` and `assert` to validate results, and `restrict` to check actions.
+1. **Short loops.** One file, run directly. `--check` validates syntax without a model, and
+   trace/replay reruns your code and guards against recorded model answers.
+2. **Exact code where it matters.** Control flow, arithmetic and I/O never call a model.
+   `ask` and `think` generate values without tools; only `agent` can act.
+3. **Guards you can see.** `fmt`, `schema` and `assert` check data; `restrict` checks actions.
+   Prompt guidance (`enforce`, `forbid`, `len`) is kept separate from validation.
+4. **Readable.** Inputs, prompts, checks and outputs sit in one document, top to bottom.
 
 ## How a run works
 
-1. Parse - the lexer and parser check syntax. Unknown or duplicate modifier names
-   are syntax errors; modifier values are validated at runtime.
-2. Interpret - evaluate statements and expressions deterministically.
-3. Assemble - prepend guidance, restrictions and modifier hints to the prompt.
-4. Call - use the Copilot SDK for generation or explicit agent actions.
-   Agent tool calls are intercepted and checked.
-5. Result - print the value of `success` to stdout and logs to stderr.
-
-## Where to next
-
-* [Getting started](Getting-started.md) - install, authenticate and build a short iteration loop.
-* [Language basics](Language.md) - variables, strings, operators, control flow and functions.
-* [Generation, agents & tools](LLM-commands.md) - modifiers, schemas, repairs, guidance and exact tools.
-* [Restrictions](Restrictions.md) - narrow file, network, executable and MCP access.
-* [Failures & errors](Failures.md) - failure payloads, status codes and recovery.
-* [Built-ins](Builtins.md) - functions and collection methods.
-* [CLI & runtime](CLI.md) - options, authentication, persistence and trace/replay.
-* [Grammar](Grammar.md) - the complete EBNF reference.
-* [Examples](Examples.md) - working scripts for extraction, triage, agents and CI gates.
-* [Human in the loop](HITL.md) - noninteractive questions, durable pause/resume and CI integration.
-* [VS Code extension](Editor.md) - installation, highlighting and snippets.
-* [Architecture](Internals.md) - execution boundaries, embedding and extension points.
+1. Frontmatter opts the file in. All fences are parsed first, so syntax errors fail before anything runs.
+2. Fences and blockquotes execute in document order in one shared scope.
+3. A blockquote sends its text, the visible bindings and a runtime preamble to the model, which
+   submits one SPL program. The runtime executes it exactly like a fence.
+4. `ask`, `think` and `agent` call GitHub Copilot through the Copilot SDK, one fresh session per call.
+5. `success` prints the result on stdout. Logs go to stderr.
 
 ## Non-goals
 
-* Bit-for-bit reproducible live model output, a general workflow cache or
-  transactional external actions.
-* A full Python implementation - SPL supports a deliberately small subset.
+* Full Python, classes or a static type system.
+* Reproducible model output, transactional actions or an OS sandbox.
+
+## Where next
+
+* [Getting started](Getting-started.md): install, sign in, run and iterate.
+* [Language](Language.md): SPL syntax, scopes, built-ins and tools.
+* [Natural language & models](LLM-commands.md): blockquotes, `ask`, `think`, `agent` and output validation.
+* [Guards & failures](Safety.md): restrictions, assertions, failures and human input.
+* [CLI & runtime](CLI.md): options, traces, stores, MCP and embedding.
+* [Examples](Examples.md): real-world workflows.

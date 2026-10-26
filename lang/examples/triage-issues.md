@@ -1,76 +1,82 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
+model: 'gpt-6-luna'
 ---
 
+# Triage unlabeled GitHub issues
+
+Classifies open issues without labels and applies the labels only after a human approves
+the plan. Needs an authenticated `gh` CLI. Pass `--arg owner/repo` to target another repository.
+
+    spl examples/triage-issues.md --checkpoint triage.jsonl --arg owner/repo
+
 ```spl
-# Triage a batch of issues into labels and priorities, with validated JSON and retries.
-# Schema repairs retry generation only; transport errors are not retried.
+let repo = ''
+if $args[0] != None {
+    repo = "--repo {$args[0]}"
+}
 
-let LABELS = ['bug', 'feature', 'question', 'docs']
-let PRIORITIES = ['low', 'medium', 'high']
-let Triage = {
-    'type': 'object',
-    'properties': {
-        'label': {'type': 'string', 'enum': LABELS},
-        'priority': {'type': 'string', 'enum': PRIORITIES},
-        'reason': {'type': 'string', 'minLength': 1},
+let issues = []
+restrict exec 'gh' {
+    issues = json_parse(shell('gh issue list {repo} --state open --search "no:label" --limit 20 --json number,title,body'))
+}
+if len(issues) == 0 {
+    success 'No unlabeled issues'
+}
+
+let LABELS = ['bug', 'enhancement', 'question', 'documentation']
+let Plan = {
+    'type': 'array',
+    'items': {
+        'type': 'object',
+        'properties': {
+            'number': {'type': 'integer'},
+            'label': {'type': 'string', 'enum': LABELS},
+            'priority': {'type': 'string', 'enum': ['low', 'medium', 'high']},
+            'reason': {'type': 'string', 'minLength': 1},
+        },
+        'required': ['number', 'label', 'priority', 'reason'],
+        'additionalProperties': False,
     },
-    'required': ['label', 'priority', 'reason'],
-    'additionalProperties': False,
 }
+```
 
-let issues = [
-    {'id': 101, 
-    'title': 'App crashes on startup', 
-    'body': 'Since 2.3 the app exits with a segfault right after the splash screen on macOS.'},
-    {'id': 102, 
-    'title': 'Support dark mode', 
-    'body': 'It would be great to have a dark theme, my eyes hurt at night.'},
-    {'id': 103, 
-    'title': 'How do I export to CSV?', 
-    'body': 'I cannot find the export option anywhere in the menus.'},
-    {'id': 104, 
-    'title': 'Typo in install guide', 
-    'body': 'The guide says "npm instal", should be "npm install".'},
-]
+> @FORBID judging an issue by its title alone when the body says otherwise
+>
+> Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.
+> Crashes, data loss and security problems are high priority.
+> @validate[Plan] @retries[2] save to @plan
 
-def triage(issue) {
-    let r = ask(schema=Triage, reasoning='low', repairs=2) '''
-Classify this GitHub issue.
-Title: {issue['title']}
-Body: {issue['body']}
-Give a one-sentence reason.'''
-    return {
-        'id': issue['id'], 
-        'title': issue['title'], 
-        'label': r.label, 
-        'priority': r.priority, 
-        'reason': r.reason
-    }
-}
-
-let results = []
-let counts = {}
+```spl
+let numbers = []
 for issue in issues {
-    let t = triage(issue)
-    results.append(t)
-    if t['label'] in counts {
-        counts[t['label']] += 1
-    } else {
-        counts[t['label']] = 1
+    numbers.append(issue.number)
+}
+let planned = []
+for p in plan {
+    planned.append(p.number)
+}
+assert len(plan) == len(issues) "expected {len(issues)} decisions, got {len(plan)}"
+
+let table = []
+for p in plan {
+    assert p.number in numbers "issue #{p.number} is not part of this batch"
+    assert planned.count(p.number) == 1 "issue #{p.number} was classified twice"
+    table.append("#{p.number} -> {p.label} ({p.priority}): {p.reason}")
+}
+```
+
+> @HUMAN Show the @table lines and ask "Apply these labels? (yes/no)". Save the answer to @approved
+
+```spl
+if not approved.strip().lower().startswith('y') {
+    fail 'Labels were not applied'
+}
+restrict exec 'gh' {
+    for p in plan {
+        shell('gh issue edit {p.number} {repo} --add-label {p.label}')
     }
 }
-
-let urgent = []
-for t in results {
-    if t['priority'] == 'high' {
-        urgent.append(t['title'])
-    }
-}
-
-let summary = ask(len='sentence') \
-'Summarize this triage result for the team channel: {counts}. High priority: {urgent}.'
-
-success {'counts': counts, 'urgent': urgent, 'results': results, 'summary': summary}
+success table
 ```

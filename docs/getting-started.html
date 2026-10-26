@@ -3,16 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Go from an idea to a small, guarded workflow with a short edit-run-check loop.
-SPL keeps deterministic logic, model calls, and validation visible in one readable
-script, so you can iterate on the solution rather than build orchestration glue.">
+<meta name="description" content="Install the CLI, sign in to GitHub Copilot, then write and refine a workflow in a short edit-run loop.">
 <meta name="color-scheme" content="light dark">
 <title>Getting started - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=842fdb94d159">
-<link rel="stylesheet" href="assets/style.css?v=842fdb94d159">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=222fac99706f">
+<link rel="stylesheet" href="assets/style.css?v=222fac99706f">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=842fdb94d159"></script>
-<script defer src="assets/site.js?v=842fdb94d159"></script>
+<script defer src="assets/search-index.js?v=222fac99706f"></script>
+<script defer src="assets/site.js?v=222fac99706f"></script>
 </head>
 <body data-page="getting-started">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -24,262 +22,80 @@ script, so you can iterate on the solution rather than build orchestration glue.
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="hitl.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Human in the loop</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Getting started</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language basics</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Generation & agents</span></a></li><li><a href="restrictions.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Restrictions</span></a></li><li><a href="failures.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2zM12 9v4m0 4h.01"/></svg><span>Failures & errors</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="builtins.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Built-ins</span></a></li><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="hitl.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Human in the loop</span></a></li><li><a href="editor.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg><span>VS Code extension</span></a></li><li><a href="internals.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4m-7 4v-4h14v4"/></svg><span>Architecture</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Getting started</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>Start here</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Getting started</span><span class="reading-time">6 min read</span></div>
-    <header class="page-heading"><h1>Getting started</h1><div class="lead"><p>Go from an idea to a small, guarded workflow with a short edit-run-check loop.
-SPL keeps deterministic logic, model calls, and validation visible in one readable
-script, so you can iterate on the solution rather than build orchestration glue.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#requirements">Requirements</a></li><li class="toc-level-2"><a href="#quick-test">Quick test</a></li><li class="toc-level-2"><a href="#a-short-iteration-loop">A short iteration loop</a></li><li class="toc-level-2"><a href="#install--build">Install &amp; build</a></li><li class="toc-level-2"><a href="#your-first-run">Your first run</a></li><li class="toc-level-2"><a href="#write-a-script">Write a script</a></li><li class="toc-level-2"><a href="#exit-codes">Exit codes</a></li><li class="toc-level-2"><a href="#replay-generation-offline">Replay generation offline</a></li><li class="toc-level-2"><a href="#breaking-changes-in-03">Breaking changes in 0.3</a></li><li class="toc-level-2"><a href="#repository-tour">Repository tour</a></li><li class="toc-level-2"><a href="#run-the-tests">Run the tests</a></li></ul></nav></details>
-    <article class="prose"><p>Start with exact raw tools, add schema-validated generation, and opt into agents
-only when the model should choose actions. Syntax checks, scripts without LLM
-commands and recorded replay need no Copilot login.</p>
-<h2 id="requirements">Requirements<a class="heading-anchor" href="#requirements" aria-label="Link to Requirements">#</a></h2>
-<ul>
-<li>Node.js 20 or newer.</li>
-<li>A GitHub Copilot account for live model calls. Run <code>npx spl-lang login</code> once.
-See <a href="cli.html#authentication">Authentication</a>.</li>
-</ul>
-<h2 id="quick-test">Quick test<a class="heading-anchor" href="#quick-test" aria-label="Link to Quick test">#</a></h2>
-<p>Create <code>hello.md</code>:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-1">---
-extension: semantic-prompt-language
-version: 1
----
-
-```spl
-let report = &#39;Checkout fails for every customer after deployment.&#39;
-let severity = ask(fmt=&#39;integer&#39;, repairs=1) &#39;Rate the impact from 1 to 5: {report}&#39;
-assert severity &gt;= 1 and severity &lt;= 5 &#39;severity must be between 1 and 5&#39;
-let route = if severity &gt;= 4 { &#39;urgent-review&#39; } else { &#39;normal-review&#39; }
-success {&#39;severity&#39;: severity, &#39;route&#39;: route}
-```
-</code></pre></figure>
-<p>Check the syntax, log in and run it:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-2">npx spl-lang hello.md --check
-npx spl-lang login
-npx spl-lang hello.md
-</code></pre></figure>
-<p>The <code>ask</code> is the only model call; its result must be an integer. The assertion checks
-the allowed range, then ordinary code chooses a route. <code>repairs=1</code> can correct one
-format failure, not a failed assertion. Use <code>--model &lt;id&gt;</code> to choose a model instead
-of the SDK default.</p>
-<p><strong>stdout vs. stderr</strong></p>
-<p>The value passed to <code>success</code> or a top-level <code>return</code> goes to stdout: strings
-are printed raw, everything else as JSON. An uncaught failure prints its payload
-to stdout. Logs, including the model and reasoning effort of each LLM call, go
-to stderr so results can be piped safely.</p>
-<h2 id="a-short-iteration-loop">A short iteration loop<a class="heading-anchor" href="#a-short-iteration-loop" aria-label="Link to A short iteration loop">#</a></h2>
-<ol>
-<li><strong>Edit one decision at a time.</strong> Keep data preparation and control flow in
-ordinary code. Put model judgment behind a visible <code>ask</code> or <code>think</code>; use <code>agent</code>
-only when the model should choose actions.</li>
-<li><strong>Check syntax cheaply.</strong> <code>--check</code> parses the script without model calls or
-script side effects. It does not validate runtime modifier values or compile schemas.</li>
-<li><strong>Run and inspect.</strong> Read the result and failure category, then refine the
-prompt, schema, assertion, or restriction. Capture a live trace when you want
-to reuse that run&#39;s LLM results.</li>
-<li><strong>Retest with the same answers.</strong> Replay to iterate on downstream logic and guards
-while LLM requests stay unchanged. If you change a prompt, model, or matched
-option, run live again with a new trace filename.</li>
-</ol>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-3">npx spl-lang hello.md --check
-npx spl-lang hello.md --trace hello-v1.jsonl
-npx spl-lang hello.md --replay hello-v1.jsonl
-</code></pre></figure>
-<p>Replay never starts Copilot or MCP, but explicit script tools and stores still run.
-It does not repeat or restore agent-owned actions. Protect traces as sensitive data;
-see <a href="cli.html#workflow-traces-and-replay">workflow replay</a>.</p>
-<span id="install" class="anchor-alias" aria-hidden="true"></span><h2 id="install--build">Install &amp; build<a class="heading-anchor" href="#install--build" aria-label="Link to Install &amp; build">#</a></h2>
-<p>For a global installation:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-4">npm install -g spl-lang
+    <div class="page-meta"><span>Start here</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Getting started</span><span class="reading-time">2 min read</span></div>
+    <header class="page-heading"><h1>Getting started</h1><div class="lead"><p>Install the CLI, sign in to GitHub Copilot, then write and refine a workflow in a short edit-run loop.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#install">Install</a></li><li class="toc-level-2"><a href="#write-a-workflow">Write a workflow</a></li><li class="toc-level-2"><a href="#document-structure">Document structure</a></li><li class="toc-level-2"><a href="#the-iteration-loop">The iteration loop</a></li><li class="toc-level-2"><a href="#vs-code-extension">VS Code extension</a></li><li class="toc-level-2"><a href="#run-the-tests">Run the tests</a></li></ul></nav></details>
+    <article class="prose"><h2 id="install">Install<a class="heading-anchor" href="#install" aria-label="Link to Install">#</a></h2>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-1">npm install -g spl-lang
 spl login
-spl hello.md
 </code></pre></figure>
-<p>From a checkout, the interpreter lives in <code>lang/</code>:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-5"><span class="hljs-built_in">cd</span> lang
-npm install
-npm run build
-</code></pre></figure>
-<p><code>npm install</code> also runs <code>prepare</code>, compiling TypeScript to <code>dist/</code>. The package
-exposes two equivalent binaries, <code>spl</code> and <code>spl-lang</code>, pointing at <code>dist/cli.js</code>.</p>
-<span id="first-run" class="anchor-alias" aria-hidden="true"></span><h2 id="your-first-run">Your first run<a class="heading-anchor" href="#your-first-run" aria-label="Link to Your first run">#</a></h2>
-<p>From <code>lang/</code> in a checkout:</p>
-<ol>
-<li><p>Check the syntax without model calls or script side effects:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-6">node dist/cli.js examples/basics.md --check
-</code></pre></figure>
-</li>
-<li><p>Log in to Copilot. When authentication is needed, GitHub&#39;s device flow prints
-a code and URL to confirm in the browser:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-7">node dist/cli.js login
-</code></pre></figure>
-</li>
-<li><p>Run against Copilot:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-8">node dist/cli.js examples/live.md
-</code></pre></figure>
-</li>
-</ol>
-<p>Alternatively, from the repository root, use the local package with <code>npx</code>:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-9">npx file:./lang lang/examples/live.md
-</code></pre></figure>
-<span id="hello" class="anchor-alias" aria-hidden="true"></span><h2 id="write-a-script">Write a script<a class="heading-anchor" href="#write-a-script" aria-label="Link to Write a script">#</a></h2>
-<p>For structured output, create <code>user.md</code>:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-10">---
+<p>SPL needs Node.js 20+. From a checkout, run <code>npm install</code> in <code>lang/</code> and use <code>node dist/cli.js</code>
+in place of <code>spl</code>.</p>
+<p><code>spl login</code> reuses existing credentials (Copilot CLI, <code>gh</code>, or <code>COPILOT_GITHUB_TOKEN</code>, <code>GH_TOKEN</code>,
+<code>GITHUB_TOKEN</code>). Otherwise it runs GitHub&#39;s device flow and saves a token in <code>~/.spl</code>
+(override with <code>SPL_HOME</code>). <code>spl logout</code> deletes it. Workflows that never call a model,
+<code>--check</code> and replay need no login.</p>
+<h2 id="write-a-workflow">Write a workflow<a class="heading-anchor" href="#write-a-workflow" aria-label="Link to Write a workflow">#</a></h2>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">greet.md</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy greet.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="greet.md code example"><code class="language-markdown" id="code-2">---
 extension: semantic-prompt-language
-version: 1
----
+<span class="hljs-section">version: 1
+---</span>
 
-```spl
-let User = {
-    &#39;type&#39;: &#39;object&#39;,
-    &#39;properties&#39;: {&#39;name&#39;: {&#39;type&#39;: &#39;string&#39;}, &#39;age&#39;: {&#39;type&#39;: &#39;integer&#39;, &#39;minimum&#39;: 0}},
-    &#39;required&#39;: [&#39;name&#39;, &#39;age&#39;],
-    &#39;additionalProperties&#39;: False,
+<span class="hljs-section"># Greeting</span>
+
+<span class="hljs-code">```spl
+</span><span class="hljs-keyword">let</span> name = <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
+<span class="hljs-keyword">if</span> name == <span class="hljs-literal">None</span> {
+    name = <span class="hljs-string">&#x27;world&#x27;</span>
 }
-let user = ask(schema=User, reasoning=&#39;low&#39;, repairs=2) &#39;Invent a fictional adult user&#39;
-assert user.age &gt;= 18 &#39;expected an adult&#39;
-success user
-```
+<span class="hljs-code">```</span>
+
+<span class="hljs-quote">&gt; Write a one-line greeting for @name and return it with @success</span>
 </code></pre></figure>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-11">npx spl-lang user.md --model gpt-6-luna
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-3">spl greet.md --arg Ada
 </code></pre></figure>
-<p><strong>Literal braces in prompts</strong></p>
-<p>Every non-raw string interpolates <code>{expr}</code>. For literal braces, double them
-(<code>{{ }}</code>), escape them (<code>\{ \}</code>), or use a raw string such as <code>r&#39;{&quot;a&quot;: 1}&#39;</code>.</p>
-<h2 id="exit-codes">Exit codes<a class="heading-anchor" href="#exit-codes" aria-label="Link to Exit codes">#</a></h2>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Exit codes reference table"><table>
-<thead>
-<tr>
-<th scope="col">Code</th>
-<th scope="col">Meaning</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>0</code></td>
-<td>The script finished: it reached <code>success</code>, a top-level <code>return</code> or the end.</td>
-</tr>
-<tr>
-<td><code>1</code></td>
-<td>Uncaught failure; the failure payload is printed to stdout.</td>
-</tr>
-<tr>
-<td><code>2</code></td>
-<td>Syntax error or command-line usage error.</td>
-</tr>
-<tr>
-<td><code>3</code></td>
-<td>A checkpoint run is waiting for noninteractive human input.</td>
-</tr>
-<tr>
-<td><code>70</code></td>
-<td>Internal interpreter error.</td>
-</tr>
-</tbody></table>
-</div>
-<span id="record-replay" class="anchor-alias" aria-hidden="true"></span><h2 id="replay-generation-offline">Replay generation offline<a class="heading-anchor" href="#replay-generation-offline" aria-label="Link to Replay generation offline">#</a></h2>
-<p>For human review, use a <a href="hitl.html">resumable run</a> instead of
-ordinary replay: <code>human &#39;question&#39;</code> emits JSON and exits <code>3</code>, then a later
-<code>--resume ... --answer-for ... --answer ...</code> invocation continues without repeating
-completed tools or model calls.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-12" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-12">npx spl-lang user.md --trace user.jsonl
-npx spl-lang user.md --replay user.jsonl --silent
+<h2 id="document-structure">Document structure<a class="heading-anchor" href="#document-structure" aria-label="Link to Document structure">#</a></h2>
+<ul>
+<li><strong>Frontmatter</strong> must declare <code>extension: semantic-prompt-language</code> and <code>version: 1</code>.
+Optional <code>model</code> sets the default model; optional <code>preamble</code> is added to every model request.
+Unknown fields are errors.</li>
+<li><strong><code>spl</code> fences</strong> are complete SPL units; a block or statement cannot span two fences.</li>
+<li><strong>Blockquotes</strong> are natural-language steps; see <a href="llm-commands.html#blockquotes">Natural language &amp; models</a>.</li>
+<li><strong>Everything else</strong> (headings, prose, other code fences) is commentary.</li>
+</ul>
+<p>Blocks run in document order in one shared scope. <code>success</code>, <code>fail</code> and a top-level <code>return</code>
+end the whole document.</p>
+<h2 id="the-iteration-loop">The iteration loop<a class="heading-anchor" href="#the-iteration-loop" aria-label="Link to The iteration loop">#</a></h2>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-4">spl flow.md --check               <span class="hljs-comment"># frontmatter and syntax, no model</span>
+spl flow.md --trace run.jsonl     <span class="hljs-comment"># live run that records every model call</span>
+spl flow.md --replay run.jsonl    <span class="hljs-comment"># rerun code and guards with the recorded answers</span>
 </code></pre></figure>
-<p>Replay needs no model credentials. Requests must match exactly and in order.
-Workflow replay returns recorded generation and agent results without starting
-Copilot or MCP. Explicit script tools and stores still execute normally; agent-owned
-actions are not repeated. Traces contain prompts and raw responses; protect them as
-sensitive data. Legacy <code>--record</code> files retain generation-only replay restrictions.
-See <a href="cli.html#workflow-traces-and-replay">trace/replay</a>.</p>
-<span id="migration" class="anchor-alias" aria-hidden="true"></span><h2 id="breaking-changes-in-03">Breaking changes in 0.3<a class="heading-anchor" href="#breaking-changes-in-03" aria-label="Link to Breaking changes in 0.3">#</a></h2>
-<p><strong>Current command syntax:</strong> replace <code>?{fmt=&#39;integer&#39;} &#39;prompt&#39;</code> with
-<code>ask(fmt=&#39;integer&#39;) &#39;prompt&#39;</code>, <code>think{...}</code> / <code>agent{...}</code> with
-<code>think(...)</code> / <code>agent(...)</code>, <code>log{level=debug}(value)</code> with
-<code>log(level=debug)(value)</code>, and <code>@{model=&#39;...&#39;}</code> with <code>@(model=&#39;...&#39;)</code>.
-Blocks and dictionaries still use braces. See <a href="llm-commands.html#composable-modifiers">command modifiers</a>.</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Breaking changes in 0.3 reference table"><table>
-<thead>
-<tr>
-<th scope="col">Old</th>
-<th scope="col">New</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>read_file{path=&#39;a.txt&#39;} &#39;Return it&#39;</code></td>
-<td><code>read_file(&#39;a.txt&#39;)</code>; interpret the result with a separate generation call.</td>
-</tr>
-<tr>
-<td>Tools with missing parameters</td>
-<td>Required positional arguments, or explicit <code>agent &#39;...&#39;</code> for model-selected actions.</td>
-</tr>
-<tr>
-<td><code>instruct</code> / <code>avoid</code></td>
-<td>Use <code>enforce</code> / <code>forbid</code> for scoped prompt guidance.</td>
-</tr>
-<tr>
-<td><code>think{level=&#39;high&#39;}</code></td>
-<td><code>ask(reasoning=&#39;high&#39;)</code> or <code>think(reasoning=&#39;high&#39;)</code>.</td>
-</tr>
-<tr>
-<td><code>let x += 1</code>, <code>let d.key = 2</code></td>
-<td><code>x += 1</code>, <code>d.key = 2</code>; <code>let</code> declares or redeclares a name.</td>
-</tr>
-<tr>
-<td>Blocks share the function/script scope</td>
-<td>Each block creates a lexical child scope. Use assignment, not inner <code>let</code>, to update an enclosing declaration.</td>
-</tr>
-<tr>
-<td>Modifier values checked by parsing</td>
-<td>Values are expressions checked at runtime; unknown or duplicate names remain syntax errors.</td>
-</tr>
-</tbody></table>
-</div>
-<span id="repo-tour" class="anchor-alias" aria-hidden="true"></span><h2 id="repository-tour">Repository tour<a class="heading-anchor" href="#repository-tour" aria-label="Link to Repository tour">#</a></h2>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Repository tour reference table"><table>
-<thead>
-<tr>
-<th scope="col">Path</th>
-<th scope="col">Contents</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/LANG-PRD.md">LANG-PRD.md</a></td>
-<td>Product requirements and language specification.</td>
-</tr>
-<tr>
-<td><a href="https://github.com/dgawlik/semantic-prompt-language/tree/HEAD/lang">lang/</a></td>
-<td>The interpreter: <code>src/</code>, <code>tests/</code> and <code>examples/</code>. The canonical grammar is in <a href="grammar.html">Grammar</a>.</td>
-</tr>
-<tr>
-<td><a href="https://github.com/dgawlik/semantic-prompt-language/tree/HEAD/vscode">vscode/</a></td>
-<td>VS Code extension: language server, TextMate grammar, snippets and tests.</td>
-</tr>
-<tr>
-<td><a href="index.html">docs/</a></td>
-<td>The HTML documentation site.</td>
-</tr>
-<tr>
-<td><a href="index.html">docs-template/</a></td>
-<td>Markdown documentation, starting with the introduction.</td>
-</tr>
-</tbody></table>
-</div>
-<span id="tests" class="anchor-alias" aria-hidden="true"></span><h2 id="run-the-tests">Run the tests<a class="heading-anchor" href="#run-the-tests" aria-label="Link to Run the tests">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">sh</span><span class="code-language">sh</span><button type="button" class="copy-button" data-copy="code-13" aria-label="Copy sh code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="sh code example"><code class="language-sh" id="code-13"><span class="hljs-built_in">cd</span> lang
+<p>Replay needs the same model requests in the same order. After changing a prompt, record a new
+trace. Explicit tool calls still run during replay; see <a href="cli.html#traces-and-replay">traces and replay</a>.</p>
+<h2 id="vs-code-extension">VS Code extension<a class="heading-anchor" href="#vs-code-extension" aria-label="Link to VS Code extension">#</a></h2>
+<p>The extension in <code>vscode/</code> adds parser-backed diagnostics, completions, hover, go to definition,
+document symbols, highlighting for <code>spl</code> fences and <code>@name</code> markers, and Markdown preview
+highlighting. Type <code>splworkflow</code> for a new document.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-5"><span class="hljs-built_in">cd</span> vscode
+npm install
+npm run package
+code --install-extension spl-lang-vscode-1.0.0.vsix
+</code></pre></figure>
+<h2 id="run-the-tests">Run the tests<a class="heading-anchor" href="#run-the-tests" aria-label="Link to Run the tests">#</a></h2>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-6"><span class="hljs-built_in">cd</span> lang
 npm <span class="hljs-built_in">test</span>
 </code></pre></figure>
-<p>The default suite builds and runs offline, without model calls. It checks example
-syntax and documentation snippets.</p>
-<p>For authenticated live checks, explicitly set <code>SPL_LIVE_TESTS=1</code>. In PowerShell,
-run <code>$env:SPL_LIVE_TESTS=&#39;1&#39;; npm test</code>, then remove the environment variable
-with <code>Remove-Item Env:SPL_LIVE_TESTS</code>.</p>
+<p>Tests are offline. To include authenticated live tests in PowerShell, run
+<code>$env:SPL_LIVE_TESTS=&#39;1&#39;; npm test</code>, then remove the variable.</p>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Getting-started.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
-    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="index.html"><span>Previous</span><strong>Introduction</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="language.html"><span>Next</span><strong>Language basics</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="index.html"><span>Previous</span><strong>Introduction</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="language.html"><span>Next</span><strong>Language</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#requirements">Requirements</a></li><li class="toc-level-2"><a href="#quick-test">Quick test</a></li><li class="toc-level-2"><a href="#a-short-iteration-loop">A short iteration loop</a></li><li class="toc-level-2"><a href="#install--build">Install &amp; build</a></li><li class="toc-level-2"><a href="#your-first-run">Your first run</a></li><li class="toc-level-2"><a href="#write-a-script">Write a script</a></li><li class="toc-level-2"><a href="#exit-codes">Exit codes</a></li><li class="toc-level-2"><a href="#replay-generation-offline">Replay generation offline</a></li><li class="toc-level-2"><a href="#breaking-changes-in-03">Breaking changes in 0.3</a></li><li class="toc-level-2"><a href="#repository-tour">Repository tour</a></li><li class="toc-level-2"><a href="#run-the-tests">Run the tests</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#install">Install</a></li><li class="toc-level-2"><a href="#write-a-workflow">Write a workflow</a></li><li class="toc-level-2"><a href="#document-structure">Document structure</a></li><li class="toc-level-2"><a href="#the-iteration-loop">The iteration loop</a></li><li class="toc-level-2"><a href="#vs-code-extension">VS Code extension</a></li><li class="toc-level-2"><a href="#run-the-tests">Run the tests</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

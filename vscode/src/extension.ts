@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind } from 'vscode-languageclient/node';
+import { extendMarkdownIt } from './markdownPreview';
 
 let client: LanguageClient | undefined;
 
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export async function activate(context: vscode.ExtensionContext): Promise<{ extendMarkdownIt: typeof extendMarkdownIt }> {
     const outputChannel = vscode.window.createOutputChannel('SPL Language Server');
     context.subscriptions.push(outputChannel);
     client = new LanguageClient(
@@ -25,6 +26,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void vscode.window.showErrorMessage('SPL language server failed to start. See the SPL Language Server output.');
         throw error;
     }
+    return { extendMarkdownIt };
 }
 
 export async function deactivate(): Promise<void> {

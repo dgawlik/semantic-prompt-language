@@ -1,28 +1,31 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
+model: 'gpt-6-luna'
 ---
 
+# Extract an invoice into accounting-ready JSON
+
+Turns a pasted or OCR'd invoice into structured data. The schema checks the shape;
+ordinary arithmetic checks the numbers, because a model can produce valid JSON with wrong totals.
+
+    spl examples/extract-invoice.md --arg ./examples/data/invoice.txt
+
 ```spl
-# Extract structured data from messy text and cross-check it with plain arithmetic.
-# Schemas validate shape; ordinary assertions validate the business rules.
+let path = './examples/data/invoice.txt'
+if $args[0] != None {
+    path = $args[0]
+}
+let document = read_file(path)
 
-let document = '''
-ACME Industrial Supplies GmbH            Invoice No. INV-2026-0042
-Date: 2026-03-14                          Currency: EUR
-
-  3 x Hex bolt M8 (box of 100)        @ 12.50     37.50
-  2 x Safety gloves, size L           @  8.90     17.80
-  1 x Cordless drill                  @ 119.00   119.00
-
-Subtotal 174.30   VAT 19%  33.12   TOTAL DUE 207.42
-'''
-
+let Money = {'type': 'number', 'minimum': 0}
 let Invoice = {
     'type': 'object',
     'properties': {
-        'vendor': {'type': 'string'}, 'number': {'type': 'string'},
-        'date': {'type': 'string'}, 'currency': {'type': 'string'},
+        'vendor': {'type': 'string', 'minLength': 1},
+        'number': {'type': 'string', 'minLength': 1},
+        'date': {'type': 'string', 'pattern': '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$'},
+        'currency': {'type': 'string', 'pattern': '^[A-Z]{{3}}$'},
         'lines': {
             'type': 'array', 'minItems': 1,
             'items': {
@@ -30,29 +33,36 @@ let Invoice = {
                 'properties': {
                     'description': {'type': 'string'},
                     'quantity': {'type': 'integer', 'minimum': 1},
-                    'unit_price': {'type': 'number', 'minimum': 0},
+                    'unit_price': Money,
                 },
                 'required': ['description', 'quantity', 'unit_price'],
                 'additionalProperties': False,
             },
         },
-        'subtotal': {'type': 'number'}, 'total': {'type': 'number'},
+        'subtotal': Money, 'tax': Money, 'total': Money,
     },
-    'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'total'],
+    'required': ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'tax', 'total'],
     'additionalProperties': False,
 }
-let invoice = ask(
-    schema=Invoice,
-    reasoning='high',
-    repairs=2
-    ) 'Extract this invoice: {document}'
-    
+```
+
+> @FORBID filling in values that are not printed on the invoice
+>
+> Extract the invoice in @document. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,
+> and there is one entry per line item. @validate[Invoice] @retries[2] save to @invoice
+
+```spl
 let computed = 0
 for line in invoice.lines {
     computed += line.quantity * line.unit_price
 }
 assert abs(computed - invoice.subtotal) < 0.01 \
-    "lines add up to {round(computed, 2)} but subtotal is {invoice.subtotal}"
-assert invoice.total >= invoice.subtotal 'total is smaller than subtotal'
+    "line items add up to {round(computed, 2)} but the subtotal is {invoice.subtotal}"
+assert abs(invoice.subtotal + invoice.tax - invoice.total) < 0.01 \
+    "subtotal {invoice.subtotal} + tax {invoice.tax} does not equal total {invoice.total}"
+
+restrict './out/invoices' {
+    write_file('./out/invoices/{invoice.number}.json', json_stringify(invoice, 2))
+}
 success invoice
 ```

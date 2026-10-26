@@ -1,15 +1,17 @@
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
+model: 'gpt-6-luna'
 ---
 
-```spl
-# A rolling journal that remembers previous runs through the variable store:
-#
-#   spl examples/journal.md --store journal.json
-#
-# Top-level variables are saved on exit and reloaded on the next run, so state survives between runs.
+# Rolling journal
 
+Remembers earlier runs through the variable store: top-level variables are saved on exit
+and loaded again on the next run.
+
+    spl examples/journal.md --store journal.json
+
+```spl
 def stored_runs() {
     try { return runs } except first_run { return 0 }
 }
@@ -18,20 +20,22 @@ def stored_history() {
 }
 let runs = stored_runs() + 1
 let history = stored_history()
-
 let notes = read_file('./examples/data/notes.txt')
-let todays = ask(len='sentence') 'Summarize these notes: {notes}'
-history.append({'run': runs, 'summary': todays})
+```
+
+> Summarize @notes in one sentence and save it to @today
+
+```spl
+history.append({'run': runs, 'summary': today})
 if len(history) > 5 {
     history = history[1:]
 }
-
 let trend = ''
-if len(history) > 1 {
-    trend = ask(len='paragraph') '''
-Here are my last journal summaries, oldest first: {history}
-What is changing from run to run? Be concrete.'''
-}
+```
 
-success {'run': runs, 'today': todays, 'trend': trend}
+> If @history has more than one entry, describe in one paragraph what changes from run to run
+> and save it to @trend. Otherwise leave @trend unchanged.
+
+```spl
+success {'run': runs, 'today': today, 'trend': trend}
 ```

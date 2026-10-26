@@ -2,8 +2,8 @@
 
 SPL is a small Python-like language for AI workflows. Braces delimit blocks; statements
 end at newlines or semicolons. The [grammar](docs-template/Grammar.md) specifies the syntax.
-Older tool-command and brace-modifier syntax is not accepted; see the
-[command syntax](README.md#commands-and-modifiers) and [migration guide](README.md#breaking-changes-in-03).
+Older tool-command and brace-modifier syntax is not accepted; see
+[modifiers](docs-template/LLM-commands.md#modifiers).
 
 ## Goals and boundaries
 
