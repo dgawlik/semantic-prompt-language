@@ -26,13 +26,13 @@ let Card = {
     'required': ['term', 'definition'],
     'additionalProperties': False,
 }
-let cards = []
+let cards = {}
 for topic in topics {
-    cards.append(ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}')
+    cards[topic] = ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}'
 }
 ```
 
-> Pick the topic from @topics whose card in @cards a beginner would find hardest. Save it to @hardest
+> Pick the key of @cards whose card a beginner would find hardest. Save that exact key to @hardest
 
 ```spl
 assert hardest in topics "unexpected topic '{hardest}'"
