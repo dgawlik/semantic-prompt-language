@@ -6,7 +6,8 @@ model: 'gpt-6-luna'
 
 # Basics
 
-SPL fences run exact code. Blockquotes are natural-language steps. Both share one scope.
+SPL fences run exact code. Blockquotes run agent commands with tools, not generated SPL.
+Both share one scope; agents load and save variables and can invoke existing functions.
 
 ```spl
 def fib(n) {
@@ -17,10 +18,12 @@ def fib(n) {
 }
 ```
 
+> Invoke @fib with 10 as argument -> @fib10
+
 > Ask the model for the 10th Fibonacci number as an integer, without using @fib. Save it to @modelFib10
 
 ```spl
-assert fib(10) == modelFib10 'Oops, the model got it wrong'
+assert fib10 == modelFib10 'Oops, the model got it wrong'
 ```
 
 > @joke = a joke about programmers as an object with "setup" and "punchline"
@@ -32,5 +35,5 @@ assert fib(10) == modelFib10 'Oops, the model got it wrong'
 > Paragraph of funny story about a pet animal -> @animal
 
 ```spl
-success {'fib': fib(10), 'modelFib': modelFib10, 'joke': joke, 'animal': animal}
+success {'fib': fib10, 'modelFib': modelFib10, 'joke': joke, 'animal': animal}
 ```

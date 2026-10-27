@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RUNTIME_PREAMBLE } from '../src/preamble.js';
 
@@ -25,11 +26,11 @@ function markdown(script: string): string {
     return `---\nextension: semantic-prompt-language\nversion: 1\n---\n\n\`\`\`spl\n${script}\n\`\`\`\n`;
 }
 
-function run(args: string[]) {
+function run(args: string[], env: NodeJS.ProcessEnv = {}) {
     const r = spawnSync(process.execPath, [CLI, ...args], {
         encoding: 'utf8',
         cwd: dir,
-        env: { ...process.env, SPL_HOME: path.join(dir, 'spl-home') },
+        env: { ...process.env, ...env, SPL_HOME: path.join(dir, 'spl-home') },
     });
     return { code: r.status, out: r.stdout, err: r.stderr };
 }
@@ -235,6 +236,34 @@ describe('cli', () => {
 
     it('prints non-string results as JSON', () => {
         expect(JSON.parse(spl(`success {'a': [1, None, True]}`).out)).toEqual({ a: [1, null, true] });
+    });
+
+    it('pretty-prints and colors JSON logs on stderr without changing stdout', () => {
+        const file = path.join(dir, 'pretty.md');
+        fs.writeFileSync(file, markdown("let review = {'findings': [{'severity': 'high', 'line': 12}]}\nlog('review:', review)\nsuccess review"));
+        const plain = run([file], { FORCE_COLOR: undefined, NO_COLOR: undefined });
+        const colored = run([file], { FORCE_COLOR: '1', NO_COLOR: undefined });
+        expect(plain.code).toBe(0);
+        expect(colored.code).toBe(0);
+        expect(colored.out).toBe(plain.out);
+        expect(JSON.parse(colored.out)).toEqual({ findings: [{ severity: 'high', line: 12 }] });
+        expect(colored.out).not.toContain('\u001b[');
+        expect(plain.err).not.toContain('\u001b[');
+        expect(colored.err).toContain('\u001b[36m"findings"\u001b[0m');
+        expect(stripVTControlCharacters(colored.err)).toBe(plain.err);
+        expect(plain.err).toContain('[info] log: review:\n[info]   {\n[info]     "findings": [');
+        expect(plain.err.trimEnd().split('\n').every(line => /^\[(info|deterministic)\] /.test(line))).toBe(true);
+        expect(run([file, '--silent'], { FORCE_COLOR: '1', NO_COLOR: undefined }).err).toBe('');
+    });
+
+    it('uses the same log format for CLI usage and syntax diagnostics', () => {
+        const usage = run(['--unknown-option'], { NO_COLOR: '1', FORCE_COLOR: undefined });
+        expect(usage.code).toBe(2);
+        expect(usage.out).toBe('');
+        expect(usage.err.trimEnd().split('\n').every(line => line.startsWith('[error] '))).toBe(true);
+        const syntax = spl('let value =');
+        expect(syntax.code).toBe(2);
+        expect(syntax.err).toContain('[error] ');
     });
 
     it('--silent suppresses logs', () => {

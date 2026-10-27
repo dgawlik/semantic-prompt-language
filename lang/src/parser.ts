@@ -16,6 +16,10 @@ const KEYWORDS = new Set([
     'True', 'False', 'None',
 ]);
 
+export function isReservedName(name: string): boolean {
+    return KEYWORDS.has(name);
+}
+
 export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'show', 'schema', 'repairs', 'model'] as const;
 export const LOG_MODIFIER_NAMES = ['level'] as const;
 
@@ -117,7 +121,7 @@ class Parser {
         if (t.type !== 'name') this.fail(`expected ${what} but found ${this.describe(t)}`);
         const name = (t as { value: string }).value;
         if (name.startsWith('$')) this.fail(`special variable '${name}' cannot be used as ${what}`);
-        if (KEYWORDS.has(name)) this.fail(`'${name}' is a reserved word and cannot be used as ${what}`);
+        if (isReservedName(name)) this.fail(`'${name}' is a reserved word and cannot be used as ${what}`);
         this.next();
         return name;
     }

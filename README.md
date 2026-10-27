@@ -1,7 +1,7 @@
 # SPL: Semantic Prompt Language
 
 Executable Markdown for AI workflows. `spl` fences hold exact, Python-like code; blockquotes hold
-natural-language steps that the model turns into code. Both share variables, tools and guards.
+natural-language agent commands. Both share variables, tools and guards; blockquotes are never compiled into SPL.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
 [Examples](docs-template/Examples.md) | [Grammar](docs-template/Grammar.md) |
@@ -34,7 +34,7 @@ success data
 * **Short loops.** One file, run directly. `--check` needs no model; `--trace`/`--replay` rerun
   code and guards against recorded answers.
 * **Exact code where it matters.** Control flow and I/O never call a model. `ask`/`think` generate
-  values without tools; only `agent` can act.
+  values without tools; `agent` expressions and blockquotes can act.
 * **Guards you can see.** `fmt`, `schema` and `assert` check data; `restrict` limits files, network,
   commands and MCP tools. Prompt guidance (`enforce`, `forbid`) is kept separate from validation.
 

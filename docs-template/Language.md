@@ -88,6 +88,9 @@ if target == None {
 
 `log(value, ...)` writes to stderr at info level. `log(level=debug)(value)` selects `error`, `info` or
 `debug`. Debug output appears only with `--log-level debug`; `--silent` hides all logs.
+Objects and lists are logged as indented JSON, including when mixed with text arguments.
+Every continuation line carries the same log tag. Terminal output colors JSON tokens;
+redirected logs are plain text by default. See [console formatting](CLI.md#output-and-exit-codes).
 
 ## Built-in functions
 

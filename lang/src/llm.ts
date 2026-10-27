@@ -6,6 +6,17 @@ import { fromJson, isDict, isList, type Value } from './values.js';
 
 export type ReasoningLevel = 'low' | 'medium' | 'high';
 
+export interface RuntimeTool {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+}
+
+export interface RuntimeAction {
+    name: string;
+    arguments: Record<string, unknown>;
+}
+
 export interface Constraint {
     kind: 'enforce' | 'forbid';
     text: string;
@@ -20,10 +31,9 @@ export interface LlmRequest {
     showReasoning: boolean;
     restrictions: Restrictions;
     tools: ToolHost;
-    /** Submit a program for execution in the document's shared scope. */
+    /** Execute a blockquote as an agent command, yielding runtime actions between turns. */
     naturalLanguage?: boolean;
-    /** `@name` markers of a natural-language blockquote; submitted programs must keep these names visible. */
-    markers?: readonly string[];
+    runtimeTools?: readonly RuntimeTool[];
 }
 
 export interface LlmResponse {
@@ -31,12 +41,16 @@ export interface LlmResponse {
     reasoning?: string;
     /** Effective model and parameters, recorded in the logs. */
     effective: Record<string, unknown>;
-    spl?: string;
+    action?: RuntimeAction;
+    /** MCP results retained across the blockquote's runtime-action turns. */
+    toolResults?: string[];
 }
 
 export interface LlmBackend {
     readonly mode?: 'record' | 'replay' | 'trace' | 'workflow-replay';
     call(req: LlmRequest): Promise<LlmResponse>;
+    /** Record/replay external effects of blockquote actions, including those inside SPL functions. */
+    invokeTool?(action: RuntimeAction, perform: () => Promise<Value>): Promise<Value>;
     close(): Promise<void>;
 }
 

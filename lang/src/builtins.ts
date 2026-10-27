@@ -18,7 +18,7 @@ import {
 } from './values.js';
 
 export interface BuiltinContext {
-    log: (message: string) => void;
+    log: (values: Value[]) => void;
 }
 
 function arity(name: string, args: Value[], min: number, max = min): void {
@@ -197,7 +197,7 @@ export function makeBuiltins(ctx: BuiltinContext): Map<string, BuiltinFunction> 
         return JSON.stringify(toJson(a[0]), null, indent);
     });
     def('log', (a) => {
-        ctx.log(a.map(str).join(' '));
+        ctx.log(a);
         return null;
     });
     return fns;

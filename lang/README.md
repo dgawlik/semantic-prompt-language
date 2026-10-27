@@ -29,6 +29,10 @@ The result goes to stdout and logs to stderr. Exit codes: `0` success, `1` scrip
 `2` syntax or usage error, `3` waiting for human input, `70` internal error.
 See [CLI & runtime](../docs-template/CLI.md).
 
+Console logs use consistent tags and indented, syntax-colored JSON. Color is automatic on stderr
+terminals; `NO_COLOR` disables it and `FORCE_COLOR=1` enables it for redirected logs.
+stdout results and trace/checkpoint files remain plain data.
+
 ## Language in brief
 
 ```spl
@@ -44,7 +48,9 @@ success rating
 
 * Exact tools `read_file`, `write_file`, `web_fetch`, `web_search` and `shell` never call a model.
 * `ask` and `think` generate values without tools; `agent` can act, within `restrict` scopes.
-* Blockquotes are translated into SPL by the model and run in the same scope.
+* Blockquotes run as agent commands, not generated SPL. Their tools can call existing functions,
+  load/save shared variables, read environment values, request checkpointed human input, and use
+  runtime tools and configured MCP servers. Explicit `agent` expressions keep their existing tool set.
 * `fmt`, `schema`, `repairs` and `assert` check output; `enforce`/`forbid` only guide prompts.
 
 See [Language](../docs-template/Language.md), [Natural language & models](../docs-template/LLM-commands.md)

@@ -27,6 +27,7 @@ Usage: spl <workflow.md> [options]
 Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
                           All levels include LLM transcripts and [deterministic] statement traces.
+                          JSON is pretty-printed; terminal colors honor NO_COLOR / FORCE_COLOR.
   --silent                suppress all logs; only the result is printed
   --model <id>            model override (takes precedence over frontmatter)
   --arg <value>           script argument exposed in $args (repeatable; also --arg=value)
@@ -61,7 +62,7 @@ function version(): string {
 }
 
 function usageError(msg: string): never {
-    process.stderr.write(`spl: ${msg}\nTry 'spl --help'.\n`);
+    new Logger('error').error(`spl: ${msg}\nTry 'spl --help'.`);
     process.exit(2);
 }
 
@@ -133,7 +134,7 @@ async function checkpointCommand(
         return result.status === 'success' ? 0 : 1;
     } catch (error) {
         if (!(error instanceof CheckpointError) || error.kind !== 'usage') throw error;
-        process.stderr.write(`spl: ${error.message}\n`);
+        new Logger('error').error(`spl: ${error.message}`);
         return 2;
     } finally {
         checkpoint?.close();
@@ -147,7 +148,7 @@ async function loginCommand(): Promise<number> {
         return 0;
     } catch (e) {
         if (!(e instanceof AuthError)) throw e;
-        process.stderr.write(`spl: login failed: ${e.message}\n`);
+        new Logger('error').error(`spl: login failed: ${e.message}`);
         return 1;
     }
 }
@@ -158,7 +159,7 @@ function logoutCommand(): number {
         return 0;
     } catch (e) {
         if (!(e instanceof AuthError)) throw e;
-        process.stderr.write(`spl: ${e.message}\n`);
+        new Logger('error').error(`spl: ${e.message}`);
         return 1;
     }
 }
@@ -273,7 +274,7 @@ async function main(): Promise<number> {
         program = parseMarkdown(source);
     } catch (e) {
         if (e instanceof SplSyntaxError) {
-            process.stderr.write(e.format(file) + '\n');
+            new Logger('error').error(e.format(file));
             return 2;
         }
         throw e;
@@ -336,7 +337,7 @@ async function main(): Promise<number> {
 main().then(
     (code) => process.exit(code),
     (e) => {
-        process.stderr.write(`spl: internal error: ${(e as Error).stack ?? e}\n`);
+        new Logger('error').error(`spl: internal error: ${(e as Error).stack ?? e}`);
         process.exit(70);
     },
 );

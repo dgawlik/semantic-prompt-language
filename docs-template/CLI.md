@@ -35,6 +35,33 @@ stdout gets the `success` value: strings as-is, everything else as JSON. An unca
 its [payload](Safety.md#failure-payload) instead. stderr gets logs, including every model prompt and
 response and a trace of executed statements. Use `--silent` when logs could expose sensitive data.
 
+Every log line uses `[tag] message`, including continuation lines and CLI diagnostics.
+Multiline payloads are indented under their header. JSON objects, arrays and JSON model responses
+use two-space indentation; JSON keys, strings, numbers, booleans and `null` have distinct colors.
+Script source traces are displayed as written rather than reformatted as JSON.
+
+Colors are enabled automatically when stderr is a terminal, and disabled for redirected output
+or `TERM=dumb`. Set `NO_COLOR=1` to disable color, or `FORCE_COLOR=1` to enable it when redirecting;
+`FORCE_COLOR=0` disables color, and `NO_COLOR` takes precedence. stdout results, checkpoint
+envelopes, trace journals and variable stores remain plain, machine-readable data.
+`--silent` suppresses execution logs; usage, syntax and checkpoint-usage diagnostics still appear
+on stderr so command-line errors are not hidden.
+
+For example, `log('review:', review)` produces:
+
+```text
+[info] log: review:
+[info]   {
+[info]     "findings": [],
+[info]     "count": 0
+[info]   }
+```
+
+Embedded callers can pass structured data directly with `logger.info('review:', review)`.
+Custom logger sinks default to plain text; `new Logger('info', sink, { color: true })`
+explicitly enables styling. Non-JSON values such as errors, bigints and circular objects use
+Node's inspect format instead of losing error details or failing JSON serialization.
+
 | Code | Meaning |
 | --- | --- |
 | `0` | Success |
@@ -56,7 +83,8 @@ so you can iterate on code and guards for free. Requests must match exactly and 
 kind, model, reasoning); a mismatch, missing or unused entry fails.
 
 Replay is not a dry run: explicit `read_file`, `write_file`, `shell` and web calls, and stores, still run.
-Agent actions are not repeated, and their side effects are not recreated.
+Agent actions are not repeated, and their side effects are not recreated. Blockquote decisions
+rebuild shared bindings and run existing functions against recorded external-tool results.
 
 ```json
 {"format":"spl-trace","version":1}
@@ -64,7 +92,8 @@ Agent actions are not repeated, and their side effects are not recreated.
 ```
 
 The older `--record` mode writes generation-only recordings; replaying them blocks writes, shell,
-network, agents and stores. Traces and recordings contain full prompts and answers, so keep them private.
+network, agents (including blockquotes) and stores. Traces and recordings contain full prompts,
+answers and requested environment values, so keep them private.
 
 ## Variable stores
 
