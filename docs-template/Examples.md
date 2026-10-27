@@ -18,9 +18,7 @@ folder, for example `spl examples/hi.md`. Each example's header shows its argume
 | Example | Shows |
 | --- | --- |
 | [code-review.md](../lang/examples/code-review.md) | A review that fails CI on high-severity findings |
-| [commit-message.md](../lang/examples/commit-message.md) | Conventional commit from staged changes, format checks and human approval |
 | [release-notes.md](../lang/examples/release-notes.md) | User-facing notes from `git log` prepended to `CHANGELOG.md` |
-| [fix-failing-tests.md](../lang/examples/fix-failing-tests.md) | A bounded agent repair loop restricted to the project |
 | [triage-issues.md](../lang/examples/triage-issues.md) | Labeling GitHub issues with `gh` after human approval |
 
 ## Data and documents
