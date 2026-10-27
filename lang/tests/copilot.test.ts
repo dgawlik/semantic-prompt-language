@@ -12,10 +12,13 @@ const sdk = vi.hoisted(() => ({
     disconnect: vi.fn(async () => {}),
     stop: vi.fn(async () => {}),
     abort: vi.fn(async () => {}),
+    continueTurn: vi.fn(async () => {}),
     permission: undefined as PermissionRequest | undefined,
     calls: [] as RuntimeAction[],
     results: [] as unknown[],
+    toolErrors: [] as unknown[],
     events: [] as { type: string; data: object }[],
+    eventsAfterTools: [] as { type: string; data: object }[],
     prompts: [] as string[],
     reply: { data: { content: 'MCP result' } } as { data?: { content?: string } } | undefined,
 }));
@@ -29,6 +32,7 @@ vi.mock('@github/copilot-sdk', () => ({
         async createSession(config: SessionConfig) {
             sdk.configs.push(config);
             const listeners = new Map<string, (event: { data: object }) => void>();
+            let aborted = false;
             return {
                 on(type: string, handler: (event: { data: object }) => void) { listeners.set(type, handler); },
                 async sendAndWait({ prompt }: { prompt: string }) {
@@ -38,14 +42,24 @@ vi.mock('@github/copilot-sdk', () => ({
                     for (const call of sdk.calls) {
                         const tool = config.tools?.find(tool => tool.name === call.name);
                         if (!tool) throw new Error(`${call.name} not registered`);
-                        sdk.results.push(await tool.handler(call.arguments, {
-                            sessionId: 'test', toolCallId: 'test', toolName: call.name, arguments: call.arguments,
-                        }));
+                        try {
+                            sdk.results.push(await tool.handler(call.arguments, {
+                                sessionId: 'test', toolCallId: 'test', toolName: call.name, arguments: call.arguments,
+                            }));
+                        } catch (error) {
+                            sdk.toolErrors.push(error);
+                        }
                     }
+                    if (aborted) return undefined;
+                    for (const event of sdk.eventsAfterTools) listeners.get(event.type)?.(event);
+                    await sdk.continueTurn();
                     return sdk.reply;
                 },
                 disconnect: sdk.disconnect,
-                abort: sdk.abort,
+                async abort() {
+                    await sdk.abort();
+                    aborted = true;
+                },
             };
         }
     },
@@ -56,10 +70,14 @@ beforeEach(() => {
     sdk.permission = undefined;
     sdk.calls = [];
     sdk.results = [];
+    sdk.toolErrors = [];
     sdk.events = [];
+    sdk.eventsAfterTools = [];
     sdk.prompts.length = 0;
     sdk.reply = { data: { content: 'MCP result' } };
     vi.clearAllMocks();
+    sdk.abort.mockReset().mockResolvedValue(undefined);
+    sdk.continueTurn.mockReset().mockResolvedValue(undefined);
 });
 
 const command = async (prompt: string) => {
@@ -87,6 +105,59 @@ it('provides blockquote runtime tools instead of an SPL compiler and queues one 
     expect(sdk.results[0]).toContain('not yet executed');
     expect(sdk.results[1]).toMatchObject({ resultType: 'failure' });
     expect(sdk.prompts).toHaveLength(1);
+});
+
+it('hands off a queued action without waiting for post-tool model generation', async () => {
+    sdk.calls = [{ name: 'save_variable', arguments: { name: 'fibPlus2', value: 57 } }];
+    sdk.continueTurn.mockImplementation(() => new Promise(() => {}));
+
+    await expect(command('Add to @fib10 2 and save to @fibPlus2')).resolves.toMatchObject({
+        action: sdk.calls[0], text: 'Runtime action queued.',
+    });
+    expect(sdk.abort).toHaveBeenCalledOnce();
+    expect(sdk.continueTurn).not.toHaveBeenCalled();
+    expect(sdk.disconnect).toHaveBeenCalledOnce();
+});
+
+it('surfaces a failed action handoff instead of reporting the queued action as successful', async () => {
+    sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
+    sdk.abort.mockRejectedValueOnce(new Error('abort failed'));
+
+    await expect(command('Save @answer')).rejects.toThrow('cannot hand off runtime action: abort failed');
+    expect(sdk.toolErrors).toHaveLength(1);
+    expect(sdk.disconnect).toHaveBeenCalledOnce();
+});
+
+it('waits for in-flight MCP results before handing off a runtime action', async () => {
+    const cwd = process.cwd();
+    const restrictions = new Restrictions(cwd);
+    sdk.events = [{
+        type: 'tool.execution_start',
+        data: { toolCallId: 'mcp-1', toolName: 'mcp:docs-search', mcpServerName: 'docs', mcpToolName: 'search', arguments: { query: 'SPL' } },
+    }];
+    sdk.eventsAfterTools = [{
+        type: 'tool.execution_complete',
+        data: { toolCallId: 'mcp-1', success: true, result: { content: 'Verified documentation' } },
+    }];
+    sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
+    const backend = new CopilotBackend({
+        cwd, timeoutMs: 1000, logger: new Logger('silent'), mcpServers: { docs: { command: 'never-start' } },
+    });
+    try {
+        const response = await backend.call({
+            kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, prompt: 'Search and save', restrictions,
+            showReasoning: false, tools: new ToolHost(restrictions, cwd),
+        });
+        expect(response.action).toEqual(sdk.calls[0]);
+        expect(response.toolResults).toHaveLength(1);
+        expect(JSON.parse(response.toolResults![0])).toMatchObject({
+            server: 'docs', tool: 'search', result: { content: 'Verified documentation' },
+        });
+        expect(sdk.abort).not.toHaveBeenCalled();
+        expect(sdk.continueTurn).toHaveBeenCalledOnce();
+    } finally {
+        await backend.close();
+    }
 });
 
 it.each([
@@ -150,6 +221,8 @@ it('registers runtime tools and configured MCP servers together for blockquotes'
 it('accepts a final blockquote answer without requiring generated SPL', async () => {
     expect(await command('Finish')).toMatchObject({ text: 'MCP result' });
     expect(sdk.prompts).toHaveLength(1);
+    expect(sdk.abort).not.toHaveBeenCalled();
+    expect(sdk.continueTurn).toHaveBeenCalledOnce();
 });
 
 it('retains actual MCP results for later runtime-action turns', async () => {

@@ -44,6 +44,9 @@ function closures. Cells run sequentially in the order you request, **not** docu
 use the current state without replaying earlier cells. Undefined dependencies are reported as
 runtime errors. A failure retains assignments already performed, as in Jupyter. Changing or
 deleting source does not undo its previous execution; rerun the cell or reset the session.
+Natural-language cells hand queued runtime actions back immediately instead of waiting for a
+post-tool model reply. When MCP tools are configured, the turn finishes normally so external
+calls can complete and their results are retained.
 Syntax errors are highlighted while editing, and runtime failures point to the responsible cell
 (including previously defined functions). Edited function definitions must be rerun before their
 old failure location can be highlighted again.

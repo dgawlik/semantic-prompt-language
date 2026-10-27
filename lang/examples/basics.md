@@ -20,6 +20,10 @@ def fib(n) {
 
 > Invoke @fib with 10 as argument -> @fib10
 
+> Add to @fib10 2 and save to @fibPlus2
+
+
+
 > Ask the model for the 10th Fibonacci number as an integer, without using @fib. Save it to @modelFib10
 
 ```spl
