@@ -1,7 +1,8 @@
 import type { AssignTarget, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
 import { callMethod, iterate, makeBuiltins } from './builtins.js';
-import { Failure, SplSyntaxError, SuccessSignal, type FailurePayload } from './errors.js';
-import { LlmError, buildPrompt, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse } from './llm.js';
+import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
+import { LlmError, buildPrompt, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
+import { AGENT_TOOLS, actionArguments } from './agent.js';
 import { compileSchema } from './schema.js';
 import type { Logger } from './logger.js';
 import { Restrictions, makeRestriction } from './restrict.js';
@@ -9,7 +10,7 @@ import { MemoryStore, type VariableStore } from './store.js';
 import { ToolHost, TOOL_SPECS } from './tools.js';
 import { CheckpointError, SuspensionSignal, type Checkpoint, type HumanRequest } from './checkpoint.js';
 import { isResponse, traceRequest } from './recording.js';
-import { parse, usesHuman } from './parser.js';
+import { usesHuman } from './parser.js';
 import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
 import {
     assertMutable,
@@ -73,6 +74,7 @@ class Interpreter {
     private constraints: Constraint[] = [];
     private restrictions: Restrictions;
     private depth = 0;
+    private naturalDepth = 0;
 
     constructor(
         private readonly program: Program,
@@ -600,10 +602,11 @@ class Interpreter {
             const res = this.opts.checkpoint
                 ? await this.opts.checkpoint.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
                 : await perform();
+            if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response; blockquotes require runtime actions, not submitted SPL');
             if (!replaying) {
                 logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
                 logger.llm(`llm response:\n${res.text}`);
-                if (res.spl !== undefined) logger.llm(`submitted SPL:\n${res.spl}`);
+                if (res.action) logger.llm(`runtime action:\n${JSON.stringify(res.action)}`);
             }
             return res;
         } catch (e) {
@@ -615,6 +618,9 @@ class Interpreter {
     }
 
     private async execNatural(text: string, line: number, env: Env): Promise<Completion> {
+        if (this.opts.backend.mode === 'record' || this.opts.backend.mode === 'replay') {
+            throw new Failure('restriction_violation', 'blockquotes are agents and cannot run in generation-only record/replay mode; use --trace');
+        }
         const bindings: Record<string, unknown> = Object.create(null);
         const visiting = new Set<Value>();
         const describe = (value: Value): unknown => {
@@ -635,38 +641,98 @@ class Interpreter {
                 bindings[name] = describe(value);
             }
         }
-        const response = await this.callLlmResponse({
-            kind: 'agent', naturalLanguage: true,
-            markers: [...new Set([...text.matchAll(/@([A-Za-z_]\w*)/g)].map((match) => match[1]))],
-            prompt: buildPrompt({
-                prompt: `${NATURAL_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings:\n${JSON.stringify(bindings)}\n\nBlockquote:\n${text}`,
-                constraints: this.constraints, restrictions: this.restrictions,
-            }),
-            model: this.model, showReasoning: false,
-            restrictions: this.restrictions, tools: new ToolHost(this.restrictions, this.cwd),
-        });
-        if (typeof response.spl !== 'string' || !response.spl.trim()) {
-            throw new Failure('llm_error', 'natural-language execution requires a non-empty submit_spl program');
-        }
-        let generated: Program;
+        const history: unknown[] = [];
+        const savedRestrictions = this.restrictions;
+        const savedConstraints = this.constraints;
+        this.naturalDepth++;
         try {
-            generated = parse(response.spl);
+            for (;;) {
+                const response = await this.callLlmResponse({
+                    kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS,
+                    prompt: buildPrompt({
+                        prompt: `${NATURAL_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings at command start:\n${JSON.stringify(bindings)}\n\nBlockquote:\n${text}\n\nCompleted turns and action results:\n${JSON.stringify(history)}`,
+                        constraints: this.constraints, restrictions: this.restrictions,
+                    }),
+                    model: this.model, reasoningEffort: 'medium', showReasoning: false,
+                    restrictions: this.restrictions, tools: new ToolHost(this.restrictions, this.cwd),
+                });
+                if (!response.action) return;
+                let result: unknown;
+                try {
+                    result = { value: describe(await this.execNaturalAction(response.action, line, env)) };
+                } catch (error) {
+                    if (!(error instanceof Failure) || error.statusCode === 'restriction_violation' ||
+                        error.statusCode === 'explicit_failure' || error.statusCode === 'llm_error') throw error;
+                    error.locate(line, this.program.lines[line - 1]?.trim() ?? '');
+                    if (!this.opts.checkpoint?.replaying) this.opts.logger.error(`blockquote tool ${response.action.name}: ${error.reason}`);
+                    result = { error: error.payload() };
+                }
+                history.push({ reply: response.text, toolResults: response.toolResults, action: response.action, result });
+            }
+        } finally {
+            this.naturalDepth--;
+            this.restrictions = savedRestrictions;
+            this.constraints = savedConstraints;
+        }
+    }
+
+    private async execNaturalAction(action: RuntimeAction, line: number, env: Env): Promise<Value> {
+        const args = actionArguments(action);
+        switch (action.name) {
+            case 'load_variable':
+                return args.name === '$args' ? this.runtimeArgs : this.lookup(String(args.name), env);
+            case 'save_variable': {
+                const name = String(args.name);
+                if ('schema' in args) compileSchema(args.schema)(args.value);
+                if (isFunction(this.bindingScope(name, env)?.vars.get(name)) || this.builtins.has(name)) {
+                    throw runtimeError(`cannot replace function '${name}' with a variable`);
+                }
+                (this.bindingScope(name, env) ?? env).vars.set(name, args.value);
+                return args.value;
+            }
+            case 'call_function': {
+                const fn = this.lookup(String(args.name), env);
+                if (!isFunction(fn)) throw runtimeError(`'${args.name}' is not callable`);
+                if (!isList(args.args)) throw runtimeError('function arguments must be a list');
+                return fn.__fn === 'user' ? this.callUser(fn, args.args) : fn.call(args.args);
+            }
+            case 'get_env':
+                this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
+                return this.externalAction(action, async () => this.getKey(this.runtimeEnv, String(args.name)));
+            case 'ask_human':
+                if (!this.opts.checkpoint) throw runtimeError('human input requires a checkpoint; use --checkpoint or --resume');
+                return this.opts.checkpoint.human(String(args.question), line);
+            case 'success':
+                throw new SuccessSignal(args.value);
+            case 'fail':
+                throw new Failure('explicit_failure', String(args.reason));
+            case 'restrict': {
+                const kind = args.kind;
+                if (kind !== 'fs' && kind !== 'exec' && kind !== 'net' && kind !== 'mcp') throw runtimeError('invalid restriction kind');
+                this.restrictions = this.restrictions.with(makeRestriction(kind, args.value, this.cwd));
+                return null;
+            }
+            case 'set_guidance': {
+                const kind = args.kind;
+                if (kind !== 'enforce' && kind !== 'forbid') throw runtimeError('invalid guidance kind');
+                this.constraints = [...this.constraints, { kind, text: String(args.text) }];
+                return null;
+            }
+            default: {
+                const tool = Object.values(TOOL_SPECS).find(spec => spec.name === action.name);
+                if (!tool) throw runtimeError(`unknown blockquote tool '${action.name}'`);
+                return this.callTool(tool.name, tool.required.map(name => args[name]));
+            }
+        }
+    }
+
+    private async externalAction(action: RuntimeAction, perform: () => Promise<Value>): Promise<Value> {
+        try {
+            return await (this.opts.backend.invokeTool ? this.opts.backend.invokeTool(action, perform) : perform());
         } catch (error) {
-            if (!(error instanceof SplSyntaxError)) throw error;
-            throw new Failure('llm_error', `invalid submitted SPL: ${error.message}`);
+            if (error instanceof LlmError) throw new Failure('llm_error', error.message);
+            throw error;
         }
-        if (generated.directives.model !== undefined) throw runtimeError('submitted SPL must use model modifiers, not a model header');
-        if (!this.opts.checkpoint && usesHuman(generated)) {
-            throw runtimeError('human input requires a checkpoint; use --checkpoint or --resume');
-        }
-        // Generated code has no document coordinates; attribute its statements to the blockquote.
-        const locate = (value: unknown): void => {
-            if (!value || typeof value !== 'object') return;
-            if ('line' in value) value.line = line;
-            for (const child of Object.values(value)) locate(child);
-        };
-        locate(generated.body);
-        return this.execBlock(generated.body, env);
     }
 
     private async callTool(tool: ToolName, args: Value[]): Promise<Value> {
@@ -677,7 +743,10 @@ class Interpreter {
             if (typeof args[i] !== 'string') throw runtimeError(`${tool}(): ${name} must be a string`);
             params[name] = args[i];
         });
-        const perform = () => new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay', true).invoke(tool, params);
+        const invoke = async () => new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay', true).invoke(tool, params);
+        const perform = () => this.naturalDepth
+            ? this.externalAction({ name: tool, arguments: { ...params, restrictions: this.restrictions.list } }, invoke)
+            : invoke();
         return this.opts.checkpoint
             ? this.opts.checkpoint.effect({ kind: 'tool', tool, params, restrictions: this.restrictions.list }, perform, (value): value is string => typeof value === 'string')
             : perform();

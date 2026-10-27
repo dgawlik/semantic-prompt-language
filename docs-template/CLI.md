@@ -56,7 +56,8 @@ so you can iterate on code and guards for free. Requests must match exactly and 
 kind, model, reasoning); a mismatch, missing or unused entry fails.
 
 Replay is not a dry run: explicit `read_file`, `write_file`, `shell` and web calls, and stores, still run.
-Agent actions are not repeated, and their side effects are not recreated.
+Agent actions are not repeated, and their side effects are not recreated. Blockquote decisions
+rebuild shared bindings and run existing functions against recorded external-tool results.
 
 ```json
 {"format":"spl-trace","version":1}
@@ -64,7 +65,8 @@ Agent actions are not repeated, and their side effects are not recreated.
 ```
 
 The older `--record` mode writes generation-only recordings; replaying them blocks writes, shell,
-network, agents and stores. Traces and recordings contain full prompts and answers, so keep them private.
+network, agents (including blockquotes) and stores. Traces and recordings contain full prompts,
+answers and requested environment values, so keep them private.
 
 ## Variable stores
 

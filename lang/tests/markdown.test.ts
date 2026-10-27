@@ -1,10 +1,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Checkpoint } from '../src/checkpoint.js';
 import { run } from '../src/interpreter.js';
-import type { LlmBackend, LlmRequest, LlmResponse } from '../src/llm.js';
+import type { LlmBackend, LlmRequest, LlmResponse, RuntimeAction } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown } from '../src/markdown.js';
 import { RUNTIME_PREAMBLE } from '../src/preamble.js';
@@ -22,6 +22,7 @@ const directory = () => {
     return dir;
 };
 afterEach(() => {
+    vi.unstubAllEnvs();
     for (const dir of temporary.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 const backend = (call: (request: LlmRequest) => Promise<LlmResponse>): LlmBackend => ({ call, async close() {} });
@@ -103,11 +104,12 @@ describe('shared natural-language execution', () => {
     it('describes cyclic collections and nested functions without changing shared values', async () => {
         const source = document(fence("let cyclic = []\ncyclic.append(cyclic)\ndef double(x) { return x * 2 }\nlet helpers = {'double': double}") +
             '\n\n> Return the doubled length of @cyclic.');
+        let turn = 0;
         const result = await run(parseMarkdown(source), {
             logger, backend: backend(async req => {
                 expect(req.prompt).toContain('<circular reference>');
                 expect(req.prompt).toContain('"helpers":{"double":"def double(x)"}');
-                return { text: 'Submitted', effective: {}, spl: "success helpers['double'](len(cyclic))" };
+                return { text: 'Done', effective: {}, ...(turn++ === 0 ? { action: action('success', { value: 2 }) } : {}) };
             }),
         });
         expect(result).toMatchObject({ status: 'success', value: 2 });
@@ -128,47 +130,59 @@ ${fence("fail 'must not execute'")}`, "model: document-model\npreamble: Be conci
             logger, model: 'cli-model',
             backend: backend(async (req) => {
                 requests.push(req);
-                return { text: 'Submitted', effective: {}, spl: requests.length === 1 ? 'count = double(count)' : 'success count' };
+                const actions = [
+                    action('call_function', { name: 'double', args: [2] }),
+                    action('save_variable', { name: 'count', value: 4 }),
+                    undefined,
+                    action('load_variable', { name: 'count' }),
+                    action('success', { value: 4 }),
+                ];
+                return { text: 'Done', effective: {}, action: actions[requests.length - 1] };
             }),
         });
         expect(result).toEqual({ status: 'success', value: 4, hasValue: true });
-        expect(requests).toHaveLength(2);
+        expect(requests).toHaveLength(5);
         expect(requests[0].naturalLanguage).toBe(true);
         expect(requests[0].model).toBe('cli-model');
         expect(requests[0].prompt).toContain('"double":"def double(x)"');
-        expect(requests[1].prompt).toContain('"count":4');
+        expect(requests[3].prompt).toContain('"count":4');
+        expect(requests[1].prompt).toContain('"result":{"value":4}');
+        expect(requests[0].runtimeTools?.map(tool => tool.name)).toContain('call_function');
         for (const req of requests) expect(req.prompt.startsWith(`${RUNTIME_PREAMBLE}\n\nBe concise.`)).toBe(true);
     });
 
     it('prepends the preamble to nested generation, including repairs, and preserves model precedence', async () => {
         const requests: LlmRequest[] = [];
-        const source = document('> Generate an integer and return it.', 'model: default-model\npreamble: Custom guidance.\n');
+        const source = document(fence("def number() { return ask(fmt='integer', repairs=1, model='other') 'Number?' }") +
+            '\n\n> Generate an integer using @number.', 'model: default-model\npreamble: Custom guidance.\n');
+        let naturalTurn = 0;
         const result = await run(parseMarkdown(source), {
             logger,
             backend: backend(async (req) => {
                 requests.push(req);
-                if (req.naturalLanguage) return { text: 'Submitted', effective: {}, spl: "success ask(fmt='integer', repairs=1, model='other') 'Number?'" };
+                if (req.naturalLanguage) return { text: 'Done', effective: {}, action: naturalTurn++ === 0
+                    ? action('call_function', { name: 'number', args: [] }) : action('success', { value: 7 }) };
                 return { text: requests.length === 2 ? '"bad"' : '7', effective: {} };
             }),
         });
         expect(result).toMatchObject({ status: 'success', value: 7 });
-        expect(requests.map(req => req.model)).toEqual(['default-model', 'other', 'other']);
+        expect(requests.map(req => req.model)).toEqual(['default-model', 'other', 'other', 'default-model']);
         for (const req of requests) expect(req.prompt.startsWith(`${RUNTIME_PREAMBLE}\n\nCustom guidance.`)).toBe(true);
         expect(requests[2].prompt).toContain('Validation failed');
     });
 
-    it.each(['success 9', 'return 9', "fail 'stop'"])('honors whole-document termination: %s', async (spl) => {
+    it.each(['success', 'fail'])('honors whole-document termination: %s', async (name) => {
         const result = await run(parseMarkdown(document(`> End here.\n\n${fence("fail 'later'")}`)), {
-            logger, backend: backend(async () => ({ text: 'Submitted', effective: {}, spl })),
+            logger, backend: actions(action(name, name === 'fail' ? { reason: 'stop' } : { value: 9 })),
         });
-        if (spl.startsWith('fail')) expect(result).toMatchObject({ status: 'failure', failure: { reason: 'stop', line: 6 } });
+        if (name === 'fail') expect(result).toMatchObject({ status: 'failure', failure: { reason: 'stop', line: 6 } });
         else expect(result).toMatchObject({ status: 'success', value: 9 });
     });
 
     it('supports scoped restrictions, caught failures, loops, schema validation and raw tools', async () => {
         const cwd = directory();
         fs.mkdirSync(path.join(cwd, 'allowed'));
-        const spl = `let total = 0
+        const code = `let total = 0
 for n in range(4) { total += n }
 let caught = False
 try {
@@ -178,11 +192,14 @@ assert caught
 let Schema = {'type': 'integer'}
 let result = ask(schema=Schema) 'Return {total}'
 write_file('allowed/result.txt', str(result))
-success result`;
-        const result = await run(parseMarkdown(document('> Calculate, validate and save a result.')), {
+return result`;
+        let naturalTurn = 0;
+        const result = await run(parseMarkdown(document(fence(`def calculate() {\n${code}\n}`) +
+            '\n\n> Calculate, validate and save a result using @calculate.')), {
             logger, cwd,
             backend: backend(async req => req.naturalLanguage
-                ? { text: 'Submitted', effective: {}, spl }
+                ? { text: 'Done', effective: {}, action: naturalTurn++ === 0
+                    ? action('call_function', { name: 'calculate', args: [] }) : action('success', { value: 6 }) }
                 : { text: '6', effective: {} }),
         });
         expect(result).toMatchObject({ status: 'success', value: 6 });
@@ -190,60 +207,252 @@ success result`;
         expect(fs.readFileSync(path.join(cwd, 'allowed', 'result.txt'), 'utf8')).toBe('6');
     });
 
-    it.each([undefined, '', 'let x =', "@(model='x')\npass"])('surfaces missing or invalid programs rather than succeeding: %s', async spl => {
-        const result = await run(parseMarkdown(document('> Do work.')), {
-            logger, backend: backend(async () => ({ text: 'Done', effective: {}, spl })),
-        });
-        expect(result.status).toBe('failure');
-    });
-
-    it('preflights generated human input before executing generated effects', async () => {
+    it('reports human input without a checkpoint as a tool error, not a successful answer', async () => {
         const cwd = directory();
+        let turn = 0;
         const result = await run(parseMarkdown(document('> Ask a human.')), {
-            logger, cwd, backend: backend(async () => ({
-                text: 'Submitted', effective: {}, spl: "write_file('never.txt', 'no')\nsuccess human 'Approve?'",
-            })),
+            logger, cwd, backend: backend(async req => {
+                if (turn++ === 0) return { text: 'Ask', effective: {}, action: action('ask_human', { question: 'Approve?' }) };
+                expect(req.prompt).toContain('human input requires a checkpoint');
+                return { text: 'Failed', effective: {}, action: action('fail', { reason: 'checkpoint required' }) };
+            }),
         });
         expect(result).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('checkpoint') } });
-        expect(fs.existsSync(path.join(cwd, 'never.txt'))).toBe(false);
     });
 
-    it('resumes generated human input without regenerating code or repeating completed effects', async () => {
+    it('resumes agent human input without repeating completed model turns or effects', async () => {
         const cwd = directory();
         const source = document('> Write a draft, request approval, and return it.');
         const context = { source, cwd, runtime: 'test' };
         const file = path.join(cwd, 'checkpoint.jsonl');
         let checkpoint = Checkpoint.create(file, context);
         const first = await run(parseMarkdown(source), {
-            logger, cwd, checkpoint, backend: backend(async () => ({
-                text: 'Submitted', effective: {},
-                spl: "write_file('draft.txt', 'original')\nlet approval = human 'Approve?'\nsuccess approval",
-            })),
+            logger, cwd, checkpoint, backend: actions(
+                action('write_file', { path: 'draft.txt', content: 'original' }),
+                action('ask_human', { question: 'Approve?' }),
+            ),
         });
         checkpoint.close();
         expect(first.status).toBe('waiting_for_input');
         fs.writeFileSync(path.join(cwd, 'draft.txt'), 'edited');
         checkpoint = Checkpoint.resume(file, context);
         checkpoint.answer(checkpoint.request!.request_id, 'approved');
-        const second = await run(parseMarkdown(source), { logger, cwd, checkpoint, backend: new NoLlm() });
+        const second = await run(parseMarkdown(source), { logger, cwd, checkpoint, backend: backend(async req => {
+            expect(req.prompt).toContain('"value":"approved"');
+            return { text: 'Done', effective: {}, action: action('success', { value: 'approved' }) };
+        }) });
         checkpoint.finish(second.status === 'success' ? 'success' : 'failure');
         checkpoint.close();
         expect(second).toMatchObject({ status: 'success', value: 'approved' });
         expect(fs.readFileSync(path.join(cwd, 'draft.txt'), 'utf8')).toBe('edited');
     });
 
-    it.each(['trace', 'record'] as const)('replays submitted SPL and its nested generation in %s mode', async mode => {
+    it('resumes inside invoked SPL functions without repeating effects or duplicating mutations', async () => {
+        const cwd = directory();
+        const source = document(fence(`let count = 0
+def approve() {
+    count += 1
+    write_file('function.txt', 'original')
+    return human 'Function approval?'
+}`) + '\n\n> Invoke @approve and save its answer to @answer.\n\n' + fence('success [count, answer]'));
+        const context = { source, cwd, runtime: 'test' };
+        const file = path.join(cwd, 'checkpoint.jsonl');
+        let checkpoint = Checkpoint.create(file, context);
+        const first = await run(parseMarkdown(source), {
+            cwd, checkpoint, logger, backend: actions(action('call_function', { name: 'approve', args: [] })),
+        });
+        checkpoint.close();
+        expect(first).toMatchObject({ status: 'waiting_for_input', request: { question: 'Function approval?' } });
+        fs.writeFileSync(path.join(cwd, 'function.txt'), 'edited');
+        checkpoint = Checkpoint.resume(file, context);
+        checkpoint.answer(checkpoint.request!.request_id, 'yes');
+        let turn = 0;
+        const result = await run(parseMarkdown(source), { cwd, checkpoint, logger, backend: backend(async req => {
+            expect(req.prompt).toContain('"result":{"value":"yes"}');
+            return { text: 'Done', effective: {}, action: turn++ === 0 ? action('save_variable', { name: 'answer', value: 'yes' }) : undefined };
+        }) });
+        checkpoint.finish('success');
+        checkpoint.close();
+        expect(result).toMatchObject({ status: 'success', value: [1, 'yes'] });
+        expect(fs.readFileSync(path.join(cwd, 'function.txt'), 'utf8')).toBe('edited');
+    });
+
+    it('replays function calls, shared mutations and nested generation without repeating agent effects', async () => {
         const cwd = directory();
         const file = path.join(cwd, 'recording.jsonl');
-        const source = document('> Generate a number and return it.');
+        const source = document(fence("let count = 0\ndef number() { count += 1; write_file('number.txt', 'original'); return ask(fmt='integer') 'Number?' }") +
+            '\n\n> Use @number and save the result to @numberResult.\n\n' + fence('assert count == 1\nsuccess numberResult'));
+        let turn = 0;
         const live = backend(async req => req.naturalLanguage
-            ? { text: 'Submitted', effective: {}, spl: "success ask(fmt='integer') 'Number?'" }
+            ? { text: 'Done', effective: {}, action: [
+                action('call_function', { name: 'number', args: [] }),
+                action('save_variable', { name: 'numberResult', value: 42 }),
+                undefined,
+            ][turn++] }
             : { text: '42', effective: {} });
-        const recording = mode === 'trace' ? new TraceBackend(live, file) : new RecordingBackend(live, file);
+        const recording = new TraceBackend(live, file);
         expect(await run(parseMarkdown(source), { logger, cwd, backend: recording })).toMatchObject({ value: 42 });
         await recording.close();
+        fs.writeFileSync(path.join(cwd, 'number.txt'), 'edited');
         const replay = new ReplayBackend(file);
         expect(await run(parseMarkdown(source), { logger, cwd, backend: replay })).toMatchObject({ value: 42 });
         await replay.close();
+        expect(fs.readFileSync(path.join(cwd, 'number.txt'), 'utf8')).toBe('edited');
+    });
+
+    it('rejects generation-only recordings before blockquote actions', async () => {
+        const cwd = directory();
+        const recording = new RecordingBackend(new NoLlm(), path.join(cwd, 'record.jsonl'));
+        expect(await run(parseMarkdown(document('> Act.')), { logger, cwd, backend: recording }))
+            .toMatchObject({ status: 'failure', failure: { status_code: 'restriction_violation' } });
+        await recording.close();
+    });
+
+    it('fails explicitly on a mismatched runtime-tool trace without executing the tool', async () => {
+        const cwd = directory();
+        const file = path.join(cwd, 'trace.jsonl');
+        const source = document('> Write a file.');
+        let turn = 0;
+        const trace = new TraceBackend(backend(async () => ({
+            text: 'Done', effective: {}, action: turn++ === 0 ? action('write_file', { path: 'file.txt', content: 'original' }) : undefined,
+        })), file);
+        const first = await run(parseMarkdown(source), { cwd, logger, backend: trace });
+        expect(first.status).toBe('success');
+        await trace.close();
+        const entries = fs.readFileSync(file, 'utf8').trimEnd().split('\n').map(line => JSON.parse(line));
+        entries[2].tool.arguments.path = 'different.txt';
+        fs.writeFileSync(file, entries.map(entry => JSON.stringify(entry)).join('\n') + '\n');
+        fs.writeFileSync(path.join(cwd, 'file.txt'), 'edited');
+        const result = await run(parseMarkdown(source), { cwd, logger, backend: new ReplayBackend(file) });
+        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error', reason: expect.stringContaining('replay tool mismatch') } });
+        expect(fs.readFileSync(path.join(cwd, 'file.txt'), 'utf8')).toBe('edited');
+        expect(fs.existsSync(path.join(cwd, 'different.txt'))).toBe(false);
+    });
+
+    it('loads and saves JSON variables, accesses env and args, and preserves persistence', async () => {
+        const source = document('> Set @result.\n\n' + fence("success [result, $args]"));
+        let turn = 0;
+        const result = await run(parseMarkdown(source), {
+            logger, args: ['one'],
+            backend: backend(async req => {
+                const next = [
+                    action('get_env', { name: 'SPL_TEST_UNSET_ENVIRONMENT_VARIABLE' }),
+                    action('load_variable', { name: '$args' }),
+                    action('save_variable', { name: 'result', value: { setup: 'a', punchline: 'b' } }),
+                    action('load_variable', { name: 'result' }),
+                    undefined,
+                ][turn++];
+                if (turn === 2) expect(req.prompt).toContain('"result":{"value":null}');
+                if (turn === 5) expect(req.prompt).toContain('"punchline":"b"');
+                return { text: 'Done', effective: {}, action: next };
+            }),
+        });
+        expect(result).toMatchObject({ status: 'success', value: [{ setup: 'a', punchline: 'b' }, ['one']] });
+    });
+
+    it('validates saved values before updating shared bindings', async () => {
+        const source = document(fence('let answer = 1') + '\n\n> Save a validated integer to @answer.\n\n' + fence('success answer'));
+        let turn = 0;
+        const schema = { type: 'integer', minimum: 2 };
+        const steps = [
+            action('save_variable', { name: 'answer', value: 'bad', schema }),
+            action('load_variable', { name: 'answer' }),
+            action('save_variable', { name: 'answer', value: 3, schema }),
+            undefined,
+        ];
+        expect(await run(parseMarkdown(source), { logger, backend: backend(async req => {
+            if (turn === 1) expect(req.prompt).toContain('"status_code":"validation_failed"');
+            if (turn === 2) expect(req.prompt).toContain('"result":{"value":1}');
+            return { text: 'Done', effective: {}, action: steps[turn++] };
+        }) })).toMatchObject({ status: 'success', value: 3 });
+    });
+
+    it('records requested environment values without exposing the full environment or reading it again on replay', async () => {
+        const cwd = directory();
+        const file = path.join(cwd, 'trace.jsonl');
+        const source = document('> Read the configured environment value.\n\n' + fence('success value'));
+        vi.stubEnv('SPL_AGENT_TEST_VALUE', 'original');
+        vi.stubEnv('SPL_AGENT_TEST_PRIVATE', 'do-not-include');
+        let turn = 0;
+        const trace = new TraceBackend(backend(async req => {
+            expect(req.prompt).not.toContain('do-not-include');
+            if (turn === 1) expect(req.prompt).toContain('"value":"original"');
+            return { text: 'Done', effective: {}, action: [
+                action('get_env', { name: 'SPL_AGENT_TEST_VALUE' }),
+                action('save_variable', { name: 'value', value: 'original' }),
+                undefined,
+            ][turn++] };
+        }), file);
+        const expected = await run(parseMarkdown(source), { cwd, logger, backend: trace });
+        await trace.close();
+        vi.stubEnv('SPL_AGENT_TEST_VALUE', 'changed');
+        const replay = new ReplayBackend(file);
+        expect(await run(parseMarkdown(source), { cwd, logger, backend: replay })).toEqual(expected);
+        await replay.close();
+    });
+
+    it.each([
+        action('submit_spl', { source: "success 1" }),
+        action('save_variable', { name: '$env', value: {} }),
+        action('save_variable', { name: 'human', value: 'invalid' }),
+        action('save_variable', { name: 'x', value: { __fn: 'user' } }),
+        action('call_function', { name: 'missing', args: [] }),
+    ])('reports invalid tool calls explicitly: $name', async invalid => {
+        let turn = 0;
+        expect(await run(parseMarkdown(document('> Act.')), {
+            logger, backend: backend(async req => {
+                if (turn++ === 0) return { text: 'Act', effective: {}, action: invalid };
+                expect(req.prompt).toContain('"error"');
+                return { text: 'Stop', effective: {}, action: action('fail', { reason: 'invalid action' }) };
+            }),
+        })).toMatchObject({ status: 'failure', failure: { reason: 'invalid action' } });
+    });
+
+    it('enforces narrowed restrictions across functions and restores them after the command', async () => {
+        const cwd = directory();
+        const source = document(fence("def write() { write_file('outside.txt', 'blocked') }") +
+            '\n\n> Restrict file access and invoke @write.');
+        expect(await run(parseMarkdown(source), { cwd, logger, backend: actions(
+            action('restrict', { kind: 'fs', value: './allowed' }),
+            action('call_function', { name: 'write', args: [] }),
+        ) })).toMatchObject({ status: 'failure', failure: { status_code: 'restriction_violation' } });
+        expect(fs.existsSync(path.join(cwd, 'outside.txt'))).toBe(false);
+    });
+
+    it('scopes guidance and restrictions to one blockquote, including nested model calls', async () => {
+        const cwd = directory();
+        const source = document(fence("def generate() { return ask 'Generate' }") +
+            '\n\n> Apply guidance and restrictions, then invoke @generate.\n\n> Write a file outside the previous restriction.');
+        let turn = 0;
+        const result = await run(parseMarkdown(source), { cwd, logger, backend: backend(async req => {
+            if (!req.naturalLanguage) {
+                expect(req.prompt).toContain('Follow: Be formal');
+                expect(req.restrictions.has('fs')).toBe(true);
+                return { text: 'Formal answer', effective: {} };
+            }
+            if (turn === 4) {
+                expect(req.restrictions.has('fs')).toBe(false);
+                expect(req.prompt).not.toContain('Follow: Be formal');
+            }
+            return { text: 'Done', effective: {}, action: [
+                action('set_guidance', { kind: 'enforce', text: 'Be formal' }),
+                action('restrict', { kind: 'fs', value: './allowed' }),
+                action('call_function', { name: 'generate', args: [] }),
+                undefined,
+                action('write_file', { path: 'outside.txt', content: 'allowed after command' }),
+                action('success', { value: 'done' }),
+            ][turn++] };
+        }) });
+        expect(result).toMatchObject({ status: 'success', value: 'done' });
+        expect(fs.readFileSync(path.join(cwd, 'outside.txt'), 'utf8')).toBe('allowed after command');
     });
 });
+
+function action(name: string, args: Record<string, unknown>): RuntimeAction { return { name, arguments: args }; }
+function actions(...steps: RuntimeAction[]): LlmBackend {
+    return backend(async () => {
+        const next = steps.shift();
+        if (!next) throw new Error('unexpected model turn');
+        return { text: 'Action queued', effective: {}, action: next };
+    });
+}

@@ -6,7 +6,8 @@ model: 'gpt-6-luna'
 
 # Basics
 
-SPL fences run exact code. Blockquotes are natural-language steps. Both share one scope.
+SPL fences run exact code. Blockquotes run agent commands with tools, not generated SPL.
+Both share one scope; agents load and save variables and can invoke existing functions.
 
 ```spl
 def fib(n) {

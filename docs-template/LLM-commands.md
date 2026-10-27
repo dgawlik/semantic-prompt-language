@@ -5,44 +5,68 @@ This page covers both, and how to check what comes back.
 
 ## Blockquotes
 
-A blockquote is an instruction the model translates into SPL. The model sees the text, the current
-bindings and function signatures, active guidance and restrictions, and a preamble that teaches it SPL.
-It must submit exactly one program, which the runtime then executes in the shared document scope,
-just like a fence.
+A blockquote is an agent command, not code to compile into SPL. The model sees the instruction,
+visible bindings and function signatures, active guidance and restrictions, and the available tools.
+It acts directly on the shared document scope through tool calls.
 
 ```markdown
 > Summarize @notes in one sentence and save it to @summary
 ```
 
-The same step written as code:
+For a simple generation task, the comparable code is:
 
 ```spl
 let summary = ask(len='sentence') 'Summarize: {notes}'
 ```
 
-`@name` marks a binding or an operation (`@notes`, `@success`, `@read_file`). Markers are hints
-for the model, not text substitution, and plain language works too. The examples use a few
-conventions that the model maps onto language features:
+Blockquotes have these tools in addition to configured MCP tools:
 
-| Marker | Becomes |
+| Tool | Purpose |
 | --- | --- |
-| `@ENFORCE text` / `@FORBID text` | `enforce` / `forbid` guidance around the step |
-| `@RESTRICT fs['./src'] exec['git']` | a `restrict` block |
-| `@validate[Schema] @retries[2]` | `schema=Schema, repairs=2` |
-| `@HUMAN question` | a `human` question (needs `--checkpoint`) |
-| `@SUCCESS`, `@fail` | end the document |
+| `load_variable(name)` | Read a shared variable or read-only `$args` |
+| `save_variable(name, value, schema?)` | Create or update a shared JSON value; optionally validate a JSON Schema before saving |
+| `call_function(name, args)` | Invoke an existing SPL function or builtin with positional JSON arguments |
+| `get_env(name)` | Read one read-only environment value; missing values return `null` |
+| `ask_human(question)` | Pause through checkpoint/resume and return the human's answer |
+| `read_file`, `write_file`, `web_fetch`, `web_search`, `shell` | Use the existing exact runtime tools |
+| `restrict(kind, value)` | Narrow restrictions for the rest of the command, including function and MCP calls |
+| `set_guidance(kind, text)` | Add `enforce`/`forbid` guidance for this command and its nested model calls |
+| `success(value)`, `fail(reason)` | End the whole document |
 
-Generated code is ordinary SPL: it runs under the same restrictions and validation as handwritten
-code, but the translation can be wrong. Before anything runs, the runtime rejects a submission that
-declares a marked result with `let` inside a block (where it would vanish), and it reminds the model
-once if it replies without submitting. Follow important steps with an `spl` check:
+These shared-scope tools are specific to blockquotes. Explicit `agent` expressions retain their
+existing runtime/MCP tool set; `ask` and `think` still have no tools.
+
+`@name` marks a binding or operation (`@notes`, `@success`, `@read_file`), not text substitution.
+Plain language works too. Common conventions guide the agent's tool choices:
+
+| Marker | Agent behavior |
+| --- | --- |
+| `@ENFORCE text` / `@FORBID text` | Follow prompt guidance; use `set_guidance` for nested model calls |
+| `@RESTRICT fs['./src'] exec['git']` | Narrow the command's restrictions with `restrict` |
+| `@validate[Schema] @retries[2]` | Load `Schema`, save with schema validation, and correct rejected values without repeating actions |
+| `@HUMAN question` | Call `ask_human` (needs `--checkpoint`) |
+| `@SUCCESS`, `@fail` | End the document |
+
+Each runtime tool call yields control to the interpreter. It executes the action, supplies the
+real result or error, and then lets the agent continue. Saving a variable takes effect immediately;
+prose replies do not create bindings. Functions retain their normal lexical scope and runtime guards.
+Restriction violations and explicit failures stop the command. Other tool failures are logged and
+returned to the model for handling; completed external actions are not automatically retried.
+Follow important steps with an `spl` check:
 
 ```spl
 assert len(summary) < 300 'summary is too long'
 ```
 
-`--check` validates syntax only; it cannot validate a blockquote's intent. Traces record the
-submitted program, and replay executes it without asking the model again. Run only trusted documents.
+`--check` validates syntax only; it cannot validate a blockquote's intent. `--trace` records the
+agent's decisions and runtime tool results. Replay restores shared-variable changes and function
+execution without repeating agent-owned external effects or contacting MCP. Generation-only
+`--record` cannot record blockquotes. Run only trusted documents.
+Old traces containing submitted SPL are incompatible with agent commands; record a new trace.
+
+Human input uses the existing checkpoint workflow, never a terminal prompt. Completed decisions
+and effects are replayed from the journal after `--resume`; the agent then receives the human's
+answer and continues. It may make new model calls after the answer.
 
 ## Generation: ask and think
 

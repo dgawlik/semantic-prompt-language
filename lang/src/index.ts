@@ -9,5 +9,5 @@ export { Checkpoint, CheckpointError, checkpointFingerprint, type CheckpointCont
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError } from './auth.js';
 export { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
-export type { LlmBackend, LlmRequest, LlmResponse } from './llm.js';
+export type { LlmBackend, LlmRequest, LlmResponse, RuntimeAction, RuntimeTool } from './llm.js';
 export type { Program } from './ast.js';

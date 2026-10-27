@@ -1,11 +1,11 @@
 {
   "recursion": {
     "term": "Recursion",
-    "definition": "Recursion is a technique where a function solves a problem by calling itself on smaller cases until it reaches a stopping condition."
+    "definition": "Recursion is a technique where a function solves a problem by calling itself on smaller instances until it reaches a base case."
   },
   "closures": {
     "term": "Closure",
-    "definition": "A closure is a function bundled with the variables from its surrounding scope, allowing it to access them even after that scope has ended."
+    "definition": "A closure is a function that retains access to variables from the scope in which it was created, even after that scope has ended."
   },
   "regular expressions": {
     "term": "Regular expression",

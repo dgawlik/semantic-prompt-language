@@ -1,11 +1,12 @@
 import * as fs from 'node:fs';
 import { Failure, type StatusCode } from './errors.js';
-import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse } from './llm.js';
+import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
+import { isRuntimeAction } from './agent.js';
+import type { Value } from './values.js';
 
-interface Entry {
-    request: string;
-    outcome: Outcome;
-}
+type Entry =
+    | { request: string; outcome: Outcome }
+    | { tool: string; outcome: ToolOutcome };
 
 interface TraceRequest {
     kind: LlmRequest['kind'];
@@ -19,6 +20,8 @@ interface TraceRequest {
 type Outcome =
     | { response: LlmResponse }
     | { error: { status_code: StatusCode; reason: string } };
+
+type ToolOutcome = { value: Value } | Extract<Outcome, { error: unknown }>;
 
 export function traceRequest(req: LlmRequest | TraceRequest): TraceRequest {
     return {
@@ -39,7 +42,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function isResponse(value: unknown): value is LlmResponse {
     return isRecord(value) && typeof value.text === 'string' && isRecord(value.effective)
         && (value.reasoning === undefined || typeof value.reasoning === 'string')
-        && (value.spl === undefined || typeof value.spl === 'string');
+        && (value.action === undefined || isRuntimeAction(value.action))
+        && (value.toolResults === undefined || (Array.isArray(value.toolResults) && value.toolResults.every(item => typeof item === 'string')))
+        && !('spl' in value);
+}
+
+function isToolValue(value: unknown): value is Value {
+    return value === null || typeof value === 'string' || typeof value === 'boolean'
+        || (typeof value === 'number' && Number.isFinite(value))
+        || (Array.isArray(value) && value.every(isToolValue))
+        || (isRecord(value) && !('__fn' in value) && Object.values(value).every(isToolValue));
 }
 
 function isTraceRequest(value: unknown): value is TraceRequest {
@@ -76,7 +88,7 @@ export class RecordingBackend implements LlmBackend {
     }
 
     async call(req: LlmRequest): Promise<LlmResponse> {
-        if (req.kind === 'agent' && !req.naturalLanguage) throw new LlmError('agent actions cannot be recorded; record generation-only workflows');
+        if (req.kind === 'agent') throw new LlmError('agent actions cannot be recorded; record generation-only workflows');
         const request = requestKey(req);
         const response = await this.backend.call(req);
         try {
@@ -123,6 +135,23 @@ export class TraceBackend implements LlmBackend {
         return outcome.response;
     }
 
+    async invokeTool(action: RuntimeAction, perform: () => Promise<Value>): Promise<Value> {
+        let outcome: ToolOutcome;
+        try {
+            outcome = { value: await perform() };
+        } catch (error) {
+            if (!(error instanceof Failure)) throw error;
+            outcome = { error: { status_code: error.statusCode, reason: error.reason } };
+        }
+        try {
+            fs.appendFileSync(this.file, JSON.stringify({ tool: action, ...outcome }) + '\n');
+        } catch (error) {
+            throw new LlmError(`could not save tool trace: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if ('error' in outcome) throw new Failure(outcome.error.status_code, outcome.error.reason);
+        return outcome.value;
+    }
+
     close(): Promise<void> {
         return this.backend.close();
     }
@@ -143,6 +172,15 @@ export class ReplayBackend implements LlmBackend {
         this.entries = lines.map((line, i) => {
             const entry = parseLine(line, i + 2);
             if (!isRecord(entry)) throw new LlmError(`invalid recording entry at line ${i + 2}`);
+            if (this.mode === 'workflow-replay' && isRuntimeAction(entry.tool)) {
+                if (isToolValue(entry.value) && entry.error === undefined) {
+                    return { tool: JSON.stringify(entry.tool), outcome: { value: entry.value } };
+                }
+                if (entry.value === undefined && isTraceError(entry.error)) {
+                    return { tool: JSON.stringify(entry.tool), outcome: { error: entry.error } };
+                }
+                throw new LlmError(`invalid tool trace at line ${i + 2}`);
+            }
             let request: string;
             if (this.mode === 'workflow-replay' && isTraceRequest(entry.request)) {
                 request = JSON.stringify(traceRequest(entry.request));
@@ -162,16 +200,26 @@ export class ReplayBackend implements LlmBackend {
     }
 
     async call(req: LlmRequest): Promise<LlmResponse> {
-        if (req.kind === 'agent' && !req.naturalLanguage && this.mode === 'replay') throw new LlmError('agent actions cannot be replayed');
+        if (req.kind === 'agent' && this.mode === 'replay') throw new LlmError('agent actions cannot be replayed');
         const entry = this.entries[this.position];
         if (!entry) throw new LlmError(`recording exhausted at call ${this.position + 1}`);
-        if (entry.request !== requestKey(req)) throw new LlmError(`replay request mismatch at call ${this.position + 1}`);
+        if (!('request' in entry) || entry.request !== requestKey(req)) throw new LlmError(`replay request mismatch at call ${this.position + 1}`);
         this.position++;
         if ('error' in entry.outcome) {
             const { status_code, reason } = entry.outcome.error;
             throw new Failure(status_code, reason);
         }
         return structuredClone(entry.outcome.response);
+    }
+
+    async invokeTool(action: RuntimeAction, _perform: () => Promise<Value>): Promise<Value> {
+        const entry = this.entries[this.position];
+        if (this.mode !== 'workflow-replay' || !entry || !('tool' in entry) || entry.tool !== JSON.stringify(action)) {
+            throw new LlmError(`replay tool mismatch at entry ${this.position + 1}`);
+        }
+        this.position++;
+        if ('error' in entry.outcome) throw new Failure(entry.outcome.error.status_code, entry.outcome.error.reason);
+        return structuredClone(entry.outcome.value);
     }
 
     async close(): Promise<void> {

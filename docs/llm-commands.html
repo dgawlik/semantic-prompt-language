@@ -7,11 +7,11 @@
 This page covers both, and how to check what comes back.">
 <meta name="color-scheme" content="light dark">
 <title>Natural language &amp; models - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=dc049f64b8ba">
-<link rel="stylesheet" href="assets/style.css?v=dc049f64b8ba">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=402ac6c870d3">
+<link rel="stylesheet" href="assets/style.css?v=402ac6c870d3">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=dc049f64b8ba"></script>
-<script defer src="assets/site.js?v=dc049f64b8ba"></script>
+<script defer src="assets/search-index.js?v=402ac6c870d3"></script>
+<script defer src="assets/site.js?v=402ac6c870d3"></script>
 </head>
 <body data-page="llm-commands">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -23,63 +23,117 @@ This page covers both, and how to check what comes back.">
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.0.1<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.1.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
   <details class="mobile-nav"><summary>Browse documentation <span>Natural language &amp; models</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Natural language &amp; models</span><span class="reading-time">5 min read</span></div>
+    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Natural language &amp; models</span><span class="reading-time">6 min read</span></div>
     <header class="page-heading"><h1>Natural language &amp; models</h1><div class="lead"><p>Blockquotes let you write a step in plain language; <code>ask</code>, <code>think</code> and <code>agent</code> call the model from code.
 This page covers both, and how to check what comes back.</p></div></header>
     <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-2"><a href="#generation-ask-and-think">Generation: ask and think</a></li><li class="toc-level-2"><a href="#agents">Agents</a></li><li class="toc-level-2"><a href="#modifiers">Modifiers</a></li><li class="toc-level-2"><a href="#output-formats">Output formats</a></li><li class="toc-level-2"><a href="#schemas-and-repairs">Schemas and repairs</a></li><li class="toc-level-2"><a href="#guidance-enforce-and-forbid">Guidance: enforce and forbid</a></li></ul></nav></details>
     <article class="prose"><h2 id="blockquotes">Blockquotes<a class="heading-anchor" href="#blockquotes" aria-label="Link to Blockquotes">#</a></h2>
-<p>A blockquote is an instruction the model translates into SPL. The model sees the text, the current
-bindings and function signatures, active guidance and restrictions, and a preamble that teaches it SPL.
-It must submit exactly one program, which the runtime then executes in the shared document scope,
-just like a fence.</p>
+<p>A blockquote is an agent command, not code to compile into SPL. The model sees the instruction,
+visible bindings and function signatures, active guidance and restrictions, and the available tools.
+It acts directly on the shared document scope through tool calls.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-1"><span class="hljs-quote">&gt; Summarize @notes in one sentence and save it to @summary</span>
 </code></pre></figure>
-<p>The same step written as code:</p>
+<p>For a simple generation task, the comparable code is:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> summary = <span class="hljs-keyword">ask</span>(<span class="hljs-built_in">len</span>=<span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Summarize: {notes}&#x27;</span>
 </code></pre></figure>
-<p><code>@name</code> marks a binding or an operation (<code>@notes</code>, <code>@success</code>, <code>@read_file</code>). Markers are hints
-for the model, not text substitution, and plain language works too. The examples use a few
-conventions that the model maps onto language features:</p>
+<p>Blockquotes have these tools in addition to configured MCP tools:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquotes reference table"><table>
+<thead>
+<tr>
+<th scope="col">Tool</th>
+<th scope="col">Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>load_variable(name)</code></td>
+<td>Read a shared variable or read-only <code>$args</code></td>
+</tr>
+<tr>
+<td><code>save_variable(name, value, schema?)</code></td>
+<td>Create or update a shared JSON value; optionally validate a JSON Schema before saving</td>
+</tr>
+<tr>
+<td><code>call_function(name, args)</code></td>
+<td>Invoke an existing SPL function or builtin with positional JSON arguments</td>
+</tr>
+<tr>
+<td><code>get_env(name)</code></td>
+<td>Read one read-only environment value; missing values return <code>null</code></td>
+</tr>
+<tr>
+<td><code>ask_human(question)</code></td>
+<td>Pause through checkpoint/resume and return the human&#39;s answer</td>
+</tr>
+<tr>
+<td><code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>, <code>shell</code></td>
+<td>Use the existing exact runtime tools</td>
+</tr>
+<tr>
+<td><code>restrict(kind, value)</code></td>
+<td>Narrow restrictions for the rest of the command, including function and MCP calls</td>
+</tr>
+<tr>
+<td><code>set_guidance(kind, text)</code></td>
+<td>Add <code>enforce</code>/<code>forbid</code> guidance for this command and its nested model calls</td>
+</tr>
+<tr>
+<td><code>success(value)</code>, <code>fail(reason)</code></td>
+<td>End the whole document</td>
+</tr>
+</tbody></table>
+</div>
+<p>These shared-scope tools are specific to blockquotes. Explicit <code>agent</code> expressions retain their
+existing runtime/MCP tool set; <code>ask</code> and <code>think</code> still have no tools.</p>
+<p><code>@name</code> marks a binding or operation (<code>@notes</code>, <code>@success</code>, <code>@read_file</code>), not text substitution.
+Plain language works too. Common conventions guide the agent&#39;s tool choices:</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Blockquotes reference table"><table>
 <thead>
 <tr>
 <th scope="col">Marker</th>
-<th scope="col">Becomes</th>
+<th scope="col">Agent behavior</th>
 </tr>
 </thead>
 <tbody><tr>
 <td><code>@ENFORCE text</code> / <code>@FORBID text</code></td>
-<td><code>enforce</code> / <code>forbid</code> guidance around the step</td>
+<td>Follow prompt guidance; use <code>set_guidance</code> for nested model calls</td>
 </tr>
 <tr>
 <td><code>@RESTRICT fs[&#39;./src&#39;] exec[&#39;git&#39;]</code></td>
-<td>a <code>restrict</code> block</td>
+<td>Narrow the command&#39;s restrictions with <code>restrict</code></td>
 </tr>
 <tr>
 <td><code>@validate[Schema] @retries[2]</code></td>
-<td><code>schema=Schema, repairs=2</code></td>
+<td>Load <code>Schema</code>, save with schema validation, and correct rejected values without repeating actions</td>
 </tr>
 <tr>
 <td><code>@HUMAN question</code></td>
-<td>a <code>human</code> question (needs <code>--checkpoint</code>)</td>
+<td>Call <code>ask_human</code> (needs <code>--checkpoint</code>)</td>
 </tr>
 <tr>
 <td><code>@SUCCESS</code>, <code>@fail</code></td>
-<td>end the document</td>
+<td>End the document</td>
 </tr>
 </tbody></table>
 </div>
-<p>Generated code is ordinary SPL: it runs under the same restrictions and validation as handwritten
-code, but the translation can be wrong. Before anything runs, the runtime rejects a submission that
-declares a marked result with <code>let</code> inside a block (where it would vanish), and it reminds the model
-once if it replies without submitting. Follow important steps with an <code>spl</code> check:</p>
+<p>Each runtime tool call yields control to the interpreter. It executes the action, supplies the
+real result or error, and then lets the agent continue. Saving a variable takes effect immediately;
+prose replies do not create bindings. Functions retain their normal lexical scope and runtime guards.
+Restriction violations and explicit failures stop the command. Other tool failures are logged and
+returned to the model for handling; completed external actions are not automatically retried.
+Follow important steps with an <code>spl</code> check:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(summary) &lt; <span class="hljs-number">300</span> <span class="hljs-string">&#x27;summary is too long&#x27;</span>
 </code></pre></figure>
-<p><code>--check</code> validates syntax only; it cannot validate a blockquote&#39;s intent. Traces record the
-submitted program, and replay executes it without asking the model again. Run only trusted documents.</p>
+<p><code>--check</code> validates syntax only; it cannot validate a blockquote&#39;s intent. <code>--trace</code> records the
+agent&#39;s decisions and runtime tool results. Replay restores shared-variable changes and function
+execution without repeating agent-owned external effects or contacting MCP. Generation-only
+<code>--record</code> cannot record blockquotes. Run only trusted documents.
+Old traces containing submitted SPL are incompatible with agent commands; record a new trace.</p>
+<p>Human input uses the existing checkpoint workflow, never a terminal prompt. Completed decisions
+and effects are replayed from the journal after <code>--resume</code>; the agent then receives the human&#39;s
+answer and continues. It may make new model calls after the answer.</p>
 <h2 id="generation-ask-and-think">Generation: ask and think<a class="heading-anchor" href="#generation-ask-and-think" aria-label="Link to Generation: ask and think">#</a></h2>
 <p><code>ask prompt</code> returns the model&#39;s answer as a value. <code>think</code> is the same with medium reasoning by default.
 Neither has tools: they cannot read files, browse or run commands.</p>

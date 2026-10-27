@@ -1,7 +1,7 @@
 # Build AI workflows in minutes, not hours
 
 SPL runs Markdown documents. `spl` code fences hold exact, Python-like code; blockquotes hold
-natural-language steps that the model turns into code. Both share one scope, the same tools
+natural-language agent commands. Both share one scope, the same tools
 and the same guards, so each step can be written in whichever form reads best.
 
 `hi.md`
@@ -44,7 +44,7 @@ success {'cards': len(cards), 'hardest': hardest}
 ````
 
 The loop is ordinary code; each `ask` must return JSON matching `Card`, with one repair attempt.
-The blockquote is translated into SPL and executed, and the `assert` after it checks the result.
+The blockquote agent saves its answer through a shared-variable tool, and the `assert` after it checks the result.
 Writing is limited to `./out`.
 
 ## Why SPL?
@@ -52,7 +52,7 @@ Writing is limited to `./out`.
 1. **Short loops.** One file, run directly. `--check` validates syntax without a model, and
    trace/replay reruns your code and guards against recorded model answers.
 2. **Exact code where it matters.** Control flow, arithmetic and I/O never call a model.
-   `ask` and `think` generate values without tools; only `agent` can act.
+   `ask` and `think` generate values without tools; `agent` expressions and blockquotes can act.
 3. **Guards you can see.** `fmt`, `schema` and `assert` check data; `restrict` checks actions.
    Prompt guidance (`enforce`, `forbid`, `len`) is kept separate from validation.
 4. **Readable.** Inputs, prompts, checks and outputs sit in one document, top to bottom.
@@ -61,8 +61,9 @@ Writing is limited to `./out`.
 
 1. Frontmatter opts the file in. All fences are parsed first, so syntax errors fail before anything runs.
 2. Fences and blockquotes execute in document order in one shared scope.
-3. A blockquote sends its text, the visible bindings and a runtime preamble to the model, which
-   submits one SPL program. The runtime executes it exactly like a fence.
+3. A blockquote sends its text, visible bindings and runtime tools to an agent. The model calls
+   tools to invoke functions, read environment values, request human input and load/save shared variables.
+   It never submits generated SPL.
 4. `ask`, `think` and `agent` call GitHub Copilot through the Copilot SDK, one fresh session per call.
 5. `success` prints the result on stdout. Logs go to stderr.
 

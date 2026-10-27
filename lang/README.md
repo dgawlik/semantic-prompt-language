@@ -44,7 +44,9 @@ success rating
 
 * Exact tools `read_file`, `write_file`, `web_fetch`, `web_search` and `shell` never call a model.
 * `ask` and `think` generate values without tools; `agent` can act, within `restrict` scopes.
-* Blockquotes are translated into SPL by the model and run in the same scope.
+* Blockquotes run as agent commands, not generated SPL. Their tools can call existing functions,
+  load/save shared variables, read environment values, request checkpointed human input, and use
+  runtime tools and configured MCP servers. Explicit `agent` expressions keep their existing tool set.
 * `fmt`, `schema`, `repairs` and `assert` check output; `enforce`/`forbid` only guide prompts.
 
 See [Language](../docs-template/Language.md), [Natural language & models](../docs-template/LLM-commands.md)

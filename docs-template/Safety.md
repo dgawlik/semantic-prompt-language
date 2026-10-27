@@ -102,6 +102,10 @@ terminal. Instead the run saves its progress to a checkpoint journal, prints the
 and exits with code 3. A later invocation supplies the answer and continues without repeating
 completed tool or model calls.
 
+Blockquote agents use the `ask_human` tool for the same workflow. The answer is returned to the
+agent on resume, which may then make new model calls and save it to a shared variable. Runtime
+actions completed before the question are not repeated, including actions inside invoked functions.
+
 ```spl
 let feedback = human 'What should change in the release notes?'
 assert len(feedback.strip()) > 0 'feedback must not be blank'
