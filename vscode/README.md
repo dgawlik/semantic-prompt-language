@@ -26,15 +26,21 @@ in **Output > SPL Language Server**; execution logs appear in **Output > SPL Not
 1. Open a workflow `.md` file and run **SPL: Open as Notebook**, or use **Reopen Editor With... >
    SPL Workflow Notebook**. Ordinary Markdown stays in its normal editor by default.
 2. Select **SPL Runtime** as the kernel. Existing `spl` fences become SPL code cells;
-   top-level blockquotes become executable code cells with the **Markdown** language. Commentary
-   remains rendered, editable Markdown.
+   top-level blockquotes become executable code cells with the **Markdown** language. Instruction
+   cells show plain text without the outer `>` markers; those markers are restored on save.
+   Commentary remains rendered, editable Markdown.
 3. Use the cell Run button or VS Code's notebook shortcuts to execute any cell. A final expression,
    `return`, or `success` displays its value; objects and lists are indented. Explicit `log(...)`
    messages and final natural-language replies appear beneath the cell. Full runtime logs are
    kept in the output channel, not mixed into the result.
 4. To add an instruction cell, insert a **code** cell, switch its language to **Markdown**, and
-   enter a blockquote such as `> Double @count.`. Unquoted text in such a cell is also saved as a
-   blockquote. Use a normal **Markdown** cell for non-executable notes.
+   enter an instruction such as `Double @count.`. Blank lines and Markdown inside the instruction
+   are supported; the whole cell is saved as a blockquote automatically. Use a normal **Markdown**
+   cell for non-executable notes.
+   Instructions such as `Invoke @factorial with 15 as argument -> @fact15` belong in these
+   Markdown-language code cells, not SPL cells. In an SPL cell, use exact syntax instead:
+   `let fact15 = factorial(15)`. An `unexpected '@' at end of statement` error can mean an
+   instruction was entered in an SPL cell; switch its language to **Markdown**.
 5. Save normally: the file remains executable Markdown, not `.ipynb`. Frontmatter, commentary,
    and unchanged fences are preserved, including CRLF/BOM. Edit document `model` and `preamble`
    settings by reopening the saved file in the text editor.
@@ -47,6 +53,8 @@ deleting source does not undo its previous execution; rerun the cell or reset th
 Natural-language cells hand queued runtime actions back immediately instead of waiting for a
 post-tool model reply. When MCP tools are configured, the turn finishes normally so external
 calls can complete and their results are retained.
+The SDK's abort notification for an intentional action handoff is not an execution failure;
+unexpected aborts, failed handoffs and other backend errors are still reported.
 Syntax errors are highlighted while editing, and runtime failures point to the responsible cell
 (including previously defined functions). Edited function definitions must be rerun before their
 old failure location can be highlighted again.

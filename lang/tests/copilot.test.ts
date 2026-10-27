@@ -6,6 +6,8 @@ import { makeRestriction, Restrictions } from '../src/restrict.js';
 import { TOOL_SPECS, ToolHost } from '../src/tools.js';
 import { AGENT_TOOLS } from '../src/agent.js';
 import type { RuntimeAction } from '../src/llm.js';
+import { run } from '../src/interpreter.js';
+import { parseMarkdown } from '../src/markdown.js';
 
 const sdk = vi.hoisted(() => ({
     configs: [] as SessionConfig[],
@@ -20,6 +22,8 @@ const sdk = vi.hoisted(() => ({
     events: [] as { type: string; data: object }[],
     eventsAfterTools: [] as { type: string; data: object }[],
     prompts: [] as string[],
+    sendError: undefined as Error | undefined,
+    abortRejectsWait: true,
     reply: { data: { content: 'MCP result' } } as { data?: { content?: string } } | undefined,
 }));
 vi.mock('../src/auth.js', () => ({ loadToken: () => undefined }));
@@ -50,7 +54,11 @@ vi.mock('@github/copilot-sdk', () => ({
                             sdk.toolErrors.push(error);
                         }
                     }
-                    if (aborted) return undefined;
+                    if (sdk.sendError) throw sdk.sendError;
+                    if (aborted) {
+                        if (sdk.abortRejectsWait) throw new Error('The requested run was aborted before completion.');
+                        return undefined;
+                    }
                     for (const event of sdk.eventsAfterTools) listeners.get(event.type)?.(event);
                     await sdk.continueTurn();
                     return sdk.reply;
@@ -74,6 +82,8 @@ beforeEach(() => {
     sdk.events = [];
     sdk.eventsAfterTools = [];
     sdk.prompts.length = 0;
+    sdk.sendError = undefined;
+    sdk.abortRejectsWait = true;
     sdk.reply = { data: { content: 'MCP result' } };
     vi.clearAllMocks();
     sdk.abort.mockReset().mockResolvedValue(undefined);
@@ -107,8 +117,11 @@ it('provides blockquote runtime tools instead of an SPL compiler and queues one 
     expect(sdk.prompts).toHaveLength(1);
 });
 
-it('hands off a queued action without waiting for post-tool model generation', async () => {
-    sdk.calls = [{ name: 'save_variable', arguments: { name: 'fibPlus2', value: 57 } }];
+it.each([
+    { name: 'call_function', arguments: { name: 'fib', args: [10] } },
+    { name: 'save_variable', arguments: { name: 'fibPlus2', value: 57 } },
+])('hands off a queued $name action when the SDK rejects the aborted wait', async action => {
+    sdk.calls = [action];
     sdk.continueTurn.mockImplementation(() => new Promise(() => {}));
 
     await expect(command('Add to @fib10 2 and save to @fibPlus2')).resolves.toMatchObject({
@@ -116,6 +129,66 @@ it('hands off a queued action without waiting for post-tool model generation', a
     });
     expect(sdk.abort).toHaveBeenCalledOnce();
     expect(sdk.continueTurn).not.toHaveBeenCalled();
+    expect(sdk.disconnect).toHaveBeenCalledOnce();
+});
+
+it('also hands off actions when an older SDK resolves the aborted wait without a response', async () => {
+    sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
+    sdk.abortRejectsWait = false;
+    await expect(command('Save @answer')).resolves.toMatchObject({ action: sdk.calls[0] });
+});
+
+it('does not suppress an abort that was not requested for an action handoff', async () => {
+    sdk.sendError = new Error('The requested run was aborted before completion.');
+    await expect(command('Finish')).rejects.toThrow(sdk.sendError.message);
+    expect(sdk.abort).not.toHaveBeenCalled();
+    expect(sdk.disconnect).toHaveBeenCalledOnce();
+});
+
+it('executes a factorial instruction through aborted SDK handoffs and saves the function result', async () => {
+    const cwd = process.cwd();
+    const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
+    const actions: (RuntimeAction | undefined)[] = [
+        { name: 'call_function', arguments: { name: 'factorial', args: [15] } },
+        { name: 'save_variable', arguments: { name: 'fact15', value: 1307674368000 } },
+        undefined,
+    ];
+    let turn = 0;
+    try {
+        const result = await run(parseMarkdown([
+            '---', 'extension: semantic-prompt-language', 'version: 1', '---', '',
+            '```spl', 'def factorial(n) {',
+            '    if n == 0 { return 1 }',
+            '    return n * factorial(n - 1)', '}', '```', '',
+            '> Invoke @factorial with 15 as argument -> @fact15', '',
+            '```spl', 'success fact15', '```',
+        ].join('\n')), {
+            cwd, logger: new Logger('silent'),
+            backend: {
+                async call(req) {
+                    if (turn === 1) expect(req.prompt).toContain('"result":{"value":1307674368000}');
+                    const action = actions[turn++];
+                    sdk.calls = action ? [action] : [];
+                    return backend.call(req);
+                },
+                close: () => backend.close(),
+            },
+        });
+        expect(result).toEqual({ status: 'success', value: 1307674368000, hasValue: true });
+        expect(turn).toBe(3);
+        expect(sdk.abort).toHaveBeenCalledTimes(2);
+    } finally {
+        await backend.close();
+    }
+});
+
+it.each([
+    'backend unavailable',
+    'Timeout after 1000ms waiting for session.idle',
+])('preserves unrelated errors after queuing an action: %s', async message => {
+    sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
+    sdk.sendError = new Error(message);
+    await expect(command('Save @answer')).rejects.toThrow(message);
     expect(sdk.disconnect).toHaveBeenCalledOnce();
 });
 
@@ -169,6 +242,7 @@ it.each([
     const restrictions = new Restrictions(cwd);
     sdk.calls = [{ name: 'save_variable', arguments: { name: 'modelFib10', value: 55 } }];
     sdk.reply = reply;
+    sdk.abortRejectsWait = false;
     const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
     try {
         const response = await backend.call({
@@ -213,6 +287,26 @@ it('registers runtime tools and configured MCP servers together for blockquotes'
         expect(sdk.configs[0].tools).toHaveLength(AGENT_TOOLS.length);
         expect(sdk.configs[0].mcpServers).toEqual({ docs: { command: 'never-start', tools: ['*'] } });
         expect(sdk.abort).not.toHaveBeenCalled();
+    } finally {
+        await backend.close();
+    }
+});
+
+it('does not treat an aborted MCP turn as a successful queued action', async () => {
+    const cwd = process.cwd();
+    const restrictions = new Restrictions(cwd);
+    sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
+    sdk.sendError = new Error('The requested run was aborted before completion.');
+    const backend = new CopilotBackend({
+        cwd, timeoutMs: 1000, logger: new Logger('silent'), mcpServers: { docs: { command: 'never-start' } },
+    });
+    try {
+        await expect(backend.call({
+            kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, prompt: 'Search and save', restrictions,
+            showReasoning: false, tools: new ToolHost(restrictions, cwd),
+        })).rejects.toThrow(sdk.sendError.message);
+        expect(sdk.abort).not.toHaveBeenCalled();
+        expect(sdk.disconnect).toHaveBeenCalledOnce();
     } finally {
         await backend.close();
     }

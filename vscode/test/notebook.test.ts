@@ -17,6 +17,17 @@ test('notebook codec roundtrips every shipped workflow exactly', () => {
     }
 });
 
+test('basics workflow parses every executable cell and uses an instruction cell for factorial', () => {
+    const markdown = readFileSync(path.resolve(__dirname, '..', '..', '..', 'lang', 'examples', 'basics.md'), 'utf8');
+    const notebook = decodeWorkflow(markdown);
+    for (const cell of notebook.cells) {
+        if (cell.kind === 'markdown') continue;
+        parseWorkflowCell(cell.value, cell.kind === 'spl' ? 'spl' : 'markdown', notebook.frontmatter);
+    }
+    assert.ok(notebook.cells.some(cell => cell.kind === 'natural' &&
+        /invoke @factorial with 15 as argument -> @fact15/i.test(cell.value)));
+});
+
 test('notebook codec preserves prose, alternate fences, lazy quotes, CRLF and BOM', () => {
     for (const body of [
         '', '# Notes\n\nNo executable blocks.\n', fence(''), fence('let x = 1'),
@@ -43,6 +54,40 @@ test('edited and newly inserted cells produce executable Markdown with safe fenc
     assert.equal(parseMarkdown(encoded).body.length, 3);
 });
 
+test('instruction cells hide outer quote markers and preserve multiline guidance when saved', () => {
+    const markdown = source('> @ENFORCE Answer in Chinese\n>\n> @FORBID Mentioning the word cat\n>\n> Paragraph about a pet animal -> @animal\n');
+    const notebook = decodeWorkflow(markdown);
+    const instruction = '@ENFORCE Answer in Chinese\n\n@FORBID Mentioning the word cat\n\nParagraph about a pet animal -> @animal';
+    assert.equal(notebook.cells[0].kind, 'natural');
+    assert.equal(notebook.cells[0].value, instruction);
+    assert.equal(encodeWorkflow(notebook), markdown);
+    assert.deepEqual(parseWorkflowCell(instruction, 'markdown', notebook.frontmatter).body,
+        [{ t: 'natural', text: instruction, line: 1 }]);
+
+    notebook.cells[0].value = instruction.replace('pet animal', 'pet dog');
+    const encoded = encodeWorkflow(notebook);
+    assert.equal(extractMarkdown(encoded).blocks[0].text, notebook.cells[0].value);
+    assert.equal(decodeWorkflow(encoded).cells[0].value, notebook.cells[0].value);
+});
+
+test('instruction cells preserve nested quotes, lazy continuations and embedded Markdown', () => {
+    for (const body of [
+        '> > Nested quotation\n>\n> Follow this instruction.',
+        '> Instruction\nlazy continuation\n>\n> Next paragraph.',
+        '> ```spl\n> pass\n> ```\n>\n> Explain this example.',
+    ]) {
+        const markdown = source(body);
+        const notebook = decodeWorkflow(markdown);
+        const instruction = extractMarkdown(markdown).blocks[0].text;
+        assert.equal(notebook.cells[0].value, instruction);
+        assert.equal(encodeWorkflow(notebook), markdown);
+        assert.deepEqual(parseWorkflowCell(instruction, 'markdown', notebook.frontmatter).body,
+            [{ t: 'natural', text: instruction, line: 1 }]);
+        notebook.cells[0].value += '\nMore instructions.';
+        assert.equal(extractMarkdown(encodeWorkflow(notebook)).blocks[0].text, notebook.cells[0].value);
+    }
+});
+
 test('moving and deleting cells does not concatenate their fences', () => {
     const notebook = decodeWorkflow(source(fence('let x = 1') + '\n\nNotes\n\n' + fence('success x')));
     const code = notebook.cells.filter(cell => cell.kind === 'spl');
@@ -63,11 +108,12 @@ test('cell parsing inherits model/preamble and does not parse unrelated cells', 
     const program = parseWorkflowCell('1 + 1', 'spl', header);
     assert.equal(program.directives.model, 'test-model');
     assert.equal(program.markdown?.preamble, 'Be precise.');
-    assert.deepEqual(parseWorkflowCell('> Use @x.\ncontinued', 'markdown', header).body,
+    assert.deepEqual(parseWorkflowCell('Use @x.\ncontinued', 'markdown', header).body,
         [{ t: 'natural', text: 'Use @x.\ncontinued', line: 1 }]);
     assert.throws(() => parseWorkflowCell("@(model='other')\npass", 'spl', header), /frontmatter/);
     assert.throws(() => parseWorkflowCell('pass', 'python', header), /unsupported/);
-    assert.throws(() => parseWorkflowCell('> Instruction.\n\nUnquoted paragraph.', 'markdown', header), /outside its blockquote/);
+    assert.deepEqual(parseWorkflowCell('Instruction.\n\nAnother paragraph.', 'markdown', header).body,
+        [{ t: 'natural', text: 'Instruction.\n\nAnother paragraph.', line: 1 }]);
     assert.throws(() => decodeWorkflow('# Ordinary Markdown'), /frontmatter/);
 });
 

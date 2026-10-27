@@ -100,7 +100,7 @@ export class CopilotBackend implements LlmBackend {
         const agent = req.kind === 'agent';
         const mcpServers = agent ? filterMcpServers(this.opts.mcpServers ?? {}, req.restrictions) : {};
         let action: LlmResponse['action'];
-        let handoffError: LlmError | undefined;
+        let handoff: Promise<void> | undefined;
         const tools: Tool[] = (agent && !req.naturalLanguage ? TOOL_NAMES : []).map((name) => {
             const spec = TOOL_SPECS[name];
             return defineTool(name, {
@@ -135,12 +135,10 @@ export class CopilotBackend implements LlmBackend {
                     action = { name: spec.name, arguments: { ...args } };
                     if (session && !Object.keys(mcpServers).length) {
                         // Nothing external can be in flight; skip the model's post-tool reply.
-                        try {
-                            await session.abort();
-                        } catch (error) {
-                            handoffError = new LlmError(`cannot hand off runtime action: ${error instanceof Error ? error.message : String(error)}`);
-                            throw handoffError;
-                        }
+                        handoff = session.abort().catch(error => {
+                            throw new LlmError(`cannot hand off runtime action: ${error instanceof Error ? error.message : String(error)}`);
+                        });
+                        await handoff;
                     }
                     return 'Action queued, not yet executed. End this turn. The runtime will execute it and provide its result before you continue.';
                 },
@@ -198,11 +196,14 @@ export class CopilotBackend implements LlmBackend {
                 answer = await session.sendAndWait({ prompt: req.prompt }, this.opts.timeoutMs);
             } catch (e) {
                 if (violation) throw violation;
-                if (handoffError) throw handoffError;
-                throw new LlmError((e as Error).message);
+                await handoff;
+                // Newer SDKs reject the wait when our own action handoff aborts the turn.
+                if (!handoff || !(e instanceof Error) || e.message !== 'The requested run was aborted before completion.') {
+                    throw new LlmError(e instanceof Error ? e.message : String(e));
+                }
             }
+            await handoff;
             if (violation) throw violation;
-            if (handoffError) throw handoffError;
             const content = answer?.data?.content;
             const text = action && (typeof content !== 'string' || content.trim() === '') ? 'Runtime action queued.' : content;
             if (typeof text !== 'string' || text.trim() === '') throw new LlmError('the model returned an empty response');

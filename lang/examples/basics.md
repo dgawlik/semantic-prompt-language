@@ -18,6 +18,18 @@ def fib(n) {
 }
 ```
 
+```spl
+def factorial(n){
+    if n == 0 {
+        return 1
+    } else {
+        return n * factorial(n - 1)
+    }
+}
+```
+
+> Invoke @factorial with 15 as argument -> @fact15
+
 > Invoke @fib with 10 as argument -> @fib10
 
 > Add to @fib10 2 and save to @fibPlus2

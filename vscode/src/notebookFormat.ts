@@ -47,7 +47,7 @@ export function decodeWorkflow(source: string): WorkflowNotebook {
         if (gap.trim()) cells.push({ kind: 'markdown', value: gap });
         const raw = normalized.slice(start, end);
         const kind = block.kind;
-        const value = kind === 'spl' ? block.text : raw;
+        const value = block.text;
         cells.push({
             kind, value, leading: gap.trim() ? '' : gap,
             raw, originalValue: value, originalKind: kind,
@@ -63,7 +63,7 @@ export function decodeWorkflow(source: string): WorkflowNotebook {
 }
 
 function quote(value: string): string {
-    return /^\s*>/.test(value) ? value : value.split('\n').map(line => `> ${line}`).join('\n');
+    return value.split('\n').map(line => `> ${line}`).join('\n');
 }
 
 export function encodeWorkflow(notebook: WorkflowNotebook): string {

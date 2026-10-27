@@ -27,10 +27,21 @@ const fence = (code: string) => '```spl\n' + code + '\n```';
 test('native serializer exposes editable code/instruction cells and transient outputs', () => {
     const { data, source, serializer } = setup('# Notes\n\n' + fence('let x = 1') + '\n\n> Use @x.\n');
     assert.deepEqual(data.cells.map(cell => [cell.kind, cell.languageId]), [[1, 'markdown'], [2, 'spl'], [2, 'markdown']]);
+    assert.equal(data.cells[2].value, 'Use @x.');
     assert.equal(Buffer.from(serializer.serializeNotebook(data)).toString(), source);
     assert.equal(mock.serializers[0].options.transientOutputs, true);
     data.cells[1].value = 'let x = 2';
     assert.match(Buffer.from(serializer.serializeNotebook(data)).toString(), /let x = 2/);
+});
+
+test('native instruction cells edit plain text and save blockquote markers automatically', () => {
+    const { data, serializer } = setup('> @ENFORCE Answer in Chinese\n>\n> Tell a story -> @animal\n');
+    assert.equal(data.cells[0].value, '@ENFORCE Answer in Chinese\n\nTell a story -> @animal');
+    data.cells[0].value = '@ENFORCE Answer in Chinese\n\nTell a funny story -> @animal';
+    const saved = Buffer.from(serializer.serializeNotebook(data)).toString();
+    assert.match(saved, /> @ENFORCE Answer in Chinese\n> \n> Tell a funny story -> @animal/);
+    assert.equal(serializer.deserializeNotebook(Buffer.from(saved)).cells[0].value, data.cells[0].value);
+    assert.equal(mock.diagnostics.get('spl-notebook-syntax')?.size, 0);
 });
 
 test('native controller queues requests, renders results and routes function errors to their cell', async () => {
