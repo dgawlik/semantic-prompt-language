@@ -608,9 +608,15 @@ class Interpreter {
                 : await perform();
             if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response; blockquotes require runtime actions, not submitted SPL');
             if (!replaying) {
+<<<<<<< HEAD
                 logger.info(`llm ${req.kind} call (${Date.now() - started} ms):`, res.effective);
                 logger.llm('llm response:', res.text);
                 if (res.action) logger.llm('runtime action:', res.action);
+=======
+                logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
+                logger.llm(`llm response:\n${res.text}`);
+                if (res.action) logger.llm(`runtime action:\n${JSON.stringify(res.action)}`);
+>>>>>>> f8392e76a89a94812addf6a245ad9fa8cee7151f
             }
             return res;
         } catch (e) {

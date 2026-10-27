@@ -4,7 +4,7 @@ version: 1
 model: 'gpt-6-luna'
 ---
 
-> Calculate the sum of @ENV.lhs and @ENV.rhs save to @sum
+> Calculate the sum of @ENV.lhs and @ENV.rhs save to @s
 
 ```spl
 let lhs2 = $args[0]
@@ -14,4 +14,4 @@ log(lhs2)
 log(rhs2)
 ```
 
-> Return @SUCCESS with @sum
+> Return @SUCCESS with @s

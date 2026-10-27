@@ -5,10 +5,10 @@
   },
   "closures": {
     "term": "Closure",
-    "definition": "A closure is a function that retains access to variables from the scope in which it was created, even after that scope has ended."
+    "definition": "A closure is a function that retains access to variables from the scope where it was created, even after that scope has ended."
   },
   "regular expressions": {
-    "term": "Regular expression",
-    "definition": "A regular expression is a pattern used to search, match, or manipulate text."
+    "term": "Regular expressions",
+    "definition": "Regular expressions are patterns used to match, search, and manipulate text."
   }
 }

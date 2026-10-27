@@ -1,0 +1,16 @@
+{
+  "runs": 2,
+  "history": [
+    {
+      "run": 1,
+      "summary": "Sprint 41 completed the billing queue migration with two flaky tests remaining, sped up onboarding by 30%, is awaiting an unknown-ETA security review for the SSO change, and plans dark mode work plus a CSV export encoding fix."
+    },
+    {
+      "run": 2,
+      "summary": "Sprint 41 completed the billing queue migration with two flaky tests remaining, improved onboarding speed by 30%, is awaiting an unknown-ETA security review for the SSO change, and plans dark mode work plus a CSV export encoding fix."
+    }
+  ],
+  "notes": "Sprint 41 notes\r\n\r\n- Finished the migration of the billing service to the new queue. Two flaky tests remain.\r\n- Customer onboarding flow is 30% faster after caching the plan catalogue.\r\n- Blocked: waiting on security review for the SSO change; ETA unknown.\r\n- Next: start the dark mode work and fix the CSV export encoding bug.\r\n",
+  "today": "Sprint 41 completed the billing queue migration with two flaky tests remaining, improved onboarding speed by 30%, is awaiting an unknown-ETA security review for the SSO change, and plans dark mode work plus a CSV export encoding fix.",
+  "trend": "From run 1 to run 2, the onboarding improvement was rephrased from “sped up by 30%” to “improved onboarding speed by 30%”; the 30% gain and all other reported updates remain unchanged."
+}

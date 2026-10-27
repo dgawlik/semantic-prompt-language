@@ -7,11 +7,19 @@
 the outcome through its exit code.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
+<<<<<<< HEAD
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=05294be22f62">
 <link rel="stylesheet" href="assets/style.css?v=05294be22f62">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
 <script defer src="assets/search-index.js?v=05294be22f62"></script>
 <script defer src="assets/site.js?v=05294be22f62"></script>
+=======
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=402ac6c870d3">
+<link rel="stylesheet" href="assets/style.css?v=402ac6c870d3">
+<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
+<script defer src="assets/search-index.js?v=402ac6c870d3"></script>
+<script defer src="assets/site.js?v=402ac6c870d3"></script>
+>>>>>>> f8392e76a89a94812addf6a245ad9fa8cee7151f
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -159,7 +167,11 @@ kind, model, reasoning); a mismatch, missing or unused entry fails.</p>
 <p>Replay is not a dry run: explicit <code>read_file</code>, <code>write_file</code>, <code>shell</code> and web calls, and stores, still run.
 Agent actions are not repeated, and their side effects are not recreated. Blockquote decisions
 rebuild shared bindings and run existing functions against recorded external-tool results.</p>
+<<<<<<< HEAD
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-4"><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;format&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;spl-trace&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;version&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-number">1</span><span class="hljs-punctuation">}</span>
+=======
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-3"><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;format&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;spl-trace&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;version&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-number">1</span><span class="hljs-punctuation">}</span>
+>>>>>>> f8392e76a89a94812addf6a245ad9fa8cee7151f
 <span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;request&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;kind&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;ask&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;prompt&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;Question&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;model&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">null</span></span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;reasoningEffort&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">null</span></span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;showReasoning&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-literal"><span class="hljs-keyword">false</span></span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;response&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;text&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;Answer&quot;</span><span class="hljs-punctuation">,</span><span class="hljs-attr">&quot;effective&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-punctuation">{</span><span class="hljs-attr">&quot;model&quot;</span><span class="hljs-punctuation">:</span><span class="hljs-string">&quot;actual-model&quot;</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span>
 </code></pre></figure>
 <p>The older <code>--record</code> mode writes generation-only recordings; replaying them blocks writes, shell,

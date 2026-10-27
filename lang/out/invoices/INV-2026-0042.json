@@ -1,0 +1,26 @@
+{
+  "vendor": "ACME Industrial Supplies GmbH",
+  "number": "INV-2026-0042",
+  "date": "2026-03-14",
+  "currency": "EUR",
+  "lines": [
+    {
+      "description": "Hex bolt M8 (box of 100)",
+      "quantity": 3,
+      "unit_price": 12.5
+    },
+    {
+      "description": "Safety gloves, size L",
+      "quantity": 2,
+      "unit_price": 8.9
+    },
+    {
+      "description": "Cordless drill",
+      "quantity": 1,
+      "unit_price": 119
+    }
+  ],
+  "subtotal": 174.3,
+  "tax": 33.12,
+  "total": 207.42
+}

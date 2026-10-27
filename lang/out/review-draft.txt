@@ -1,0 +1,1 @@
+Our March update adds dark mode, up to 3× faster CSV exports, and `limit` and `cursor` support for `GET /v2/reports`. It also fixes crashes when opening very large projects and incorrect time zones in scheduled report emails.
