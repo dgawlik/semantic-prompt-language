@@ -14,6 +14,7 @@ export interface UserFunction {
     params: string[];
     body: Stmt[];
     closure: Env;
+    source?: { lines: string[]; uri?: string; version?: number };
 }
 
 export interface BuiltinFunction {
@@ -105,6 +106,24 @@ export function toJson(v: Value): unknown {
     const out: Record<string, unknown> = {};
     for (const [k, x] of Object.entries(v)) Object.defineProperty(out, k, { value: toJson(x), enumerable: true, writable: true, configurable: true });
     return out;
+}
+
+/** Cycle-safe display data without exposing function closures or runtime internals. */
+export function describeValue(value: Value): unknown {
+    const visiting = new Set<Value>();
+    const describe = (value: Value): unknown => {
+        if (isFunction(value)) {
+            return value.__fn === 'user' ? `def ${value.name}(${value.params.join(', ')})` : value.name;
+        }
+        if (!isList(value) && !isDict(value)) return toJson(value);
+        if (visiting.has(value)) return '<circular reference>';
+        visiting.add(value);
+        const result = isList(value) ? value.map(describe)
+            : Object.fromEntries(Object.entries(value).map(([key, child]) => [key, describe(child)]));
+        visiting.delete(value);
+        return result;
+    };
+    return describe(value);
 }
 
 /** Converts parsed JSON into a Value (JSON objects are already safe dicts). */

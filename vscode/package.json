@@ -2,7 +2,7 @@
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
   "description": "Executable Markdown with SPL blocks and natural-language workflows",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "publisher": "spl-lang",
   "license": "ISC",
   "repository": {
@@ -15,12 +15,21 @@
     "vscode": "^1.82.0"
   },
   "main": "./out/extension.cjs",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Workflow editing is available; running cells requires workspace trust."
+    },
+    "virtualWorkspaces": { "supported": false }
+  },
   "activationEvents": [
-    "onLanguage:markdown"
+    "onLanguage:markdown",
+    "onNotebook:spl-workflow"
   ],
   "categories": [
     "Programming Languages",
-    "Snippets"
+    "Snippets",
+    "Notebooks"
   ],
   "keywords": [
     "spl",
@@ -29,6 +38,37 @@
     "copilot"
   ],
   "contributes": {
+    "notebooks": [
+      {
+        "type": "spl-workflow",
+        "displayName": "SPL Workflow Notebook",
+        "selector": [{ "filenamePattern": "*.md" }],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      { "command": "spl.openNotebook", "title": "SPL: Open as Notebook" },
+      { "command": "spl.resetNotebook", "title": "SPL: Reset Notebook Session" }
+    ],
+    "menus": {
+      "notebook/toolbar": [
+        { "command": "spl.resetNotebook", "when": "notebookType == spl-workflow", "group": "navigation" }
+      ],
+      "editor/title": [
+        { "command": "spl.openNotebook", "when": "resourceExtname == .md", "group": "navigation" }
+      ]
+    },
+    "configuration": {
+      "title": "SPL",
+      "properties": {
+        "spl.notebook.nodePath": {
+          "type": "string",
+          "default": "node",
+          "scope": "machine",
+          "description": "Node.js executable used for isolated notebook sessions. Requires Node.js 20.19+ or 22.12+ for Copilot model calls."
+        }
+      }
+    },
     "markdown.markdownItPlugins": true,
     "languages": [
       {
@@ -72,10 +112,11 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "vscode:prepublish": "npm run typecheck && npm run build",
-    "test": "npm run typecheck && node build.mjs --test && node --test out/test/language-server.test.cjs && node test/run-assertions.mjs && node test/check-examples.mjs",
+    "test": "npm run typecheck && node build.mjs --test && node --test out/test/language-server.test.cjs out/test/notebook.test.cjs out/test/notebook-ui.test.cjs && node test/run-assertions.mjs && node test/check-examples.mjs",
     "package": "vsce package --skip-license"
   },
   "dependencies": {
+    "@github/copilot-sdk": "^1.0.22",
     "highlight.js": "^11.12.0",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",

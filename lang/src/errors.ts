@@ -14,6 +14,8 @@ export interface FailurePayload {
     command: string;
     line: number;
     status_code: StatusCode;
+    source?: string;
+    source_version?: number;
 }
 
 /** A script-level failure. Stops the script unless caught by try/except. */
@@ -23,6 +25,8 @@ export class Failure extends Error {
     command = '';
     line = 0;
     located = false;
+    source?: string;
+    sourceVersion?: number;
 
     constructor(statusCode: StatusCode, reason: string) {
         super(reason);
@@ -31,11 +35,13 @@ export class Failure extends Error {
         this.reason = reason;
     }
 
-    locate(line: number, command: string): this {
+    locate(line: number, command: string, source?: string, sourceVersion?: number): this {
         if (!this.located) {
             this.line = line;
             this.command = command;
             this.located = true;
+            this.source = source;
+            this.sourceVersion = sourceVersion;
         }
         return this;
     }
@@ -47,6 +53,8 @@ export class Failure extends Error {
             command: this.command,
             line: this.line,
             status_code: this.statusCode,
+            ...(this.source ? { source: this.source } : {}),
+            ...(this.sourceVersion !== undefined ? { source_version: this.sourceVersion } : {}),
         };
     }
 }

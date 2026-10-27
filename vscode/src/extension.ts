@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind } from 'vscode-languageclient/node';
 import { extendMarkdownIt } from './markdownPreview';
+import { registerNotebooks } from './notebook';
 
 let client: LanguageClient | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<{ extendMarkdownIt: typeof extendMarkdownIt }> {
+    registerNotebooks(context);
     const outputChannel = vscode.window.createOutputChannel('SPL Language Server');
     context.subscriptions.push(outputChannel);
     client = new LanguageClient(
@@ -15,7 +17,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ exte
             transport: TransportKind.ipc,
         },
         {
-            documentSelector: [{ language: 'markdown' }],
+            documentSelector: [{ language: 'markdown' }, { language: 'spl', scheme: 'vscode-notebook-cell' }],
             outputChannel,
         },
     );

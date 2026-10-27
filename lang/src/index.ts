@@ -1,6 +1,6 @@
 export { parse, usesHuman } from './parser.js';
 export { parseMarkdown, extractMarkdown, isWorkflowMarkdown } from './markdown.js';
-export { run, type RunOptions, type RunResult } from './interpreter.js';
+export { run, ExecutionSession, type RunOptions, type RunResult } from './interpreter.js';
 export { Failure, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
 export { Logger, type LogLevel, type LoggerOptions } from './logger.js';
 export { CopilotBackend } from './copilot.js';

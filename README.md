@@ -54,7 +54,7 @@ then `node dist/cli.js examples/hi.md`.
 | Folder | Contents |
 | --- | --- |
 | [lang/](lang/README.md) | Interpreter, CLI, tests and [examples](lang/examples/) |
-| [vscode/](vscode/README.md) | VS Code extension with a language server |
+| [vscode/](vscode/README.md) | VS Code language server and runnable Markdown notebooks |
 | [docs-template/](docs-template/Introduction.md) | Documentation sources |
 | [docs/](docs/) | Generated documentation site (GitHub Pages) |
 

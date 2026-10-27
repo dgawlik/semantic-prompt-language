@@ -15,6 +15,7 @@ import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
 import {
     assertMutable,
     compareValues,
+    describeValue,
     equals,
     hasKey,
     isDict,
@@ -44,6 +45,9 @@ export interface RunOptions {
     args?: readonly string[];
     maxCallDepth?: number;
     checkpoint?: Checkpoint;
+    /** Source URI used to locate failures across interactive cells. */
+    source?: string;
+    sourceVersion?: number;
 }
 
 export type RunResult =
@@ -62,8 +66,31 @@ export async function run(program: Program, opts: RunOptions): Promise<RunResult
     return new Interpreter(program, opts).run();
 }
 
+interface SessionState {
+    globals: Env;
+    current?: Interpreter;
+}
+
+/** An isolated interactive scope, retaining values and function closures between runs. */
+export class ExecutionSession {
+    private readonly state: SessionState = { globals: { vars: new Map() } };
+    private running = false;
+
+    async run(program: Program, opts: Omit<RunOptions, 'store' | 'checkpoint'>): Promise<RunResult> {
+        if (this.running) throw new Error('an execution session can only run one cell at a time');
+        this.running = true;
+        try {
+            this.state.current = new Interpreter(program, opts, this.state);
+            return await this.state.current.run();
+        } finally {
+            this.running = false;
+            this.state.current = undefined;
+        }
+    }
+}
+
 class Interpreter {
-    private readonly globals: Env = { vars: new Map() };
+    private readonly globals: Env;
     private readonly builtins;
     private readonly store: VariableStore;
     private readonly cwd: string;
@@ -75,11 +102,19 @@ class Interpreter {
     private restrictions: Restrictions;
     private depth = 0;
     private naturalDepth = 0;
+    private sourceLines: string[];
+    private sourceUri?: string;
+    private sourceVersion?: number;
 
     constructor(
         private readonly program: Program,
         private readonly opts: RunOptions,
+        private readonly sessionState?: SessionState,
     ) {
+        this.globals = sessionState?.globals ?? { vars: new Map() };
+        this.sourceLines = program.lines;
+        this.sourceUri = opts.source;
+        this.sourceVersion = opts.sourceVersion;
         this.cwd = opts.cwd ?? process.cwd();
         this.store = opts.store ?? new MemoryStore();
         this.model = opts.model ?? program.directives.model;
@@ -91,9 +126,12 @@ class Interpreter {
         Object.freeze(this.runtimeEnv);
         Object.freeze(this.runtimeArgs);
         this.restrictions = new Restrictions(this.cwd);
-        this.builtins = makeBuiltins({ log: (values) => this.logValues('info', values) });
+        this.builtins = makeBuiltins({ log: (values) => (this.sessionState?.current ?? this).logValues('info', values) });
         for (const tool of Object.keys(TOOL_SPECS) as ToolName[]) {
-            this.builtins.set(tool, { __fn: 'builtin', name: tool, call: (args) => this.callTool(tool, args) });
+            this.builtins.set(tool, {
+                __fn: 'builtin', name: tool,
+                call: (args) => (this.sessionState?.current ?? this).callTool(tool, args),
+            });
         }
     }
 
@@ -115,6 +153,7 @@ class Interpreter {
             this.opts.checkpoint?.assertConsumed();
             if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
             if (signal && signal.k !== 'value') throw runtimeError(`'${signal.k}' outside of a loop`);
+            if (this.sessionState && signal?.k === 'value') return { status: 'success', value: signal.v, hasValue: true };
             return { status: 'success', value: null, hasValue: false };
         } catch (e) {
             if (e instanceof SuspensionSignal) return { status: 'waiting_for_input', request: e.request };
@@ -130,7 +169,7 @@ class Interpreter {
             throw e;
         } finally {
             try {
-                if (!this.opts.checkpoint && this.opts.backend.mode !== 'replay') {
+                if (!this.sessionState && !this.opts.checkpoint && this.opts.backend.mode !== 'replay') {
                     const snapshot: Record<string, Value> = {};
                     for (const [k, v] of this.globals.vars) if (!isFunction(v)) snapshot[k] = v;
                     this.store.save(snapshot);
@@ -182,14 +221,14 @@ class Interpreter {
     private async execStmt(s: Stmt, env: Env): Promise<Completion> {
         try {
             if (!this.opts.checkpoint?.replaying) {
-                this.opts.logger.deterministic(`line ${s.line} (${s.t}): ${this.program.lines[s.line - 1]?.trim() ?? ''}`);
+                this.opts.logger.deterministic(`line ${s.line} (${s.t}): ${this.sourceLines[s.line - 1]?.trim() ?? ''}`);
             }
             return await this.execStmtInner(s, env);
         } catch (e) {
             if (e instanceof ExpressionSignal) return e.signal;
-            if (e instanceof Failure) throw e.locate(s.line, this.program.lines[s.line - 1]?.trim() ?? '');
+            if (e instanceof Failure) throw e.locate(s.line, this.sourceLines[s.line - 1]?.trim() ?? '', this.sourceUri, this.sourceVersion);
             if (e instanceof RangeError) {
-                throw new Failure('runtime_error', e.message).locate(s.line, this.program.lines[s.line - 1]?.trim() ?? '');
+                throw new Failure('runtime_error', e.message).locate(s.line, this.sourceLines[s.line - 1]?.trim() ?? '', this.sourceUri, this.sourceVersion);
             }
             throw e;
         }
@@ -243,7 +282,10 @@ class Interpreter {
                 return;
             }
             case 'def': {
-                const fn: UserFunction = { __fn: 'user', name: s.name, params: s.params, body: s.body, closure: env };
+                const fn: UserFunction = {
+                    __fn: 'user', name: s.name, params: s.params, body: s.body, closure: env,
+                    source: { lines: this.sourceLines, uri: this.sourceUri, version: this.sourceVersion },
+                };
                 env.vars.set(s.name, fn);
                 return;
             }
@@ -475,6 +517,12 @@ class Interpreter {
         }
         if (this.depth >= this.maxDepth) throw runtimeError(`maximum call depth (${this.maxDepth}) exceeded`);
         const local: Env = { vars: new Map(fn.params.map((p, i) => [p, args[i]])), parent: fn.closure };
+        const savedLines = this.sourceLines;
+        const savedUri = this.sourceUri;
+        const savedVersion = this.sourceVersion;
+        this.sourceLines = fn.source?.lines ?? savedLines;
+        this.sourceUri = fn.source?.uri ?? savedUri;
+        this.sourceVersion = fn.source?.version ?? savedVersion;
         this.depth++;
         try {
             const sig = await this.execBlock(fn.body, local);
@@ -482,6 +530,9 @@ class Interpreter {
             return sig?.k === 'return' ? sig.v : null;
         } finally {
             this.depth--;
+            this.sourceLines = savedLines;
+            this.sourceUri = savedUri;
+            this.sourceVersion = savedVersion;
         }
     }
 
@@ -626,23 +677,10 @@ class Interpreter {
             throw new Failure('restriction_violation', 'blockquotes are agents and cannot run in generation-only record/replay mode; use --trace');
         }
         const bindings: Record<string, unknown> = Object.create(null);
-        const visiting = new Set<Value>();
-        const describe = (value: Value): unknown => {
-            if (isFunction(value)) {
-                return value.__fn === 'user' ? `def ${value.name}(${value.params.join(', ')})` : value.name;
-            }
-            if (!isList(value) && !isDict(value)) return toJson(value);
-            if (visiting.has(value)) return '<circular reference>';
-            visiting.add(value);
-            const result = isList(value) ? value.map(describe)
-                : Object.fromEntries(Object.entries(value).map(([key, child]) => [key, describe(child)]));
-            visiting.delete(value);
-            return result;
-        };
         for (let scope: Env | undefined = env; scope; scope = scope.parent) {
             for (const [name, value] of scope.vars) {
                 if (Object.hasOwn(bindings, name)) continue;
-                bindings[name] = describe(value);
+                bindings[name] = describeValue(value);
             }
         }
         const history: unknown[] = [];
@@ -663,11 +701,11 @@ class Interpreter {
                 if (!response.action) return;
                 let result: unknown;
                 try {
-                    result = { value: describe(await this.execNaturalAction(response.action, line, env)) };
+                    result = { value: describeValue(await this.execNaturalAction(response.action, line, env)) };
                 } catch (error) {
                     if (!(error instanceof Failure) || error.statusCode === 'restriction_violation' ||
                         error.statusCode === 'explicit_failure' || error.statusCode === 'llm_error') throw error;
-                    error.locate(line, this.program.lines[line - 1]?.trim() ?? '');
+                    error.locate(line, this.sourceLines[line - 1]?.trim() ?? '', this.sourceUri, this.sourceVersion);
                     if (!this.opts.checkpoint?.replaying) this.opts.logger.error(`blockquote tool ${response.action.name}: ${error.reason}`);
                     result = { error: error.payload() };
                 }

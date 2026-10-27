@@ -74,6 +74,30 @@ try {
 Also exported: `parse` (raw SPL), `TraceBackend`, `ReplayBackend`, `RecordingBackend`, variable stores,
 `Checkpoint`, authentication helpers and types. See [Embedding](../docs-template/CLI.md#embedding).
 
+### Interactive sessions
+
+Use `ExecutionSession` for notebook/REPL execution. It retains variables, mutable objects, builtin
+aliases and user-function closures without a variable-store file. Calls must be serialized; each
+session is isolated, and replacing it clears state.
+
+```js
+import { ExecutionSession, parse } from 'spl-lang';
+
+const session = new ExecutionSession();
+await session.run(parse('let count = 2\ndef double() { return count * 2 }'), { backend, logger });
+await session.run(parse('count += 1'), { backend, logger });
+const result = await session.run(parse('double()'), { backend, logger, source: 'cell:3' });
+// result: { status: 'success', value: 6, hasValue: true }
+```
+
+Unlike one-shot `run`, a session returns the final expression's value. Explicit `return` and
+`success` keep their usual behavior. Failures retain changes already made; no cells are replayed.
+The optional `source` URI and `sourceVersion` are remembered by function definitions and returned
+as `failure.source` and `failure.source_version`, so a host can locate errors without highlighting
+stale edited source. Stores and checkpoints are not session
+options. The embedding host owns backend cleanup and cancellation; the VS Code notebook extension
+uses a separate process per notebook so even unbounded deterministic code can be interrupted.
+
 ## Tests
 
 ```sh
