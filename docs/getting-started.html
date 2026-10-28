@@ -6,11 +6,11 @@
 <meta name="description" content="Install the CLI, sign in to GitHub Copilot, then write and refine a workflow in a short edit-run loop.">
 <meta name="color-scheme" content="light dark">
 <title>Getting started - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=8c8d1cbc37ef">
-<link rel="stylesheet" href="assets/style.css?v=8c8d1cbc37ef">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=60342000322c">
+<link rel="stylesheet" href="assets/style.css?v=60342000322c">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=8c8d1cbc37ef"></script>
-<script defer src="assets/site.js?v=8c8d1cbc37ef"></script>
+<script defer src="assets/search-index.js?v=60342000322c"></script>
+<script defer src="assets/site.js?v=60342000322c"></script>
 </head>
 <body data-page="getting-started">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -46,14 +46,14 @@ extension: semantic-prompt-language
 
 <span class="hljs-section"># Greeting</span>
 
-<span class="hljs-code">```spl
-</span><span class="hljs-keyword">let</span> name = <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
-<span class="hljs-keyword">if</span> name == <span class="hljs-literal">None</span> {
-    name = <span class="hljs-string">&#x27;world&#x27;</span>
+<span class="hljs-meta">```spl</span><span class="language-spl">
+<span class="hljs-keyword">let</span> name <span class="hljs-operator">=</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
+<span class="hljs-keyword">if</span> name <span class="hljs-operator">==</span> <span class="hljs-literal">None</span> {
+    name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;world&#x27;</span>
 }
-<span class="hljs-code">```</span>
+</span><span class="hljs-meta">```</span>
 
-<span class="hljs-quote">&gt; Write a one-line greeting for @name and return it with @success</span>
+<span class="hljs-quote">&gt; Write a one-line greeting for <span class="hljs-variable">@name</span> and return it with <span class="hljs-variable">@success</span></span>
 </code></pre></figure>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-3">spl greet.md --arg Ada
 </code></pre></figure>

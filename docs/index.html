@@ -6,11 +6,11 @@
 <meta name="description" content="Run all your workflows in Markdown editor. SPL understands both code and natural language. spl code fences hold exact, Python-like code; blockquotes hold natural-language agent commands. Both share one scope, the same tools and the same guards, so each step can be written in whichever form reads best.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=8c8d1cbc37ef">
-<link rel="stylesheet" href="assets/style.css?v=8c8d1cbc37ef">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=60342000322c">
+<link rel="stylesheet" href="assets/style.css?v=60342000322c">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=8c8d1cbc37ef"></script>
-<script defer src="assets/site.js?v=8c8d1cbc37ef"></script>
+<script defer src="assets/search-index.js?v=60342000322c"></script>
+<script defer src="assets/site.js?v=60342000322c"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -42,27 +42,27 @@ This example highlights some SPL features helpful in automation of day to day wo
 <span class="hljs-quote">&gt; grouped in categories high, medium, low. each category </span>
 <span class="hljs-quote">&gt; should be an array of issues with each issue json object </span>
 <span class="hljs-quote">&gt; with name, cwe-id, link to file and describtion. </span>
-<span class="hljs-quote">&gt; save to @vulnerabilities</span>
+<span class="hljs-quote">&gt; save to <span class="hljs-variable">@vulnerabilities</span></span>
 
-<span class="hljs-code">```spl
-</span><span class="hljs-built_in">log</span>(vulnerabilities)
-<span class="hljs-code">```</span>
+<span class="hljs-meta">```spl</span><span class="language-spl">
+<span class="hljs-built_in">log</span>(vulnerabilities)
+</span><span class="hljs-meta">```</span>
 
-<span class="hljs-code">```spl
-</span><span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;high&#x27;</span>]) &gt; <span class="hljs-number">0</span>{
-    <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;High vulnerabilities found. Fix this one first {vulnerabilities[&quot;high&quot;][0]}&#x27;</span>
-} <span class="hljs-keyword">elif</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;medium&#x27;</span>]) &gt; <span class="hljs-number">0</span>{
+<span class="hljs-meta">```spl</span><span class="language-spl">
+<span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;high&#x27;</span>]) <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span>{
+    <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;High vulnerabilities found. Fix this one first <span class="hljs-subst">{vulnerabilities[<span class="hljs-string">&quot;high&quot;</span>][<span class="hljs-number">0</span>]}</span>&#x27;</span>
+} <span class="hljs-keyword">elif</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;medium&#x27;</span>]) <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span>{
     <span class="hljs-keyword">for</span> vuln <span class="hljs-keyword">in</span> vulnerabilities[<span class="hljs-string">&#x27;medium&#x27;</span>]{
-        <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Medium vulnerability found: {vuln}&#x27;</span>)
+        <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Medium vulnerability found: <span class="hljs-subst">{vuln}</span>&#x27;</span>)
     }
-} <span class="hljs-keyword">elif</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;low&#x27;</span>]) &gt; <span class="hljs-number">0</span>{
+} <span class="hljs-keyword">elif</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;low&#x27;</span>]) <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span>{
     <span class="hljs-keyword">for</span> vuln <span class="hljs-keyword">in</span> vulnerabilities[<span class="hljs-string">&#x27;low&#x27;</span>]{
-        <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Low vulnerability found: {vuln}&#x27;</span>)
+        <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Low vulnerability found: <span class="hljs-subst">{vuln}</span>&#x27;</span>)
     }
 }
 
 <span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;Analyzed&#x27;</span>
-<span class="hljs-code">```</span>
+</span><span class="hljs-meta">```</span>
 </code></pre></figure>
 <h2 id="why-spl">Why SPL?<a class="heading-anchor" href="#why-spl" aria-label="Link to Why SPL?">#</a></h2>
 <ol>

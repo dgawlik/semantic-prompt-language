@@ -7,11 +7,11 @@
 folder, for example spl examples/hi.md. Each example&#39;s header shows its arguments.">
 <meta name="color-scheme" content="light dark">
 <title>Examples - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=8c8d1cbc37ef">
-<link rel="stylesheet" href="assets/style.css?v=8c8d1cbc37ef">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=60342000322c">
+<link rel="stylesheet" href="assets/style.css?v=60342000322c">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=8c8d1cbc37ef"></script>
-<script defer src="assets/site.js?v=8c8d1cbc37ef"></script>
+<script defer src="assets/search-index.js?v=60342000322c"></script>
+<script defer src="assets/site.js?v=60342000322c"></script>
 </head>
 <body data-page="examples">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -145,15 +145,15 @@ ordinary arithmetic checks the numbers, because a model can produce valid JSON w
 
 <span class="hljs-code">    spl examples/extract-invoice.md --arg ./examples/data/invoice.txt
 </span>
-<span class="hljs-code">```spl
-</span><span class="hljs-keyword">let</span> path = <span class="hljs-string">&#x27;./examples/data/invoice.txt&#x27;</span>
-<span class="hljs-keyword">if</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>] != <span class="hljs-literal">None</span> {
-    path = <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
+<span class="hljs-meta">```spl</span><span class="language-spl">
+<span class="hljs-keyword">let</span> path <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;./examples/data/invoice.txt&#x27;</span>
+<span class="hljs-keyword">if</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>] <span class="hljs-operator">!=</span> <span class="hljs-literal">None</span> {
+    path <span class="hljs-operator">=</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
 }
-<span class="hljs-keyword">let</span> document = <span class="hljs-built_in">read_file</span>(path)
+<span class="hljs-keyword">let</span> document <span class="hljs-operator">=</span> <span class="hljs-built_in">read_file</span>(path)
 
-<span class="hljs-keyword">let</span> Money = {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;number&#x27;</span>, <span class="hljs-string">&#x27;minimum&#x27;</span>: <span class="hljs-number">0</span>}
-<span class="hljs-keyword">let</span> Invoice = {
+<span class="hljs-keyword">let</span> Money <span class="hljs-operator">=</span> {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;number&#x27;</span>, <span class="hljs-string">&#x27;minimum&#x27;</span>: <span class="hljs-number">0</span>}
+<span class="hljs-keyword">let</span> Invoice <span class="hljs-operator">=</span> {
     <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
     <span class="hljs-string">&#x27;properties&#x27;</span>: {
         <span class="hljs-string">&#x27;vendor&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>, <span class="hljs-string">&#x27;minLength&#x27;</span>: <span class="hljs-number">1</span>},
@@ -178,28 +178,28 @@ ordinary arithmetic checks the numbers, because a model can produce valid JSON w
     <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;vendor&#x27;</span>, <span class="hljs-string">&#x27;number&#x27;</span>, <span class="hljs-string">&#x27;date&#x27;</span>, <span class="hljs-string">&#x27;currency&#x27;</span>, <span class="hljs-string">&#x27;lines&#x27;</span>, <span class="hljs-string">&#x27;subtotal&#x27;</span>, <span class="hljs-string">&#x27;tax&#x27;</span>, <span class="hljs-string">&#x27;total&#x27;</span>],
     <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
 }
-<span class="hljs-code">```</span>
+</span><span class="hljs-meta">```</span>
 
-<span class="hljs-quote">&gt; @FORBID filling in values that are not printed on the invoice</span>
-<span class="hljs-quote">&gt;
-&gt; Extract the invoice in @document. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,</span>
-<span class="hljs-quote">&gt; and there is one entry per line item. @validate[Invoice] save to @invoice</span>
+<span class="hljs-quote">&gt; <span class="hljs-keyword">@FORBID</span> filling in values that are not printed on the invoice</span>
+<span class="hljs-quote">&gt;</span>
+<span class="hljs-quote">&gt; Extract the invoice in <span class="hljs-variable">@document</span>. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,</span>
+<span class="hljs-quote">&gt; and there is one entry per line item. <span class="hljs-keyword">@validate</span>[Invoice] save to <span class="hljs-variable">@invoice</span></span>
 
-<span class="hljs-code">```spl
-</span><span class="hljs-keyword">let</span> computed = <span class="hljs-number">0</span>
+<span class="hljs-meta">```spl</span><span class="language-spl">
+<span class="hljs-keyword">let</span> computed <span class="hljs-operator">=</span> <span class="hljs-number">0</span>
 <span class="hljs-keyword">for</span> line <span class="hljs-keyword">in</span> invoice.lines {
-    computed += line.quantity * line.unit_price
+    computed <span class="hljs-operator">+=</span> line.quantity <span class="hljs-operator">*</span> line.unit_price
 }
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">abs</span>(computed - invoice.subtotal) &lt; <span class="hljs-number">0.01</span> \
-    <span class="hljs-string">&quot;line items add up to {round(computed, 2)} but the subtotal is {invoice.subtotal}&quot;</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">abs</span>(invoice.subtotal + invoice.tax - invoice.total) &lt; <span class="hljs-number">0.01</span> \
-    <span class="hljs-string">&quot;subtotal {invoice.subtotal} + tax {invoice.tax} does not equal total {invoice.total}&quot;</span>
+<span class="hljs-keyword">assert</span> <span class="hljs-built_in">abs</span>(computed <span class="hljs-operator">-</span> invoice.subtotal) <span class="hljs-operator">&lt;</span> <span class="hljs-number">0.01</span> \
+    <span class="hljs-string">&quot;line items add up to <span class="hljs-subst">{<span class="hljs-built_in">round</span>(computed, <span class="hljs-number">2</span>)}</span> but the subtotal is <span class="hljs-subst">{invoice.subtotal}</span>&quot;</span>
+<span class="hljs-keyword">assert</span> <span class="hljs-built_in">abs</span>(invoice.subtotal <span class="hljs-operator">+</span> invoice.tax <span class="hljs-operator">-</span> invoice.total) <span class="hljs-operator">&lt;</span> <span class="hljs-number">0.01</span> \
+    <span class="hljs-string">&quot;subtotal <span class="hljs-subst">{invoice.subtotal}</span> + tax <span class="hljs-subst">{invoice.tax}</span> does not equal total <span class="hljs-subst">{invoice.total}</span>&quot;</span>
 
 <span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./out/invoices&#x27;</span> {
-    <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./out/invoices/{invoice.number}.json&#x27;</span>, <span class="hljs-built_in">json_stringify</span>(invoice, <span class="hljs-number">2</span>))
+    <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./out/invoices/<span class="hljs-subst">{invoice.number}</span>.json&#x27;</span>, <span class="hljs-built_in">json_stringify</span>(invoice, <span class="hljs-number">2</span>))
 }
 <span class="hljs-keyword">success</span> invoice
-<span class="hljs-code">```</span>
+</span><span class="hljs-meta">```</span>
 </code></pre></figure>
 <h2 id="triage-issues">Triage issues<a class="heading-anchor" href="#triage-issues" aria-label="Link to Triage issues">#</a></h2>
 <p>Exact <code>gh</code> calls fetch and label issues; the model only classifies, and nothing changes until a person approves.</p>
@@ -216,22 +216,22 @@ the plan. Needs an authenticated <span class="hljs-code">`gh`</span> CLI. Pass <
 
 <span class="hljs-code">    spl examples/triage-issues.md --checkpoint triage.jsonl --arg owner/repo
 </span>
-<span class="hljs-code">```spl
-</span><span class="hljs-keyword">let</span> repo = <span class="hljs-string">&#x27;&#x27;</span>
-<span class="hljs-keyword">if</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>] != <span class="hljs-literal">None</span> {
-    repo = <span class="hljs-string">&quot;--repo {$args[0]}&quot;</span>
+<span class="hljs-meta">```spl</span><span class="language-spl">
+<span class="hljs-keyword">let</span> repo <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
+<span class="hljs-keyword">if</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>] <span class="hljs-operator">!=</span> <span class="hljs-literal">None</span> {
+    repo <span class="hljs-operator">=</span> <span class="hljs-string">&quot;--repo <span class="hljs-subst">{<span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]}</span>&quot;</span>
 }
 
-<span class="hljs-keyword">let</span> issues = []
+<span class="hljs-keyword">let</span> issues <span class="hljs-operator">=</span> []
 <span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;gh&#x27;</span> {
-    issues = <span class="hljs-built_in">json_parse</span>(<span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;gh issue list {repo} --state open --search &quot;no:label&quot; --limit 20 --json number,title,body&#x27;</span>))
+    issues <span class="hljs-operator">=</span> <span class="hljs-built_in">json_parse</span>(<span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;gh issue list <span class="hljs-subst">{repo}</span> --state open --search &quot;no:label&quot; --limit 20 --json number,title,body&#x27;</span>))
 }
-<span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(issues) == <span class="hljs-number">0</span> {
+<span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(issues) <span class="hljs-operator">==</span> <span class="hljs-number">0</span> {
     <span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;No unlabeled issues&#x27;</span>
 }
 
-<span class="hljs-keyword">let</span> LABELS = [<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;enhancement&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>, <span class="hljs-string">&#x27;documentation&#x27;</span>]
-<span class="hljs-keyword">let</span> Plan = {
+<span class="hljs-keyword">let</span> LABELS <span class="hljs-operator">=</span> [<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;enhancement&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>, <span class="hljs-string">&#x27;documentation&#x27;</span>]
+<span class="hljs-keyword">let</span> Plan <span class="hljs-operator">=</span> {
     <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;array&#x27;</span>,
     <span class="hljs-string">&#x27;items&#x27;</span>: {
         <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
@@ -245,46 +245,46 @@ the plan. Needs an authenticated <span class="hljs-code">`gh`</span> CLI. Pass <
         <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
     },
 }
-<span class="hljs-code">```</span>
+</span><span class="hljs-meta">```</span>
 
-<span class="hljs-quote">&gt; @FORBID judging an issue by its title alone when the body says otherwise</span>
-<span class="hljs-quote">&gt;
-&gt; Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.</span>
+<span class="hljs-quote">&gt; <span class="hljs-keyword">@FORBID</span> judging an issue by its title alone when the body says otherwise</span>
+<span class="hljs-quote">&gt;</span>
+<span class="hljs-quote">&gt; Classify every issue in <span class="hljs-variable">@issues</span> with exactly one label from <span class="hljs-variable">@LABELS</span>, a priority and a one-sentence reason.</span>
 <span class="hljs-quote">&gt; Crashes, data loss and security problems are high priority.</span>
-<span class="hljs-quote">&gt; @validate[Plan] save to @plan</span>
+<span class="hljs-quote">&gt; <span class="hljs-keyword">@validate</span>[Plan] save to <span class="hljs-variable">@plan</span></span>
 
-<span class="hljs-code">```spl
-</span><span class="hljs-keyword">let</span> numbers = []
+<span class="hljs-meta">```spl</span><span class="language-spl">
+<span class="hljs-keyword">let</span> numbers <span class="hljs-operator">=</span> []
 <span class="hljs-keyword">for</span> issue <span class="hljs-keyword">in</span> issues {
     numbers.append(issue.number)
 }
-<span class="hljs-keyword">let</span> planned = []
+<span class="hljs-keyword">let</span> planned <span class="hljs-operator">=</span> []
 <span class="hljs-keyword">for</span> p <span class="hljs-keyword">in</span> plan {
     planned.append(p.number)
 }
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(plan) == <span class="hljs-built_in">len</span>(issues) <span class="hljs-string">&quot;expected {len(issues)} decisions, got {len(plan)}&quot;</span>
+<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(plan) <span class="hljs-operator">==</span> <span class="hljs-built_in">len</span>(issues) <span class="hljs-string">&quot;expected <span class="hljs-subst">{<span class="hljs-built_in">len</span>(issues)}</span> decisions, got <span class="hljs-subst">{<span class="hljs-built_in">len</span>(plan)}</span>&quot;</span>
 
-<span class="hljs-keyword">let</span> table = []
+<span class="hljs-keyword">let</span> table <span class="hljs-operator">=</span> []
 <span class="hljs-keyword">for</span> p <span class="hljs-keyword">in</span> plan {
-    <span class="hljs-keyword">assert</span> p.number <span class="hljs-keyword">in</span> numbers <span class="hljs-string">&quot;issue #{p.number} is not part of this batch&quot;</span>
-    <span class="hljs-keyword">assert</span> planned.count(p.number) == <span class="hljs-number">1</span> <span class="hljs-string">&quot;issue #{p.number} was classified twice&quot;</span>
-    table.append(<span class="hljs-string">&quot;#{p.number} -&gt; {p.label} ({p.priority}): {p.reason}&quot;</span>)
+    <span class="hljs-keyword">assert</span> p.number <span class="hljs-keyword">in</span> numbers <span class="hljs-string">&quot;issue #<span class="hljs-subst">{p.number}</span> is not part of this batch&quot;</span>
+    <span class="hljs-keyword">assert</span> planned.count(p.number) <span class="hljs-operator">==</span> <span class="hljs-number">1</span> <span class="hljs-string">&quot;issue #<span class="hljs-subst">{p.number}</span> was classified twice&quot;</span>
+    table.append(<span class="hljs-string">&quot;#<span class="hljs-subst">{p.number}</span> -&gt; <span class="hljs-subst">{p.label}</span> (<span class="hljs-subst">{p.priority}</span>): <span class="hljs-subst">{p.reason}</span>&quot;</span>)
 }
-<span class="hljs-code">```</span>
+</span><span class="hljs-meta">```</span>
 
-<span class="hljs-quote">&gt; @HUMAN Show the @table lines and ask &quot;Apply these labels? (yes/no)&quot;. Save the answer to @approved</span>
+<span class="hljs-quote">&gt; <span class="hljs-keyword">@HUMAN</span> Show the <span class="hljs-variable">@table</span> lines and ask &quot;Apply these labels? (yes/no)&quot;. Save the answer to <span class="hljs-variable">@approved</span></span>
 
-<span class="hljs-code">```spl
-</span><span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> approved.strip().lower().startswith(<span class="hljs-string">&#x27;y&#x27;</span>) {
+<span class="hljs-meta">```spl</span><span class="language-spl">
+<span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> approved.strip().lower().startswith(<span class="hljs-string">&#x27;y&#x27;</span>) {
     <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;Labels were not applied&#x27;</span>
 }
 <span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;gh&#x27;</span> {
     <span class="hljs-keyword">for</span> p <span class="hljs-keyword">in</span> plan {
-        <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;gh issue edit {p.number} {repo} --add-label {p.label}&#x27;</span>)
+        <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;gh issue edit <span class="hljs-subst">{p.number}</span> <span class="hljs-subst">{repo}</span> --add-label <span class="hljs-subst">{p.label}</span>&#x27;</span>)
     }
 }
 <span class="hljs-keyword">success</span> table
-<span class="hljs-code">```</span>
+</span><span class="hljs-meta">```</span>
 </code></pre></figure>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Examples.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>

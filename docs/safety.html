@@ -7,11 +7,11 @@
 check data, failures can be caught, and human hands decisions to a person.">
 <meta name="color-scheme" content="light dark">
 <title>Guards &amp; failures - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=8c8d1cbc37ef">
-<link rel="stylesheet" href="assets/style.css?v=8c8d1cbc37ef">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=60342000322c">
+<link rel="stylesheet" href="assets/style.css?v=60342000322c">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=8c8d1cbc37ef"></script>
-<script defer src="assets/site.js?v=8c8d1cbc37ef"></script>
+<script defer src="assets/search-index.js?v=60342000322c"></script>
+<script defer src="assets/site.js?v=60342000322c"></script>
 </head>
 <body data-page="safety">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -61,7 +61,7 @@ tools and agents are allowed by default. A blocked action raises <code>restricti
 <p>Values are a comma-separated string or a list of strings. Combine clauses with commas;
 nested or repeated clauses of the same kind intersect, so a scope can only narrow.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span>, exec <span class="hljs-string">&#x27;git&#x27;</span>, net <span class="hljs-string">&#x27;docs.example.com&#x27;</span> {
-    <span class="hljs-keyword">let</span> review = <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Review the changes in git diff and check them against the docs&#x27;</span>
+    <span class="hljs-keyword">let</span> review <span class="hljs-operator">=</span> <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Review the changes in git diff and check them against the docs&#x27;</span>
 }
 </code></pre></figure>
 <p>What is checked:</p>
@@ -78,10 +78,10 @@ MCP servers themselves are trusted and not sandboxed.</li>
 <p>Models are told the active restrictions, and the runtime enforces them on every call.
 <code>ask</code> and <code>think</code> have no tools at all.</p>
 <h2 id="assertions-fail-and-success">Assertions, fail and success<a class="heading-anchor" href="#assertions-fail-and-success" aria-label="Link to Assertions, fail and success">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> subtotal = <span class="hljs-number">10</span>
-<span class="hljs-keyword">let</span> total = <span class="hljs-number">12</span>
-<span class="hljs-keyword">assert</span> total &gt;= subtotal <span class="hljs-string">&#x27;total is smaller than subtotal&#x27;</span>
-<span class="hljs-keyword">if</span> total &gt; <span class="hljs-number">1000</span> {
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> subtotal <span class="hljs-operator">=</span> <span class="hljs-number">10</span>
+<span class="hljs-keyword">let</span> total <span class="hljs-operator">=</span> <span class="hljs-number">12</span>
+<span class="hljs-keyword">assert</span> total <span class="hljs-operator">&gt;=</span> subtotal <span class="hljs-string">&#x27;total is smaller than subtotal&#x27;</span>
+<span class="hljs-keyword">if</span> total <span class="hljs-operator">&gt;</span> <span class="hljs-number">1000</span> {
     <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;needs manual approval&#x27;</span>
 }
 <span class="hljs-keyword">success</span> total
@@ -144,11 +144,11 @@ MCP servers themselves are trusted and not sandboxed.</li>
 </tbody></table>
 </div>
 <h2 id="try--except">try / except<a class="heading-anchor" href="#try--except" aria-label="Link to try / except">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">let</span> data = <span class="hljs-string">&#x27;&#x27;</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
 <span class="hljs-keyword">try</span> {
-    data = <span class="hljs-built_in">read_file</span>(<span class="hljs-string">&#x27;optional.txt&#x27;</span>)
+    data <span class="hljs-operator">=</span> <span class="hljs-built_in">read_file</span>(<span class="hljs-string">&#x27;optional.txt&#x27;</span>)
 } <span class="hljs-keyword">except</span> err {
-    <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;{err.status_code} on line {err.line}: {err.reason}&quot;</span>)
+    <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;<span class="hljs-subst">{err.status_code}</span> on line <span class="hljs-subst">{err.line}</span>: <span class="hljs-subst">{err.reason}</span>&quot;</span>)
 }
 <span class="hljs-keyword">success</span> data
 </code></pre></figure>
@@ -162,8 +162,8 @@ completed tool or model calls.</p>
 <p>Blockquote agents use the <code>ask_human</code> tool for the same workflow. The answer is returned to the
 agent on resume, which may then make new model calls and save it to a shared variable. Runtime
 actions completed before the question are not repeated, including actions inside invoked functions.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> feedback = <span class="hljs-keyword">human</span> <span class="hljs-string">&#x27;What should change in the release notes?&#x27;</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(feedback.strip()) &gt; <span class="hljs-number">0</span> <span class="hljs-string">&#x27;feedback must not be blank&#x27;</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> feedback <span class="hljs-operator">=</span> <span class="hljs-keyword">human</span> <span class="hljs-string">&#x27;What should change in the release notes?&#x27;</span>
+<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(feedback.strip()) <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span> <span class="hljs-string">&#x27;feedback must not be blank&#x27;</span>
 </code></pre></figure>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-6">spl review.md --checkpoint run.jsonl --silent        <span class="hljs-comment"># exits 3 and prints the question</span>
 spl review.md --resume run.jsonl                      <span class="hljs-comment"># shows the pending question again</span>

@@ -7,11 +7,11 @@
 spl fences: values, bindings, control flow, functions, built-ins and exact tools.">
 <meta name="color-scheme" content="light dark">
 <title>Language - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=8c8d1cbc37ef">
-<link rel="stylesheet" href="assets/style.css?v=8c8d1cbc37ef">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=60342000322c">
+<link rel="stylesheet" href="assets/style.css?v=60342000322c">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=8c8d1cbc37ef"></script>
-<script defer src="assets/site.js?v=8c8d1cbc37ef"></script>
+<script defer src="assets/search-index.js?v=60342000322c"></script>
+<script defer src="assets/site.js?v=60342000322c"></script>
 </head>
 <body data-page="language">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -33,11 +33,11 @@ spl fences: values, bindings, control flow, functions, built-ins and exact tools
     <article class="prose"><h2 id="values-and-strings">Values and strings<a class="heading-anchor" href="#values-and-strings" aria-label="Link to Values and strings">#</a></h2>
 <p>Values are <code>None</code>, <code>True</code>/<code>False</code>, numbers, strings, lists, dicts with string keys, and functions.
 Statements end at a newline or <code>;</code>. <code>#</code> starts a comment, and a trailing <code>\</code> continues a line.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> name = <span class="hljs-string">&#x27;Ada&#x27;</span>
-<span class="hljs-keyword">let</span> greeting = <span class="hljs-string">&quot;Hello, {name.upper()}!&quot;</span>     <span class="hljs-comment"># {expr} interpolates in every quote style</span>
-<span class="hljs-keyword">let</span> literal = <span class="hljs-string">&#x27;Use {{name}} as a placeholder&#x27;</span> <span class="hljs-comment"># doubled braces are literal</span>
-<span class="hljs-keyword">let</span> raw = <span class="hljs-string">r&#x27;C:\temp\{not interpolated}&#x27;</span>     <span class="hljs-comment"># raw strings: no escapes or interpolation</span>
-<span class="hljs-keyword">let</span> block = <span class="hljs-string">&#x27;&#x27;&#x27;
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Ada&#x27;</span>
+<span class="hljs-keyword">let</span> greeting <span class="hljs-operator">=</span> <span class="hljs-string">&quot;Hello, <span class="hljs-subst">{name.upper()}</span>!&quot;</span>     <span class="hljs-comment"># {expr} interpolates in every quote style</span>
+<span class="hljs-keyword">let</span> literal <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Use {{name}} as a placeholder&#x27;</span> <span class="hljs-comment"># doubled braces are literal</span>
+<span class="hljs-keyword">let</span> raw <span class="hljs-operator">=</span> <span class="hljs-string">r&#x27;C:\temp\{not interpolated}&#x27;</span>     <span class="hljs-comment"># raw strings: no escapes or interpolation</span>
+<span class="hljs-keyword">let</span> block <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;&#x27;
 Triple-quoted strings span lines.
 &#x27;&#x27;&#x27;</span>
 </code></pre></figure>
@@ -48,13 +48,13 @@ slicing with negative indexes, and <code>d.key</code> as a shorthand for <code>d
 <p><code>let</code> declares a name in the current block; plain assignment updates the nearest existing declaration.
 Every block is a child scope, so inner <code>let</code> shadows outer names and does not leak out.
 Each loop iteration gets fresh variables.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> count = <span class="hljs-number">0</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> count <span class="hljs-operator">=</span> <span class="hljs-number">0</span>
 <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">3</span>) {
-    count += i
+    count <span class="hljs-operator">+=</span> i
 }
-<span class="hljs-keyword">let</span> result = {
-    <span class="hljs-keyword">let</span> count = <span class="hljs-number">10</span>
-    count + <span class="hljs-number">1</span>
+<span class="hljs-keyword">let</span> result <span class="hljs-operator">=</span> {
+    <span class="hljs-keyword">let</span> count <span class="hljs-operator">=</span> <span class="hljs-number">10</span>
+    count <span class="hljs-operator">+</span> <span class="hljs-number">1</span>
 }
 <span class="hljs-keyword">success</span> [count, result]  <span class="hljs-comment"># [3, 11]</span>
 </code></pre></figure>
@@ -64,8 +64,8 @@ Each loop iteration gets fresh variables.</p>
 <p><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>break</code>, <code>continue</code> and <code>pass</code> behave as in Python, with braces.
 <code>for k, v in items(d)</code> unpacks pairs. Blocks and <code>if</code> are expressions that yield their last
 expression, or <code>None</code>. <code>{}</code> is an empty dict; <code>{ pass }</code> is an empty block.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">let</span> score = <span class="hljs-number">6</span>
-<span class="hljs-keyword">let</span> label = <span class="hljs-keyword">if</span> score &gt; <span class="hljs-number">7</span> { <span class="hljs-string">&#x27;high&#x27;</span> } <span class="hljs-keyword">elif</span> score &gt; <span class="hljs-number">3</span> { <span class="hljs-string">&#x27;medium&#x27;</span> } <span class="hljs-keyword">else</span> { <span class="hljs-string">&#x27;low&#x27;</span> }
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">let</span> score <span class="hljs-operator">=</span> <span class="hljs-number">6</span>
+<span class="hljs-keyword">let</span> label <span class="hljs-operator">=</span> <span class="hljs-keyword">if</span> score <span class="hljs-operator">&gt;</span> <span class="hljs-number">7</span> { <span class="hljs-string">&#x27;high&#x27;</span> } <span class="hljs-keyword">elif</span> score <span class="hljs-operator">&gt;</span> <span class="hljs-number">3</span> { <span class="hljs-string">&#x27;medium&#x27;</span> } <span class="hljs-keyword">else</span> { <span class="hljs-string">&#x27;low&#x27;</span> }
 <span class="hljs-keyword">for</span> key, value <span class="hljs-keyword">in</span> <span class="hljs-built_in">items</span>({<span class="hljs-string">&#x27;a&#x27;</span>: <span class="hljs-number">1</span>, <span class="hljs-string">&#x27;b&#x27;</span>: <span class="hljs-number">2</span>}) {
     <span class="hljs-built_in">log</span>(key, value)
 }
@@ -73,20 +73,20 @@ expression, or <code>None</code>. <code>{}</code> is an empty dict; <code>{ pass
 <h2 id="functions">Functions<a class="heading-anchor" href="#functions" aria-label="Link to Functions">#</a></h2>
 <p><code>def</code> defines a function with lexical closures and recursion. Functions return <code>None</code>
 unless they use an explicit <code>return</code>.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
-    <span class="hljs-keyword">if</span> n &lt; <span class="hljs-number">2</span> {
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(n) {
+    <span class="hljs-keyword">if</span> n <span class="hljs-operator">&lt;</span> <span class="hljs-number">2</span> {
         <span class="hljs-keyword">return</span> n
     }
-    <span class="hljs-keyword">return</span> fib(n - <span class="hljs-number">1</span>) + fib(n - <span class="hljs-number">2</span>)
+    <span class="hljs-keyword">return</span> fib(n <span class="hljs-operator">-</span> <span class="hljs-number">1</span>) <span class="hljs-operator">+</span> fib(n <span class="hljs-operator">-</span> <span class="hljs-number">2</span>)
 }
 </code></pre></figure>
 <h2 id="runtime-inputs-env-and-args">Runtime inputs: $env and $args<a class="heading-anchor" href="#runtime-inputs-env-and-args" aria-label="Link to Runtime inputs: $env and $args">#</a></h2>
 <p><code>$env.NAME</code> or <code>$env[&#39;NAME&#39;]</code> reads a process environment variable as a string.
 <code>$args[0]</code>, <code>$args[1]</code>, … read the CLI&#39;s repeated <code>--arg</code> values. Missing variables and
 out-of-range indexes return <code>None</code>. Both are read-only snapshots and are never persisted by stores.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> target = <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
-<span class="hljs-keyword">if</span> target == <span class="hljs-literal">None</span> {
-    target = <span class="hljs-variable">$env</span>.USER
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> target <span class="hljs-operator">=</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
+<span class="hljs-keyword">if</span> target <span class="hljs-operator">==</span> <span class="hljs-literal">None</span> {
+    target <span class="hljs-operator">=</span> <span class="hljs-variable">$env</span>.USER
 }
 </code></pre></figure>
 <h2 id="logging">Logging<a class="heading-anchor" href="#logging" aria-label="Link to Logging">#</a></h2>
@@ -195,9 +195,9 @@ call is checked against active <a href="safety.html#restrictions">restrictions</
 </tr>
 </tbody></table>
 </div>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">let</span> diff = <span class="hljs-string">&#x27;&#x27;</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">let</span> diff <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
 <span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;git&#x27;</span> {
-    diff = <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git diff --cached&#x27;</span>)
+    diff <span class="hljs-operator">=</span> <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git diff --cached&#x27;</span>)
 }
 </code></pre></figure>
 <p><code>shell</code> runs through the platform shell (<code>cmd.exe</code> on Windows, <code>/bin/sh</code> elsewhere).

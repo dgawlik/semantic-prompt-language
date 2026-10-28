@@ -70,6 +70,8 @@ Live tests are opt-in: in PowerShell, `$env:SPL_LIVE_TESTS='1'; npm test`.
 
 To change the documentation, edit [docs-template/](docs-template/Introduction.md), then regenerate
 and verify the site. Commit the generated `docs/` files with the sources.
+The build-time syntax rules live in [docs/highlight.mjs](docs/highlight.mjs); keep them aligned with
+SPL syntax and the [VS Code grammar](vscode/syntaxes/spl.tmLanguage.json).
 
 ```sh
 npm install

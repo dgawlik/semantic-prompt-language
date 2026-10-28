@@ -3,14 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { Marked, Renderer } from 'marked';
-import hljs from 'highlight.js/lib/core';
-import python from 'highlight.js/lib/languages/python';
-import bash from 'highlight.js/lib/languages/bash';
-import json from 'highlight.js/lib/languages/json';
-import javascript from 'highlight.js/lib/languages/javascript';
-import powershell from 'highlight.js/lib/languages/powershell';
-import ebnf from 'highlight.js/lib/languages/ebnf';
-import markdown from 'highlight.js/lib/languages/markdown';
+import hljs from './highlight.mjs';
 
 const output = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(output);
@@ -33,6 +26,7 @@ const pages = [
 const fingerprint = createHash('sha256');
 for (const file of [
     fileURLToPath(import.meta.url),
+    path.join(output, 'highlight.mjs'),
     ...['style.css', 'site.js', 'favicon.svg'].map((file) => path.join(output, 'assets', file)),
     ...pages.map((page) => path.join(source, `${page.file}.md`)),
 ]) fingerprint.update(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n'));
@@ -68,30 +62,6 @@ const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const plain = (tokens) => tokens.map((token) => token.tokens ? plain(token.tokens) : token.text ?? '').join('');
 const headingId = (value) => value.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, '').replace(/ /g, '-');
-
-hljs.registerLanguage('spl', (engine) => {
-    const language = python(engine);
-    language.keywords = {
-        keyword: 'let def if elif else for in while return try except assert fail success enforce forbid restrict ask think agent human break continue pass and or not',
-        literal: 'True False None',
-        built_in: 'len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log read_file write_file web_fetch web_search shell',
-    };
-    language.contains.unshift({ scope: 'variable', match: /\$(?:env|args)\b/ });
-    return language;
-});
-for (const [name, grammar] of Object.entries({ bash, sh: bash, json, js: javascript, javascript, powershell, ebnf, markdown })) hljs.registerLanguage(name, grammar);
-
-/** Highlights a full workflow document: Markdown around its embedded `spl` fences, SPL inside them. */
-function highlightMarkdown(text) {
-    let html = '';
-    let last = 0;
-    for (const match of text.matchAll(/^(```spl\n)([\s\S]*?\n)(```)$/gm)) {
-        html += hljs.highlight(text.slice(last, match.index), { language: 'markdown' }).value;
-        html += `<span class="hljs-code">${escape(match[1])}</span>${hljs.highlight(match[2], { language: 'spl' }).value}<span class="hljs-code">${escape(match[3])}</span>`;
-        last = match.index + match[0].length;
-    }
-    return html + hljs.highlight(text.slice(last), { language: 'markdown' }).value;
-}
 
 function rewriteLink(href, page) {
     if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith('#')) return href;
@@ -164,7 +134,6 @@ function renderPage(page, index) {
             const language = token.lang?.split(/\s/)[0] || 'text';
             if (language !== 'text' && !hljs.getLanguage(language)) throw new Error(`${page.file}: unsupported code language ${language}`);
             const content = language === 'text' ? escape(token.text)
-                : language === 'markdown' ? highlightMarkdown(token.text)
                 : hljs.highlight(token.text, { language }).value;
             const filename = token.filename;
             const synced = filename?.endsWith('.md') && fs.existsSync(path.join(root, 'lang', 'examples', filename));
