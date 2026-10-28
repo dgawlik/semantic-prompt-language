@@ -17,7 +17,24 @@ export async function loadGrammar(scopeName = 'source.spl') {
             createOnigScanner: (p) => new oniguruma.OnigScanner(p),
             createOnigString: (s) => new oniguruma.OnigString(s),
         }),
+        getInjections: (scope) => scope === 'text.html.markdown' ? ['spl.markdown.injection'] : [],
         loadGrammar: async (scope) => {
+            if (scope === 'text.html.markdown') {
+                return {
+                    scopeName: scope,
+                    patterns: [
+                        { begin: '<!--', end: '-->', name: 'comment.block.html' },
+                        {
+                            begin: '^ {0,3}(`{3,}|~{3,}).*$',
+                            end: '^ {0,3}\\1[`~]*\\s*$',
+                            name: 'markup.fenced_code.block.markdown',
+                        },
+                        { match: '^ {4}.*$', name: 'markup.raw.block.markdown' },
+                        { begin: '`', end: '`', name: 'markup.inline.raw.string.markdown' },
+                        { begin: '^ {0,3}> ?', end: '$', name: 'markup.quote.markdown' },
+                    ],
+                };
+            }
             const filename = scope === 'source.spl' ? 'spl.tmLanguage.json'
                 : scope === 'spl.markdown.injection' ? 'markdown.tmLanguage.json' : undefined;
             return filename ? vsctm.parseRawGrammar(fs.readFileSync(path.join(root, 'syntaxes', filename), 'utf8'), filename) : null;

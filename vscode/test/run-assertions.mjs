@@ -9,7 +9,7 @@ import { loadGrammar, root, vsctm } from './load-grammar.mjs';
 
 const ASSERT = /^#(\s*)(\^+)\s+(.+?)\s*$/;
 const grammar = await loadGrammar();
-const markdown = await loadGrammar('spl.markdown.injection');
+const markdown = await loadGrammar('text.html.markdown');
 for (const fence of ['```', '~~~~']) {
     let stack = markdown.tokenizeLine(`${fence}spl`, vsctm.INITIAL).ruleStack;
     const code = markdown.tokenizeLine('let count = 42', stack);
@@ -20,12 +20,48 @@ for (const fence of ['```', '~~~~']) {
     assert.equal(stack.depth, 1, 'closing fence exits embedded SPL');
 }
 const quote = '> Return @count using @success.';
-const markers = markdown.tokenizeLine(quote, vsctm.INITIAL).tokens
+const quoteTokens = markdown.tokenizeLine(quote, vsctm.INITIAL).tokens;
+const markers = quoteTokens
     .filter(token => token.scopes.includes('variable.other.reference.spl'))
     .map(token => quote.slice(token.startIndex, token.endIndex));
 assert.deepEqual(markers, ['@count', '@success']);
+assert.ok(quoteTokens.find(token => quote.slice(token.startIndex, token.endIndex) === 'Return ')
+    .scopes.includes('string.unquoted.blockquote.spl'), 'blockquote text uses the theme string color');
+assert.ok(quoteTokens.filter(token => token.scopes.includes('variable.other.reference.spl'))
+    .every(token => token.scopes.includes('meta.embedded.inline.spl')),
+    'references reset the surrounding string color before applying the theme variable color');
 assert.ok(!markdown.tokenizeLine('ordinary @count', vsctm.INITIAL).tokens
     .some(token => token.scopes.includes('variable.other.reference.spl')));
+
+let quoteStack = vsctm.INITIAL;
+for (const line of ['> First @count', '> Next @result', '>', '   > Indented @value', '> > Nested @inner']) {
+    const result = markdown.tokenizeLine(line, quoteStack);
+    quoteStack = result.ruleStack;
+    assert.ok(result.tokens.some(token => token.scopes.includes('markup.quote.spl')), line);
+    assert.deepEqual(result.tokens.filter(token => token.scopes.includes('variable.other.reference.spl'))
+        .map(token => line.slice(token.startIndex, token.endIndex)), line.match(/@[A-Za-z_]\w*/g) ?? [], line);
+}
+for (const line of ['', 'ordinary @count', '`@count`', '    > @count']) {
+    const result = markdown.tokenizeLine(line, quoteStack);
+    quoteStack = result.ruleStack;
+    assert.ok(!result.tokens.some(token => token.scopes.includes('string.unquoted.blockquote.spl') ||
+        token.scopes.includes('variable.other.reference.spl')), line);
+}
+const invalidMarkers = '> email@example.com @@escaped @123 @valid_name';
+assert.deepEqual(markdown.tokenizeLine(invalidMarkers, vsctm.INITIAL).tokens
+    .filter(token => token.scopes.includes('variable.other.reference.spl'))
+    .map(token => invalidMarkers.slice(token.startIndex, token.endIndex)), ['@valid_name']);
+for (const opener of ['```markdown', '~~~~text', '```spl', '<!--']) {
+    let stack = markdown.tokenizeLine(opener, vsctm.INITIAL).ruleStack;
+    const result = markdown.tokenizeLine('> Do not color @count as an instruction.', stack);
+    stack = result.ruleStack;
+    assert.ok(!result.tokens.some(token => token.scopes.includes('markup.quote.spl') ||
+        token.scopes.includes('variable.other.reference.spl')), opener);
+    const closer = opener === '<!--' ? '-->' : opener.startsWith('~') ? '~~~~' : '```';
+    stack = markdown.tokenizeLine(closer, stack).ruleStack;
+    assert.ok(markdown.tokenizeLine('> Color @count again.', stack).tokens
+        .some(token => token.scopes.includes('variable.other.reference.spl')), opener);
+}
 const dir = path.join(root, 'test');
 let failures = 0;
 let checks = 0;

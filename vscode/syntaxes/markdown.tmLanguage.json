@@ -19,10 +19,15 @@
     {
       "begin": "^ {0,3}>\\s?",
       "end": "$",
+      "name": "markup.quote.spl",
+      "contentName": "string.unquoted.blockquote.spl",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.quote.begin.spl" }
+      },
       "patterns": [
         {
           "match": "(?<![\\w@])@[A-Za-z_]\\w*",
-          "name": "variable.other.reference.spl"
+          "name": "meta.embedded.inline.spl variable.other.reference.spl"
         }
       ]
     }

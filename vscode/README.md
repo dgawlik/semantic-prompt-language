@@ -1,7 +1,8 @@
 # SPL - Semantic Prompt Language for VS Code
 
 Language support for executable SPL Markdown workflows. Features turn on for `.md` files whose
-frontmatter declares `extension: semantic-prompt-language`; other Markdown is left alone.
+frontmatter declares `extension: semantic-prompt-language`. Syntax highlighting for SPL fences
+and blockquotes is also available in other Markdown files.
 
 ## Features
 
@@ -9,7 +10,11 @@ frontmatter declares `extension: semantic-prompt-language`; other Markdown is le
 * **Completions** for keywords, built-ins, tools, modifiers, `$env`/`$args`, visible bindings, and
   `@name` references in blockquotes.
 * **Hover**, **Go to Definition** and **document symbols** that follow SPL's lexical scopes.
-* **Highlighting** for `spl` fences, `@name` markers in blockquotes, and `spl` fences in the Markdown preview.
+* **Highlighting** for `spl` fences, colored blockquote instructions, and contrasting `@name`
+  references only inside blockquotes. Instructions use the theme's string color; references use
+  its variable color (or the default text color for themes without a variable color). Ordinary
+  prose and fenced examples do not receive blockquote/reference highlighting. `spl` fences are
+  also highlighted in the Markdown preview.
 * **Snippets**: `splworkflow` for a new document, plus `ask`, `askschema`, `agent`, `restrict`, `try`,
   `retry`, tools and control flow inside fences.
 
