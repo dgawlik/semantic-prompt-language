@@ -6,11 +6,11 @@
 <meta name="description" content="Run all your workflows in Markdown editor. SPL understands both code and natural language. spl code fences hold exact, Python-like code; blockquotes hold natural-language agent commands. Both share one scope, the same tools and the same guards, so each step can be written in whichever form reads best.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=cf7ab32b2602">
-<link rel="stylesheet" href="assets/style.css?v=cf7ab32b2602">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=9f5d9422ced7">
+<link rel="stylesheet" href="assets/style.css?v=9f5d9422ced7">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=cf7ab32b2602"></script>
-<script defer src="assets/site.js?v=cf7ab32b2602"></script>
+<script defer src="assets/search-index.js?v=9f5d9422ced7"></script>
+<script defer src="assets/site.js?v=9f5d9422ced7"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -31,36 +31,37 @@
     <article class="prose"><figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">hi.md</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy hi.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="hi.md code example"><code class="language-markdown" data-file="hi.md" id="code-1">---
 extension: &#x27;semantic-prompt-language&#x27;
 version: 1
-model: &#x27;gpt-6-luna&#x27;
-<span class="hljs-section">preamble: &#x27;Be concise.&#x27;
+<span class="hljs-section">model: &#x27;gpt-6-luna&#x27;
 ---</span>
 
-<span class="hljs-section"># Hello, SPL</span>
+<span class="hljs-section"># Repository Agentic Operations</span>
 
-Prose like this is commentary. Only <span class="hljs-code">`spl`</span> fences and blockquotes run, top to bottom, in one shared scope.
+This example highlights some SPL features helpful in automation of day to day workflow
+
+<span class="hljs-quote">&gt; read the repository you are in and list security vulnerabilities</span>
+<span class="hljs-quote">&gt; grouped in categories high, medium, low. each category </span>
+<span class="hljs-quote">&gt; should be an array of issues with each issue json object </span>
+<span class="hljs-quote">&gt; with name, cwe-id, link to file and describtion. </span>
+<span class="hljs-quote">&gt; save to @vulnerabilities</span>
 
 <span class="hljs-code">```spl
-</span><span class="hljs-keyword">let</span> topics = [<span class="hljs-string">&#x27;recursion&#x27;</span>, <span class="hljs-string">&#x27;closures&#x27;</span>, <span class="hljs-string">&#x27;regular expressions&#x27;</span>]
-<span class="hljs-keyword">let</span> Card = {
-    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>,
-    <span class="hljs-string">&#x27;properties&#x27;</span>: {<span class="hljs-string">&#x27;term&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>}, <span class="hljs-string">&#x27;definition&#x27;</span>: {<span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>}},
-    <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;term&#x27;</span>, <span class="hljs-string">&#x27;definition&#x27;</span>],
-    <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>,
-}
-<span class="hljs-keyword">let</span> cards = {}
-<span class="hljs-keyword">for</span> topic <span class="hljs-keyword">in</span> topics {
-    cards[topic] = <span class="hljs-keyword">ask</span>(schema=Card, repairs=<span class="hljs-number">1</span>) <span class="hljs-string">&#x27;A one-sentence flashcard about {topic}&#x27;</span>
-}
+</span><span class="hljs-built_in">log</span>(vulnerabilities)
 <span class="hljs-code">```</span>
 
-<span class="hljs-quote">&gt; Pick the key of @cards whose card a beginner would find hardest. Save that exact key to @hardest</span>
-
 <span class="hljs-code">```spl
-</span><span class="hljs-keyword">assert</span> hardest <span class="hljs-keyword">in</span> topics <span class="hljs-string">&quot;unexpected topic &#x27;{hardest}&#x27;&quot;</span>
-<span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./out&#x27;</span> {
-    <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./out/cards.json&#x27;</span>, <span class="hljs-built_in">json_stringify</span>(cards, <span class="hljs-number">2</span>))
+</span><span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;high&#x27;</span>]) &gt; <span class="hljs-number">0</span>{
+    <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;High vulnerabilities found. Fix this one first {vulnerabilities[&quot;high&quot;][0]}&#x27;</span>
+} <span class="hljs-keyword">elif</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;medium&#x27;</span>]) &gt; <span class="hljs-number">0</span>{
+    <span class="hljs-keyword">for</span> vuln <span class="hljs-keyword">in</span> vulnerabilities[<span class="hljs-string">&#x27;medium&#x27;</span>]{
+        <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Medium vulnerability found: {vuln}&#x27;</span>)
+    }
+} <span class="hljs-keyword">elif</span> <span class="hljs-built_in">len</span>(vulnerabilities[<span class="hljs-string">&#x27;low&#x27;</span>]) &gt; <span class="hljs-number">0</span>{
+    <span class="hljs-keyword">for</span> vuln <span class="hljs-keyword">in</span> vulnerabilities[<span class="hljs-string">&#x27;low&#x27;</span>]{
+        <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Low vulnerability found: {vuln}&#x27;</span>)
+    }
 }
-<span class="hljs-keyword">success</span> {<span class="hljs-string">&#x27;cards&#x27;</span>: <span class="hljs-built_in">len</span>(cards), <span class="hljs-string">&#x27;hardest&#x27;</span>: hardest}
+
+<span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;Analyzed&#x27;</span>
 <span class="hljs-code">```</span>
 </code></pre></figure>
 <p>The loop is ordinary code; each <code>ask</code> must return JSON matching <code>Card</code>, with one repair attempt.

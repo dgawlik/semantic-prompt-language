@@ -9,35 +9,36 @@ Run all your workflows in Markdown editor. SPL understands both code and natural
 extension: 'semantic-prompt-language'
 version: 1
 model: 'gpt-6-luna'
-preamble: 'Be concise.'
 ---
 
-# Hello, SPL
+# Repository Agentic Operations
 
-Prose like this is commentary. Only `spl` fences and blockquotes run, top to bottom, in one shared scope.
+This example highlights some SPL features helpful in automation of day to day workflow
+
+> read the repository you are in and list security vulnerabilities
+> grouped in categories high, medium, low. each category 
+> should be an array of issues with each issue json object 
+> with name, cwe-id, link to file and describtion. 
+> save to @vulnerabilities
 
 ```spl
-let topics = ['recursion', 'closures', 'regular expressions']
-let Card = {
-    'type': 'object',
-    'properties': {'term': {'type': 'string'}, 'definition': {'type': 'string'}},
-    'required': ['term', 'definition'],
-    'additionalProperties': False,
-}
-let cards = {}
-for topic in topics {
-    cards[topic] = ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}'
-}
+log(vulnerabilities)
 ```
 
-> Pick the key of @cards whose card a beginner would find hardest. Save that exact key to @hardest
-
 ```spl
-assert hardest in topics "unexpected topic '{hardest}'"
-restrict './out' {
-    write_file('./out/cards.json', json_stringify(cards, 2))
+if len(vulnerabilities['high']) > 0{
+    fail 'High vulnerabilities found. Fix this one first {vulnerabilities["high"][0]}'
+} elif len(vulnerabilities['medium']) > 0{
+    for vuln in vulnerabilities['medium']{
+        log('Medium vulnerability found: {vuln}')
+    }
+} elif len(vulnerabilities['low']) > 0{
+    for vuln in vulnerabilities['low']{
+        log('Low vulnerability found: {vuln}')
+    }
 }
-success {'cards': len(cards), 'hardest': hardest}
+
+success 'Analyzed'
 ```
 ````
 
