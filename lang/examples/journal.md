@@ -12,12 +12,16 @@ and loaded again on the next run.
     spl examples/journal.md --store journal.json
 
 ```spl
-def stored_runs() {
-    try { return runs } except first_run { return 0 }
-}
-def stored_history() {
-    try { return history } except first_run { return [] }
-}
+def stored_runs():
+    try:
+        return runs
+    except first_run:
+        return 0
+def stored_history():
+    try:
+        return history
+    except first_run:
+        return []
 let runs = stored_runs() + 1
 let history = stored_history()
 let notes = read_file('./examples/data/notes.txt')
@@ -27,9 +31,8 @@ let notes = read_file('./examples/data/notes.txt')
 
 ```spl
 history.append({'run': runs, 'summary': today})
-if len(history) > 5 {
+if len(history) > 5:
     history = history[1:]
-}
 let trend = ''
 ```
 

@@ -84,6 +84,10 @@ class Execution {
     end(success: boolean) { this.ended = true; this.success = success; }
     async clearOutput() { this.outputs = []; }
     async appendOutput(output: NotebookCellOutput) { this.outputs.push(output); }
+    async replaceOutputItems(items: NotebookCellOutput['items'], output: NotebookCellOutput) {
+        if (!this.outputs.includes(output)) throw new Error('Notebook output does not exist');
+        output.items = items;
+    }
     cancel() { this.cancellation.fire(); }
 }
 export const executions: Execution[] = [];
@@ -150,6 +154,7 @@ export const languages = {
     },
 };
 export const messages: string[] = [];
+export const outputLines: string[] = [];
 export const window: {
     activeNotebookEditor?: { notebook: NotebookDocument };
     activeTextEditor?: { document: TextDocument };
@@ -157,7 +162,7 @@ export const window: {
     showErrorMessage: (text: string) => Promise<void>;
     showInformationMessage: (text: string) => Promise<void>;
 } = {
-    createOutputChannel: () => ({ appendLine() {}, dispose() {} }),
+    createOutputChannel: () => ({ appendLine(text) { outputLines.push(text); }, dispose() {} }),
     showErrorMessage: async text => { messages.push(text); },
     showInformationMessage: async text => { messages.push(text); },
 };
@@ -188,6 +193,7 @@ export function reset() {
     controllers.length = 0;
     serializers.length = 0;
     messages.length = 0;
+    outputLines.length = 0;
     diagnostics.clear();
     installedExtensions.clear();
 }

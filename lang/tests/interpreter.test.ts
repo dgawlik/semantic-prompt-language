@@ -40,9 +40,10 @@ describe('deterministic language', () => {
         for (const name of ['SPL_TEST_MISSING', 'toString', 'constructor', '__proto__']) vi.stubEnv(name, undefined);
         const { result } = await exec(`
 let env = $env
-def read() { return env.SPL_TEST_INPUT }
+def read():
+    return env.SPL_TEST_INPUT
 success [read(), $env['SPL_TEST_INPUT'], $env.SPL_TEST_EMPTY, env.SPL_TEST_MISSING,
-         env['toString'], env.constructor, env.__proto__, type(env), '{env.SPL_TEST_INPUT}']
+    env['toString'], env.constructor, env.__proto__, type(env), '{env.SPL_TEST_INPUT}']
 `);
         expect(value(result)).toEqual(['a value', 'a value', '', null, null, null, null, 'dict', 'a value']);
     });
@@ -51,9 +52,10 @@ success [read(), $env['SPL_TEST_INPUT'], $env.SPL_TEST_EMPTY, env.SPL_TEST_MISSI
         const args = ['first', '', '--model=x'];
         const { result } = await exec(`
 let args = $args
-def read() { return args[0] }
+def read():
+    return args[0]
 success [read(), args[1], args[2], args[3], args[99], args[-1], args[-4],
-         args[1:], len(args), type(args), list(enumerate(args)), '{$args[0]}']
+    args[1:], len(args), type(args), list(enumerate(args)), '{$args[0]}']
 `, { args });
         expect(value(result)).toEqual(['first', '', '--model=x', null, null, '--model=x', null,
             ['', '--model=x'], 3, 'list', [[0, 'first'], [1, ''], [2, '--model=x']], 'first']);
@@ -76,7 +78,9 @@ success [read(), args[1], args[2], args[3], args[99], args[-1], args[-4],
         `$args.remove('first')`, `$args.reverse()`, `$args.sort()`, `$args.clear()`,
         `let alias = $env\nalias.KEY = 'changed'`, `let alias = $env\nalias.clear()`,
         `let alias = $args\nalias[0] = 'changed'`, `let alias = $args\nalias.append('changed')`,
-        `def change(a) { a.clear() }\nchange($args)`,
+        `def change(a):
+    a.clear()
+change($args)`,
         `let nested = {'env': $env}\nnested.env.update({})`,
     ])('rejects mutation of runtime inputs through all aliases: %s', async (source) => {
         const { result } = await exec(source, { args: ['first'] });
@@ -87,7 +91,10 @@ success [read(), args[1], args[2], args[3], args[99], args[-1], args[-4],
         vi.stubEnv('SPL_TEST_INPUT', 'original');
         const { result } = await exec(`
 let caught = None
-try { $args.clear() } except err { caught = err.status_code }
+try:
+    $args.clear()
+except err:
+    caught = err.status_code
 let args = $args.copy()
 args.append('copy')
 let env = $env.copy()
@@ -95,7 +102,7 @@ env.SPL_TEST_INPUT = 'copy'
 let sliced = $args[:]
 sliced[0] = 'slice'
 success [caught, args, sliced, env.SPL_TEST_INPUT, $env.get('SPL_TEST_INPUT'),
-         $args.count('first'), $args.index('first'), $args, $env.SPL_TEST_INPUT]
+    $args.count('first'), $args.index('first'), $args, $env.SPL_TEST_INPUT]
 `, { args: ['first'] });
         expect(value(result)).toEqual(['runtime_error', ['first', 'copy'], ['slice'], 'copy', 'original', 1, 0, ['first'], 'original']);
         expect(process.env.SPL_TEST_INPUT).toBe('original');
@@ -153,29 +160,45 @@ success 'Hello {name}! {1 + 2} {d} {True} {None} {{braces}} \\{x\\}'
         expect(value(result)).toBe('Hello World! 3 {"a":[1,2]} True None {braces} {x}');
     });
 
+    it('preserves value-producing suites inside interpolation at any enclosing indentation', async () => {
+        const { result } = await exec(`if True:
+    let text = '''Answer: {if False:
+        1
+    else:
+        let n = 2
+        n + 1
+    }'''
+    success text`);
+        expect(value(result)).toBe('Answer: 3');
+        expect(value((await exec(`success '''{:
+    let n = 4
+    n * 2
+}'''`)).result)).toBe('8');
+    });
+
     it('runs functions, recursion, loops and closures', async () => {
         const { result } = await exec(`
-def fact(n) {
-    if n <= 1 { return 1 }
+def fact(n):
+    if n <= 1:
+        return 1
     return n * fact(n - 1)
-}
-def counter() {
+def counter():
     let cell = [0]
-    def add(x) {
+    def add(x):
         cell[0] += x
         return cell[0]
-    }
     add(1)
     return add(2)
-}
 let acc = []
-for i in range(10) {
-    if i % 2 == 0 { continue }
-    if i > 7 { break }
+for i in range(10):
+    if i % 2 == 0:
+        continue
+    if i > 7:
+        break
     acc.append(i)
-}
 let n = 0
-while n < 3 { n += 1 }
+while n < 3:
+    n += 1
 success {'fact': fact(5), 'counter': counter(), 'acc': acc, 'n': n}
 `);
         expect(value(result)).toEqual({ fact: 120, counter: 3, acc: [1, 3, 5, 7], n: 3 });
@@ -225,15 +248,13 @@ success [e.get('polluted', 'clean'), len(d)]
         const { result } = await exec(`
 let color = 'Blue'
 let seen = []
-{
+:
     let color = 'Red'
     seen.append(color)
-    {
+    :
         let color = 'Green'
         seen.append(color)
-    }
     seen.append(color)
-}
 seen.append(color)
 success seen
 `);
@@ -241,17 +262,18 @@ success seen
     });
 
     it('rejects access to variables declared in a child scope', async () => {
-        const { result } = await exec(`{ let inner = 1 }\nsuccess inner`);
-        expect(failure(result)).toMatchObject({ status_code: 'runtime_error', reason: "name 'inner' is not defined", line: 2 });
+        const { result } = await exec(`:
+    let inner = 1
+success inner`);
+        expect(failure(result)).toMatchObject({ status_code: 'runtime_error', reason: "name 'inner' is not defined", line: 3 });
     });
 
     it('lets function parameters and locals shadow outer variables', async () => {
         const { result } = await exec(`
 let x = 'outer'
-def f(x) {
+def f(x):
     let y = x + '!'
     return y
-}
 success [f('inner'), x]
 `);
         expect(value(result)).toEqual(['inner!', 'outer']);
@@ -262,16 +284,18 @@ success [f('inner'), x]
         const { result } = await exec(`
 let color = None
 let n = 0
-enforce 'be brief' {
-    forbid 'swearing' {
-        restrict './out' {
+enforce 'be brief':
+    forbid 'swearing':
+        restrict './out':
             color = 'blue'
-        }
-    }
-}
-if True { n += 1 }
-for i in range(2) { n += 1 }
-try { n += 10 } except e { pass }
+if True:
+    n += 1
+for i in range(2):
+    n += 1
+try:
+    n += 10
+except e:
+    pass
 success [color, n]
 `);
         expect(value(result)).toEqual(['blue', 13]);
@@ -280,29 +304,40 @@ success [color, n]
     it('keeps outer assignments but discards child declarations after failure', async () => {
         const { result } = await exec(`
 let r = 0
-try {
-    enforce 'x' {
+try:
+    enforce 'x':
         r = 1
         let hidden = 2
         fail 'f'
-    }
-} except e {
+except e:
     r += 5
-}
 success r
 `);
         expect(value(result)).toBe(6);
     });
 
     it.each([
-        `if True { let hidden = 1 }`,
-        `for hidden in [1] { pass }`,
-        `while True { let hidden = 1; break }`,
-        `try { let hidden = 1 } except e { pass }`,
-        `try { fail 'x' } except hidden { pass }`,
-        `enforce 'x' { let hidden = 1 }`,
-        `forbid 'x' { let hidden = 1 }`,
-        `restrict '.' { let hidden = 1 }`,
+        `if True:
+    let hidden = 1`,
+        `for hidden in [1]:
+    pass`,
+        `while True:
+    let hidden = 1
+    break`,
+        `try:
+    let hidden = 1
+except e:
+    pass`,
+        `try:
+    fail 'x'
+except hidden:
+    pass`,
+        `enforce 'x':
+    let hidden = 1`,
+        `forbid 'x':
+    let hidden = 1`,
+        `restrict '.':
+    let hidden = 1`,
     ])('isolates block-local declarations: %s', async (source) => {
         expect(failure((await exec(`${source}\nsuccess hidden`)).result).reason).toBe("name 'hidden' is not defined");
     });
@@ -311,10 +346,10 @@ success r
         const { result } = await exec(`
 let fns = []
 let i = 'outer'
-for i in [1, 2, 3] {
-    def capture() { return i }
+for i in [1, 2, 3]:
+    def capture():
+        return i
     fns.append(capture)
-}
 success [fns[0](), fns[1](), fns[2](), i]
 `);
         expect(value(result)).toEqual([1, 2, 3, 'outer']);
@@ -323,15 +358,14 @@ success [fns[0](), fns[1](), fns[2](), i]
     it('searches the entire lexical chain for assignments without losing child scopes', async () => {
         const { result } = await exec(`
 let x = 1
-{
+:
     let local = 3
-    {
+    :
         x += 2
         assert local == 3
-    }
     assert local == 3
-}
-def update() { x += 4 }
+def update():
+    x += 4
 update()
 success x
 `);
@@ -340,25 +374,45 @@ success x
 
     it('returns final expressions from blocks and selected conditional branches', async () => {
         const { result } = await exec(`
-let result = if False { fail 'unreachable' } elif True {
+let result = if False:
+    fail 'unreachable'
+elif True:
     let x = 3
-    { let y = 4; x + y }
-} else { fail 'unreachable' }
-let other = {
+    :
+        let y = 4
+        x + y
+else:
+    fail 'unreachable'
+let other =:
     let result = 8
-    if True { result + 1 } else { 0 }
-}
-success [result, other, if False { 0 } else { 10 }]
+    if True:
+        result + 1
+    else:
+        0
+success [result, other, if False:
+    0
+else:
+    10
+]
 `);
         expect(value(result)).toEqual([7, 9, 10]);
     });
 
     it('returns None for blocks ending in statements or unmatched conditionals', async () => {
         const { result } = await exec(`
-let x = { 1; let y = 2 }
-let y = if False { 3 }
-let z = if True { }
-success [x, y, z, { pass }, { 5; pass }]
+let x =:
+    1
+    let y = 2
+let y = if False:
+    3
+let z = if True:
+    pass
+success [x, y, z,:
+    pass
+,:
+    5
+    pass
+]
 `);
         expect(value(result)).toEqual([null, null, null, null, null]);
     });
@@ -366,16 +420,22 @@ success [x, y, z, { pass }, { 5; pass }]
     it('preserves dictionaries and supports multiline blocks within calls and lists', async () => {
         const { result } = await exec(`
 success [
-    len({
+    len(:
         let value = [1, 2]
         value
-    }),
-    if True {
+    ),
+    if True:
         let x = 2
         {'value': x}
-    } else { {} },
+    else:
+        {}
+    ,
     {},
-    {'if': if False { 1 } else { 2 }},
+    {'if': if False:
+        1
+    else:
+        2
+    },
 ]
 `);
         expect(value(result)).toEqual([2, { value: 2 }, {}, { if: 2 }]);
@@ -383,29 +443,42 @@ success [
 
     it('propagates return, break, continue and success out of expression blocks', async () => {
         const { result } = await exec(`
-def f() {
-    let unused = { if True { return 42 }; 0 }
+def f():
+    let unused =:
+        if True:
+            return 42
+        0
     fail 'unreachable'
-}
 let out = []
-for i in [1, 2, 3, 4] {
-    let x = if i == 2 { continue } elif i == 4 { break } else { i }
+for i in [1, 2, 3, 4]:
+    let x = if i == 2:
+        continue
+    elif i == 4:
+        break
+    else:
+        i
     out.append(x)
-}
 success [f(), out]
 `);
         expect(value(result)).toEqual([42, [1, 3]]);
-        expect(value((await exec(`let unused = { success 7 }\nfail 'unreachable'`)).result)).toBe(7);
+        expect(value((await exec(`let unused =:
+    success 7
+fail 'unreachable'`)).result)).toBe(7);
     });
 
     it('restores scopes after expression failures and persists only top-level bindings', async () => {
         const file = path.join(dir, 'store.json');
         const { result } = await exec(`
 let x = 1
-try {
-    let bad = { let x = 2; fail 'stop' }
-} except e { assert x == 1 }
-{ let transient = 3; x += 4 }
+try:
+    let bad =:
+        let x = 2
+        fail 'stop'
+except e:
+    assert x == 1
+:
+    let transient = 3
+    x += 4
 success x
 `, { store: new JsonFileStore(file) });
         expect(value(result)).toBe(5);
@@ -414,18 +487,16 @@ success x
 
     it('returns immediately from any scope', async () => {
         const { result } = await exec(`
-def find(items) {
-    for x in items {
-        {
-            enforce 'irrelevant' {
-                try {
-                    if x > 2 { return x }
-                } except e { pass }
-            }
-        }
-    }
+def find(items):
+    for x in items:
+        :
+            enforce 'irrelevant':
+                try:
+                    if x > 2:
+                        return x
+                except e:
+                    pass
     return -1
-}
 success [find([1, 2, 3, 4]), find([1])]
 `);
         expect(value(result)).toEqual([3, -1]);
@@ -434,7 +505,11 @@ success [find([1, 2, 3, 4]), find([1])]
     it('lets return end the script from the top level, nested scopes included', async () => {
         const top = await exec(`let a = 1\nreturn a + 1\nfail 'unreachable'`);
         expect(top.result).toEqual({ status: 'success', value: 2, hasValue: true });
-        const nested = await exec(`for i in range(5) {\n    {\n        if i == 2 { return i }\n    }\n}\nfail 'unreachable'`);
+        const nested = await exec(`for i in range(5):
+    :
+        if i == 2:
+            return i
+fail 'unreachable'`);
         expect(nested.result).toEqual({ status: 'success', value: 2, hasValue: true });
         const bare = await exec(`return`);
         expect(bare.result).toEqual({ status: 'success', value: null, hasValue: false });
@@ -448,26 +523,36 @@ success [find([1, 2, 3, 4]), find([1])]
     it('turns runtime errors into catchable failures', async () => {
         const { result } = await exec(`
 let out = []
-for src in ['1 / 0', 'x']  {
+for src in ['1 / 0', 'x']:
     pass
-}
-try { let a = 1 / 0 } except e { out.append(e.status_code) }
-try { let a = [1][5] } except e { out.append(e.reason) }
-try { let a = 'a' + 1 } except e { out.append(e.status_code) }
+try:
+    let a = 1 / 0
+except e:
+    out.append(e.status_code)
+try:
+    let a = [1][5]
+except e:
+    out.append(e.reason)
+try:
+    let a = 'a' + 1
+except e:
+    out.append(e.status_code)
 success out
 `);
         expect(value(result)).toEqual(['runtime_error', 'index 5 out of range', 'runtime_error']);
     });
 
     it('limits recursion depth', async () => {
-        const { result } = await exec(`def f() { return f() }\nf()`);
+        const { result } = await exec(`def f():
+    return f()
+f()`);
         expect(failure(result).reason).toMatch(/maximum call depth/);
     });
 });
 
 describe('failures', () => {
     it('produces the documented payload', async () => {
-        const { result } = await exec(`let a = 1\n\n  assert 1 == 2 'Abnormal'`);
+        const { result } = await exec(`let a = 1\n\nassert 1 == 2 'Abnormal'`);
         expect(failure(result)).toEqual({
             status: 'failure',
             reason: 'Abnormal',
@@ -484,11 +569,10 @@ describe('failures', () => {
             line: 1,
         });
         const { result } = await exec(`
-try {
+try:
     fail 'boom'
-} except err {
+except err:
     success err
-}
 `);
         expect(value(result)).toMatchObject({ status: 'failure', reason: 'boom', status_code: 'explicit_failure', line: 3 });
     });
@@ -501,7 +585,9 @@ try {
     });
 
     it('fails inside functions with the innermost location', async () => {
-        const { result } = await exec(`def f() {\n    fail 'deep'\n}\nf()`);
+        const { result } = await exec(`def f():
+    fail 'deep'
+f()`);
         expect(failure(result)).toMatchObject({ line: 2, command: "fail 'deep'" });
     });
 });
@@ -510,20 +596,29 @@ describe('restrict enforcement', () => {
     it('blocks explicit tool calls outside the folder', async () => {
         fs.mkdirSync(path.join(dir, 'out'));
         fs.writeFileSync(path.join(dir, 'secret.txt'), 'secret');
-        const bad = await exec(`restrict './out' { let a = read_file('./secret.txt') }`);
-        expect(failure(bad.result)).toMatchObject({ status_code: 'restriction_violation', line: 1 });
+        const bad = await exec(`restrict './out':
+    let a = read_file('./secret.txt')`);
+        expect(failure(bad.result)).toMatchObject({ status_code: 'restriction_violation', line: 2 });
     });
 
     it('cannot escape through .. and nested restrictions only narrow', async () => {
         fs.mkdirSync(path.join(dir, 'a', 'b'), { recursive: true });
         fs.writeFileSync(path.join(dir, 'a', 'x.txt'), 'x');
-        const dotdot = await exec(`restrict './a/b' { let v = read_file('./a/b/../x.txt') }`);
+        const dotdot = await exec(`restrict './a/b':
+    let v = read_file('./a/b/../x.txt')`);
         expect(failure(dotdot.result).status_code).toBe('restriction_violation');
-        const widen = await exec(`restrict './a/b' { restrict './a' { let v = read_file('./a/x.txt') } }`);
+        const widen = await exec(`restrict './a/b':
+    restrict './a':
+        let v = read_file('./a/x.txt')`);
         expect(failure(widen.result).status_code).toBe('restriction_violation');
-        const narrow = await exec(`restrict './a' { restrict './a/b' { let v = read_file('./a/x.txt') } }`);
+        const narrow = await exec(`restrict './a':
+    restrict './a/b':
+        let v = read_file('./a/x.txt')`);
         expect(failure(narrow.result).status_code).toBe('restriction_violation');
-        const fine = await exec(`restrict './a' { restrict './a/b' { restrict './a' { let v = 1 } } }`);
+        const fine = await exec(`restrict './a':
+    restrict './a/b':
+        restrict './a':
+            let v = 1`);
         expect(fine.result.status).toBe('success');
     });
 
@@ -532,7 +627,8 @@ describe('restrict enforcement', () => {
         fs.mkdirSync(path.join(dir, 'outside'));
         fs.writeFileSync(path.join(dir, 'outside', 'secret.txt'), 'secret');
         fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, 'out', 'link'), 'junction');
-        const r = await exec(`restrict './out' { let v = read_file('./out/link/secret.txt') }`);
+        const r = await exec(`restrict './out':
+    let v = read_file('./out/link/secret.txt')`);
         expect(failure(r.result).status_code).toBe('restriction_violation');
     });
 
@@ -542,45 +638,60 @@ describe('restrict enforcement', () => {
         // a junction to an existing folder is followed; a file symlink needs privileges on Windows, so use a junction to a missing dir
         const missing = path.join(dir, 'outside', 'not-yet');
         fs.symlinkSync(missing, path.join(dir, 'out', 'dangling'), 'junction');
-        const r = await exec(`restrict './out' { let v = write_file('./out/dangling/x.txt', 'x') }`);
+        const r = await exec(`restrict './out':
+    let v = write_file('./out/dangling/x.txt', 'x')`);
         expect(failure(r.result).status_code).toBe('restriction_violation');
         expect(fs.existsSync(path.join(missing, 'x.txt'))).toBe(false);
     });
 
     it('blocks path-qualified executables inside restrict exec', async () => {
-        const r = await exec(`restrict exec 'git' { let v = shell('./evil/git status') }`);
+        const r = await exec(`restrict exec 'git':
+    let v = shell('./evil/git status')`);
         expect(failure(r.result).reason).toMatch(/without a path/);
     });
 
     it('blocks network and exec for explicit tools', async () => {
-        const net = await exec(`restrict net 'api.example.com' { let v = web_fetch('https://evil.example.org/x') }`);
+        const net = await exec(`restrict net 'api.example.com':
+    let v = web_fetch('https://evil.example.org/x')`);
         expect(failure(net.result).status_code).toBe('restriction_violation');
-        const exe = await exec(`restrict exec 'npm,git' { let v = shell('curl http://x') }`);
+        const exe = await exec(`restrict exec 'npm,git':
+    let v = shell('curl http://x')`);
         expect(failure(exe.result).status_code).toBe('restriction_violation');
-        const chain = await exec(`restrict exec 'git' { let v = shell('git status && curl x') }`);
+        const chain = await exec(`restrict exec 'git':
+    let v = shell('git status && curl x')`);
         expect(failure(chain.result).status_code).toBe('restriction_violation');
         expect(failure(chain.result).reason).toMatch(/executable 'curl' blocked/);
         const echoBackend = { async call(req: any) { return { text: req.prompt, effective: {} }; }, async close() {} };
-        const allowedChain = await exec(`restrict exec 'node' { let v = shell('node -e "process.stdout.write(String(4))" && node -e "process.stdout.write(String(2))"')\nsuccess v }`, { backend: echoBackend as any });
+        const allowedChain = await exec(`restrict exec 'node':
+    let v = shell('node -e "process.stdout.write(String(4))" && node -e "process.stdout.write(String(2))"')
+    success v`, { backend: echoBackend as any });
         expect(value(allowedChain.result)).toContain('42');
-        const pipe = await exec(`restrict '.' { let v = shell('node -e "process.stdout.write(String(7*6))"')\nsuccess v }`, { backend: echoBackend as any });
+        const pipe = await exec(`restrict '.':
+    let v = shell('node -e "process.stdout.write(String(7*6))"')
+    success v`, { backend: echoBackend as any });
         expect(value(pipe.result)).toContain('42');
     });
 
     it('blocks web_search outside the allowed hosts', async () => {
-        const r = await exec(`restrict net 'api.example.com' { let v = web_search('spl') }`);
+        const r = await exec(`restrict net 'api.example.com':
+    let v = web_search('spl')`);
         expect(failure(r.result).status_code).toBe('restriction_violation');
     });
 
     it('reports tool errors as tool_error and allows catching restriction violations', async () => {
         const missing = await exec(`let v = read_file('./nope.txt')`);
         expect(failure(missing.result).status_code).toBe('tool_error');
-        const caught = await exec(`restrict './out' { try { let v = read_file('./nope.txt') } except e { success e.status_code } }`);
+        const caught = await exec(`restrict './out':
+    try:
+        let v = read_file('./nope.txt')
+    except e:
+        success e.status_code`);
         expect(value(caught.result)).toBe('restriction_violation');
     });
 
     it('write_file refuses paths outside the folder', async () => {
-        const bad = await exec(`restrict './out' { let r = write_file('./evil.txt', 'x') }`);
+        const bad = await exec(`restrict './out':
+    let r = write_file('./evil.txt', 'x')`);
         expect(failure(bad.result).status_code).toBe('restriction_violation');
         expect(fs.existsSync(path.join(dir, 'evil.txt'))).toBe(false);
         const missingContent = await exec(`write_file('./evil.txt')`);
@@ -588,15 +699,20 @@ describe('restrict enforcement', () => {
     });
 
     it('rejects malformed restrict arguments', async () => {
-        expect(failure((await exec(`restrict net '' { pass }`)).result).status_code).toBe('runtime_error');
-        expect(failure((await exec(`restrict exec 5 { pass }`)).result).status_code).toBe('runtime_error');
+        expect(failure((await exec(`restrict net '':
+    pass`)).result).status_code).toBe('runtime_error');
+        expect(failure((await exec(`restrict exec 5:
+    pass`)).result).status_code).toBe('runtime_error');
     });
 });
 
 describe('variable store', () => {
     it('persists top-level variables to a JSON file and reloads them', async () => {
         const file = path.join(dir, 'store.json');
-        await exec(`let counter = 1\nlet data = {'a': [1, 2]}\ndef f() { return 1 }`, { store: new JsonFileStore(file) });
+        await exec(`let counter = 1
+let data = {'a': [1, 2]}
+def f():
+    return 1`, { store: new JsonFileStore(file) });
         expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ counter: 1, data: { a: [1, 2] } });
         const second = await exec(`counter += 1\nsuccess counter`, { store: new JsonFileStore(file) });
         expect(value(second.result)).toBe(2);

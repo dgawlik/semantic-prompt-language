@@ -290,16 +290,14 @@
 
 <span class="cm">```spl</span>
 <span class="kw">let</span> computed = 0
-<span class="kw">for</span> line <span class="kw">in</span> invoice.lines {
+<span class="kw">for</span> line <span class="kw">in</span> invoice.lines:
     computed += line.quantity * line.unit_price
-}
 <span class="kw">assert</span> abs(computed - invoice.subtotal) &lt; 0.01
 <span class="kw">assert</span> abs(invoice.subtotal + invoice.tax
     - invoice.total) &lt; 0.01
-<span class="kw">restrict</span> <span class="str">'./out/invoices'</span> {
+<span class="kw">restrict</span> <span class="str">'./out/invoices'</span>:
     write_file(<span class="str">'./out/invoices/{invoice.number}.json'</span>,
         json_stringify(invoice, 2))
-}
 <span class="kw">success</span> invoice
 <span class="cm">```</span></pre>
         </div>

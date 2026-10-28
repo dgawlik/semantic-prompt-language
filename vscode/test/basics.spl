@@ -7,28 +7,38 @@
     let MAX = 3.5e2
 #       ^^^ variable.other.definition.spl
 #             ^^^^^ constant.numeric.spl
-    def fib(n) {
+    def fib(n):
 #   ^^^ storage.type.function.spl
 #       ^^^ entity.name.function.spl
-    }
-    if a and not b { pass } elif c { break } else { continue }
+        pass
+    if a and not b:
 #   ^^ keyword.control.flow.spl
 #        ^^^ keyword.operator.logical.spl
 #            ^^^ keyword.operator.logical.spl
-#                    ^^^^ keyword.control.flow.spl
-#                           ^^^^ keyword.control.flow.spl
-#                                            ^^^^ keyword.control.flow.spl
-    for k, v in items(d) {
+        pass
+#       ^^^^ keyword.control.flow.spl
+    elif c:
+#   ^^^^ keyword.control.flow.spl
+        break
+#       ^^^^^ keyword.control.flow.spl
+    else:
+#   ^^^^ keyword.control.flow.spl
+        continue
+#       ^^^^^^^^ keyword.control.flow.spl
+    for k, v in items(d):
 #   ^^^ keyword.control.flow.spl
 #            ^^ keyword.operator.logical.spl
 #               ^^^^^ support.function.builtin.spl
-    }
-    try { x } except err { return None }
+        pass
+    try:
 #   ^^^ keyword.control.exception.spl
-#             ^^^^^^ keyword.control.exception.spl
-#                    ^^^ variable.other.definition.spl
-#                          ^^^^^^ keyword.control.flow.spl
-#                                 ^^^^ constant.language.spl
+        x
+    except err:
+#   ^^^^^^ keyword.control.exception.spl
+#          ^^^ variable.other.definition.spl
+        return None
+#       ^^^^^^ keyword.control.flow.spl
+#              ^^^^ constant.language.spl
     assert x == 1 'msg'
 #   ^^^^^^ keyword.control.result.spl
 #            ^^ keyword.operator.comparison.spl

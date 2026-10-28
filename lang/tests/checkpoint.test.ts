@@ -50,11 +50,14 @@ async function resume(source: string, answer: string, backend = unusedBackend, l
 describe('human syntax and suspension', () => {
     it('parses questions, rejects modifiers/reserved bindings, and preflights unused human expressions', async () => {
         expect(usesHuman(parse(`success 'human'`))).toBe(false);
-        expect(usesHuman(parse(`def later() { return human ('one' + 'two') }`))).toBe(true);
+        expect(usesHuman(parse(`def later():
+    return human ('one' + 'two')`))).toBe(true);
         expect(() => parse(`human(fmt='text') 'question'`)).toThrow(/does not accept modifiers/);
         expect(() => parse(`let human = 1`)).toThrow(/reserved/);
         expect(() => parse(`human`)).toThrow(/requires a prompt/);
-        const result = await run(parse(`write_file('should-not-exist', 'x')\ndef later() { return human 'question' }`), {
+        const result = await run(parse(`write_file('should-not-exist', 'x')
+def later():
+    return human 'question'`), {
             cwd: dir, backend: unusedBackend, logger: new Logger('silent'),
         });
         expect(result).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('requires a checkpoint') } });
@@ -65,16 +68,14 @@ describe('human syntax and suspension', () => {
         const source = `
 let answers = []
 let alias = answers
-def collect(i) {
-    restrict '.' {
-        try {
+def collect(i):
+    restrict '.':
+        try:
             alias.append(human 'Question {i}')
-        } except err {
+        except err:
             fail 'suspension must not be caught'
-        }
-    }
-}
-for i in range(2) { collect(i) }
+for i in range(2):
+    collect(i)
 let skipped = False and human 'unreachable'
 success [answers, alias == answers, skipped]`;
         const first = waiting(await execute(source, Checkpoint.create(file, context(source))));
@@ -156,8 +157,14 @@ success [old, current, answer]`;
         const backend = { call, async close() {} };
         const source = `
 let reasons = []
-try { read_file('missing') } except err { reasons.append(err.status_code) }
-try { ask 'will fail' } except err { reasons.append(err.reason) }
+try:
+    read_file('missing')
+except err:
+    reasons.append(err.status_code)
+try:
+    ask 'will fail'
+except err:
+    reasons.append(err.reason)
 let answer = human 'continue'
 success reasons`;
         await execute(source, Checkpoint.create(file, context(source)), backend);
@@ -167,7 +174,11 @@ success reasons`;
     });
 
     it('fails closed on a mismatched effect instead of reaching live execution or except', async () => {
-        const source = `try { read_file('x') } except err { pass }\nhuman 'question'`;
+        const source = `try:
+    read_file('x')
+except err:
+    pass
+human 'question'`;
         await execute(source, Checkpoint.create(file, context(source)));
         const lines = fs.readFileSync(file, 'utf8').trimEnd().split('\n');
         const event = JSON.parse(lines[1]);

@@ -12,7 +12,7 @@ const options = { logger, backend: new NoLlm() };
 describe('interactive execution sessions', () => {
     it('retains variables, mutable aliases and closures in execution order', async () => {
         const session = new ExecutionSession();
-        await session.run(parse('let count = 2\nlet items = []\nlet alias = items\ndef double() { return count * 2 }'), options);
+        await session.run(parse('let count = 2\nlet items = []\nlet alias = items\ndef double():\n    return count * 2'), options);
         await session.run(parse('items.append(double())\ncount += 1'), options);
         expect(await session.run(parse('[double(), alias]'), options))
             .toEqual({ status: 'success', hasValue: true, value: [6, [4]] });
@@ -56,7 +56,7 @@ describe('interactive execution sessions', () => {
     it('uses the current cell restrictions and logger for saved builtin aliases', async () => {
         const session = new ExecutionSession();
         await session.run(parse('let reader = read_file\nlet print = log'), options);
-        expect(await session.run(parse("restrict './out' { reader('./secret.txt') }"), options)).toMatchObject({
+        expect(await session.run(parse("restrict './out':\n    reader('./secret.txt')"), options)).toMatchObject({
             status: 'failure', failure: { status_code: 'restriction_violation' },
         });
         const lines: string[] = [];
@@ -68,7 +68,7 @@ describe('interactive execution sessions', () => {
 
     it('locates nested function failures in the original cell', async () => {
         const session = new ExecutionSession();
-        await session.run(parse("def broken() {\n    fail 'original'\n}\ndef nested() { return broken() }"),
+        await session.run(parse("def broken():\n    fail 'original'\ndef nested():\n    return broken()"),
             { ...options, source: 'cell:definition' });
         expect(await session.run(parse('nested()'), { ...options, source: 'cell:caller' })).toMatchObject({
             status: 'failure', failure: { line: 2, command: "fail 'original'", source: 'cell:definition' },
@@ -80,9 +80,9 @@ describe('interactive execution sessions', () => {
 
     it('retains the original source version for aliases of redefined functions', async () => {
         const session = new ExecutionSession();
-        await session.run(parse("def broken() { fail 'old' }\nlet old = broken"),
+        await session.run(parse("def broken():\n    fail 'old'\nlet old = broken"),
             { ...options, source: 'cell:definition', sourceVersion: 1 });
-        await session.run(parse("def broken() { fail 'new' }"),
+        await session.run(parse("def broken():\n    fail 'new'"),
             { ...options, source: 'cell:definition', sourceVersion: 2 });
         expect(await session.run(parse('old()'), { ...options, source: 'cell:caller', sourceVersion: 3 }))
             .toMatchObject({ status: 'failure', failure: { reason: 'old', source: 'cell:definition', source_version: 1 } });
@@ -92,7 +92,7 @@ describe('interactive execution sessions', () => {
 
     it('shares state with blockquotes using the existing agent runtime', async () => {
         const session = new ExecutionSession();
-        await session.run(parse('let count = 2\ndef double(x) { return x * 2 }'), options);
+        await session.run(parse('let count = 2\ndef double(x):\n    return x * 2'), options);
         let turn = 0;
         const backend: LlmBackend = {
             async call(request) {

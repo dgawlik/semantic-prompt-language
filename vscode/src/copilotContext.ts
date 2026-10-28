@@ -31,10 +31,11 @@ interface CopilotExports extends CopilotApi {
 
 const syntax = [
     'This is Semantic Prompt Language (language id: spl), not Python or Splunk SPL.',
-    'Complete native SPL code only. Blocks use { and }, never Python colon/indentation syntax.',
+    'Complete native SPL code only. Blocks use a colon followed by a newline and a space-indented body, like Python. Never use brace-delimited blocks.',
     'Declare variables with let name = expression. Reassign existing variables with name = expression.',
-    'Functions use def name(args) { ... }. Branches use if condition { ... } elif condition { ... } else { ... }.',
-    'Loops use for item in items { ... } or while condition { ... }. Catch failures with try { ... } except err { ... }.',
+    'Functions use def name(args):. Branches use if condition:, elif condition:, and else: with indented bodies.',
+    'Loops use for item in items: or while condition:. Catch failures with try: and except err:. Use pass for empty bodies.',
+    'Use four spaces per indentation level, not tabs. Braces are only for dictionaries and string interpolation. Anonymous blocks use a bare colon and an indented body.',
     'Use True, False, None, and/or/not, # comments, and {name} interpolation inside strings.',
     'Use log(value), not print(value). Use success value to end the workflow successfully.',
     'Do not generate Python imports, f-strings, or @name references in SPL code cells.',
@@ -43,18 +44,15 @@ const syntax = [
 
 const example = [
     "let isFriday = ask(fmt='boolean') 'Is today Friday?'",
-    'if isFriday {',
+    'if isFriday:',
     "    success 'Today is Friday!'",
-    '} else {',
+    'else:',
     "    success ask 'Complain in an original way'",
-    '}',
     '',
-    'def double(value) {',
+    'def double(value):',
     '    return value * 2',
-    '}',
-    'for item in range(3) {',
+    'for item in range(3):',
     '    log(double(item))',
-    '}',
 ].join('\n');
 
 export async function registerCopilotContext(

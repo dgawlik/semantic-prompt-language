@@ -46,9 +46,11 @@ success score`, backend)).toMatchObject({ status: 'success', value: 4 });
         const { backend, calls } = scripted('5');
         const result = await exec(`@(
     model = 'header',
-)
+    )
 let count = [0]
-def option(value) { count[0] += 1; return value }
+def option(value):
+    count[0] += 1
+    return value
 let score = ${command}(
     fmt = option('integer'),
     repairs = option(0),
@@ -56,7 +58,7 @@ let score = ${command}(
     model = 'per-call',
     show = True,
     schema = {'type': 'integer', 'minimum': 1, 'maximum': 5},
-) 'Rate this issue'
+    ) 'Rate this issue'
 success [score, count[0]]`, backend);
         expect(result).toMatchObject({ status: 'success', value: [5, 2] });
         expect(calls).toHaveLength(1);
@@ -66,11 +68,10 @@ success [score, count[0]]`, backend);
     it.each([true, false])('evaluates only the selected generation branch for %s', async (friday) => {
         const { backend, calls } = scripted(String(friday), 'selected answer');
         const result = await exec(`
-let result = if ask(fmt='boolean') 'Today is friday? True/False' {
+let result = if ask(fmt='boolean') 'Today is friday? True/False':
     ask 'Haiku on variance'
-} else {
+else:
     ask 'Sentence on passing time'
-}
 success result
 `, backend);
         expect(result).toMatchObject({ status: 'success', value: 'selected answer' });
@@ -179,8 +180,12 @@ success ask(schema=Contract, reasoning=effort, model='test-model', show=True) 'E
         const { backend, calls } = scripted(invalid, valid);
         const result = await exec(`
 let count = [0]
-def format() { count[0] += 1; return '${fmt}' }
-def prompt() { count[0] += 1; return 'Generate' }
+def format():
+    count[0] += 1
+    return '${fmt}'
+def prompt():
+    count[0] += 1
+    return 'Generate'
 let result = ask(fmt=format(), repairs=1) prompt()
 success [result, count[0]]
 `, backend);
@@ -210,7 +215,9 @@ success [result, count[0]]
         const { backend, calls } = scripted('not JSON', '{"total":"bad"}', '{"total":42}');
         const result = await exec(`
 let count = [0]
-def prompt() { count[0] += 1; return 'Extract' }
+def prompt():
+    count[0] += 1
+    return 'Extract'
 let result = ask(schema=${schema}, repairs=2) prompt()
 success [result, count[0]]
 `, backend);
@@ -273,7 +280,10 @@ success [result, count[0]]
 
     it('keeps guidance separate from validation and makes agent calls explicit', async () => {
         const { backend, calls } = scripted('contrary', 'done');
-        expect(await exec(`enforce 'Be polite' { forbid 'jokes' { let x = ask 'Hi' } }\nsuccess agent 'Do the task'`, backend)).toMatchObject({ status: 'success', value: 'done' });
+        expect(await exec(`enforce 'Be polite':
+    forbid 'jokes':
+        let x = ask 'Hi'
+success agent 'Do the task'`, backend)).toMatchObject({ status: 'success', value: 'done' });
         expect(calls[0].prompt).toContain('Follow: Be polite');
         expect(calls[0].prompt).toContain('Avoid: jokes');
         expect(calls[1]).toMatchObject({ kind: 'agent' });
@@ -283,11 +293,12 @@ success [result, count[0]]
     it.each(['ask', 'think', 'agent'])('applies enforce/forbid to %s calls through functions and unwinds afterward', async (command) => {
         const { backend, calls } = scripted('inside', 'outside');
         const result = await exec(`
-def answer() { return ${command} 'inside' }
+def answer():
+    return ${command} 'inside'
 let inside = None
-enforce 'Answer in English' {
-    forbid 'jokes' { inside = answer() }
-}
+enforce 'Answer in English':
+    forbid 'jokes':
+        inside = answer()
 let outside = ${command} 'outside'
 success [inside, outside]
 `, backend);
@@ -302,16 +313,13 @@ success [inside, outside]
     it('unwinds nested enforce/forbid guidance after a caught failure', async () => {
         const { backend, calls } = scripted('inside', 'after');
         const result = await exec(`
-try {
-    enforce 'Be polite' {
-        forbid 'profanity' {
+try:
+    enforce 'Be polite':
+        forbid 'profanity':
             let answer = ask 'inside'
             fail 'expected'
-        }
-    }
-} except err {
+except err:
     success ask 'after'
-}
 `, backend);
         expect(result).toMatchObject({ status: 'success', value: 'after' });
         expect(calls[0].prompt).toContain('Follow: Be polite');
@@ -361,9 +369,19 @@ describe('raw tools and bindings', () => {
 
     it('isolates child declarations and assigns to enclosing lexical bindings', async () => {
         const { backend } = scripted();
-        expect(await exec(`let x = 1\n{ let x = 2; let hidden = 3 }\nsuccess x`, backend)).toMatchObject({ status: 'success', value: 1 });
-        expect(await exec(`{ let hidden = 3 }\nsuccess hidden`, backend)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('not defined') } });
-        expect(await exec(`let x = 1\ndef f() { x = 2 }\nf()\nsuccess x`, backend)).toMatchObject({ status: 'success', value: 2 });
+        expect(await exec(`let x = 1
+:
+    let x = 2
+    let hidden = 3
+success x`, backend)).toMatchObject({ status: 'success', value: 1 });
+        expect(await exec(`:
+    let hidden = 3
+success hidden`, backend)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('not defined') } });
+        expect(await exec(`let x = 1
+def f():
+    x = 2
+f()
+success x`, backend)).toMatchObject({ status: 'success', value: 2 });
         expect(await exec(`x = 1`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'runtime_error' } });
     });
 });

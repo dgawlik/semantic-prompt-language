@@ -1,27 +1,27 @@
 {
   "Function": {
     "prefix": "def",
-    "body": ["def ${1:name}(${2:args}) {", "\t$0", "}"],
+    "body": ["def ${1:name}(${2:args}):", "    ${0:pass}"],
     "description": "Function definition"
   },
   "If": {
     "prefix": "if",
-    "body": ["if ${1:condition} {", "\t$0", "}"],
+    "body": ["if ${1:condition}:", "    ${0:pass}"],
     "description": "if block"
   },
   "If / else": {
     "prefix": "ifelse",
-    "body": ["if ${1:condition} {", "\t$2", "} else {", "\t$0", "}"],
+    "body": ["if ${1:condition}:", "    ${2:pass}", "else:", "    ${0:pass}"],
     "description": "if / else block"
   },
   "For loop": {
     "prefix": "for",
-    "body": ["for ${1:item} in ${2:items} {", "\t$0", "}"],
+    "body": ["for ${1:item} in ${2:items}:", "    ${0:pass}"],
     "description": "for loop"
   },
   "If expression": {
     "prefix": "ifexpr",
-    "body": ["let ${1:result} = if ${2:condition} {", "\t${3:value}", "} else {", "\t${0:other}", "}"],
+    "body": ["let ${1:result} = if ${2:condition}:", "    ${3:value}", "else:", "    ${0:other}"],
     "description": "Conditional expression returning the selected branch's final expression"
   },
   "Leveled log": {
@@ -31,7 +31,7 @@
   },
   "While loop": {
     "prefix": "while",
-    "body": ["while ${1:condition} {", "\t$0", "}"],
+    "body": ["while ${1:condition}:", "    ${0:pass}"],
     "description": "while loop"
   },
   "Variable": {
@@ -51,7 +51,7 @@
   },
   "Think": {
     "prefix": "think",
-    "body": ["let ${1:answer} = think(", "\treasoning = '${2|low,medium,high|}',", "\tshow = ${3|False,True|},", ") '${0:problem}'"],
+    "body": ["let ${1:answer} = think(", "    reasoning = '${2|low,medium,high|}',", "    show = ${3|False,True|},", ") '${0:problem}'"],
     "description": "Generation-only reasoning"
   },
   "Human input": {
@@ -61,12 +61,12 @@
   },
   "Try / except": {
     "prefix": "try",
-    "body": ["try {", "\t$1", "} except ${2:err} {", "\t$0", "}"],
+    "body": ["try:", "    ${1:pass}", "except ${2:err}:", "    ${0:pass}"],
     "description": "Catch failures"
   },
   "Validated generation": {
     "prefix": ["askschema", "retry"],
-    "body": ["let ${1:result} = ask(", "\tschema = ${2:Contract},", "\treasoning = '${3|low,medium,high|}',", "\trepairs = ${4:2},", ") '${0:prompt}'"],
+    "body": ["let ${1:result} = ask(", "    schema = ${2:Contract},", "    reasoning = '${3|low,medium,high|}',", "    repairs = ${4:2},", ") '${0:prompt}'"],
     "description": "Validate JSON and repair generation only, without repeating external actions"
   },
   "Agent": {
@@ -76,37 +76,37 @@
   },
   "Enforce": {
     "prefix": "enforce",
-    "body": ["enforce '${1:guidance}' {", "\t$0", "}"],
+    "body": ["enforce '${1:guidance}':", "    ${0:pass}"],
     "description": "Scoped positive prompt guidance, not runtime validation"
   },
   "Forbid": {
     "prefix": "forbid",
-    "body": ["forbid '${1:guidance}' {", "\t$0", "}"],
+    "body": ["forbid '${1:guidance}':", "    ${0:pass}"],
     "description": "Scoped negative prompt guidance, not runtime enforcement"
   },
   "Restrict folder": {
     "prefix": "restrict",
-    "body": ["restrict '${1:./folder}' {", "\t$0", "}"],
+    "body": ["restrict '${1:./folder}':", "    ${0:pass}"],
     "description": "Limit reads and writes to a folder"
   },
   "Restrict network": {
     "prefix": "restrictnet",
-    "body": ["restrict net '${1:api.example.com}' {", "\t$0", "}"],
+    "body": ["restrict net '${1:api.example.com}':", "    ${0:pass}"],
     "description": "Limit network access to hosts"
   },
   "Restrict exec": {
     "prefix": "restrictexec",
-    "body": ["restrict exec '${1:git,npm}' {", "\t$0", "}"],
+    "body": ["restrict exec '${1:git,npm}':", "    ${0:pass}"],
     "description": "Limit shell commands to executables"
   },
   "Restrict MCP": {
     "prefix": "restrictmcp",
-    "body": ["restrict mcp '${1:docs/search}' {", "\t$0", "}"],
+    "body": ["restrict mcp '${1:docs/search}':", "    ${0:pass}"],
     "description": "Limit configured MCP servers or tools"
   },
   "Combined restrictions": {
     "prefix": "restrictmulti",
-    "body": ["restrict '${1:./src}', exec '${2:git}', mcp '${3:docs/search}' {", "\t$0", "}"],
+    "body": ["restrict '${1:./src}', exec '${2:git}', mcp '${3:docs/search}':", "    ${0:pass}"],
     "description": "Combine filesystem, executable and MCP restrictions"
   },
   "Read file": {

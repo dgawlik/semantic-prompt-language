@@ -10,16 +10,18 @@ SPL fences run exact code. Blockquotes run agent commands with tools, not genera
 Both share one scope; agents load and save variables and can invoke existing functions.
 
 ```spl
-def fib(n) {
-    if n < 2 {
+def fib(n):
+    if n < 2:
         return n
-    }
     return fib(n - 1) + fib(n - 2)
-}
 ```
 
 ```spl
-
+def factorial(n):
+    if n == 0:
+        return 1
+    else:
+        return n * factorial(n - 1)
 ```
 
 > Invoke @factorial with 15 as argument -> @fact15

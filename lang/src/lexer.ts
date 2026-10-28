@@ -8,6 +8,7 @@ export type Token =
     | { type: 'name'; value: string; line: number; col: number }
     | { type: 'op'; value: string; line: number; col: number }
     | { type: 'nl'; line: number; col: number }
+    | { type: 'indent' | 'dedent'; line: number; col: number }
     | { type: 'eof'; line: number; col: number };
 
 const OPS = [
@@ -22,12 +23,23 @@ const ESCAPES: Record<string, string> = {
 const isDigit = (c: string) => c >= '0' && c <= '9';
 const isNameStart = (c: string) => /[A-Za-z_]/.test(c);
 const isNameChar = (c: string) => /[A-Za-z0-9_]/.test(c);
+const EXPR_PREFIXES = new Set([
+    'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
+    'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass',
+    'and', 'or', 'not',
+]);
+const canEndExpression = (token: Token | undefined): boolean =>
+    token?.type === 'num' || token?.type === 'str' ||
+    (token?.type === 'name' && !EXPR_PREFIXES.has(token.value)) ||
+    (token?.type === 'op' && [')', ']', '}'].includes(token.value));
 
 export interface LexOptions {
-    /** Lexing the body of a `{...}` interpolation: newlines are insignificant. */
+    /** Interpolation newlines are insignificant except inside indentation suites. */
     inExpr?: boolean;
     line?: number;
     col?: number;
+    /** Original first-line indentation when lexing an interpolation substring. */
+    indent?: number;
     /** Editor analysis may tokenize a document while a group is still being typed. */
     allowUnclosedBrackets?: boolean;
 }
@@ -37,9 +49,15 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
     let i = 0;
     let line = opts.line ?? 1;
     let col = opts.col ?? 1;
-    let depth = opts.inExpr ? 1 : 0;
     const brackets: string[] = [];
-    const braceDepths: number[] = [];
+    const indexes = new Set<number>();
+    // Suites inside expression groups need their own indentation baseline.
+    const indents = [{ width: opts.indent ?? 0, depth: 0, base: true }];
+    const suiteHeaders = new Map<number, number>();
+    let pendingSuite: { width: number; depth: number } | undefined;
+    let lineStart = true;
+    let lineIndent = 0;
+    let suiteColon = false;
 
     const err = (msg: string, l = line, c = col): never => {
         throw new SplSyntaxError(msg, l, c);
@@ -57,6 +75,41 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
     };
 
     while (i < src.length) {
+        if (lineStart) {
+            const start = i;
+            while (src[i] === ' ' || src[i] === '\t') advance();
+            lineIndent = start === 0 && opts.inExpr ? opts.indent ?? 0 : i - start;
+            lineStart = false;
+            if (i === src.length) break;
+            const blank = src[i] === '#' || src[i] === '\r' || src[i] === '\n';
+            const active = indents.at(-1)!;
+            const significant = pendingSuite || (!opts.inExpr && brackets.length === 0) ||
+                (!active.base && brackets.length === active.depth);
+            if (!blank && significant) {
+                if (src.slice(start, i).includes('\t')) err('tabs are not allowed in indentation; use spaces', line, 1);
+                if (pendingSuite) {
+                    if (lineIndent <= pendingSuite.width) err('expected an indented block');
+                    if (indents.at(-1)!.depth !== pendingSuite.depth) {
+                        indents.push({ ...pendingSuite, base: true });
+                    } else if (indents.at(-1)!.base) {
+                        indents.at(-1)!.width = pendingSuite.width;
+                    }
+                    indents.push({ width: lineIndent, depth: pendingSuite.depth, base: false });
+                    tokens.push({ type: 'indent', line, col });
+                    pendingSuite = undefined;
+                } else {
+                    let dedented = false;
+                    while (lineIndent < indents.at(-1)!.width && indents.length > 1) {
+                        const indent = indents.pop()!;
+                        if (!indent.base) tokens.push({ type: 'dedent', line, col });
+                        dedented = true;
+                    }
+                    if (lineIndent !== indents.at(-1)!.width) {
+                        err(dedented ? 'inconsistent dedent' : 'unexpected indentation');
+                    }
+                }
+            }
+        }
         const c = src[i];
 
         if (c === ' ' || c === '\t' || c === '\r') {
@@ -72,8 +125,17 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
             continue;
         }
         if (c === '\n') {
-            if (depth === 0) tokens.push({ type: 'nl', line, col });
+            const last = tokens.at(-1);
+            if (last?.type === 'op' && last.value === ':' && suiteColon) {
+                pendingSuite = { width: suiteHeaders.get(brackets.length) ?? lineIndent, depth: brackets.length };
+            }
+            if (pendingSuite || (!opts.inExpr && brackets.length === 0) ||
+                (!indents.at(-1)!.base && brackets.length === indents.at(-1)!.depth)) {
+                tokens.push({ type: 'nl', line, col });
+                suiteHeaders.delete(brackets.length);
+            }
             advance();
+            lineStart = true;
             continue;
         }
 
@@ -101,6 +163,13 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
             let j = i + (c === '$' ? 1 : 0);
             while (j < src.length && isNameChar(src[j])) j++;
             const value = src.slice(i, j);
+            const previous = tokens.at(-1);
+            const member = previous?.type === 'op' && previous.value === '.';
+            const prefix = !canEndExpression(previous);
+            if (!member && (['def', 'for', 'while', 'try', 'except', 'enforce', 'forbid', 'restrict', 'elif'].includes(value) ||
+                (['if', 'else'].includes(value) && prefix))) {
+                suiteHeaders.set(brackets.length, lineIndent);
+            }
             advance(j - i);
             tokens.push({ type: 'name', value, line: startLine, col: startCol });
             continue;
@@ -109,25 +178,36 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
         const op = OPS.find((o) => src.startsWith(o, i));
         if (!op) err(`unexpected character '${c}'`);
         advance(op!.length);
-        if (op === '{') {
-            braceDepths.push(depth);
-            depth = 0;
-        } else if (op === '}') {
-            depth = braceDepths.pop() ?? depth;
-        } else if (op === '(' || op === '[') {
+        if (op === ':') {
+            const previous = tokens.at(-1);
+            suiteColon = brackets.length === 0 || brackets.at(-1) === '(' || suiteHeaders.has(brackets.length) ||
+                (!indexes.has(brackets.length) && previous?.type === 'op' && ['=', '[', '{', ',', ':'].includes(previous.value));
+        }
+        if (op === '(' || op === '[' || op === '{') {
+            const index = op === '[' && canEndExpression(tokens.at(-1));
             brackets.push(op);
-            depth++;
-        } else if (op === ')' || op === ']') {
+            if (index) indexes.add(brackets.length);
+        } else if (op === ')' || op === ']' || op === '}') {
+            suiteHeaders.delete(brackets.length);
+            indexes.delete(brackets.length);
+            if (indents.length > 1 && indents.at(-1)!.base && indents.at(-1)!.depth === brackets.length) indents.pop();
             const open = brackets.pop();
-            if ((op === ')' && open !== '(') || (op === ']' && open !== '[')) {
+            if (open !== { ')': '(', ']': '[', '}': '{' }[op]) {
                 err(`unbalanced '${op}'`, startLine, startCol);
             }
-            depth--;
+        } else if (op === ',' || op === ';') {
+            suiteHeaders.delete(brackets.length);
         }
         tokens.push({ type: 'op', value: op!, line: startLine, col: startCol });
     }
 
     if (brackets.length && !opts.allowUnclosedBrackets) err(`unclosed '${brackets[brackets.length - 1]}'`);
+    if (!opts.inExpr || indents.length > 1) {
+        if (tokens.length && tokens.at(-1)!.type !== 'nl') tokens.push({ type: 'nl', line, col });
+        while (indents.length > 1) {
+            if (!indents.pop()!.base) tokens.push({ type: 'dedent', line, col });
+        }
+    }
     tokens.push({ type: 'eof', line, col });
     return tokens;
 

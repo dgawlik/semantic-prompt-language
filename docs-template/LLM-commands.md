@@ -88,9 +88,8 @@ Agents default to medium reasoning and never use repairs, so a failed check neve
 
 ```spl
 let report = ''
-restrict './src', exec 'npm' {
+restrict './src', exec 'npm':
     report = agent 'Run the tests, fix the failing source file, and describe the fix'
-}
 ```
 
 ## Modifiers
@@ -157,15 +156,13 @@ The prompt is not re-evaluated. Put business rules in `assert`, after the call.
 
 ## Guidance: enforce and forbid
 
-`enforce text { ... }` and `forbid text { ... }` add instructions to every model call inside the
-block, including calls in functions it invokes. Nested guidance combines. Guidance shapes prompts;
+`enforce text:` and `forbid text:` introduce indented blocks and add instructions to every model
+call inside, including calls in functions they invoke. Nested guidance combines. Guidance shapes prompts;
 it does not check the answer.
 
 ```spl
 let answer = None
-enforce 'Answer in English' {
-    forbid 'jokes' {
+enforce 'Answer in English':
+    forbid 'jokes':
         answer = ask(len='sentence') 'Explain recursion'
-    }
-}
 ```

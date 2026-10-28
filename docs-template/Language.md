@@ -1,12 +1,29 @@
 # Language
 
-SPL is a small Python-like language with brace-delimited blocks. This page covers the code inside
+SPL is a small Python-like language with colon-and-indentation blocks. This page covers the code inside
 `spl` fences: values, bindings, control flow, functions, built-ins and exact tools.
+
+## Block syntax and migration
+
+**Breaking change:** blocks use `:` followed by a newline and an indented, nonempty body, not
+`{ ... }`. To migrate, replace each opening block brace with `:`, move any inline body onto its
+own indented lines, and remove the closing brace. Align `elif`, `else` and `except` with their
+opening statement. Replace empty bodies with `pass`; inline suites are not supported.
+
+Use spaces for indentation (4 per level recommended). Tabs in indentation are prohibited.
+Unexpected indentation, a missing indented body, and a dedent that does not match a prior level
+are syntax errors. Blank and comment-only lines are ignored: they neither open nor close a block
+and do not count as a body. Semicolons can separate simple statements only, never block headers
+or compound statements.
+
+Dictionaries `{...}` and string interpolation `{expr}` are unchanged. Newlines inside `()`, `[]`
+and dictionaries are insignificant; explicit backslash continuation remains supported.
+Only the layout changes: every block is still a lexical child scope, not Python assignment semantics.
 
 ## Values and strings
 
 Values are `None`, `True`/`False`, numbers, strings, lists, dicts with string keys, and functions.
-Statements end at a newline or `;`. `#` starts a comment, and a trailing `\` continues a line.
+Simple statements end at a newline or `;`. `#` starts a comment, and a trailing `\` continues a line.
 
 ```spl
 let name = 'Ada'
@@ -30,13 +47,11 @@ Each loop iteration gets fresh variables.
 
 ```spl
 let count = 0
-for i in range(3) {
+for i in range(3):
     count += i
-}
-let result = {
+let result = :
     let count = 10
     count + 1
-}
 success [count, result]  # [3, 11]
 ```
 
@@ -45,16 +60,24 @@ Declare a result before a block when the block should set it:
 
 ## Control flow and expressions
 
-`if`/`elif`/`else`, `for`, `while`, `break`, `continue` and `pass` behave as in Python, with braces.
+`if`/`elif`/`else`, `for`, `while`, `break`, `continue` and `pass` use Python-like layout,
+but keep SPL's lexical scopes.
 `for k, v in items(d)` unpacks pairs. Blocks and `if` are expressions that yield their last
-expression, or `None`. `{}` is an empty dict; `{ pass }` is an empty block.
+expression, or `None`. Anonymous value-producing blocks begin with a bare `:`, as in `result`
+above. `{}` is an empty dict; a block containing only `pass` yields `None`.
 
 ```spl
 let score = 6
-let label = if score > 7 { 'high' } elif score > 3 { 'medium' } else { 'low' }
-for key, value in items({'a': 1, 'b': 2}) {
+let label = if score > 7:
+    'high'
+elif score > 3:
+    'medium'
+else:
+    'low'
+for key, value in items({'a': 1, 'b': 2}):
     log(key, value)
-}
+if score < 0:
+    pass
 ```
 
 ## Functions
@@ -63,12 +86,10 @@ for key, value in items({'a': 1, 'b': 2}) {
 unless they use an explicit `return`.
 
 ```spl
-def fib(n) {
-    if n < 2 {
+def fib(n):
+    if n < 2:
         return n
-    }
     return fib(n - 1) + fib(n - 2)
-}
 ```
 
 ## Runtime inputs: $env and $args
@@ -79,9 +100,8 @@ out-of-range indexes return `None`. Both are read-only snapshots and are never p
 
 ```spl
 let target = $args[0]
-if target == None {
+if target == None:
     target = $env.USER
-}
 ```
 
 ## Logging
@@ -129,9 +149,8 @@ call is checked against active [restrictions](Safety.md#restrictions).
 
 ```spl
 let diff = ''
-restrict exec 'git' {
+restrict exec 'git':
     diff = shell('git diff --cached')
-}
 ```
 
 `shell` runs through the platform shell (`cmd.exe` on Windows, `/bin/sh` elsewhere).

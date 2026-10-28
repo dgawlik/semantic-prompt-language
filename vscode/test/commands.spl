@@ -29,20 +29,25 @@
 #   ^^^^^ support.function.tool.spl
     web_fetch('https://a.com')
 #   ^^^^^^^^^ support.function.tool.spl
-    enforce 'be nice' { pass }
+    enforce 'be nice':
 #   ^^^^^^^ keyword.control.constraint.spl
-    forbid 'rude' { pass }
+        pass
+    forbid 'rude':
 #   ^^^^^^ keyword.control.constraint.spl
+        pass
     instruct 'not a keyword'
 #   ^^^^^^^^ - keyword.control.constraint.spl
     avoid 'not a keyword'
 #   ^^^^^ - keyword.control.constraint.spl
-    restrict './out' { pass }
+    restrict './out':
 #   ^^^^^^^^ keyword.control.restrict.spl
-    restrict net 'a.com' { pass }
+        pass
+    restrict net 'a.com':
 #            ^^^ storage.modifier.restrict-kind.spl
-    restrict exec 'git' { pass }
+        pass
+    restrict exec 'git':
 #            ^^^^ storage.modifier.restrict-kind.spl
+        pass
     content = 5
 #   ^^^^^^^ - variable.parameter.modifier.spl
     log(level=debug)('details')

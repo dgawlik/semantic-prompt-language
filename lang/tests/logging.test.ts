@@ -19,7 +19,9 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('script log levels 
         const result = await run(parse(`
 let chosen = 'debug'
 let n = 0
-def next() { n += 1; return n }
+def next():
+    n += 1
+    return n
 log('plain', next())
 log(level=error)('problem', next())
 log(level='info')('details', next())
@@ -62,7 +64,8 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
             },
             async close() {},
         };
-        const result = await run(parse(`enforce 'Be precise' { success ${expression} }`), {
+        const result = await run(parse(`enforce 'Be precise':
+    success ${expression}`), {
             backend, logger: new Logger(level, (line) => lines.push(line)), cwd: process.cwd(),
         });
 
@@ -101,12 +104,10 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
     it('traces only executed deterministic statements, including loop iterations', async () => {
         const lines: string[] = [];
         const result = await run(parse(`let n = 0
-for i in [1, 2] {
+for i in [1, 2]:
     n += i
-}
-if False {
+if False:
     fail 'unreachable'
-}
 success n`), {
             backend: { async call() { throw new Error('unexpected LLM call'); }, async close() {} },
             logger: new Logger(level, (line) => lines.push(line)), cwd: process.cwd(),
@@ -114,11 +115,11 @@ success n`), {
         expect(result).toMatchObject({ status: 'success', value: 3 });
         expect(lines).toEqual(level === 'silent' ? [] : [
             '[deterministic] line 1 (let): let n = 0',
-            '[deterministic] line 2 (for): for i in [1, 2] {',
+            '[deterministic] line 2 (for): for i in [1, 2]:',
             '[deterministic] line 3 (assign): n += i',
             '[deterministic] line 3 (assign): n += i',
-            '[deterministic] line 5 (if): if False {',
-            '[deterministic] line 8 (success): success n',
+            '[deterministic] line 4 (if): if False:',
+            '[deterministic] line 6 (success): success n',
         ]);
     });
 });

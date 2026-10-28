@@ -47,6 +47,29 @@ class WorkflowSerializer implements vscode.NotebookSerializer {
     }
 }
 
+const LOG_MAX_LINES = 20;
+const LOG_MAX_CHARACTERS = 4_000;
+const LOG_TRUNCATION = '[Earlier logs omitted; full logs: Output > SPL Notebook]\n';
+
+export class NotebookLogBuffer {
+    private tail = '';
+    private truncated = false;
+
+    append(text: string): void {
+        const combined = (this.tail ? this.tail + '\n' : '') + text.replace(/\r\n?/g, '\n');
+        const lines = combined.split('\n');
+        this.truncated ||= lines.length > LOG_MAX_LINES || combined.length > LOG_MAX_CHARACTERS;
+        const prefix = this.truncated ? LOG_TRUNCATION : '';
+        this.tail = lines.slice(-(LOG_MAX_LINES - (this.truncated ? 1 : 0))).join('\n')
+            .slice(-(LOG_MAX_CHARACTERS - prefix.length));
+        if (/^[\uDC00-\uDFFF]/.test(this.tail)) this.tail = this.tail.slice(1);
+    }
+
+    get text(): string {
+        return (this.truncated ? LOG_TRUNCATION : '') + this.tail;
+    }
+}
+
 interface Session {
     kernel: NotebookKernel;
     queue: Promise<void>;
@@ -144,10 +167,37 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
             const runCell = async () => {
                 let success = false;
                 let outputQueue = Promise.resolve();
+                const logs = new NotebookLogBuffer();
+                let logOutput: vscode.NotebookCellOutput | undefined;
+                let logUpdatePending = false;
+                const log = (text: string, display = false) => {
+                    output.appendLine(text);
+                    if (display) {
+                        outputQueue = outputQueue.then(async () => {
+                            await execution.appendOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stdout(text + '\n')]));
+                        });
+                    } else if (/^\[(?:info|warn|error)\] /.test(text) && !text.startsWith('[info] reasoning:')) {
+                        logs.append(text);
+                        if (logUpdatePending) return;
+                        logUpdatePending = true;
+                        outputQueue = outputQueue.then(async () => {
+                            logUpdatePending = false;
+                            const items = [vscode.NotebookCellOutputItem.text(logs.text)];
+                            if (logOutput) {
+                                await execution.replaceOutputItems(items, logOutput);
+                            } else {
+                                logOutput = new vscode.NotebookCellOutput(items);
+                                await execution.appendOutput(logOutput);
+                            }
+                        });
+                    }
+                };
+                const started = Date.now();
                 try {
-                    execution.start(Date.now());
+                    execution.start(started);
                     execution.executionOrder = ++current.order;
                     await execution.clearOutput();
+                    log(`[info] Running ${cell.document.languageId === 'spl' ? 'SPL' : 'instruction'} cell`);
                     if (cell.document.isClosed || notebook.isClosed) throw new Error('The cell or notebook was closed before execution.');
                     runtimeDiagnostics.delete(cell.document.uri);
                     const version = cell.document.version;
@@ -155,15 +205,7 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
                         id: ++requestId, value: cell.document.getText(), language: cell.document.languageId,
                         frontmatter: frontmatter(notebook), source: cell.document.uri.toString(),
                         version,
-                    }, (text, display) => {
-                        output.appendLine(text);
-                        if (display) {
-                            outputQueue = outputQueue.then(async () => {
-                                await execution.appendOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stdout(text + '\n')]));
-                            });
-                        }
-                    });
-                    await outputQueue;
+                    }, log);
                     if (result.kind === 'error') {
                         const origin = notebook.getCells().find(item => item.document.uri.toString() === result.source)?.document;
                         if (origin && result.version === origin.version) {
@@ -171,14 +213,18 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
                         }
                         throw new Error(`${result.message}\n${result.source}:${result.line}:${result.column}`);
                     }
+                    log(`[info] Cell completed (${Date.now() - started} ms)`);
+                    await outputQueue;
                     if (result.text !== undefined) {
                         await execution.appendOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.text(result.text)]));
                     }
                     success = true;
                 } catch (error) {
-                    await outputQueue;
                     const failure = error instanceof Error ? error : new Error(String(error));
-                    output.appendLine(failure.message);
+                    log(`[error] Cell failed: ${failure.message}`);
+                    await outputQueue.catch(outputError => {
+                        output.appendLine(`Could not update cell output: ${String(outputError)}`);
+                    });
                     await execution.appendOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.error(failure)]));
                 } finally {
                     cancel.dispose();

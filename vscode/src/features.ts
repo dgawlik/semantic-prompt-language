@@ -15,7 +15,12 @@ type NamedToken = Extract<Token, { type: 'name' }>;
 interface Scope {
     start: number;
     end: number;
+    includesEnd?: boolean;
     parent?: Scope;
+}
+
+function contains(scope: Scope, at: number): boolean {
+    return scope.start <= at && (at < scope.end || (scope.includesEnd === true && at === scope.end));
 }
 
 interface Binding {
@@ -57,7 +62,7 @@ function isOp(token: Token | undefined, value: string): boolean {
     return token?.type === 'op' && token.value === value;
 }
 
-function interpolationNames(tokens: Token[]): NamedToken[] {
+function interpolationNames(tokens: Token[], lines: string[]): NamedToken[] {
     const names: NamedToken[] = [];
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
@@ -65,7 +70,8 @@ function interpolationNames(tokens: Token[]): NamedToken[] {
         if (token.type === 'str') {
             for (const part of token.parts) {
                 if ('expr' in part) {
-                    names.push(...interpolationNames(tokenize(part.expr, { inExpr: true, line: part.line, col: part.col })));
+                    const indent = /^[ \t]*/.exec(lines[part.line - 1] ?? '')![0].length;
+                    names.push(...interpolationNames(tokenize(part.expr, { inExpr: true, line: part.line, col: part.col, indent }), lines));
                 }
             }
         }
@@ -107,8 +113,11 @@ export function analyze(document: TextDocument): Analysis {
     let tokens: Token[] = [];
     let names: NamedToken[] = [];
     try {
-        tokens = blocks?.length === 0 ? [] : tokenize(source, { allowUnclosedBrackets: true });
-        names = interpolationNames(tokens);
+        tokens = blocks
+            ? blocks.filter(block => block.kind === 'spl').flatMap(block =>
+                tokenize('\n'.repeat(block.line - 1) + block.text, { allowUnclosedBrackets: true }))
+            : tokenize(source, { allowUnclosedBrackets: true });
+        names = interpolationNames(tokens, source.split(/\r?\n/));
         for (const block of blocks ?? []) {
             if (block.kind !== 'natural') continue;
             const lines = document.getText().split(/\r?\n/);
@@ -126,46 +135,43 @@ export function analyze(document: TextDocument): Analysis {
     const root: Scope = { start: 0, end: source.length };
     const scopes: Scope[] = [root];
     const bindings: Binding[] = [];
-    const braceEnds = new Map<number, number>();
+    const suiteEnds = new Map<number, number>();
     const opens: number[] = [];
     for (let i = 0; i < tokens.length; i++) {
-        if (isOp(tokens[i], '{')) opens.push(i);
-        if (isOp(tokens[i], '}')) {
+        if (tokens[i].type === 'indent') opens.push(i);
+        if (tokens[i].type === 'dedent') {
             const open = opens.pop();
-            if (open !== undefined) braceEnds.set(open, i);
+            if (open !== undefined) suiteEnds.set(open, i);
         }
     }
-    const currentScope = (at: number) => scopes.findLast((scope) => scope.start <= at && at <= scope.end) ?? root;
-    const braceScopes = new Map<number, Scope>();
+    const currentScope = (at: number) => scopes.findLast((scope) => contains(scope, at)) ?? root;
+    const suiteScopes = new Map<number, Scope>();
     const blockScope = (open: number, parent: Scope): Scope => {
-        const existing = braceScopes.get(open);
+        const existing = suiteScopes.get(open);
         if (existing) return existing;
-        const close = braceEnds.get(open);
+        const close = suiteEnds.get(open);
+        let next = close === undefined ? tokens.length : close + 1;
+        while (tokens[next]?.type === 'dedent') next++;
         const scope = {
             start: offset(document, tokens[open]),
-            end: close === undefined ? source.length : offset(document, tokens[close]) + 1,
+            end: close === undefined ? source.length : offset(document, tokens[close]),
+            includesEnd: tokens[next]?.type === 'eof' && tokens[next].col > 1,
             parent,
         };
-        braceScopes.set(open, scope);
+        suiteScopes.set(open, scope);
         scopes.push(scope);
         return scope;
     };
     const bodyOpen = (start: number): number | undefined => {
-        let candidate: number | undefined;
-        let depth = 0;
         for (let j = start; j < tokens.length; j++) {
             const token = tokens[j];
-            if (depth === 0 && (token.type === 'nl' || token.type === 'eof' || isOp(token, ';'))) break;
-            if (isOp(token, '(') || isOp(token, '[')) depth++;
-            if (isOp(token, ')') || isOp(token, ']')) depth--;
-            if (depth === 0 && isOp(token, '{')) {
-                candidate = j;
-                const close = braceEnds.get(j);
-                if (close === undefined) break;
-                j = close;
+            if (token.type === 'eof' || isOp(token, ';')) return undefined;
+            if (token.type === 'nl') {
+                while (tokens[j]?.type === 'nl') j++;
+                return tokens[j]?.type === 'indent' ? j : undefined;
             }
         }
-        return candidate;
+        return undefined;
     };
     const add = (token: NamedToken, scope: Scope, signature: string, kind: SymbolKind = SymbolKind.Variable): Binding => {
         const binding = { name: token.value, token, scope, signature, kind, end: offset(document, token) + token.value.length };
@@ -175,12 +181,12 @@ export function analyze(document: TextDocument): Analysis {
 
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
-        if (isOp(token, '{')) blockScope(i, currentScope(offset(document, token)));
+        if (token.type === 'indent') blockScope(i, currentScope(offset(document, token)));
         if (!isName(token) || isOp(tokens[i - 1], '.')) continue;
         const scope = currentScope(offset(document, token));
         const name = tokens[i + 1];
         if ((token.value === 'let' || token.value === 'except') && isName(name)) {
-            const open = token.value === 'except' && isOp(tokens[i + 2], '{') ? i + 2 : undefined;
+            const open = token.value === 'except' ? bodyOpen(i + 2) : undefined;
             add(name, open === undefined ? scope : blockScope(open, scope),
                 token.value === 'let' ? `let ${name.value}` : `except ${name.value}`);
         } else if (token.value === 'for') {
@@ -200,10 +206,10 @@ export function analyze(document: TextDocument): Analysis {
                 if (isName(param)) params.push(param);
                 j++;
             }
-            if (!isOp(tokens[j + 1], '{')) continue;
-            const open = j + 1;
-            const close = braceEnds.get(open);
-            const end = close === undefined ? source.length : offset(document, tokens[close]) + 1;
+            const open = bodyOpen(j + 1);
+            if (open === undefined) continue;
+            const close = suiteEnds.get(open);
+            const end = close === undefined ? source.length : offset(document, tokens[close]);
             const functionScope = blockScope(open, scope);
             const binding = add(name, scope, `def ${name.value}(${params.map((param) => param.value).join(', ')})`, SymbolKind.Function);
             binding.end = end;
@@ -215,7 +221,7 @@ export function analyze(document: TextDocument): Analysis {
 }
 
 function scopeAt(analysis: Analysis, at: number): Scope {
-    return analysis.scopes.findLast((scope) => scope.start <= at && at < scope.end) ?? analysis.scopes[0];
+    return analysis.scopes.findLast((scope) => contains(scope, at)) ?? analysis.scopes[0];
 }
 
 function visibleBindings(analysis: Analysis, at: number): Binding[] {

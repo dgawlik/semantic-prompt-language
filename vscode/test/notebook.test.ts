@@ -126,7 +126,7 @@ test('isolated worker executes out of order, pretty prints results and survives 
     const execute = (value: string, origin = 'cell:current', instance = kernel) => instance.execute({
         id: ++id, value, source: origin, frontmatter: DEFAULT_FRONTMATTER, language: 'spl',
     }, () => {});
-    assert.equal((await execute('let count = 2\ndef double() { return count * 2 }', 'cell:definitions')).kind, 'result');
+    assert.equal((await execute('let count = 2\ndef double():\n    return count * 2', 'cell:definitions')).kind, 'result');
     await execute('count += 1');
     const result = await execute("{'count': count, 'double': double()}");
     assert.equal(result.kind, 'result');
@@ -135,7 +135,7 @@ test('isolated worker executes out of order, pretty prints results and survives 
     const failure = await execute('let x =');
     assert.equal(failure.kind, 'error');
     if (failure.kind === 'error') { assert.equal(failure.line, 1); assert.ok(failure.column > 1); }
-    await execute("def broken() {\n    fail 'broken'\n}", 'cell:broken');
+    await execute("def broken():\n    fail 'broken'", 'cell:broken');
     const runtimeFailure = await execute('broken()');
     assert.equal(runtimeFailure.kind, 'error');
     if (runtimeFailure.kind === 'error') {
@@ -154,7 +154,7 @@ test('cancelling a running worker stops unbounded code and rejects queued work',
     const kernel = new NotebookKernel(path.resolve(__dirname, '..', 'notebookWorker.cjs'), process.cwd(), process.execPath, () => {});
     t.after(() => kernel.dispose());
     const running = kernel.execute({
-        id: 1, value: 'while True { pass }', source: 'cell:loop', frontmatter: DEFAULT_FRONTMATTER, language: 'spl',
+        id: 1, value: 'while True:\n    pass', source: 'cell:loop', frontmatter: DEFAULT_FRONTMATTER, language: 'spl',
     }, () => {});
     const rejection = assert.rejects(running, /cancelled/);
     await new Promise(resolve => setTimeout(resolve, 200));

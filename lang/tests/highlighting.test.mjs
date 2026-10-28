@@ -52,12 +52,14 @@ success True`;
     });
 
     it('does not inherit Python-only syntax', () => {
-        const html = highlight('class import lambda\n# ask {ignored}\ndef run(value) {\n    return 1e-3 // 2\n}');
+        const source = 'class import lambda\n# ask {ignored}\ndef run(value):\n    return 1e-3 // 2';
+        const html = highlight(source);
         for (const keyword of ['class', 'import', 'lambda']) expect(html).not.toContain(`>${keyword}</span>`);
         expect(html).toContain('<span class="hljs-title function_">run</span>');
         expect(html).toContain('<span class="hljs-number">1e-3</span>');
         expect(html).toContain('<span class="hljs-operator">//</span>');
         expect(html).not.toContain('hljs-subst');
+        expect(decode(html)).toBe(source);
     });
 
     it('highlights references and agent markers only in blockquotes', () => {

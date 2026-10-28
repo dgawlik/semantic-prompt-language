@@ -43,7 +43,8 @@ describe.skipIf(!live)('generation and explicit agents on Copilot', () => {
 
     it('lets an explicit agent read through the runtime tools', async () => {
         fs.writeFileSync(path.join(dir, 'note.txt'), 'The magic word is PINEAPPLE.');
-        const result = await exec(`restrict '.' { success agent 'Read note.txt and return the magic word only' }`);
+        const result = await exec(`restrict '.':
+    success agent 'Read note.txt and return the magic word only'`);
         expect(result).toMatchObject({ status: 'success', value: expect.stringContaining('PINEAPPLE') });
         expect(backend.calls[0].kind).toBe('agent');
     }, LIVE_TIMEOUT);

@@ -16,19 +16,17 @@ let Card = {
     'properties': {'term': {'type': 'string'}, 'definition': {'type': 'string'}},
     'required': ['term', 'definition'],
     'additionalProperties': False,
-}
+    }
 let cards = {}
-for topic in topics {
+for topic in topics:
     cards[topic] = ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}'
-}
 ```
 
 > Pick the key of @cards whose card a beginner would find hardest. Save that exact key to @hardest
 
 ```spl
 assert hardest in topics "unexpected topic '{hardest}'"
-restrict './out' {
+restrict './out':
     write_file('./out/cards.json', json_stringify(cards, 2))
-}
 success {'cards': len(cards), 'hardest': hardest}
 ```

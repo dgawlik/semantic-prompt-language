@@ -273,11 +273,11 @@
     "group": {
       "patterns": [
         {
-          "name": "meta.block.spl",
+          "name": "meta.dictionary.spl",
           "begin": "\\{",
           "end": "\\}",
-          "beginCaptures": { "0": { "name": "punctuation.section.block.begin.spl" } },
-          "endCaptures": { "0": { "name": "punctuation.section.block.end.spl" } },
+          "beginCaptures": { "0": { "name": "punctuation.section.dictionary.begin.spl" } },
+          "endCaptures": { "0": { "name": "punctuation.section.dictionary.end.spl" } },
           "patterns": [{ "include": "#expression" }]
         },
         {

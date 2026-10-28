@@ -74,6 +74,10 @@ class Parser {
         return this.toks[this.pos];
     }
 
+    private isType(type: Token['type']): boolean {
+        return this.tok.type === type;
+    }
+
     private peekAt(n: number): Token {
         return this.toks[Math.min(this.pos + n, this.toks.length - 1)];
     }
@@ -92,6 +96,8 @@ class Parser {
         switch (t.type) {
             case 'eof': return 'end of file';
             case 'nl': return 'end of line';
+            case 'indent': return 'indentation';
+            case 'dedent': return 'dedent';
             case 'num': return `number ${t.value}`;
             case 'str': return 'string';
             default: return `'${t.value}'`;
@@ -143,13 +149,18 @@ class Parser {
 
     private endOfStatement(): void {
         const t = this.tok;
-        if (t.type === 'nl' || t.type === 'eof' || this.isOp(';') || this.isOp('}')) return;
+        if (t.type === 'nl' || t.type === 'dedent' || t.type === 'eof' || this.isOp(';') ||
+            this.atSuiteEnd()) return;
         this.fail(`unexpected ${this.describe(t)} at end of statement`);
     }
 
     private atStatementEnd(): boolean {
         const t = this.tok;
-        return t.type === 'nl' || t.type === 'eof' || this.isOp(';') || this.isOp('}');
+        return t.type === 'nl' || t.type === 'dedent' || t.type === 'eof' || this.isOp(';') || this.atSuiteEnd();
+    }
+
+    private atSuiteEnd(): boolean {
+        return this.toks[this.pos - 1]?.type === 'dedent';
     }
 
     // ---- program & statements -----------------------------------------
@@ -212,19 +223,21 @@ class Parser {
     }
 
     private parseBlock(): Stmt[] {
-        this.expectOp('{');
-        return this.finishBlock();
-    }
-
-    private finishBlock(body: Stmt[] = []): Stmt[] {
-        if (body.length) this.endOfStatement();
+        if (this.isOp('{')) this.fail("brace-delimited blocks have been removed; use ':' and an indented body");
+        this.expectOp(':');
+        if (!this.isType('nl')) this.fail("expected a newline after ':'; put the block body on indented lines");
+        this.skipNl();
+        if (!this.isType('indent')) this.fail('expected an indented block (use pass for an empty body)');
+        this.next();
+        const body: Stmt[] = [];
         this.skipSeparators();
-        while (!this.isOp('}')) {
-            if (this.tok.type === 'eof') this.fail("unclosed block, missing '}'");
+        while (this.tok.type !== 'dedent') {
+            if (this.tok.type === 'eof') this.fail('expected the end of an indented block');
             body.push(this.parseStatement());
             this.endOfStatement();
             this.skipSeparators();
         }
+        if (!body.length) this.fail('expected a statement in the indented block (use pass for an empty body)');
         this.next();
         return body;
     }
@@ -412,6 +425,7 @@ class Parser {
 
     private parseExpr(): Expr {
         const e = this.parseOr();
+        if (this.atSuiteEnd()) return e;
         if (this.isName('if')) {
             this.next();
             const cond = this.parseOr();
@@ -423,7 +437,7 @@ class Parser {
 
     private parseOr(): Expr {
         let l = this.parseAnd();
-        while (this.isName('or')) {
+        while (!this.atSuiteEnd() && this.isName('or')) {
             this.next();
             l = { t: 'logic', op: 'or', l, r: this.parseAnd() };
         }
@@ -432,7 +446,7 @@ class Parser {
 
     private parseAnd(): Expr {
         let l = this.parseNot();
-        while (this.isName('and')) {
+        while (!this.atSuiteEnd() && this.isName('and')) {
             this.next();
             l = { t: 'logic', op: 'and', l, r: this.parseNot() };
         }
@@ -452,6 +466,7 @@ class Parser {
         const ops: string[] = [];
         const operands: Expr[] = [first];
         for (;;) {
+            if (this.atSuiteEnd()) break;
             const t = this.tok;
             let op: string | undefined;
             if (t.type === 'op' && ['==', '!=', '<', '<=', '>', '>='].includes(t.value)) {
@@ -474,7 +489,7 @@ class Parser {
 
     private parseAdd(): Expr {
         let l = this.parseMul();
-        while (this.isOp('+') || this.isOp('-')) {
+        while (!this.atSuiteEnd() && (this.isOp('+') || this.isOp('-'))) {
             const op = (this.next() as { value: string }).value;
             l = { t: 'binary', op, l, r: this.parseMul() };
         }
@@ -483,7 +498,7 @@ class Parser {
 
     private parseMul(): Expr {
         let l = this.parseUnary();
-        while (this.isOp('*') || this.isOp('/') || this.isOp('//') || this.isOp('%')) {
+        while (!this.atSuiteEnd() && (this.isOp('*') || this.isOp('/') || this.isOp('//') || this.isOp('%'))) {
             const op = (this.next() as { value: string }).value;
             l = { t: 'binary', op, l, r: this.parseUnary() };
         }
@@ -510,7 +525,7 @@ class Parser {
 
     private parsePower(): Expr {
         const base = this.parsePostfix();
-        if (this.isOp('**')) {
+        if (!this.atSuiteEnd() && this.isOp('**')) {
             this.next();
             return { t: 'binary', op: '**', l: base, r: this.parseUnary() };
         }
@@ -520,6 +535,7 @@ class Parser {
     private parsePostfix(): Expr {
         let e = this.parsePrimary();
         for (;;) {
+            if (this.atSuiteEnd()) return e;
             if (this.isOp('(')) {
                 e = { t: 'call', callee: e, args: this.parseArgs() };
             } else if (this.isOp('[')) {
@@ -580,6 +596,9 @@ class Parser {
     }
 
     private parseOpPrimary(t: Token & { type: 'op' }): Expr {
+        if (t.value === ':') {
+            return { t: 'block', line: t.line, body: this.parseBlock() };
+        }
         if (t.value === '(') {
             this.next();
             const e = this.parseExpr();
@@ -599,30 +618,20 @@ class Parser {
         }
         if (t.value === '{') {
             this.next();
-            this.skipSeparators();
             if (this.isOp('}')) {
                 this.next();
                 return { t: 'dict', entries: [] };
             }
-            const first = this.parseStatement();
-            const key = first.t === 'expr' ? first.e : first.t === 'if' || first.t === 'block' ? first : undefined;
-            if (!key || !this.isOp(':')) {
-                return { t: 'block', line: t.line, body: this.finishBlock([first]) };
-            }
             const entries: [Expr, Expr][] = [];
-            let k = key;
             while (!this.isOp('}')) {
+                const k = this.parseExpr();
                 this.expectOp(':');
-                this.skipNl();
                 entries.push([k, this.parseExpr()]);
-                this.skipNl();
                 if (this.isOp(',')) {
                     this.next();
-                    this.skipNl();
                 } else if (!this.isOp('}')) {
                     this.fail("expected ',' or '}' in dict");
                 }
-                if (!this.isOp('}')) k = this.parseExpr();
             }
             this.next();
             return { t: 'dict', entries };
@@ -724,7 +733,8 @@ class Parser {
     private convertParts(parts: StringPart[]): StrPart[] {
         return parts.map((p) => {
             if ('text' in p) return p.text;
-            const sub = new Parser(tokenize(p.expr, { inExpr: true, line: p.line, col: p.col }), this.lines);
+            const indent = /^[ \t]*/.exec(this.lines[p.line - 1] ?? '')![0].length;
+            const sub = new Parser(tokenize(p.expr, { inExpr: true, line: p.line, col: p.col, indent }), this.lines);
             const e = sub.parseExpr();
             if (sub.tok.type !== 'eof') sub.fail(`unexpected ${sub.describe(sub.tok)} in interpolation`);
             return e;

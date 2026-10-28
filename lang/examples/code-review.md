@@ -40,15 +40,13 @@ let Review = {
 ```spl
 let lines = ["# Review of repository", '']
 let high = 0
-for f in review.findings {
+for f in review.findings:
     assert f.severity in ['low', 'medium', 'high'] \
-         "bad severity '{f.severity}'"
-    if f.severity == 'high' {
+    "bad severity '{f.severity}'"
+    if f.severity == 'high':
         high += 1
-    }
     lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
     lines.append("  - Fix: {f.fix}")
-}
 lines.append('')
 lines.append("{len(review.findings)} finding(s), {high} high severity")
 ```
@@ -58,8 +56,7 @@ lines.append("{len(review.findings)} finding(s), {high} high severity")
 > Write joined @lines to './reports/review.md'
 
 ```spl
-if high > 0 {
+if high > 0:
     fail '{high} high severity finding(s), see ./reports/review.md'
-}
 success '\n'.join(lines)
 ```

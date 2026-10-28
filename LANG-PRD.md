@@ -1,9 +1,22 @@
 # Semantic Prompt Language specification
 
-SPL is a small Python-like language for AI workflows. Braces delimit blocks; statements
-end at newlines or semicolons. The [grammar](docs-template/Grammar.md) specifies the syntax.
+SPL is a small Python-like language for AI workflows. Blocks use `:` followed by a newline
+and an indented nonempty body. Simple statements end at newlines or semicolons.
+The [grammar](docs-template/Grammar.md) specifies the syntax.
 Older tool-command and brace-modifier syntax is not accepted; see
 [modifiers](docs-template/LLM-commands.md#modifiers).
+
+## Block syntax and migration
+
+This is a breaking change: block braces are no longer accepted. Replace each opening block brace
+with `:`, move its body to subsequent indented lines, and remove the closing brace. Inline suites
+are not supported; use `pass` for an otherwise empty body. Indentation uses spaces only (4
+recommended), not tabs. Unexpected indentation, missing bodies and dedents that do not match a
+previous level are syntax errors. Blank and comment-only lines do not affect indentation.
+Semicolons separate simple statements only, not compound statements or block headers.
+Newlines inside parentheses, lists and dictionaries are insignificant; a trailing `\` still
+continues a line. Dictionaries `{...}` and interpolation `{expression}` keep their braces.
+The layout change does not change lexical scoping or introduce Python's assignment semantics.
 
 ## Goals and boundaries
 
@@ -37,11 +50,21 @@ closures, recursion, loops, and conditionals form the deterministic subset.
 Strings interpolate `{expression}`; `{{`/`}}`, escaped braces, and raw strings provide literal braces.
 
 Blocks and `if`/`elif`/`else` are expressions when their last executed line is an expression.
-The final expression is their value; a block ending in a statement, an empty branch,
+The final expression is their value; a block ending in a statement, a branch containing only `pass`,
 or an `if` with no selected branch yields `None`. Only the selected branch is evaluated.
-`{}` is an empty dict; `{ pass }` is a block yielding `None`. Function bodies still require
+`{}` is an empty dict; a bare-colon block containing `pass` yields `None`. Function bodies still require
 explicit `return` to return a value. Explicit return, break, continue, fail and success
 retain their normal control flow inside expression blocks.
+
+```spl
+let x = :
+    let n = 2
+    n + 1
+let choice = if x > 2:
+    1
+else:
+    2
+```
 
 `log(value, ...)` writes at info severity and returns `None`.
 `log(level=debug)(value, ...)` selects error/info/debug severity. Levels may be bare
@@ -140,11 +163,11 @@ Business rules are explicit `assert` statements outside schema repair.
 
 ## Guidance and restrictions
 
-`enforce text { ... }` and `forbid text { ... }` prepend scoped response guidance.
+`enforce text:` and `forbid text:` introduce indented blocks of scoped response guidance.
 They apply dynamically to calls in the block and called functions; nested guidance combines
 and unwinds on exit. They do not verify compliance.
 
-`restrict [fs|net|exec|mcp] expression { ... }` checks actions at runtime.
+`restrict [fs|net|exec|mcp] expression:` introduces an indented block that checks actions at runtime.
 The default kind is fs. Arguments are comma-separated strings or nonempty string lists.
 Clauses can be combined, and nested/repeated clauses of one kind intersect.
 
@@ -161,7 +184,8 @@ regardless of scopes. Permission requests for tools outside the runtime/configur
 ## Failures and termination
 
 `assert condition [message]` raises `assertion_failed`, `fail reason` raises
-`explicit_failure`, and `try { ... } except name { ... }` binds the caught failure payload.
+`explicit_failure`, and `try:` followed by an aligned `except name:` binds the caught failure
+payload in the handler's indented body.
 All script failures have `status`, `reason`, `command`, `line`, and `status_code`.
 Other categories: `invalid_format`, `validation_failed`, `restriction_violation`,
 `llm_error`, `tool_error`, `runtime_error`.

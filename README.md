@@ -21,13 +21,26 @@ let invoice = read_file('invoice.txt')
 
 ```spl
 let sum = 0
-for line in data.lines {
+for line in data.lines:
     sum += line.amount
-}
 assert abs(sum - data.total) < 0.01 'line items do not add up'
 success data
 ```
 ````
+
+## Block syntax migration
+
+**Breaking change:** blocks now use `:` followed by a newline and an indented, nonempty body,
+not braces. Use spaces (4 recommended), never tabs for indentation. Replace empty bodies with
+`pass`; inline suites are not supported. Dedents must match a previous indentation level;
+unexpected indentation or a missing body is a syntax error. Blank and comment-only lines do
+not affect indentation. Semicolons separate simple statements only.
+
+Dictionaries `{...}` and string interpolation `{expr}` are unchanged. Newlines inside `()`, `[]`
+and dictionaries are insignificant; explicit `\` continuation still works. Each block remains
+a lexical child scope: `let` declares locally, while assignment updates the nearest declaration,
+unlike Python. Anonymous value-producing blocks use a bare colon; see
+[Language](docs-template/Language.md#bindings-and-scopes) and the [grammar](docs-template/Grammar.md).
 
 ## Why SPL?
 

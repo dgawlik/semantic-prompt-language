@@ -24,13 +24,14 @@
     ["\"", "\""]
   ],
   "folding": {
+    "offSide": true,
     "markers": {
       "start": "^\\s*#\\s*region\\b",
       "end": "^\\s*#\\s*endregion\\b"
     }
   },
   "indentationRules": {
-    "increaseIndentPattern": "[\\{\\[\\(]\\s*(#.*)?$",
-    "decreaseIndentPattern": "^\\s*[\\}\\]\\)]"
+    "increaseIndentPattern": "(?::|[\\{\\[\\(])\\s*(#.*)?$",
+    "decreaseIndentPattern": "^\\s*(?:[\\}\\]\\)]|(?:elif\\b.*|else|except\\s+[A-Za-z_]\\w*)\\s*:)"
   }
 }

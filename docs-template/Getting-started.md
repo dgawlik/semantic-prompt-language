@@ -28,9 +28,8 @@ version: 1
 
 ```spl
 let name = $args[0]
-if name == None {
+if name == None:
     name = 'world'
-}
 ```
 
 > Write a one-line greeting for @name and return it with @success
@@ -49,7 +48,11 @@ spl greet.md --arg Ada
 * **Blockquotes** are natural-language steps; see [Natural language & models](LLM-commands.md#blockquotes).
 * **Everything else** (headings, prose, other code fences) is commentary.
 
-Blocks run in document order in one shared scope. `success`, `fail` and a top-level `return`
+Fences and blockquotes run in document order in one shared scope. Indented SPL blocks create
+lexical child scopes. Blocks use `:` plus a newline and spaces (4 recommended), with `pass` for
+an empty body; old block braces and inline suites are no longer accepted. See
+[block syntax and migration](Language.md#block-syntax-and-migration).
+`success`, `fail` and a top-level `return`
 end the whole document.
 
 ## The iteration loop

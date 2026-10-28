@@ -105,7 +105,10 @@ describe('noninteractive checkpoint CLI', () => {
 
     it('preflights human expressions but accepts --check without creating a checkpoint', () => {
         const state = path.join(dir, 'check.jsonl');
-        const script = `write_file('bad.txt', 'x')\nif False { human 'later' }\nsuccess 1`;
+        const script = `write_file('bad.txt', 'x')
+if False:
+    human 'later'
+success 1`;
         expect(spl(script, '--silent').code).toBe(2);
         expect(fs.existsSync(path.join(dir, 'bad.txt'))).toBe(false);
         expect(spl(script, '--check', '--checkpoint', state)).toEqual({ code: 0, out: '', err: '' });
@@ -229,7 +232,10 @@ describe('cli', () => {
     });
 
     it('prints the value of a top-level return', () => {
-        const r = spl(`let a = 41\n{\n    return a + 1\n}\nfail 'unreachable'`, '--silent');
+        const r = spl(`let a = 41
+:
+    return a + 1
+fail 'unreachable'`, '--silent');
         expect(r.code).toBe(0);
         expect(r.out).toBe('42\n');
     });

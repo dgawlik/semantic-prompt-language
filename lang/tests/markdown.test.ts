@@ -45,7 +45,7 @@ describe('Markdown document syntax', () => {
         [document('', 'unknown: value\n'), /unknown frontmatter/],
         [document('```spl\nsuccess 1'), /unterminated SPL/],
         [document(fence("@(model='x')\npass")), /frontmatter/],
-        [document(fence('if True {') + '\n\n' + fence('pass\n}')), /unclosed block/],
+        [document(fence('if True:') + '\n\n' + fence('    pass')), /indented block/],
     ])('rejects invalid documents %#', (source, error) => {
         expect(() => parseMarkdown(source)).toThrow(error);
     });
@@ -102,7 +102,7 @@ ${fence('count += 2\nsuccess count')}`);
 
 describe('shared natural-language execution', () => {
     it('describes cyclic collections and nested functions without changing shared values', async () => {
-        const source = document(fence("let cyclic = []\ncyclic.append(cyclic)\ndef double(x) { return x * 2 }\nlet helpers = {'double': double}") +
+        const source = document(fence("let cyclic = []\ncyclic.append(cyclic)\ndef double(x):\n    return x * 2\nlet helpers = {'double': double}") +
             '\n\n> Return the doubled length of @cyclic.');
         let turn = 0;
         const result = await run(parseMarkdown(source), {
@@ -117,7 +117,7 @@ describe('shared natural-language execution', () => {
 
     it('executes mixed blocks in order, with shared functions and variables', async () => {
         const requests: LlmRequest[] = [];
-        const source = document(`${fence('let count = 2\ndef double(x) { return x * 2 }')}
+        const source = document(`${fence('let count = 2\ndef double(x):\n    return x * 2')}
 
 > Set @count to @double of its current value.
 
@@ -153,7 +153,7 @@ ${fence("fail 'must not execute'")}`, "model: document-model\npreamble: Be conci
 
     it('prepends the preamble to nested generation, including repairs, and preserves model precedence', async () => {
         const requests: LlmRequest[] = [];
-        const source = document(fence("def number() { return ask(fmt='integer', repairs=1, model='other') 'Number?' }") +
+        const source = document(fence("def number():\n    return ask(fmt='integer', repairs=1, model='other') 'Number?'") +
             '\n\n> Generate an integer using @number.', 'model: default-model\npreamble: Custom guidance.\n');
         let naturalTurn = 0;
         const result = await run(parseMarkdown(source), {
@@ -183,18 +183,22 @@ ${fence("fail 'must not execute'")}`, "model: document-model\npreamble: Be conci
         const cwd = directory();
         fs.mkdirSync(path.join(cwd, 'allowed'));
         const code = `let total = 0
-for n in range(4) { total += n }
+for n in range(4):
+    total += n
 let caught = False
-try {
-    restrict './allowed' { write_file('outside.txt', 'blocked') }
-} except error { caught = error.status_code == 'restriction_violation' }
+try:
+    restrict './allowed':
+        write_file('outside.txt', 'blocked')
+except error:
+    caught = error.status_code == 'restriction_violation'
 assert caught
 let Schema = {'type': 'integer'}
 let result = ask(schema=Schema) 'Return {total}'
 write_file('allowed/result.txt', str(result))
 return result`;
         let naturalTurn = 0;
-        const result = await run(parseMarkdown(document(fence(`def calculate() {\n${code}\n}`) +
+        const result = await run(parseMarkdown(document(fence(`def calculate():
+${code.split('\n').map(line => '    ' + line).join('\n')}`) +
             '\n\n> Calculate, validate and save a result using @calculate.')), {
             logger, cwd,
             backend: backend(async req => req.naturalLanguage
@@ -250,11 +254,10 @@ return result`;
     it('resumes inside invoked SPL functions without repeating effects or duplicating mutations', async () => {
         const cwd = directory();
         const source = document(fence(`let count = 0
-def approve() {
+def approve():
     count += 1
     write_file('function.txt', 'original')
-    return human 'Function approval?'
-}`) + '\n\n> Invoke @approve and save its answer to @answer.\n\n' + fence('success [count, answer]'));
+    return human 'Function approval?'`) + '\n\n> Invoke @approve and save its answer to @answer.\n\n' + fence('success [count, answer]'));
         const context = { source, cwd, runtime: 'test' };
         const file = path.join(cwd, 'checkpoint.jsonl');
         let checkpoint = Checkpoint.create(file, context);
@@ -280,7 +283,7 @@ def approve() {
     it('replays function calls, shared mutations and nested generation without repeating agent effects', async () => {
         const cwd = directory();
         const file = path.join(cwd, 'recording.jsonl');
-        const source = document(fence("let count = 0\ndef number() { count += 1; write_file('number.txt', 'original'); return ask(fmt='integer') 'Number?' }") +
+        const source = document(fence("let count = 0\ndef number():\n    count += 1\n    write_file('number.txt', 'original')\n    return ask(fmt='integer') 'Number?'") +
             '\n\n> Use @number and save the result to @numberResult.\n\n' + fence('assert count == 1\nsuccess numberResult'));
         const live = backend(async req => {
             if (!req.naturalLanguage) return { text: '42', effective: {} };
@@ -426,7 +429,7 @@ def approve() {
 
     it('enforces narrowed restrictions across functions and restores them after the command', async () => {
         const cwd = directory();
-        const source = document(fence("def write() { write_file('outside.txt', 'blocked') }") +
+        const source = document(fence("def write():\n    write_file('outside.txt', 'blocked')") +
             '\n\n> Restrict file access and invoke @write.');
         expect(await run(parseMarkdown(source), { cwd, logger, backend: actions(
             action('restrict', { kind: 'fs', value: './allowed' }),
@@ -437,7 +440,7 @@ def approve() {
 
     it('scopes guidance and restrictions to one blockquote, including nested model calls', async () => {
         const cwd = directory();
-        const source = document(fence("def generate() { return ask 'Generate' }") +
+        const source = document(fence("def generate():\n    return ask 'Generate'") +
             '\n\n> Apply guidance and restrictions, then invoke @generate.\n\n> Write a file outside the previous restriction.');
         let turn = 0;
         const result = await run(parseMarkdown(source), { cwd, logger, backend: backend(async req => {

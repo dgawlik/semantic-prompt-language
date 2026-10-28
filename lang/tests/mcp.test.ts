@@ -116,16 +116,13 @@ describe('MCP restriction enforcement', () => {
 it('combined restrictions apply together, intersect, and restore after a caught failure', async () => {
     const calls: LlmRequest[] = [];
     const result = await run(parse(`
-restrict '.', net 'example.com', exec 'git', mcp 'docs' {
-    try {
-        restrict mcp 'docs/search', exec 'node' {
+restrict '.', net 'example.com', exec 'git', mcp 'docs':
+    try:
+        restrict mcp 'docs/search', exec 'node':
             let x = ask 'inner'
             fail 'caught'
-        }
-    } except err {
+    except err:
         let x = ask 'restored'
-    }
-}
 let x = ask 'outside'
 success x`), {
         cwd, logger: new Logger('silent'),
@@ -147,11 +144,11 @@ success x`), {
 it('restores scopes when a later clause fails to evaluate', async () => {
     const calls: LlmRequest[] = [];
     const result = await run(parse(`
-try {
-    restrict mcp 'docs/search', exec 42 { fail 'unreachable' }
-} except err {
-    success ask 'after invalid clause'
-}`), {
+try:
+    restrict mcp 'docs/search', exec 42:
+        fail 'unreachable'
+except err:
+    success ask 'after invalid clause'`), {
         cwd, logger: new Logger('silent'),
         backend: {
             async call(req) { calls.push(req); return { text: 'ok', effective: {} }; },

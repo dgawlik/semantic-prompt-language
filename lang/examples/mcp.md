@@ -13,15 +13,13 @@ MCP tools are available only to agents; `restrict mcp` limits which ones they ma
 
 ```spl
 let question = $args[0]
-if question == None {
+if question == None:
     question = 'How do I get started?'
-}
 let answer = ''
-restrict mcp 'docs/search' {
+restrict mcp 'docs/search':
     answer = agent '''
 Use docs/search to answer: {question}
 End with a line "Sources:" followed by the URLs of the pages you used.'''
-}
 assert 'Sources:' in answer 'the answer does not cite its sources'
 ```
 

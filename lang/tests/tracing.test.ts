@@ -117,10 +117,11 @@ describe('workflow trace/replay', () => {
     it('retains runtime failure categories and caught-error control flow', async () => {
         const backend = scripted(new Failure('restriction_violation', 'denied agent action'), 'recovered');
         const source = `
-try { agent 'Act' } except err {
+try:
+    agent 'Act'
+except err:
     assert err.status_code == 'restriction_violation'
     assert err.reason == 'denied agent action'
-}
 success ask 'Recover'
 `;
         const trace = new TraceBackend(backend, file);
@@ -150,7 +151,8 @@ success [read_file('output.txt'), shell('echo traced')]
         await replay.close();
         expect(fs.readFileSync(path.join(dir, 'output.txt'), 'utf8')).toBe('answer');
         expect(fetch).toHaveBeenCalledTimes(2);
-        expect(await exec(`restrict './allowed' { write_file('denied.txt', 'x') }`, new ReplayBackend(file)))
+        expect(await exec(`restrict './allowed':
+    write_file('denied.txt', 'x')`, new ReplayBackend(file)))
             .toMatchObject({ status: 'failure', failure: { status_code: 'restriction_violation' } });
         expect(fs.existsSync(path.join(dir, 'denied.txt'))).toBe(false);
     });

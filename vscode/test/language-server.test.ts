@@ -51,8 +51,43 @@ test('Markdown preserves positions and shared symbols across code and natural la
 });
 
 test('Markdown validates each fence independently', () => {
-    const result = markdownAnalysis(markdownSource('```spl\nif True {\n```\n\n```spl\npass\n}\n```'));
-    assert.match(result.diagnostics[0].message, /unclosed block/);
+    const result = markdownAnalysis(markdownSource('```spl\nif True:\n```\n\n```spl\n    pass\n```'));
+    assert.match(result.diagnostics[0].message, /indented block/);
+});
+
+test('Markdown indentation scopes end at their fence, before natural-language references', () => {
+    const source = markdownSource('```spl\nlet shared = 1\nif True:\n    let hidden = 2\n```\n\n> Use @shared and @hidden.\n\n```spl\nlog(shared)\n```');
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    const shared = at(source, '@shared');
+    shared.character++;
+    const hidden = at(source, '@hidden');
+    hidden.character++;
+    assert.deepEqual(definition(result, shared)?.range.start, at(source, 'shared'));
+    assert.equal(definition(result, hidden), undefined);
+    assert.ok(!completions(result, hidden).some(item => item.label === 'hidden'));
+});
+
+test('indentation diagnostics, scope boundaries and editing defaults stay aligned', () => {
+    assert.match(analysis('if True { pass }').diagnostics[0].message, /brace-delimited blocks/);
+    assert.match(analysis('if True:\npass').diagnostics[0].message, /indented block/);
+    assert.match(analysis('if True:\n\tpass').diagnostics[0].message, /tabs/);
+    const source = 'let outer = 1\nlet data = {\n    "key": outer,\n}\nif True:\n    let local = data\n    log(local)';
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    assert.equal(result.scopes.length, 2, 'Dictionaries do not introduce lexical scopes');
+    assert.deepEqual(definition(result, at(source, 'outer,'))?.range.start, at(source, 'outer'));
+    assert.ok(completions(result, document(source).positionAt(source.length)).some(item => item.label === 'local'));
+    const configuration = JSON.parse(readFileSync(path.resolve(root, 'language-configuration.json'), 'utf8'));
+    assert.equal(configuration.folding.offSide, true);
+    const increase = new RegExp(configuration.indentationRules.increaseIndentPattern);
+    for (const header of ['if True:', 'def f(): # body', 'else:', 'let value = :', 'let data = {']) {
+        assert.ok(increase.test(header), header);
+    }
+    const manifest = JSON.parse(readFileSync(path.resolve(root, 'package.json'), 'utf8'));
+    assert.deepEqual(manifest.contributes.configurationDefaults['[spl]'], {
+        'editor.insertSpaces': true, 'editor.tabSize': 4, 'editor.detectIndentation': false,
+    });
 });
 
 function at(source: string, text: string, occurrence = 0) {
@@ -237,19 +272,20 @@ test('format hover and completions describe every supported output type', () => 
 test('navigation and completions respect block and function scopes', () => {
     const source = [
         'let outer = 1',
-        'def first(value) {',
-        '    if True { let local = value }',
+        'def first(value):',
+        '    if True:',
+        '        let local = value',
         '    return local + outer',
-        '}',
-        'def second(value) { return value }',
+        'def second(value):',
+        '    return value',
         'success outer',
     ].join('\n');
     const result = analysis(source);
     assert.deepEqual(result.diagnostics, []);
     assert.equal(definition(result, at(source, 'local +')), undefined);
     assert.deepEqual(definition(result, at(source, 'outer', 1))?.range.start, at(source, 'outer'));
-    assert.deepEqual(definition(result, at(source, 'value }'))?.range.start, at(source, 'value'));
-    assert.deepEqual(definition(result, at(source, 'value }', 1))?.range.start, at(source, 'value', 2));
+    assert.deepEqual(definition(result, at(source, 'value\n'))?.range.start, at(source, 'value'));
+    assert.deepEqual(definition(result, at(source, 'value\n', 1))?.range.start, at(source, 'value', 2));
     const outside = completions(result, at(source, 'success')).map((item) => item.label);
     assert.ok(!outside.includes('local'));
     assert.ok(!outside.includes('value'));
@@ -262,12 +298,22 @@ test('navigation and completions respect block and function scopes', () => {
 test('definitions restore shadowed names and hide loop and handler bindings', () => {
     const source = [
         'let x = 1',
-        '{ let x = 2; log(x) }',
+        ':',
+        '    let x = 2',
+        '    log(x)',
         'log(x)',
-        'for i in [1] { log(i) }',
-        "try { fail 'x' } except err { log(err) }",
+        'for i in [1]:',
+        '    log(i)',
+        'try:',
+        '    fail \'x\'',
+        'except err:',
+        '    log(err)',
         'log(i, err)',
-        'let value = if True { let hidden = 3; hidden } else { 0 }',
+        'let value = if True:',
+        '    let hidden = 3',
+        '    hidden',
+        'else:',
+        '    0',
         'log(hidden)',
         'log(level=debug)(value)',
     ].join('\n');
@@ -283,17 +329,22 @@ test('definitions restore shadowed names and hide loop and handler bindings', ()
 
 test('definitions handle nested functions, redeclarations, loop and exception bindings', () => {
     const source = [
-        'let name = 1; let name = 2',
-        'def outer(param) {',
-        '    def inner() { return param + name }',
+        'let name = 1',
+        'let name = 2',
+        'def outer(param):',
+        '    def inner():',
+        '        return param + name',
         '    return inner()',
-        '}',
-        'for i, item in enumerate([]) { log(i, item) }',
-        "try { fail 'x' } except err { log(err.reason) }",
+        'for i, item in enumerate([]):',
+        '    log(i, item)',
+        'try:',
+        '    fail \'x\'',
+        'except err:',
+        '    log(err.reason)',
     ].join('\n');
     const result = analysis(source);
     assert.deepEqual(result.diagnostics, []);
-    assert.deepEqual(definition(result, at(source, 'name }'))?.range.start, at(source, 'name', 1));
+    assert.deepEqual(definition(result, at(source, 'name', 2))?.range.start, at(source, 'name', 1));
     assert.deepEqual(definition(result, at(source, 'param +'))?.range.start, at(source, 'param'));
     assert.deepEqual(definition(result, at(source, 'inner()', 1))?.range.start, at(source, 'inner'));
     assert.deepEqual(definition(result, at(source, 'i, item', 1))?.range.start, at(source, 'i, item'));
@@ -319,15 +370,31 @@ test('interpolation references retain exact positions, raw strings and escapes d
     assert.deepEqual(definition(result, at(source, 'name', 4))?.range.start, at(source, 'name'));
 });
 
+test('references inside indented interpolation suites keep their original locations', () => {
+    const source = `let shared = 1
+if True:
+    log('''{if False:
+        shared
+    else:
+        shared
+    }''')
+success shared`;
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    for (const occurrence of [1, 2, 3]) {
+        assert.deepEqual(definition(result, at(source, 'shared', occurrence))?.range.start, at(source, 'shared'));
+    }
+});
+
 test('symbols include nested functions and block bindings with valid selection ranges', () => {
-    const source = "let x = 1\ndef foo(param) {\n    if True { let nested = param }\n}\n{ let visible = 2 }";
+    const source = "let x = 1\ndef foo(param):\n    if True:\n        let nested = param\n:\n    let visible = 2";
     const symbols = documentSymbols(analysis(source));
     assert.deepEqual(symbols.map((symbol) => symbol.name), ['x', 'foo', 'visible']);
     const fn = symbols[1];
     assert.equal(fn.kind, SymbolKind.Function);
     assert.deepEqual(fn.children?.map((symbol) => symbol.name), ['nested']);
     assert.deepEqual(fn.selectionRange.start, at(source, 'foo'));
-    assert.deepEqual(fn.range.end, { line: 3, character: 1 });
+    assert.deepEqual(fn.range.end, at(source, ':\n    let visible'));
 });
 
 test('the language server never executes source', () => {

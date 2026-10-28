@@ -10,7 +10,8 @@ and blockquotes is also available in other Markdown files.
 * **Completions** for keywords, built-ins, tools, modifiers, `$env`/`$args`, visible bindings, and
   `@name` references in blockquotes.
 * **Copilot inline context** for SPL notebook code cells: native syntax rules and parser-checked
-  examples guide AI ghost-text suggestions toward SPL braces, `let` declarations and model calls
+  examples guide AI ghost-text suggestions toward SPL colon-and-indentation blocks, `let`
+  declarations and model calls
   instead of Python. Requires a Copilot version exposing context provider API v1; registration
   status appears in **Output > SPL Language Server**. Copilot decides whether to use the supplied
   context, so AI suggestions can still need correction. This does not replace Copilot, make
@@ -26,11 +27,24 @@ and blockquotes is also available in other Markdown files.
 
 * **Native notebooks** for existing workflow Markdown: edit SPL fences and natural-language
   blockquotes as runnable cells, with rendered commentary, execution counts, formatted results,
-  and errors in cell outputs and the Problems panel.
+  brief live runtime logs, and errors in cell outputs and the Problems panel.
 
 The language server only reads source: it never runs workflows, calls tools or contacts models.
 Notebook execution is explicit and requires a trusted workspace. Language server errors appear
 in **Output > SPL Language Server**; execution logs appear in **Output > SPL Notebook**.
+
+## Block syntax migration
+
+**Breaking change:** replace block braces with `:` followed by a newline and an indented nonempty
+body. Use spaces (4 recommended); indentation tabs, inline suites, unexpected indentation and
+dedents that do not match a prior level are syntax errors. Use `pass` for an otherwise empty body.
+Blank and comment-only lines are ignored for indentation. Semicolons separate simple statements
+only. Dictionaries `{...}` and interpolation `{expr}` are unchanged; newlines inside `()`, `[]`
+and dictionaries remain insignificant, and explicit `\` continuation still works.
+
+Despite the Python-like layout, every block remains a lexical child scope: `let` declares locally,
+and assignment updates the nearest existing declaration. Anonymous value blocks begin with a bare
+colon. See the [language reference](https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Language.md#block-syntax-and-migration).
 
 ## Notebook workflows
 
@@ -42,8 +56,12 @@ in **Output > SPL Language Server**; execution logs appear in **Output > SPL Not
    Commentary remains rendered, editable Markdown.
 3. Use the cell Run button or VS Code's notebook shortcuts to execute any cell. A final expression,
    `return`, or `success` displays its value; objects and lists are indented. Explicit `log(...)`
-   messages and final natural-language replies appear beneath the cell. Full runtime logs are
-   kept in the output channel, not mixed into the result.
+   messages and final natural-language replies appear beneath the cell. A separate live log output
+   shows cell progress, runtime information, warnings and errors, keeping the last 20 lines and
+   at most 4,000 characters, including a truncation notice when older content is omitted.
+   AI transcripts, reasoning and per-statement traces stay in **Output > SPL Notebook**.
+   Explicit `log(...)` messages, final replies, results and error outputs are not subject to
+   this brief-log limit. Full runtime logs remain in the output channel.
 4. To add an instruction cell, insert a **code** cell, switch its language to **Markdown**, and
    enter an instruction such as `Double @count.`. Blank lines and Markdown inside the instruction
    are supported; the whole cell is saved as a blockquote automatically. Use a normal **Markdown**

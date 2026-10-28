@@ -19,9 +19,8 @@ Values are a comma-separated string or a list of strings. Combine clauses with c
 nested or repeated clauses of the same kind intersect, so a scope can only narrow.
 
 ```spl
-restrict './src', exec 'git', net 'docs.example.com' {
+restrict './src', exec 'git', net 'docs.example.com':
     let review = agent 'Review the changes in git diff and check them against the docs'
-}
 ```
 
 What is checked:
@@ -44,9 +43,8 @@ Models are told the active restrictions, and the runtime enforces them on every 
 let subtotal = 10
 let total = 12
 assert total >= subtotal 'total is smaller than subtotal'
-if total > 1000 {
+if total > 1000:
     fail 'needs manual approval'
-}
 success total
 ```
 
@@ -84,11 +82,10 @@ Every failure has the same shape. Uncaught failures are printed to stdout and ex
 
 ```spl
 let data = ''
-try {
+try:
     data = read_file('optional.txt')
-} except err {
+except err:
     log("{err.status_code} on line {err.line}: {err.reason}")
-}
 success data
 ```
 

@@ -13,26 +13,21 @@ Collects commits since the latest tag, writes user-facing notes and prepends the
 
 ```spl
 let version = $args[0]
-if version == None {
+if version == None:
     fail 'Pass the release version, e.g. --arg 1.4.0'
-}
-
 let range = 'HEAD'
 let since = 'the first commit'
 let commits = ''
-restrict exec 'git' {
-    try {
+restrict exec 'git':
+    try:
         let tag = shell('git describe --tags --abbrev=0').strip()
         range = '{tag}..HEAD'
         since = tag
-    } except no_tag {
+    except no_tag:
         log('No tags yet, using the whole history')
-    }
     commits = shell('git log --no-merges --oneline {range}').strip()
-}
-if commits == '' {
+if commits == '':
     success 'Nothing to release since {since}'
-}
 log("{len(commits.splitlines())} commit(s) since {since}")
 ```
 
@@ -48,27 +43,21 @@ log("{len(commits.splitlines())} commit(s) since {since}")
 notes = notes.strip()
 assert notes.startswith('## {version}') "notes must start with '## {version}'"
 let sections = 0
-for line in notes.splitlines() {
-    if line.startswith('### ') {
+for line in notes.splitlines():
+    if line.startswith('### '):
         sections += 1
-    }
-}
 assert sections > 0 'notes have no sections'
-
 let changelog = '# Changelog\n'
-try {
+try:
     changelog = read_file('./CHANGELOG.md')
-} except missing {
+except missing:
     log('Creating CHANGELOG.md')
-}
 let lines = changelog.splitlines()
 let body = notes
 let rest = '\n'.join(lines[1:]).strip()
-if rest != '' {
+if rest != '':
     body = '{notes}\n\n{rest}'
-}
-restrict './CHANGELOG.md' {
+restrict './CHANGELOG.md':
     write_file('./CHANGELOG.md', '{lines[0]}\n\n{body}\n')
-}
 success notes
 ```

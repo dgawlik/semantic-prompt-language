@@ -40,9 +40,8 @@ let Rating = {'type': 'object', 'properties': {'score': {'type': 'integer'}}, 'r
 let review = read_file('review.txt')
 let rating = ask(schema=Rating, repairs=2) 'Rate this review from 1 to 5: {review}'
 assert 1 <= rating.score and rating.score <= 5 'score out of range'
-restrict './out' {
+restrict './out':
     write_file('./out/rating.json', json_stringify(rating))
-}
 success rating
 ```
 
@@ -52,6 +51,10 @@ success rating
   load/save shared variables, read environment values, request checkpointed human input, and use
   runtime tools and configured MCP servers. Explicit `agent` expressions keep their existing tool set.
 * `fmt`, `schema`, `repairs` and `assert` check output; `enforce`/`forbid` only guide prompts.
+* **Breaking syntax change:** blocks use `:` plus a newline and an indented nonempty body, not
+  braces. Use spaces (4 recommended), no inline suites, and `pass` for empty bodies. Dicts and
+  interpolation keep their braces; blocks still create lexical child scopes. See the
+  [migration rules](../docs-template/Language.md#block-syntax-and-migration).
 
 See [Language](../docs-template/Language.md), [Natural language & models](../docs-template/LLM-commands.md)
 and [Guards & failures](../docs-template/Safety.md).
@@ -84,7 +87,7 @@ session is isolated, and replacing it clears state.
 import { ExecutionSession, parse } from 'spl-lang';
 
 const session = new ExecutionSession();
-await session.run(parse('let count = 2\ndef double() { return count * 2 }'), { backend, logger });
+await session.run(parse('let count = 2\ndef double():\n    return count * 2'), { backend, logger });
 await session.run(parse('count += 1'), { backend, logger });
 const result = await session.run(parse('double()'), { backend, logger, source: 'cell:3' });
 // result: { status: 'success', value: 6, hasValue: true }
