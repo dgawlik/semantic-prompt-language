@@ -1,3 +1,5 @@
+<img src="vscode/icon.png" alt="SPL logo" width="128" height="127">
+
 # SPL: Semantic Prompt Language
 
 Executable Markdown for AI workflows. `spl` fences hold exact, Python-like code; blockquotes hold
@@ -85,6 +87,8 @@ To change the documentation, edit [docs-template/](docs-template/Introduction.md
 and verify the site. Commit the generated `docs/` files with the sources.
 The build-time syntax rules live in [docs/highlight.mjs](docs/highlight.mjs); keep them aligned with
 SPL syntax and the [VS Code grammar](vscode/syntaxes/spl.tmLanguage.json).
+The shared logo is [vscode/icon.png](vscode/icon.png); the docs build copies it into
+`docs/assets/` for the site header and favicon.
 
 ```sh
 npm install

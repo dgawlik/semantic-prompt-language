@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/dgawlik/semantic-prompt-language/HEAD/vscode/icon.png" alt="SPL logo" width="128" height="127">
+
 # spl-lang
 
 The SPL interpreter and CLI. Runs Markdown workflows that mix Python-like `spl` fences with

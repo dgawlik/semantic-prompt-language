@@ -1,3 +1,5 @@
+<img src="icon.png" alt="SPL logo" width="128" height="127">
+
 # SPL - Semantic Prompt Language for VS Code
 
 Language support for executable SPL Markdown workflows. Features turn on for `.md` files whose

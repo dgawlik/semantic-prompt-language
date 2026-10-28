@@ -8,6 +8,7 @@ import hljs from './highlight.mjs';
 const output = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(output);
 const source = path.join(root, 'docs-template');
+const logo = fs.readFileSync(path.join(root, 'vscode', 'icon.png'));
 const repository = 'https://github.com/dgawlik/semantic-prompt-language';
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'lang', 'package.json'), 'utf8'));
 const check = process.argv.includes('--check');
@@ -27,9 +28,10 @@ const fingerprint = createHash('sha256');
 for (const file of [
     fileURLToPath(import.meta.url),
     path.join(output, 'highlight.mjs'),
-    ...['style.css', 'site.js', 'favicon.svg'].map((file) => path.join(output, 'assets', file)),
+    ...['style.css', 'site.js'].map((file) => path.join(output, 'assets', file)),
     ...pages.map((page) => path.join(source, `${page.file}.md`)),
 ]) fingerprint.update(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n'));
+fingerprint.update(logo);
 const revision = fingerprint.digest('hex').slice(0, 12);
 
 // Published anchors that must keep resolving after headings are renamed.
@@ -169,7 +171,7 @@ function renderPage(page, index) {
 <meta name="description" content="${escape(plain(lead.tokens))}">
 <meta name="color-scheme" content="light dark">
 <title>${escape(page.slug === 'index' ? 'SPL - Semantic Prompt Language' : `${page.label} - SPL docs`)}</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=${revision}">
+<link rel="icon" type="image/png" href="assets/icon.png?v=${revision}">
 <link rel="stylesheet" href="assets/style.css?v=${revision}">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
 <script defer src="assets/search-index.js?v=${revision}"></script>
@@ -179,7 +181,7 @@ function renderPage(page, index) {
 <a class="skip-link" href="#page">Skip to content</a>
 <header class="site-header">
   <div class="header-inner">
-    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><img class="brand-icon" src="assets/icon.png?v=${revision}" alt="" width="36" height="36"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
     <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
     <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden>${icon('search')}<span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden>${icon('sun')}${icon('moon')}</button><a class="github-link icon-button" href="${repository}" aria-label="SPL on GitHub">${icon('external')}</a></div>
   </div>
@@ -209,10 +211,10 @@ function renderPage(page, index) {
 
 const markdownFiles = fs.readdirSync(source).filter((name) => name.endsWith('.md')).sort();
 if (JSON.stringify(markdownFiles) !== JSON.stringify(pages.map((page) => `${page.file}.md`).sort())) throw new Error('Update the documentation navigation to cover every Markdown page.');
-for (const file of ['style.css', 'site.js', 'favicon.svg']) {
+for (const file of ['style.css', 'site.js']) {
     if (!fs.existsSync(path.join(output, 'assets', file))) throw new Error(`Missing documentation asset: ${file}`);
 }
-const generated = new Map([['.nojekyll', '']]);
+const generated = new Map([['.nojekyll', ''], [path.join('assets', 'icon.png'), logo]]);
 const search = [];
 for (const [index, page] of pages.entries()) {
     const result = renderPage(page, index);
@@ -223,7 +225,9 @@ generated.set(path.join('assets', 'search-index.js'), `window.SPL_SEARCH_INDEX =
 for (const [file, content] of generated) {
     const target = path.join(output, file);
     if (check) {
-        if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== content) throw new Error(`Outdated ${file}. Run npm run docs:build.`);
+        if (!fs.existsSync(target) || (Buffer.isBuffer(content)
+            ? !fs.readFileSync(target).equals(content)
+            : fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== content)) throw new Error(`Outdated ${file}. Run npm run docs:build.`);
     } else {
         fs.writeFileSync(target, content);
     }
