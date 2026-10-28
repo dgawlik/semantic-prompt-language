@@ -3,6 +3,8 @@ import * as path from 'node:path';
 import { afterEach, test } from 'node:test';
 import { registerNotebooks } from '../src/notebook';
 import { DEFAULT_FRONTMATTER } from '../src/notebookFormat';
+import { registerCopilotContext, type CopilotContextProvider } from '../src/copilotContext';
+import { parse } from '../../lang/src/parser.js';
 import * as mock from './vscodeMock';
 
 const contexts: ReturnType<typeof mock.context>[] = [];
@@ -42,6 +44,102 @@ test('native instruction cells edit plain text and save blockquote markers autom
     assert.match(saved, /> @ENFORCE Answer in Chinese\n> \n> Tell a funny story -> @animal/);
     assert.equal(serializer.deserializeNotebook(Buffer.from(saved)).cells[0].value, data.cells[0].value);
     assert.equal(mock.diagnostics.get('spl-notebook-syntax')?.size, 0);
+});
+
+for (const id of ['GitHub.copilot-chat', 'GitHub.copilot']) {
+    test(`SPL notebook supplies native syntax to ${id} inline suggestions`, async () => {
+        const { notebook } = setup(fence('let count = 1') + '\n\n> Use @count.');
+        const context = contexts[0];
+        let provider: CopilotContextProvider | undefined;
+        let disposed = false;
+        const messages: string[] = [];
+        mock.installedExtensions.set(id, {
+            async activate() {
+                const api = {
+                    getContextProviderAPI(version: string) {
+                        assert.equal(version, 'v1');
+                        return {
+                            registerContextProvider(value: CopilotContextProvider) {
+                                provider = value;
+                                return new mock.Disposable(() => { disposed = true; });
+                            },
+                        };
+                    },
+                };
+                return id === 'GitHub.copilot' ? api : {
+                    getAPI(version: number) {
+                        assert.equal(version, 1);
+                        return api;
+                    },
+                };
+            },
+        });
+        await registerCopilotContext(context, { appendLine: text => messages.push(text) });
+        assert.ok(provider);
+        assert.deepEqual(provider.selector, [{ language: 'spl', scheme: 'vscode-notebook-cell' }]);
+        const registered = provider;
+        const resolve = (uri: string, languageId = 'spl', cancelled = false) => registered.resolver.resolve(
+            { documentContext: { uri, languageId } }, { isCancellationRequested: cancelled },
+        );
+        const uri = notebook.getCells()[0].document.uri.toString();
+        const traits = await resolve(uri);
+        assert.ok(traits.every(trait => trait.importance === 100));
+        assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /never Python colon/);
+        assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /let name = expression/);
+        const example = traits.find(trait => trait.name === 'SPL example')?.value;
+        assert.ok(example);
+        assert.doesNotThrow(() => parse(example));
+        assert.match(example, /if isFriday \{/);
+        assert.match(example, /\} else \{/);
+        assert.deepEqual(await resolve(uri, 'spl', true), []);
+        assert.deepEqual(await resolve(notebook.getCells()[1].document.uri.toString(), 'markdown'), []);
+        assert.deepEqual(await resolve('file:///workflow.md'), []);
+        notebook.notebookType = 'jupyter-notebook';
+        assert.deepEqual(await resolve(uri), []);
+        assert.match(messages.at(-1) ?? '', /Registered SPL notebook inline context/);
+        for (const subscription of context.subscriptions) subscription.dispose();
+        assert.equal(disposed, true);
+    });
+}
+
+test('optional Copilot context reports unsupported APIs and activation failures without breaking notebooks', async () => {
+    const { notebook } = setup(fence('42'));
+    const messages: string[] = [];
+    const register = () => registerCopilotContext(contexts[0], { appendLine: text => messages.push(text) });
+    await register();
+    assert.match(messages.at(-1) ?? '', /inline context is unavailable/);
+    mock.installedExtensions.set('GitHub.copilot-chat', { activate: async () => ({}) });
+    await register();
+    assert.ok(messages.some(message => message.includes('does not expose')));
+    mock.installedExtensions.set('GitHub.copilot-chat', {
+        activate: async () => ({ getContextProviderAPI: () => ({}) }),
+    });
+    await register();
+    assert.ok(messages.some(message => message.includes('does not support')));
+    mock.installedExtensions.set('GitHub.copilot-chat', {
+        async activate() { throw new Error('activation failed'); },
+    });
+    await register();
+    assert.ok(messages.some(message => message.includes('activation failed')));
+    assert.equal(notebook.getCells()[0].document.languageId, 'spl');
+});
+
+test('legacy Copilot context is used when the chat extension has no compatible API', async () => {
+    setup(fence('42'));
+    let registrations = 0;
+    mock.installedExtensions.set('GitHub.copilot-chat', { activate: async () => ({}) });
+    mock.installedExtensions.set('GitHub.copilot', {
+        activate: async () => ({
+            getContextProviderAPI: () => ({
+                registerContextProvider() {
+                    registrations++;
+                    return new mock.Disposable();
+                },
+            }),
+        }),
+    });
+    await registerCopilotContext(contexts[0], { appendLine() {} });
+    assert.equal(registrations, 1);
 });
 
 test('native controller queues requests, renders results and routes function errors to their cell', async () => {

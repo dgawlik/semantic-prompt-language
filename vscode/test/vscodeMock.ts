@@ -169,6 +169,10 @@ export const commands = {
     },
     async executeCommand() {},
 };
+export const installedExtensions = new Map<string, { activate(): Promise<unknown> }>();
+export const extensions = {
+    getExtension: (id: string) => installedExtensions.get(id),
+};
 export function context() {
     return {
         subscriptions: [] as Disposable[],
@@ -185,4 +189,5 @@ export function reset() {
     serializers.length = 0;
     messages.length = 0;
     diagnostics.clear();
+    installedExtensions.clear();
 }

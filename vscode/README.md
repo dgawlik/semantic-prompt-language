@@ -9,6 +9,12 @@ and blockquotes is also available in other Markdown files.
 * **Diagnostics** from the interpreter's own parser, updated as you type.
 * **Completions** for keywords, built-ins, tools, modifiers, `$env`/`$args`, visible bindings, and
   `@name` references in blockquotes.
+* **Copilot inline context** for SPL notebook code cells: native syntax rules and parser-checked
+  examples guide AI ghost-text suggestions toward SPL braces, `let` declarations and model calls
+  instead of Python. Requires a Copilot version exposing context provider API v1; registration
+  status appears in **Output > SPL Language Server**. Copilot decides whether to use the supplied
+  context, so AI suggestions can still need correction. This does not replace Copilot, make
+  additional model calls, or change suggestions in Python or Markdown instruction cells.
 * **Hover**, **Go to Definition** and **document symbols** that follow SPL's lexical scopes.
 * **Highlighting** for `spl` fences, colored blockquote instructions, and contrasting `@name`
   references only inside blockquotes. Instructions use the theme's string color; references use
@@ -97,6 +103,7 @@ npm test
 ```
 
 * `src/extension.ts` starts the client; `src/server.ts` is the language server (IPC or `--stdio`).
+* `src/copilotContext.ts` supplies SPL notebook syntax context to Copilot inline completions.
 * `src/features.ts` uses the parser from `../lang/src`, bundled into `out/` by `build.mjs`.
 * `src/markdownPreview.ts` highlights `spl` fences in the Markdown preview.
 * `src/notebook.ts` registers the native serializer, controller, diagnostics and session lifecycle.

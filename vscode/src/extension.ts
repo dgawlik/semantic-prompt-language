@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { LanguageClient, TransportKind } from 'vscode-languageclient/node';
 import { extendMarkdownIt } from './markdownPreview';
 import { registerNotebooks } from './notebook';
+import { registerCopilotContext } from './copilotContext';
 
 let client: LanguageClient | undefined;
 
@@ -28,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ exte
         void vscode.window.showErrorMessage('SPL language server failed to start. See the SPL Language Server output.');
         throw error;
     }
+    await registerCopilotContext(context, outputChannel);
     return { extendMarkdownIt };
 }
 
