@@ -6,11 +6,11 @@
 <meta name="description" content="Run all your workflows in Markdown editor. SPL understands both code and natural language. spl code fences hold exact, Python-like code; blockquotes hold natural-language agent commands. Both share one scope, the same tools and the same guards, so each step can be written in whichever form reads best.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=9f5d9422ced7">
-<link rel="stylesheet" href="assets/style.css?v=9f5d9422ced7">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=8c8d1cbc37ef">
+<link rel="stylesheet" href="assets/style.css?v=8c8d1cbc37ef">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=9f5d9422ced7"></script>
-<script defer src="assets/site.js?v=9f5d9422ced7"></script>
+<script defer src="assets/search-index.js?v=8c8d1cbc37ef"></script>
+<script defer src="assets/site.js?v=8c8d1cbc37ef"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -64,9 +64,6 @@ This example highlights some SPL features helpful in automation of day to day wo
 <span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;Analyzed&#x27;</span>
 <span class="hljs-code">```</span>
 </code></pre></figure>
-<p>The loop is ordinary code; each <code>ask</code> must return JSON matching <code>Card</code>, with one repair attempt.
-The blockquote agent saves its answer through a shared-variable tool, and the <code>assert</code> after it checks the result.
-Writing is limited to <code>./out</code>.</p>
 <h2 id="why-spl">Why SPL?<a class="heading-anchor" href="#why-spl" aria-label="Link to Why SPL?">#</a></h2>
 <ol>
 <li><strong>Short loops.</strong> One file, run directly. <code>--check</code> validates syntax without a model, and

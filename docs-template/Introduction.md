@@ -42,9 +42,6 @@ success 'Analyzed'
 ```
 ````
 
-The loop is ordinary code; each `ask` must return JSON matching `Card`, with one repair attempt.
-The blockquote agent saves its answer through a shared-variable tool, and the `assert` after it checks the result.
-Writing is limited to `./out`.
 
 ## Why SPL?
 
