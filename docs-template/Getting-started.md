@@ -76,7 +76,7 @@ highlighting. Type `splworkflow` for a new document.
 cd vscode
 npm install
 npm run package
-code --install-extension spl-lang-vscode-1.0.0.vsix
+code --install-extension spl-lang-vscode-1.5.0.vsix
 ```
 
 ## Run the tests
