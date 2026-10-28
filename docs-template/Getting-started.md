@@ -9,9 +9,6 @@ npm install -g spl-lang
 spl login
 ```
 
-SPL needs Node.js 20+. From a checkout, run `npm install` in `lang/` and use `node dist/cli.js`
-in place of `spl`.
-
 `spl login` reuses existing credentials (Copilot CLI, `gh`, or `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`,
 `GITHUB_TOKEN`). Otherwise it runs GitHub's device flow and saves a token in `~/.spl`
 (override with `SPL_HOME`). `spl logout` deletes it. Workflows that never call a model,
@@ -68,9 +65,13 @@ trace. Explicit tool calls still run during replay; see [traces and replay](CLI.
 
 ## VS Code extension
 
+Install from Marketplace: [spl](https://marketplace.visualstudio.com/items?itemName=spl-lang.spl-lang-vscode)
+
 The extension in `vscode/` adds parser-backed diagnostics, completions, hover, go to definition,
 document symbols, highlighting for `spl` fences and `@name` markers, and Markdown preview
 highlighting. Type `splworkflow` for a new document.
+
+Or install from repository:
 
 ```bash
 cd vscode

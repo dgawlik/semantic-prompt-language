@@ -6,11 +6,11 @@
 <meta name="description" content="Install the CLI, sign in to GitHub Copilot, then write and refine a workflow in a short edit-run loop.">
 <meta name="color-scheme" content="light dark">
 <title>Getting started - SPL docs</title>
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=60342000322c">
-<link rel="stylesheet" href="assets/style.css?v=60342000322c">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg?v=59dd62ffc6e5">
+<link rel="stylesheet" href="assets/style.css?v=59dd62ffc6e5">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=60342000322c"></script>
-<script defer src="assets/site.js?v=60342000322c"></script>
+<script defer src="assets/search-index.js?v=59dd62ffc6e5"></script>
+<script defer src="assets/site.js?v=59dd62ffc6e5"></script>
 </head>
 <body data-page="getting-started">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -32,8 +32,6 @@
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-1">npm install -g spl-lang
 spl login
 </code></pre></figure>
-<p>SPL needs Node.js 20+. From a checkout, run <code>npm install</code> in <code>lang/</code> and use <code>node dist/cli.js</code>
-in place of <code>spl</code>.</p>
 <p><code>spl login</code> reuses existing credentials (Copilot CLI, <code>gh</code>, or <code>COPILOT_GITHUB_TOKEN</code>, <code>GH_TOKEN</code>,
 <code>GITHUB_TOKEN</code>). Otherwise it runs GitHub&#39;s device flow and saves a token in <code>~/.spl</code>
 (override with <code>SPL_HOME</code>). <code>spl logout</code> deletes it. Workflows that never call a model,
@@ -76,13 +74,15 @@ spl flow.md --replay run.jsonl    <span class="hljs-comment"># rerun code and gu
 <p>Replay needs the same model requests in the same order. After changing a prompt, record a new
 trace. Explicit tool calls still run during replay; see <a href="cli.html#traces-and-replay">traces and replay</a>.</p>
 <h2 id="vs-code-extension">VS Code extension<a class="heading-anchor" href="#vs-code-extension" aria-label="Link to VS Code extension">#</a></h2>
+<p>Install from Marketplace: <a href="https://marketplace.visualstudio.com/items?itemName=spl-lang.spl-lang-vscode">spl</a></p>
 <p>The extension in <code>vscode/</code> adds parser-backed diagnostics, completions, hover, go to definition,
 document symbols, highlighting for <code>spl</code> fences and <code>@name</code> markers, and Markdown preview
 highlighting. Type <code>splworkflow</code> for a new document.</p>
+<p>Or install from repository:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-5"><span class="hljs-built_in">cd</span> vscode
 npm install
 npm run package
-code --install-extension spl-lang-vscode-1.0.0.vsix
+code --install-extension spl-lang-vscode-1.5.0.vsix
 </code></pre></figure>
 <h2 id="run-the-tests">Run the tests<a class="heading-anchor" href="#run-the-tests" aria-label="Link to Run the tests">#</a></h2>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-6"><span class="hljs-built_in">cd</span> lang
