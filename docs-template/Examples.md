@@ -96,7 +96,7 @@ let Invoice = {
 > @FORBID filling in values that are not printed on the invoice
 >
 > Extract the invoice in @document. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,
-> and there is one entry per line item. @validate[Invoice] @retries[2] save to @invoice
+> and there is one entry per line item. @validate[Invoice] save to @invoice
 
 ```spl
 let computed = 0
@@ -170,7 +170,7 @@ let Plan = {
 >
 > Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.
 > Crashes, data loss and security problems are high priority.
-> @validate[Plan] @retries[2] save to @plan
+> @validate[Plan] save to @plan
 
 ```spl
 let numbers = []

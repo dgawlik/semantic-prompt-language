@@ -43,15 +43,15 @@ Plain language works too. Common conventions guide the agent's tool choices:
 | --- | --- |
 | `@ENFORCE text` / `@FORBID text` | Follow prompt guidance; use `set_guidance` for nested model calls |
 | `@RESTRICT fs['./src'] exec['git']` | Narrow the command's restrictions with `restrict` |
-| `@validate[Schema] @retries[2]` | Load `Schema`, save with schema validation, and correct rejected values without repeating actions |
+| `@validate[Schema]` | Load `Schema` and validate the value before saving; invalid values stop the command |
 | `@HUMAN question` | Call `ask_human` (needs `--checkpoint`) |
 | `@SUCCESS`, `@fail` | End the document |
 
-Each runtime tool call yields control to the interpreter. It executes the action, supplies the
-real result or error, and then lets the agent continue. Saving a variable takes effect immediately;
+Each runtime tool call executes immediately in the interpreter and returns its real result to the
+same agent session. Tools run sequentially, not through a deferred action queue. Saving a variable takes effect immediately;
 prose replies do not create bindings. Functions retain their normal lexical scope and runtime guards.
-Restriction violations and explicit failures stop the command. Other tool failures are logged and
-returned to the model for handling; completed external actions are not automatically retried.
+Any runtime or MCP tool error stops the command immediately, preserving the original failure.
+The model cannot continue or retry after a failed action; completed external actions are not repeated.
 Follow important steps with an `spl` check:
 
 ```spl

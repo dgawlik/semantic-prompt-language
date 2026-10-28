@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Checkpoint } from '../src/checkpoint.js';
-import { run } from '../src/interpreter.js';
+import { ExecutionSession, run } from '../src/interpreter.js';
 import type { LlmBackend, LlmRequest, LlmResponse, RuntimeAction } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown } from '../src/markdown.js';
@@ -207,17 +207,17 @@ return result`;
         expect(fs.readFileSync(path.join(cwd, 'allowed', 'result.txt'), 'utf8')).toBe('6');
     });
 
-    it('reports human input without a checkpoint as a tool error, not a successful answer', async () => {
+    it('fails immediately on human input without a checkpoint', async () => {
         const cwd = directory();
         let turn = 0;
         const result = await run(parseMarkdown(document('> Ask a human.')), {
-            logger, cwd, backend: backend(async req => {
-                if (turn++ === 0) return { text: 'Ask', effective: {}, action: action('ask_human', { question: 'Approve?' }) };
-                expect(req.prompt).toContain('human input requires a checkpoint');
-                return { text: 'Failed', effective: {}, action: action('fail', { reason: 'checkpoint required' }) };
+            logger, cwd, backend: backend(async () => {
+                turn++;
+                return { text: 'Ask', effective: {}, action: action('ask_human', { question: 'Approve?' }) };
             }),
         });
         expect(result).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('checkpoint') } });
+        expect(turn).toBe(1);
     });
 
     it('resumes agent human input without repeating completed model turns or effects', async () => {
@@ -282,14 +282,13 @@ def approve() {
         const file = path.join(cwd, 'recording.jsonl');
         const source = document(fence("let count = 0\ndef number() { count += 1; write_file('number.txt', 'original'); return ask(fmt='integer') 'Number?' }") +
             '\n\n> Use @number and save the result to @numberResult.\n\n' + fence('assert count == 1\nsuccess numberResult'));
-        let turn = 0;
-        const live = backend(async req => req.naturalLanguage
-            ? { text: 'Done', effective: {}, action: [
-                action('call_function', { name: 'number', args: [] }),
-                action('save_variable', { name: 'numberResult', value: 42 }),
-                undefined,
-            ][turn++] }
-            : { text: '42', effective: {} });
+        const live = backend(async req => {
+            if (!req.naturalLanguage) return { text: '42', effective: {} };
+            const value = await req.invokeAction!(action('call_function', { name: 'number', args: [] }));
+            expect(value).toBe(42);
+            await req.invokeAction!(action('save_variable', { name: 'numberResult', value }));
+            return { text: 'Done', effective: {} };
+        });
         const recording = new TraceBackend(live, file);
         expect(await run(parseMarkdown(source), { logger, cwd, backend: recording })).toMatchObject({ value: 42 });
         await recording.close();
@@ -298,6 +297,25 @@ def approve() {
         expect(await run(parseMarkdown(source), { logger, cwd, backend: replay })).toMatchObject({ value: 42 });
         await replay.close();
         expect(fs.readFileSync(path.join(cwd, 'number.txt'), 'utf8')).toBe('edited');
+    });
+
+    it.each([
+        action('success', { value: 9 }),
+        action('fail', { reason: 'stop now' }),
+        action('call_function', { name: 'missing', args: [] }),
+        action('save_variable', { name: 'value', value: 'bad', schema: { type: 'integer' } }),
+        action('read_file', { path: 'missing.txt' }),
+    ])('replays an immediately terminating $name call without an extra model response', async step => {
+        const cwd = directory();
+        const file = path.join(cwd, 'trace.jsonl');
+        const source = document('> Execute the requested action.');
+        const trace = new TraceBackend(actions(step), file);
+        const expected = await run(parseMarkdown(source), { logger, cwd, backend: trace });
+        await trace.close();
+        expect(expected).toMatchObject({ status: step.name === 'success' ? 'success' : 'failure' });
+        const replay = new ReplayBackend(file);
+        expect(await run(parseMarkdown(source), { logger, cwd, backend: replay })).toEqual(expected);
+        await replay.close();
     });
 
     it('rejects generation-only recordings before blockquote actions', async () => {
@@ -350,21 +368,19 @@ def approve() {
         expect(result).toMatchObject({ status: 'success', value: [{ setup: 'a', punchline: 'b' }, ['one']] });
     });
 
-    it('validates saved values before updating shared bindings', async () => {
+    it('fails validation without updating shared bindings or asking the model to retry', async () => {
         const source = document(fence('let answer = 1') + '\n\n> Save a validated integer to @answer.\n\n' + fence('success answer'));
-        let turn = 0;
+        const session = new ExecutionSession();
         const schema = { type: 'integer', minimum: 2 };
-        const steps = [
-            action('save_variable', { name: 'answer', value: 'bad', schema }),
-            action('load_variable', { name: 'answer' }),
-            action('save_variable', { name: 'answer', value: 3, schema }),
-            undefined,
-        ];
-        expect(await run(parseMarkdown(source), { logger, backend: backend(async req => {
-            if (turn === 1) expect(req.prompt).toContain('"status_code":"validation_failed"');
-            if (turn === 2) expect(req.prompt).toContain('"result":{"value":1}');
-            return { text: 'Done', effective: {}, action: steps[turn++] };
-        }) })).toMatchObject({ status: 'success', value: 3 });
+        const call = vi.fn(async (req: LlmRequest) => {
+            await req.invokeAction!(action('save_variable', { name: 'answer', value: 'bad', schema }));
+            throw new Error('must stop before another action');
+        });
+        expect(await session.run(parseMarkdown(source), { logger, backend: backend(call) }))
+            .toMatchObject({ status: 'failure', failure: { status_code: 'validation_failed' } });
+        expect(call).toHaveBeenCalledOnce();
+        expect(await session.run(parseMarkdown(document(fence('success answer'))), { logger, backend: new NoLlm() }))
+            .toMatchObject({ status: 'success', value: 1 });
     });
 
     it('records requested environment values without exposing the full environment or reading it again on replay', async () => {
@@ -400,12 +416,12 @@ def approve() {
     ])('reports invalid tool calls explicitly: $name', async invalid => {
         let turn = 0;
         expect(await run(parseMarkdown(document('> Act.')), {
-            logger, backend: backend(async req => {
-                if (turn++ === 0) return { text: 'Act', effective: {}, action: invalid };
-                expect(req.prompt).toContain('"error"');
-                return { text: 'Stop', effective: {}, action: action('fail', { reason: 'invalid action' }) };
+            logger, backend: backend(async () => {
+                turn++;
+                return { text: 'Act', effective: {}, action: invalid };
             }),
-        })).toMatchObject({ status: 'failure', failure: { reason: 'invalid action' } });
+        })).toMatchObject({ status: 'failure', failure: { status_code: expect.stringMatching(/runtime_error|validation_failed/) } });
+        expect(turn).toBe(1);
     });
 
     it('enforces narrowed restrictions across functions and restores them after the command', async () => {
@@ -450,9 +466,8 @@ def approve() {
 
 function action(name: string, args: Record<string, unknown>): RuntimeAction { return { name, arguments: args }; }
 function actions(...steps: RuntimeAction[]): LlmBackend {
-    return backend(async () => {
-        const next = steps.shift();
-        if (!next) throw new Error('unexpected model turn');
-        return { text: 'Action queued', effective: {}, action: next };
+    return backend(async req => {
+        for (const step of steps.splice(0)) await req.invokeAction!(step);
+        return { text: 'Done', effective: {} };
     });
 }

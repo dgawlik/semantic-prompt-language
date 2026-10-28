@@ -49,7 +49,7 @@ let Invoice = {
 > @FORBID filling in values that are not printed on the invoice
 >
 > Extract the invoice in @document. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,
-> and there is one entry per line item. @validate[Invoice] @retries[2] save to @invoice
+> and there is one entry per line item. @validate[Invoice] save to @invoice
 
 ```spl
 let computed = 0

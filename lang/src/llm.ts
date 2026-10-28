@@ -31,9 +31,12 @@ export interface LlmRequest {
     showReasoning: boolean;
     restrictions: Restrictions;
     tools: ToolHost;
-    /** Execute a blockquote as an agent command, yielding runtime actions between turns. */
+    /** Execute a blockquote as an agent command with immediate runtime tool calls. */
     naturalLanguage?: boolean;
     runtimeTools?: readonly RuntimeTool[];
+    invokeAction?: (action: RuntimeAction) => Promise<unknown>;
+    /** Restrictions can narrow during a blockquote without recreating its SDK session. */
+    currentRestrictions?: () => Restrictions;
 }
 
 export interface LlmResponse {
@@ -41,8 +44,9 @@ export interface LlmResponse {
     reasoning?: string;
     /** Effective model and parameters, recorded in the logs. */
     effective: Record<string, unknown>;
+    /** Recorded runtime decision, replayed through invokeAction before continuing. */
     action?: RuntimeAction;
-    /** MCP results retained across the blockquote's runtime-action turns. */
+    /** MCP results retained in traces. */
     toolResults?: string[];
 }
 

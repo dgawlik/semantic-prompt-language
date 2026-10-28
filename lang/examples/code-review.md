@@ -35,7 +35,7 @@ let Review = {
 }
 ```
 
-> Convert @notes review into structured finding @validate[Review] @retries[2] save to @review
+> Convert @notes review into structured finding @validate[Review] save to @review
 
 ```spl
 let lines = ["# Review of repository", '']

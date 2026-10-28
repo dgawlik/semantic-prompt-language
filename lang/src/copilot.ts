@@ -89,18 +89,27 @@ export class CopilotBackend implements LlmBackend {
         const client = await this.getClient();
         await this.checkModel(client, req.model);
         let effort = await this.resolveEffort(client, req);
-        let violation: Failure | undefined;
         let session: CopilotSession | undefined;
-
-        const block = (failure: Failure) => {
-            violation ??= failure;
-            void session?.abort().catch(() => undefined);
+        let interruption: { error: unknown } | undefined;
+        let interrupt!: (value: { error: unknown }) => void;
+        const interrupted = new Promise<{ error: unknown }>(resolve => { interrupt = resolve; });
+        const stop = (error: unknown) => {
+            if (interruption) return;
+            interruption = { error };
+            interrupt(interruption);
+            void session?.abort().catch(error => {
+                this.opts.logger.warn(`cannot abort the Copilot turn: ${error instanceof Error ? error.message : String(error)}`);
+            });
         };
+        const checkInterrupted = () => {
+            if (interruption) throw interruption.error;
+        };
+        const restrictions = () => req.currentRestrictions?.() ?? req.restrictions;
 
         const agent = req.kind === 'agent';
         const mcpServers = agent ? filterMcpServers(this.opts.mcpServers ?? {}, req.restrictions) : {};
-        let action: LlmResponse['action'];
-        let handoff: Promise<void> | undefined;
+        let actionRunning = false;
+        let actionExecuted = false;
         const tools: Tool[] = (agent && !req.naturalLanguage ? TOOL_NAMES : []).map((name) => {
             const spec = TOOL_SPECS[name];
             return defineTool(name, {
@@ -114,7 +123,7 @@ export class CopilotBackend implements LlmBackend {
                     } catch (e) {
                         if (!(e instanceof Failure)) throw e;
                         if (e.statusCode === 'restriction_violation') {
-                            block(e);
+                            stop(e);
                             return { textResultForLlm: JSON.stringify(e.payload()), resultType: 'denied' as const, error: e.reason };
                         }
                         return { textResultForLlm: e.reason, resultType: 'failure' as const, error: e.reason };
@@ -128,19 +137,26 @@ export class CopilotBackend implements LlmBackend {
                 overridesBuiltInTool: true,
                 parameters: spec.parameters,
                 handler: async (args: unknown) => {
-                    if (action) return { resultType: 'failure' as const, textResultForLlm: 'An action is already queued. End this turn and wait for its result.' };
-                    if (!args || typeof args !== 'object' || Array.isArray(args)) {
-                        return { resultType: 'failure' as const, textResultForLlm: 'Tool arguments must be an object.' };
+                    checkInterrupted();
+                    try {
+                        if (actionRunning) throw new Failure('runtime_error', 'Runtime tools must execute sequentially; wait for the previous result.');
+                        if (!args || typeof args !== 'object' || Array.isArray(args)) {
+                            throw new Failure('runtime_error', 'Tool arguments must be an object.');
+                        }
+                        if (!req.invokeAction) throw new LlmError('blockquote runtime action handler is not configured');
+                        actionRunning = true;
+                        try {
+                            const value = await req.invokeAction({ name: spec.name, arguments: { ...args } });
+                            checkInterrupted();
+                            actionExecuted = true;
+                            return JSON.stringify({ value });
+                        } finally {
+                            actionRunning = false;
+                        }
+                    } catch (error) {
+                        stop(error);
+                        throw error;
                     }
-                    action = { name: spec.name, arguments: { ...args } };
-                    if (session && !Object.keys(mcpServers).length) {
-                        // Nothing external can be in flight; skip the model's post-tool reply.
-                        handoff = session.abort().catch(error => {
-                            throw new LlmError(`cannot hand off runtime action: ${error instanceof Error ? error.message : String(error)}`);
-                        });
-                        await handoff;
-                    }
-                    return 'Action queued, not yet executed. End this turn. The runtime will execute it and provide its result before you continue.';
                 },
             }));
         }
@@ -153,11 +169,11 @@ export class CopilotBackend implements LlmBackend {
             systemMessage: { mode: 'append' as const, content: SYSTEM_MESSAGE },
             workingDirectory: this.opts.cwd,
             onPermissionRequest: (r: PermissionRequest): PermissionRequestResult => {
-                if (action) return { kind: 'reject', feedback: 'Wait for the queued runtime action to execute before using more tools.' };
+                if (interruption) return { kind: 'reject', feedback: 'The command has already stopped.' };
                 if (agent && req.naturalLanguage && r.kind === 'custom-tool' && req.runtimeTools?.some(tool => tool.name === r.toolName)) {
                     return { kind: 'approve-once' };
                 }
-                return agent ? decidePermission(r, req.restrictions, block, mcpServers) : this.denyGenerationPermission(block);
+                return agent ? decidePermission(r, restrictions(), stop, mcpServers) : this.denyGenerationPermission(stop);
             },
         };
 
@@ -183,7 +199,10 @@ export class CopilotBackend implements LlmBackend {
                 });
                 session.on('tool.execution_complete', ({ data }) => {
                     const call = mcpCalls.get(data.toolCallId);
-                    if (call) toolResults.push(JSON.stringify({ ...call, success: data.success, result: data.result, error: data.error }));
+                    if (call) {
+                        toolResults.push(JSON.stringify({ ...call, success: data.success, result: data.result, error: data.error }));
+                        if (!data.success) stop(new Failure('tool_error', `MCP ${call.server}/${call.tool}: ${data.error?.message ?? 'tool execution failed'}`));
+                    }
                 });
             }
             session.on('assistant.reasoning', (ev) => {
@@ -193,24 +212,23 @@ export class CopilotBackend implements LlmBackend {
 
             let answer: Awaited<ReturnType<CopilotSession['sendAndWait']>>;
             try {
-                answer = await session.sendAndWait({ prompt: req.prompt }, this.opts.timeoutMs);
+                const outcome = await Promise.race([
+                    session.sendAndWait({ prompt: req.prompt }, this.opts.timeoutMs).then(answer => ({ answer })),
+                    interrupted,
+                ]);
+                if ('error' in outcome) throw outcome.error;
+                answer = outcome.answer;
             } catch (e) {
-                if (violation) throw violation;
-                await handoff;
-                // Newer SDKs reject the wait when our own action handoff aborts the turn.
-                if (!handoff || !(e instanceof Error) || e.message !== 'The requested run was aborted before completion.') {
-                    throw new LlmError(e instanceof Error ? e.message : String(e));
-                }
+                if (interruption) throw interruption.error;
+                throw new LlmError(e instanceof Error ? e.message : String(e));
             }
-            await handoff;
-            if (violation) throw violation;
+            if (interruption) throw interruption.error;
             const content = answer?.data?.content;
-            const text = action && (typeof content !== 'string' || content.trim() === '') ? 'Runtime action queued.' : content;
+            const text = actionExecuted && (typeof content !== 'string' || content.trim() === '') ? 'Runtime actions completed.' : content;
             if (typeof text !== 'string' || text.trim() === '') throw new LlmError('the model returned an empty response');
             const usedModel = (answer?.data as { model?: string } | undefined)?.model;
             return {
                 text,
-                ...(action ? { action } : {}),
                 ...(toolResults.length ? { toolResults } : {}),
                 reasoning: reasoning.length ? reasoning.join('\n') : undefined,
                 effective: {

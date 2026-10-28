@@ -46,7 +46,7 @@ let Plan = {
 >
 > Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.
 > Crashes, data loss and security problems are high priority.
-> @validate[Plan] @retries[2] save to @plan
+> @validate[Plan] save to @plan
 
 ```spl
 let numbers = []

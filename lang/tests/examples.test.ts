@@ -153,16 +153,17 @@ describe('examples with offline backends', () => {
     const save = (name: string, value: unknown): RuntimeAction => ({ name: 'save_variable', arguments: { name, value } });
     function scriptedBackend(commands: RuntimeAction[][]) {
         const counts = { commands: 0, actions: 0 };
-        let step = 0;
         return {
             counts,
             backend: {
                 async call(req: LlmRequest) {
                     if (!req.naturalLanguage || !commands[counts.commands]) throw new Error('unexpected model call');
-                    const action = commands[counts.commands][step++];
-                    if (action) counts.actions++;
-                    else { counts.commands++; step = 0; }
-                    return { text: 'Done', action, effective: {} };
+                    const actions = commands[counts.commands++];
+                    for (const action of actions) {
+                        counts.actions++;
+                        await req.invokeAction!(action);
+                    }
+                    return { text: 'Done', effective: {} };
                 },
                 async close() {},
             },
@@ -199,6 +200,9 @@ describe('examples with offline backends', () => {
 
     it('compares integer generation with deterministic Fibonacci in the basics example', async () => {
         const { backend, counts } = scriptedBackend([
+            [{ name: 'call_function', arguments: { name: 'factorial', args: [15] } }, save('fact15', 1307674368000)],
+            [{ name: 'call_function', arguments: { name: 'fib', args: [10] } }, save('fib10', 55)],
+            [save('fibPlus2', 57)],
             [save('modelFib10', 55)],
             [save('joke', { setup: 'A programmer walks into a bar.', punchline: 'It was a FooBar.' })],
             [
@@ -216,11 +220,16 @@ describe('examples with offline backends', () => {
                 animal: 'A pet story.',
             },
         });
-        expect(counts).toEqual({ commands: 3, actions: 5 });
+        expect(counts).toEqual({ commands: 6, actions: 10 });
     });
 
     it('rejects a wrong model answer in the basics example', async () => {
-        const { backend } = scriptedBackend([[save('modelFib10', 54)]]);
+        const { backend } = scriptedBackend([
+            [{ name: 'call_function', arguments: { name: 'factorial', args: [15] } }, save('fact15', 1307674368000)],
+            [{ name: 'call_function', arguments: { name: 'fib', args: [10] } }, save('fib10', 55)],
+            [save('fibPlus2', 57)],
+            [save('modelFib10', 54)],
+        ]);
         const result = await run(parseMarkdown(load('basics.md')), { logger: new Logger('silent'), backend });
         expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
     });

@@ -650,11 +650,12 @@ class Interpreter {
                 try {
                     return await backend.call(req);
                 } catch (error) {
-                    if (error instanceof Failure || error instanceof CheckpointError) throw error;
+                    if (error instanceof Failure || error instanceof CheckpointError ||
+                        error instanceof SuccessSignal || error instanceof SuspensionSignal) throw error;
                     throw new Failure('llm_error', error instanceof Error ? error.message : String(error));
                 }
             };
-            const res = this.opts.checkpoint
+            const res = this.opts.checkpoint && !req.naturalLanguage
                 ? await this.opts.checkpoint.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
                 : await perform();
             if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response; blockquotes require runtime actions, not submitted SPL');
@@ -665,7 +666,7 @@ class Interpreter {
             }
             return res;
         } catch (e) {
-            if (e instanceof CheckpointError || e instanceof SuspensionSignal) throw e;
+            if (e instanceof CheckpointError || e instanceof SuspensionSignal || e instanceof SuccessSignal) throw e;
             if (e instanceof Failure) throw e;
             if (e instanceof LlmError) throw new Failure('llm_error', e.message);
             throw new Failure('llm_error', (e as Error).message ?? String(e));
@@ -688,8 +689,27 @@ class Interpreter {
         const savedConstraints = this.constraints;
         this.naturalDepth++;
         try {
+            const checkpoint = this.opts.checkpoint;
+            const decision = (perform: () => Promise<LlmResponse>) => checkpoint
+                ? checkpoint.effect({
+                    kind: 'natural', text, line, history: JSON.stringify(history), restrictions: this.restrictions.list,
+                }, perform, isResponse)
+                : perform();
+            const execute = async (action: RuntimeAction): Promise<unknown> => {
+                if (!checkpoint?.replaying) this.opts.logger.llm(`runtime action:\n${JSON.stringify(action)}`);
+                const result = { value: describeValue(await this.execNaturalAction(action, line, env)) };
+                history.push({ action, result });
+                return result.value;
+            };
             for (;;) {
-                const response = await this.callLlmResponse({
+                if (checkpoint?.replaying) {
+                    const response = await decision(async () => { throw new CheckpointError('missing recorded runtime decision'); });
+                    if (!response.action) return;
+                    await execute(response.action);
+                    continue;
+                }
+                let actionFailed = false;
+                const request: LlmRequest = {
                     kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS,
                     prompt: buildPrompt({
                         prompt: `${NATURAL_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings at command start:\n${JSON.stringify(bindings)}\n\nBlockquote:\n${text}\n\nCompleted turns and action results:\n${JSON.stringify(history)}`,
@@ -697,19 +717,29 @@ class Interpreter {
                     }),
                     model: this.model, reasoningEffort: 'medium', showReasoning: false,
                     restrictions: this.restrictions, tools: new ToolHost(this.restrictions, this.cwd),
-                });
-                if (!response.action) return;
-                let result: unknown;
+                    currentRestrictions: () => this.restrictions,
+                    invokeAction: async action => {
+                        try {
+                            await decision(async () => ({ text: 'Runtime action.', effective: {}, action }));
+                            return await execute(action);
+                        } catch (error) {
+                            actionFailed = true;
+                            throw error;
+                        }
+                    },
+                };
+                let response: LlmResponse;
                 try {
-                    result = { value: describeValue(await this.execNaturalAction(response.action, line, env)) };
+                    response = await this.callLlmResponse(request);
                 } catch (error) {
-                    if (!(error instanceof Failure) || error.statusCode === 'restriction_violation' ||
-                        error.statusCode === 'explicit_failure' || error.statusCode === 'llm_error') throw error;
-                    error.locate(line, this.sourceLines[line - 1]?.trim() ?? '', this.sourceUri, this.sourceVersion);
-                    if (!this.opts.checkpoint?.replaying) this.opts.logger.error(`blockquote tool ${response.action.name}: ${error.reason}`);
-                    result = { error: error.payload() };
+                    if (checkpoint && !actionFailed && error instanceof Failure) {
+                        await decision(async () => { throw error; });
+                    }
+                    throw error;
                 }
-                history.push({ reply: response.text, toolResults: response.toolResults, action: response.action, result });
+                await decision(async () => response);
+                if (!response.action) return;
+                await execute(response.action);
             }
         } finally {
             this.naturalDepth--;

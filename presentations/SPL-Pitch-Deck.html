@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="A repository-grounded product pitch for SPL, Semantic Prompt Language.">
+  <title>SPL | Executable Markdown for AI Workflows</title>
+  <style>
+    :root {
+      --paper: #f5f3ed;
+      --ink: #172332;
+      --muted: #596572;
+      --line: #d7dcd5;
+      --lime: #d0f88b;
+      --teal: #226e64;
+      --dark: #13202e;
+      --soft: #e8eee7;
+    }
+    * { box-sizing: border-box; }
+    html { background: #d9ddd9; }
+    body { margin: 0; color: var(--ink); font-family: "Segoe UI", Arial, sans-serif; }
+    .slide {
+      inline-size: 1440px;
+      block-size: 810px;
+      margin: 24px auto;
+      padding: 48px 66px 35px;
+      background: var(--paper);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      break-after: page;
+      page-break-after: always;
+    }
+    .slide:last-child { break-after: auto; page-break-after: auto; }
+    .dark { background: var(--dark); color: var(--paper); --line: #3a4855; --muted: #b6c4ca; }
+    .green { background: var(--lime); --line: #adc775; --muted: #425238; }
+    .topline, .footer, .row, .label-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .topline { font-size: 13px; font-weight: 650; letter-spacing: 1.8px; text-transform: uppercase; }
+    .brand { display: flex; align-items: center; gap: 11px; letter-spacing: 2px; }
+    .brandmark { display: inline-grid; place-items: center; inline-size: 29px; block-size: 29px; background: var(--ink); color: var(--lime); font: 700 17px Consolas, monospace; border-radius: 6px; }
+    .dark .brandmark { background: var(--lime); color: var(--dark); }
+    .section-label { color: var(--muted); font-weight: 500; }
+    .content { flex: 1; min-block-size: 0; padding-block-start: 39px; }
+    .footer { margin-block-start: 21px; padding-block-start: 16px; border-block-start: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+    .footer .page { font-size: 14px; font-weight: 650; white-space: nowrap; color: inherit; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 78px; line-height: 1.01; letter-spacing: -3.4px; font-weight: 650; }
+    h2 { font-size: 56px; line-height: 1.08; letter-spacing: -2.3px; font-weight: 650; max-inline-size: 1200px; }
+    h3 { font-size: 27px; line-height: 1.19; font-weight: 650; letter-spacing: -.5px; }
+    p { font-size: 21px; line-height: 1.47; }
+    .lede { color: var(--muted); max-inline-size: 1070px; margin-block-start: 17px; font-size: 23px; line-height: 1.45; }
+    .eyebrow { color: var(--teal); font-size: 13px; font-weight: 700; letter-spacing: 1.7px; text-transform: uppercase; margin-block-end: 15px; }
+    .dark .eyebrow { color: var(--lime); }
+    .accent { color: var(--teal); }
+    .dark .accent { color: var(--lime); }
+    .small { font-size: 16px; line-height: 1.5; color: var(--muted); }
+    .tiny { font-size: 13px; line-height: 1.45; color: var(--muted); }
+    .grid2, .grid3, .grid4 { display: grid; gap: 22px; min-inline-size: 0; }
+    .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid2 > *, .grid3 > *, .grid4 > * { min-inline-size: 0; }
+    .mt24 { margin-block-start: 24px; }
+    .mt32 { margin-block-start: 32px; }
+    .mt40 { margin-block-start: 40px; }
+    .card { padding: 29px; background: #fffdf8; border: 1px solid var(--line); border-radius: 16px; }
+    .dark .card { background: #1c2b3b; }
+    .card p { font-size: 19px; color: var(--muted); margin-block-start: 15px; }
+    .card .small { font-size: 16px; }
+    .card .number { display: block; font-size: 51px; font-weight: 350; line-height: 1; margin-block-end: 26px; color: var(--teal); }
+    .problem-cards .card { padding: 26px; }
+    .problem-cards .number { margin-block-end: 20px; }
+    .dark .number { color: var(--lime); }
+    .pill { display: inline-flex; align-items: center; padding: 7px 12px; border: 1px solid var(--line); border-radius: 30px; font-size: 13px; line-height: 1.2; font-weight: 650; }
+    .pills { display: flex; flex-wrap: wrap; gap: 9px; }
+    .pill.lime { color: var(--ink); background: var(--lime); border-color: var(--lime); }
+    .pill.teal { background: #e0eee6; color: #1b6257; border-color: #e0eee6; }
+    .pill.outline { color: var(--muted); }
+    .rule-note { padding: 17px 22px; background: var(--soft); border-radius: 10px; font-size: 17px; line-height: 1.45; }
+    .dark .rule-note { background: #223645; color: #d2e0df; }
+    .code {
+      background: #192938;
+      color: #e6edf2;
+      border: 1px solid #3b4e5e;
+      border-radius: 15px;
+      padding: 25px 27px;
+      font: 18px/1.53 Consolas, "Cascadia Code", monospace;
+    }
+    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
+    code { font-family: Consolas, "Cascadia Code", monospace; }
+    .code-title { display: flex; justify-content: space-between; gap: 12px; font: 12px/1.3 "Segoe UI", Arial, sans-serif; color: #a4b9c9; letter-spacing: 1px; margin-block-end: 23px; text-transform: uppercase; }
+    .kw { color: #c6b6ff; }
+    .str { color: #d0f88b; }
+    .cm { color: #a4b9c9; }
+    .nl { color: #9de0d4; }
+    .headline-code { display: grid; grid-template-columns: 1.03fr 1fr; gap: 63px; align-items: center; block-size: 100%; }
+    .hero-deck { margin-block-start: 25px; max-inline-size: 570px; font-size: 24px; color: #c2cdd4; line-height: 1.42; }
+    .hero-label { font-size: 15px; color: #c2cdd4; margin-block-start: 29px; }
+    .hero-code { transform: rotate(-1deg); padding: 29px; box-shadow: 14px 18px 0 #233646; }
+    .hero-code .code { padding: 0; border: 0; }
+    .hero-code .code-title { margin-block-end: 21px; }
+    .flow-node { padding: 24px; border: 1px solid var(--line); border-radius: 13px; background: #fffdf8; }
+    .flow-node h3 { font-size: 24px; }
+    .flow-node p { margin-block-start: 12px; font-size: 18px; color: var(--muted); }
+    .flow-node .step { font-size: 12px; color: var(--teal); letter-spacing: 1.2px; font-weight: 700; display: block; margin-block-end: 15px; }
+    .arrow { color: var(--teal); font-size: 28px; }
+    .architecture { display: grid; grid-template-columns: 1fr 54px 1fr 54px 1fr; align-items: stretch; margin-block-start: 37px; }
+    .architecture .arrow { align-self: center; text-align: center; }
+    .architecture .flow-node { min-block-size: 220px; }
+    .architecture .flow-node:nth-child(3) { background: var(--lime); border-color: var(--lime); }
+    .shared { border: 1px solid var(--line); border-radius: 10px; margin-block-start: 17px; padding: 17px; text-align: center; font-size: 17px; color: var(--muted); }
+    .invoice-layout { display: grid; grid-template-columns: .8fr 1.4fr; gap: 52px; margin-block-start: 20px; align-items: start; }
+    .invoice-steps { display: grid; gap: 25px; }
+    .mini-step { display: grid; grid-template-columns: 34px 1fr; gap: 13px; }
+    .mini-step .dot { background: var(--lime); color: var(--ink); inline-size: 29px; block-size: 29px; display: grid; place-items: center; border-radius: 50%; font-size: 14px; font-weight: 700; margin-block-start: 4px; }
+    .mini-step h3 { font-size: 23px; }
+    .mini-step p { font-size: 18px; color: var(--muted); margin-block-start: 6px; }
+    .invoice-code { font-size: 15px; line-height: 1.4; padding: 19px 24px; }
+    .invoice-code .code-title { margin-block-end: 17px; }
+    .guard-card { min-block-size: 176px; padding: 24px; }
+    .guard-card h3 { font-size: 23px; }
+    .guard-card p { margin-block-start: 10px; font-size: 18px; }
+    .guard-key { font: 15px Consolas, monospace; color: var(--teal); margin-block-end: 13px; }
+    .timeline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 15px; margin-block-start: 40px; }
+    .timeline .flow-node { padding: 23px 20px; min-block-size: 214px; }
+    .timeline .flow-node h3 { font-size: 23px; }
+    .timeline .flow-node p { font-size: 17px; }
+    .timeline .approval { background: var(--lime); border-color: var(--lime); }
+    .approval .step, .approval p { color: #3b5630; }
+    .boundary { margin-block-start: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .boundary > div { padding: 19px 22px; border-block-start: 2px solid var(--teal); }
+    .boundary strong { display: block; font-size: 17px; margin-block-end: 6px; }
+    .boundary p { font-size: 17px; color: var(--muted); }
+    .usecase { padding: 26px; }
+    .usecase .case-tag { font: 12px/1.3 Consolas, monospace; color: var(--teal); margin-block-end: 22px; }
+    .usecase h3 { font-size: 25px; }
+    .usecase p { font-size: 18px; min-block-size: 79px; }
+    .usecase .proof { padding-block-start: 16px; margin-block-start: 21px; border-block-start: 1px solid var(--line); color: var(--ink); font-size: 16px; }
+    .editor { border: 1px solid #455362; border-radius: 15px; background: #1b2b3a; padding: 0 23px 22px; }
+    .editor-bar { font-size: 12px; color: #b6c4ca; padding-block: 15px; border-block-end: 1px solid #455362; margin-block-end: 17px; display: flex; justify-content: space-between; gap: 15px; }
+    .cell { border-inline-start: 3px solid #8295a1; padding: 11px 15px; margin-block-start: 13px; background: #233645; border-radius: 0 6px 6px 0; }
+    .cell.prompt { border-inline-start-color: var(--lime); color: #d0f88b; }
+    .cell pre { font-size: 17px; line-height: 1.45; }
+    .cell .cell-label { font-size: 11px; color: #a8bac7; text-transform: uppercase; letter-spacing: 1px; margin-block-end: 7px; }
+    .result { margin-block-start: 13px; font: 14px Consolas, monospace; color: #9de0d4; }
+    .feature-list { display: grid; gap: 23px; margin-block-start: 3px; }
+    .feature-list h3 { font-size: 25px; }
+    .feature-list p { font-size: 19px; color: var(--muted); margin-block-start: 7px; }
+    .loop { display: grid; grid-template-columns: 1fr 45px 1fr 45px 1fr; gap: 8px; align-items: center; margin-block-start: 34px; }
+    .loop .card { block-size: 212px; }
+    .loop .card h3 { font-size: 25px; }
+    .loop .card p { font-size: 18px; }
+    .loop .arrow { text-align: center; }
+    .terminal { margin-block-start: 23px; padding: 20px 25px; font: 17px/1.65 Consolas, monospace; background: var(--dark); color: #d0f88b; border-radius: 11px; }
+    .terminal .promptchar { color: #b6c4ca; }
+    .positioning { display: grid; grid-template-columns: 1fr 1.15fr 1fr; margin-block-start: 36px; gap: 20px; align-items: center; }
+    .position { padding: 27px; border: 1px solid var(--line); border-radius: 14px; min-block-size: 273px; }
+    .position h3 { margin-block-start: 20px; }
+    .position p { font-size: 18px; color: var(--muted); margin-block-start: 15px; }
+    .position.main { background: var(--dark); color: var(--paper); min-block-size: 315px; border-color: var(--dark); padding: 30px; }
+    .position.main p { color: #c2cdd4; }
+    .position.main .eyebrow { color: var(--lime); }
+    .position .type { color: var(--muted); font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
+    .position.main h3 { font-size: 37px; margin-block-start: 0; }
+    .hypothesis { background: #e8e4f1; color: #51416c; border-color: #e8e4f1; }
+    .adoption .card { min-block-size: 269px; }
+    .adoption .card h3 { font-size: 25px; }
+    .adoption .card p { font-size: 19px; }
+    .measure { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin-block-start: 27px; padding: 19px 23px; border-block-start: 1px solid var(--line); }
+    .measure strong { font-size: 16px; }
+    .measure span { color: var(--muted); font-size: 16px; }
+    .evidence { display: grid; gap: 16px; margin-block-start: 23px; }
+    .evidence-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block-end: 16px; border-block-end: 1px solid var(--line); font-size: 19px; }
+    .evidence-row span:last-child { color: var(--teal); font-size: 14px; white-space: nowrap; }
+    .next-list { padding-inline-start: 23px; margin-block: 23px 0; }
+    .next-list li { font-size: 20px; line-height: 1.43; margin-block-end: 21px; padding-inline-start: 5px; }
+    .cta-layout { display: grid; grid-template-columns: 1.12fr .88fr; gap: 70px; align-items: center; block-size: 100%; }
+    .cta-layout h2 { font-size: 73px; line-height: 1.03; }
+    .cta-layout .lede { color: #425238; font-size: 24px; max-inline-size: 620px; }
+    .cta-steps { display: grid; gap: 22px; }
+    .cta-step { display: grid; grid-template-columns: 38px 1fr; gap: 18px; border-block-end: 1px solid #adc775; padding-block-end: 23px; }
+    .cta-step .index { font-size: 25px; font-weight: 350; }
+    .cta-step h3 { font-size: 24px; }
+    .cta-step p { font-size: 18px; margin-block-start: 8px; color: #425238; }
+    a { color: inherit; text-decoration-color: #91a599; text-underline-offset: 4px; }
+    .cta-link { display: block; margin-block-start: 29px; font-size: 17px; line-height: 1.65; }
+    .source-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 49px; margin-block-start: 28px; }
+    .source-item { padding-block: 8px; border-block-end: 1px solid var(--line); }
+    .source-item a { font-size: 18px; font-weight: 600; }
+    .source-item p { font-size: 15px; color: var(--muted); margin-block-start: 5px; }
+    .disclosure { padding: 23px; background: var(--soft); border-radius: 14px; }
+    .disclosure h3 { font-size: 23px; }
+    .disclosure p { font-size: 16px; color: var(--muted); margin-block-start: 13px; }
+    @page { size: 15in 8.4375in; margin: 0; }
+    @media print {
+      html, body { margin: 0; background: var(--paper); }
+      .slide { margin: 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <section class="slide dark" aria-labelledby="s01">
+    <header class="topline">
+      <div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div>
+      <span class="section-label">Semantic Prompt Language / Product pitch</span>
+    </header>
+    <main class="content">
+      <div class="headline-code">
+        <div>
+          <div class="eyebrow">Executable Markdown for AI workflows</div>
+          <h1 id="s01">Let AI handle<br>ambiguity.<br><span class="accent">Keep control<br>in code.</span></h1>
+          <p class="hero-deck">Natural language, exact logic, and explicit guards. One readable, runnable document.</p>
+          <div class="pills mt24"><span class="pill lime">Markdown-native</span><span class="pill outline">CLI + VS Code notebooks</span></div>
+        </div>
+        <div class="code hero-code">
+          <div class="code-title"><span>invoice.md</span><span>One document. Shared variables.</span></div>
+          <pre><span class="cm">```spl</span>
+<span class="kw">let</span> document = read_file(<span class="str">'invoice.txt'</span>)
+<span class="cm">```</span>
+
+<span class="nl">&gt; Extract line items from @document.
+&gt; @validate[Invoice] save to @invoice</span>
+
+<span class="cm">```spl</span>
+<span class="kw">assert</span> abs(
+  invoice.subtotal + invoice.tax
+  - invoice.total
+) &lt; 0.01 <span class="str">'totals do not add up'</span>
+<span class="kw">success</span> invoice
+<span class="cm">```</span></pre>
+          <p class="tiny mt24">Condensed illustration. Invoice schema omitted.</p>
+        </div>
+      </div>
+    </main>
+    <footer class="footer"><span>Repository-grounded overview / October 2026</span><span class="page">01 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s02">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">The problem</span></header>
+    <main class="content">
+      <div class="eyebrow">The gap between a prompt and a process</div>
+      <h2 id="s02">A clever prompt isn't<br>a reliable workflow.</h2>
+      <p class="lede">A model can interpret the messy parts. The surrounding process still needs exact rules.</p>
+      <div class="grid3 problem-cards mt32">
+        <article class="card"><span class="number">01</span><h3>Instructions are<br>not checks.</h3><p>"Return valid data" is a request. A schema and an arithmetic assertion are executable tests.</p></article>
+        <article class="card"><span class="number">02</span><h3>Reasoning is not<br>permission.</h3><p>Drafting an action and executing it should have visible, separately controlled boundaries.</p></article>
+        <article class="card"><span class="number">03</span><h3>A good answer is<br>not a regression test.</h3><p>Live model output varies. Teams need a way to revisit recorded answers while changing code and guards.</p></article>
+      </div>
+      <div class="rule-note mt24"><strong>The design opportunity:</strong> keep model judgment flexible without making control flow, validation, and I/O equally probabilistic.</div>
+    </main>
+    <footer class="footer"><span>Product thesis / Grounded in README and specification goals</span><span class="page">02 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s03">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">The product</span></header>
+    <main class="content">
+      <div class="eyebrow">One file. Two ways to express intent.</div>
+      <h2 id="s03">A document people can read.<br>A workflow the runtime can execute.</h2>
+      <p class="lede">SPL fences run Python-like code. Blockquotes run natural-language agent commands.</p>
+      <div class="architecture">
+        <article class="flow-node"><span class="step">01 / EXACT INPUT</span><h3>Read, fetch, compute</h3><p>Deterministic control flow and direct tools. No model needed for ordinary code.</p></article>
+        <span class="arrow" aria-hidden="true">&#8594;</span>
+        <article class="flow-node"><span class="step">02 / MODEL JUDGMENT</span><h3>Interpret the messy part</h3><p>Generate with <code>ask</code> or <code>think</code>; act with <code>agent</code> or a blockquote.</p></article>
+        <span class="arrow" aria-hidden="true">&#8594;</span>
+        <article class="flow-node"><span class="step">03 / EXPLICIT CONTROL</span><h3>Validate, then proceed</h3><p>Check structure and business rules. Limit actions. Pause for a person when needed.</p></article>
+      </div>
+      <div class="shared">Shared variables, functions, and active restrictions connect the layers.</div>
+      <p class="small mt24">Natural language is executed as an agent command; it is not compiled into SPL code.</p>
+    </main>
+    <footer class="footer"><span>Sources: README / Language / Natural language &amp; models</span><span class="page">03 / 14</span></footer>
+  </section>
+
+  <section class="slide dark" aria-labelledby="s04">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Product in action / Invoice extraction</span></header>
+    <main class="content">
+      <div class="eyebrow">From document understanding to checked data</div>
+      <h2 id="s04">AI reads the invoice.<br>Code checks the math.</h2>
+      <div class="invoice-layout">
+        <div class="invoice-steps">
+          <div class="mini-step"><span class="dot">1</span><div><h3>Extract into a contract</h3><p>A JSON Schema defines required fields, types, and line items.</p></div></div>
+          <div class="mini-step"><span class="dot">2</span><div><h3>Check business truth</h3><p>Recompute line totals and verify subtotal + tax = total.</p></div></div>
+          <div class="mini-step"><span class="dot">3</span><div><h3>Write within a boundary</h3><p>The output write is scoped to the invoice directory.</p></div></div>
+          <p class="small">Valid JSON alone does not mean the numbers are correct.</p>
+        </div>
+        <div class="code invoice-code">
+          <div class="code-title"><span>Adapted from extract-invoice.md</span><span>Schema / input setup omitted</span></div>
+          <pre><span class="nl">&gt; Extract the invoice in @document.
+&gt; @validate[Invoice] @retries[2] save to @invoice</span>
+
+<span class="cm">```spl</span>
+<span class="kw">let</span> computed = 0
+<span class="kw">for</span> line <span class="kw">in</span> invoice.lines {
+    computed += line.quantity * line.unit_price
+}
+<span class="kw">assert</span> abs(computed - invoice.subtotal) &lt; 0.01
+<span class="kw">assert</span> abs(invoice.subtotal + invoice.tax
+    - invoice.total) &lt; 0.01
+<span class="kw">restrict</span> <span class="str">'./out/invoices'</span> {
+    write_file(<span class="str">'./out/invoices/{invoice.number}.json'</span>,
+        json_stringify(invoice, 2))
+}
+<span class="kw">success</span> invoice
+<span class="cm">```</span></pre>
+        </div>
+      </div>
+    </main>
+    <footer class="footer"><span>Source: lang/examples/extract-invoice.md / Condensed excerpt, not the complete runnable file</span><span class="page">04 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s05">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Control model</span></header>
+    <main class="content">
+      <div class="eyebrow">Keep guidance and guarantees separate</div>
+      <h2 id="s05">Make the boundary visible.</h2>
+      <p class="lede">Use model instructions for intent. Use runtime mechanisms for enforceable checks.</p>
+      <div class="grid2 mt32">
+        <article class="card guard-card"><div class="guard-key">fmt / schema / assert</div><h3>Validate the result</h3><p>Strict output parsing, JSON Schema, and exact business-rule checks before downstream work.</p></article>
+        <article class="card guard-card"><div class="guard-key">ask / think / agent</div><h3>Separate generation from action</h3><p><code>ask</code> and <code>think</code> have no tools. Agent-enabled work can act within active restrictions.</p></article>
+        <article class="card guard-card"><div class="guard-key">restrict fs / net / exec / mcp</div><h3>Scope tool access</h3><p>Bound folders, hosts, executables, and MCP tools. Nested restrictions can only narrow access.</p></article>
+        <article class="card guard-card"><div class="guard-key">human / @HUMAN / checkpoint</div><h3>Reserve decisions for people</h3><p>Pause, publish the question, and resume with the answer without repeating completed calls.</p></article>
+      </div>
+      <p class="small mt24"><strong>Honest boundaries:</strong> restrictions are opt-in, not an OS sandbox. Prompt guidance is not validation. Failures do not roll back earlier actions.</p>
+    </main>
+    <footer class="footer"><span>Sources: Guards &amp; failures / CLI &amp; runtime / Specification</span><span class="page">05 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s06">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Product in action / Issue triage</span></header>
+    <main class="content">
+      <div class="eyebrow">Automate preparation. Preserve approval.</div>
+      <h2 id="s06">Let the model propose.<br>Let a person authorize.</h2>
+      <p class="lede">The issue-triage example combines exact GitHub CLI calls, classification, checks, and a human gate.</p>
+      <div class="timeline">
+        <article class="flow-node"><span class="step">01 / FETCH</span><h3>Read issues</h3><p><code>gh issue list</code> fetches an exact batch of unlabeled issues.</p></article>
+        <article class="flow-node"><span class="step">02 / CLASSIFY</span><h3>Build a plan</h3><p>The model selects a label, priority, and reason for each issue.</p></article>
+        <article class="flow-node"><span class="step">03 / VERIFY</span><h3>Check coverage</h3><p>Code rejects missing, duplicate, or out-of-batch decisions.</p></article>
+        <article class="flow-node approval"><span class="step">04 / APPROVE</span><h3>Ask a human</h3><p>The run checkpoints and waits before applying the plan.</p></article>
+        <article class="flow-node"><span class="step">05 / APPLY</span><h3>Label issues</h3><p>Exact <code>gh issue edit</code> calls run only after approval.</p></article>
+      </div>
+      <div class="boundary">
+        <div><strong>Model responsibility</strong><p>Interpret the issue body and propose a classification.</p></div>
+        <div><strong>Runtime + human responsibility</strong><p>Validate the plan, authorize the change, execute exact commands.</p></div>
+      </div>
+    </main>
+    <footer class="footer"><span>Source: lang/examples/triage-issues.md / Requires authenticated gh and a checkpoint journal</span><span class="page">06 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s07">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Use cases</span></header>
+    <main class="content">
+      <div class="eyebrow">A reusable pattern, not a single-purpose agent</div>
+      <h2 id="s07">Start wherever judgment<br>meets a checkable outcome.</h2>
+      <div class="grid3 mt40">
+        <article class="card usecase">
+          <div class="case-tag">DEVELOPER WORKFLOWS</div><h3>Review &amp; release</h3><p>Review source changes, structure findings, or turn git history into release notes.</p>
+          <div class="proof"><strong>Concrete check</strong><br>Fail CI when high-severity findings remain.</div>
+          <div class="pills mt24"><span class="pill">code-review.md</span><span class="pill">release-notes.md</span></div>
+        </article>
+        <article class="card usecase">
+          <div class="case-tag">DATA &amp; DOCUMENTS</div><h3>Extract &amp; transform</h3><p>Read invoices or translate documentation while retaining structural requirements.</p>
+          <div class="proof"><strong>Concrete check</strong><br>Reconcile totals; preserve links, code, and headings.</div>
+          <div class="pills mt24"><span class="pill">extract-invoice.md</span><span class="pill">translate-docs.md</span></div>
+        </article>
+        <article class="card usecase">
+          <div class="case-tag">OPERATIONS &amp; RESEARCH</div><h3>Explain &amp; synthesize</h3><p>Turn logs into incident narratives or collected web material into a sourced digest.</p>
+          <div class="proof"><strong>Concrete check</strong><br>Compute log statistics exactly; verify citations.</div>
+          <div class="pills mt24"><span class="pill">incident-report.md</span><span class="pill">web-digest.md</span></div>
+        </article>
+      </div>
+      <p class="small mt24">These are repository examples, not customer deployments or measured business outcomes.</p>
+    </main>
+    <footer class="footer"><span>Source: docs-template/Examples.md and linked runnable workflows</span><span class="page">07 / 14</span></footer>
+  </section>
+
+  <section class="slide dark" aria-labelledby="s08">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Developer experience</span></header>
+    <main class="content">
+      <div class="eyebrow">A small surface area for the first workflow</div>
+      <h2 id="s08">Write Markdown.<br>Run from the terminal or notebook.</h2>
+      <div class="grid2 mt32" style="gap: 50px; grid-template-columns: 1.07fr 1fr">
+        <div class="editor">
+          <div class="editor-bar"><span>invoice.md / SPL workflow notebook</span><span>Illustrative view, not a screenshot</span></div>
+          <div class="cell"><div class="cell-label">SPL cell / Exact input</div><pre><span class="kw">let</span> document = read_file(<span class="str">'invoice.txt'</span>)</pre></div>
+          <div class="cell prompt"><div class="cell-label">Natural-language cell</div><pre>Extract @document into @invoice.
+@validate[Invoice]</pre></div>
+          <div class="cell"><div class="cell-label">SPL cell / Exact check</div><pre><span class="kw">assert</span> invoice.total &gt;= 0
+invoice.total</pre></div>
+          <div class="result">Shared state across executed cells</div>
+        </div>
+        <div class="feature-list">
+          <div><h3>CLI for repeatable runs</h3><p>Arguments, machine-readable results, exit codes, model selection, and MCP configuration.</p></div>
+          <div><h3>Editor support while you write</h3><p>Parser diagnostics, completions, hover, definitions, snippets, and SPL highlighting.</p></div>
+          <div><h3>Interactive, still Markdown</h3><p>Run notebook cells with shared state. Save the original workflow format, not a separate notebook file.</p></div>
+          <p class="small">Node.js runtime; model calls use GitHub Copilot. Notebook execution requires a trusted workspace.</p>
+        </div>
+      </div>
+    </main>
+    <footer class="footer"><span>Sources: lang/README.md / vscode/README.md / Notebook illustration omits setup and schema</span><span class="page">08 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s09">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Iteration loop</span></header>
+    <main class="content">
+      <div class="eyebrow">Iterate on logic without another live model call</div>
+      <h2 id="s09">Record the answer.<br>Revisit the checks.</h2>
+      <div class="loop">
+        <article class="card"><div class="eyebrow">Capture</div><h3>Run with a trace</h3><p>Save model requests, raw answers, and failures to a local JSONL trace.</p></article>
+        <span class="arrow" aria-hidden="true">&#8594;</span>
+        <article class="card"><div class="eyebrow">Refine</div><h3>Edit code and guards</h3><p>Change downstream logic while preserving matching model requests.</p></article>
+        <span class="arrow" aria-hidden="true">&#8594;</span>
+        <article class="card"><div class="eyebrow">Replay</div><h3>Test recorded answers</h3><p>Rerun against the trace without contacting Copilot or MCP servers.</p></article>
+      </div>
+      <div class="terminal"><span class="promptchar">$</span> spl flow.md --trace run.jsonl<br><span class="promptchar">$</span> spl flow.md --replay run.jsonl --silent</div>
+      <div class="rule-note mt24"><strong>Replay is not a dry run:</strong> explicit file, shell, and web calls still execute. Agent actions are not recreated. Changed model requests fail exact matching. Keep traces private.</div>
+    </main>
+    <footer class="footer"><span>Source: CLI &amp; runtime / Traces and replay</span><span class="page">09 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s10">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Positioning</span></header>
+    <main class="content">
+      <div class="eyebrow">The missing middle between scripts and prompts</div>
+      <h2 id="s10">Code when you know the steps.<br>Language when you need judgment.</h2>
+      <div class="positioning">
+        <article class="position"><div class="type">Exact code</div><h3>Specify the procedure</h3><p>Control flow, calculations, parsing, and explicit I/O belong in executable logic.</p><div class="pills mt24"><span class="pill">Precise</span><span class="pill">Checkable</span></div></article>
+        <article class="position main"><div class="eyebrow">SPL brings them together</div><h3>One readable<br>execution path.</h3><p>Shared bindings connect intent to exact code. Guards make the handoff explicit.</p><div class="pills mt24"><span class="pill lime">Executable Markdown</span></div></article>
+        <article class="position"><div class="type">Natural language</div><h3>Describe the intent</h3><p>Interpretation, classification, extraction, and synthesis benefit from model judgment.</p><div class="pills mt24"><span class="pill">Expressive</span><span class="pill">Flexible</span></div></article>
+      </div>
+      <p class="small mt24">A focused workflow language, not full Python, a general workflow cache, or a transactional execution platform.</p>
+    </main>
+    <footer class="footer"><span>Positioning is qualitative / Boundaries are stated in the language specification</span><span class="page">10 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s11">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Adoption thesis</span></header>
+    <main class="content">
+      <div class="row"><div class="eyebrow">Start narrow. Earn a repeatable workflow.</div><span class="pill hypothesis">Proposed strategy / Not traction</span></div>
+      <h2 id="s11">Start with developers<br>who already automate in text.</h2>
+      <p class="lede">An initial adoption path to validate with users, not a claim about existing customers.</p>
+      <div class="grid3 adoption mt32">
+        <article class="card"><span class="number">01</span><h3>One useful local task</h3><p>Try issue triage, a review report, or invoice extraction using a repository example.</p></article>
+        <article class="card"><span class="number">02</span><h3>A team-owned workflow</h3><p>Keep the Markdown in version control. Review the prompts, checks, and permitted actions together.</p></article>
+        <article class="card"><span class="number">03</span><h3>Embed where it fits</h3><p>Use the exported runtime API when a host application needs workflow execution or interactive sessions.</p></article>
+      </div>
+      <div class="measure"><strong>Measure in a pilot:</strong><span>Time to first useful run</span><span>Manual correction time</span><span>Validation failure rate</span><span>Repeat usage</span></div>
+    </main>
+    <footer class="footer"><span>Audience and adoption sequence are hypotheses / Embedding API is documented in lang/README.md</span><span class="page">11 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s12">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Project status &amp; next proof</span></header>
+    <main class="content">
+      <div class="eyebrow">A working foundation. A focused validation plan.</div>
+      <h2 id="s12">The building blocks are here.<br>The next proof is real usage.</h2>
+      <div class="grid2 mt32" style="gap: 45px">
+        <article class="card">
+          <div class="pill teal">Present in the repository</div>
+          <div class="evidence">
+            <div class="evidence-row"><span>Interpreter + CLI + embedding API</span><span>Runtime v1.4.0*</span></div>
+            <div class="evidence-row"><span>Schemas, assertions, restrictions</span><span>Documented</span></div>
+            <div class="evidence-row"><span>Trace/replay + human checkpoints</span><span>CLI features</span></div>
+            <div class="evidence-row"><span>VS Code language support + notebooks</span><span>Source + tests</span></div>
+            <div class="evidence-row"><span>Workflow examples + offline test suites</span><span>Included</span></div>
+          </div>
+        </article>
+        <article class="card" style="background: #e8eee7">
+          <div class="pill hypothesis">Proposed next milestones</div>
+          <ol class="next-list">
+            <li>Run a bounded pilot on a repeated, human-reviewed task.</li>
+            <li>Record representative answers and test the important failure paths.</li>
+            <li>Measure correction effort and repeat use before expanding scope.</li>
+          </ol>
+          <p class="small">No revenue, adoption, fundraising, or benchmark claims are inferred from the source tree.</p>
+        </article>
+      </div>
+    </main>
+    <footer class="footer"><span>*Version from lang/package.json / Presence in source is not production certification</span><span class="page">12 / 14</span></footer>
+  </section>
+
+  <section class="slide green" aria-labelledby="s13">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">The invitation</span></header>
+    <main class="content">
+      <div class="cta-layout">
+        <div>
+          <div class="eyebrow">From a useful prompt to a controlled process</div>
+          <h2 id="s13">Bring one<br>real workflow.</h2>
+          <p class="lede">Make the judgment explicit.<br>Make the checks executable.<br>Keep the whole thing readable.</p>
+          <a class="cta-link" href="https://github.com/dgawlik/semantic-prompt-language">github.com/dgawlik/semantic-prompt-language</a>
+          <a class="small" href="https://dgawlik.github.io/semantic-prompt-language/">Documentation &amp; runnable examples &#8599;</a>
+        </div>
+        <div class="cta-steps">
+          <div class="cta-step"><span class="index">01</span><div><h3>Pick a bounded task</h3><p>Choose recurring work with a concrete output and a human fallback.</p></div></div>
+          <div class="cta-step"><span class="index">02</span><div><h3>Define the contract</h3><p>Specify the schema, assertions, permissions, and approval points.</p></div></div>
+          <div class="cta-step"><span class="index">03</span><div><h3>Compare against today's process</h3><p>Measure correction time, failures caught, and whether the team uses it again.</p></div></div>
+        </div>
+      </div>
+    </main>
+    <footer class="footer"><span>SPL / Semantic Prompt Language</span><span class="page">13 / 14</span></footer>
+  </section>
+
+  <section class="slide" aria-labelledby="s14">
+    <header class="topline"><div class="brand"><span class="brandmark" aria-hidden="true">&gt;</span> SPL</div><span class="section-label">Appendix / Sources &amp; scope</span></header>
+    <main class="content">
+      <div class="eyebrow">Inspectable claims</div>
+      <h2 id="s14">Built from the project,<br>not invented metrics.</h2>
+      <div class="source-grid">
+        <div>
+          <div class="source-item"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/README.md">Project README</a><p>Product definition, install flow, and core value proposition.</p></div>
+          <div class="source-item"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Examples.md">Examples catalog + linked workflows</a><p>Invoice extraction, issue triage, review, documents, and operations.</p></div>
+          <div class="source-item"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Safety.md">Guards &amp; failures</a><p>Restrictions, assertions, failure semantics, and human checkpoints.</p></div>
+          <div class="source-item"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/CLI.md">CLI &amp; runtime</a><p>Trace/replay, MCP, authentication, and embedding.</p></div>
+          <div class="source-item"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/vscode/README.md">VS Code README</a><p>Language-server features, notebook workflow, and execution boundaries.</p></div>
+          <div class="source-item"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/LANG-PRD.md">Specification</a> <span class="small">/</span> <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/package.json">Runtime manifest</a><p>Goals, non-goals, generation contracts, and repository version.</p></div>
+        </div>
+        <aside class="disclosure">
+          <h3>How to read this deck</h3>
+          <p>Capabilities describe the local repository snapshot reviewed in October 2026. Linked HEAD pages may change later.</p>
+          <p>Code on slides is condensed and labeled; full examples include setup, schemas, and error messages. The notebook view is illustrative.</p>
+          <p>Adoption strategy, pilot metrics, and next milestones are proposals, not measured traction or a committed roadmap.</p>
+          <p>Model calls depend on GitHub Copilot. Live output is nondeterministic. Restrictions are not an OS sandbox, and replay is not a side-effect-free dry run.</p>
+          <p>No market size, customer logos, financial projections, competitive benchmarks, or fundraising terms were supplied or fabricated.</p>
+        </aside>
+      </div>
+    </main>
+    <footer class="footer"><span>Prepared from local project documentation / Self-contained HTML source accompanies the PDF</span><span class="page">14 / 14</span></footer>
+  </section>
+</body>
+</html>

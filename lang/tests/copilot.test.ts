@@ -5,9 +5,10 @@ import { Logger } from '../src/logger.js';
 import { makeRestriction, Restrictions } from '../src/restrict.js';
 import { TOOL_SPECS, ToolHost } from '../src/tools.js';
 import { AGENT_TOOLS } from '../src/agent.js';
-import type { RuntimeAction } from '../src/llm.js';
+import type { LlmRequest, RuntimeAction } from '../src/llm.js';
 import { run } from '../src/interpreter.js';
 import { parseMarkdown } from '../src/markdown.js';
+import { Failure, SuccessSignal } from '../src/errors.js';
 
 const sdk = vi.hoisted(() => ({
     configs: [] as SessionConfig[],
@@ -90,70 +91,94 @@ beforeEach(() => {
     sdk.continueTurn.mockReset().mockResolvedValue(undefined);
 });
 
-const command = async (prompt: string) => {
+const command = async (prompt: string, invokeAction: NonNullable<LlmRequest['invokeAction']> = async () => null) => {
     const cwd = process.cwd();
     const restrictions = new Restrictions(cwd);
     const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
     try {
         return await backend.call({
             kind: 'agent', naturalLanguage: true, prompt, runtimeTools: AGENT_TOOLS, restrictions,
-            showReasoning: false, tools: new ToolHost(restrictions, cwd),
+            showReasoning: false, tools: new ToolHost(restrictions, cwd), invokeAction,
         });
     } finally {
         await backend.close();
     }
 };
 
-it('provides blockquote runtime tools instead of an SPL compiler and queues one action per turn', async () => {
+it('executes multiple runtime actions immediately and returns their results in one session', async () => {
     sdk.calls = [
         { name: 'save_variable', arguments: { name: 'animal', value: 'story' } },
-        { name: 'success', arguments: { value: 'must not run before save' } },
+        { name: 'load_variable', arguments: { name: 'animal' } },
     ];
-    expect(await command('Story -> @animal')).toMatchObject({ action: sdk.calls[0] });
+    let invoked = 0;
+    const invoke = vi.fn(async (_action: RuntimeAction) => {
+        expect(sdk.results).toHaveLength(invoked++);
+        return 'story';
+    });
+    expect(await command('Story -> @animal', invoke)).not.toHaveProperty('action');
     expect(sdk.configs[0].availableTools).toEqual(AGENT_TOOLS.map(tool => tool.name));
     expect(sdk.configs[0].availableTools).not.toContain('submit_spl');
-    expect(sdk.results[0]).toContain('not yet executed');
-    expect(sdk.results[1]).toMatchObject({ resultType: 'failure' });
+    expect(invoke.mock.calls).toEqual(sdk.calls.map(action => [action]));
+    expect(sdk.results).toEqual(['{"value":"story"}', '{"value":"story"}']);
     expect(sdk.prompts).toHaveLength(1);
+    expect(sdk.abort).not.toHaveBeenCalled();
 });
 
 it.each([
-    { name: 'call_function', arguments: { name: 'fib', args: [10] } },
-    { name: 'save_variable', arguments: { name: 'fibPlus2', value: 57 } },
-])('hands off a queued $name action when the SDK rejects the aborted wait', async action => {
-    sdk.calls = [action];
+    new Failure('runtime_error', 'missing function'),
+    new Failure('validation_failed', 'invalid value'),
+    new Failure('tool_error', 'write failed'),
+    new Failure('restriction_violation', 'denied'),
+    new Failure('explicit_failure', 'stop'),
+    new Error('unexpected tool failure'),
+    new SuccessSignal(42),
+])('stops immediately with the original tool error or control signal: %s', async error => {
+    sdk.calls = [
+        { name: 'call_function', arguments: { name: 'missing', args: [] } },
+        { name: 'save_variable', arguments: { name: 'mustNotRun', value: true } },
+    ];
     sdk.continueTurn.mockImplementation(() => new Promise(() => {}));
-
-    await expect(command('Add to @fib10 2 and save to @fibPlus2')).resolves.toMatchObject({
-        action: sdk.calls[0], text: 'Runtime action queued.',
-    });
+    const invoke = vi.fn(async () => { throw error; });
+    await expect(command('Act', invoke)).rejects.toBe(error);
+    expect(invoke).toHaveBeenCalledOnce();
     expect(sdk.abort).toHaveBeenCalledOnce();
     expect(sdk.continueTurn).not.toHaveBeenCalled();
     expect(sdk.disconnect).toHaveBeenCalledOnce();
 });
 
-it('also hands off actions when an older SDK resolves the aborted wait without a response', async () => {
+it('preserves a tool failure when an older SDK resolves the aborted wait without a response', async () => {
     sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
     sdk.abortRejectsWait = false;
-    await expect(command('Save @answer')).resolves.toMatchObject({ action: sdk.calls[0] });
+    const error = new Failure('runtime_error', 'cannot save');
+    await expect(command('Save @answer', vi.fn(async () => { throw error; }))).rejects.toBe(error);
 });
 
-it('does not suppress an abort that was not requested for an action handoff', async () => {
+it('fails without waiting for a stalled SDK abort or model continuation', async () => {
+    sdk.calls = [{ name: 'call_function', arguments: { name: 'missing', args: [] } }];
+    sdk.abort.mockImplementation(() => new Promise(() => {}));
+    sdk.continueTurn.mockImplementation(() => new Promise(() => {}));
+    const error = new Failure('runtime_error', 'missing function');
+    await expect(command('Act', async () => { throw error; })).rejects.toBe(error);
+    expect(sdk.disconnect).toHaveBeenCalledOnce();
+});
+
+it('does not suppress an unrelated abort', async () => {
     sdk.sendError = new Error('The requested run was aborted before completion.');
     await expect(command('Finish')).rejects.toThrow(sdk.sendError.message);
     expect(sdk.abort).not.toHaveBeenCalled();
     expect(sdk.disconnect).toHaveBeenCalledOnce();
 });
 
-it('executes a factorial instruction through aborted SDK handoffs and saves the function result', async () => {
+it('executes a factorial instruction and saves the real function result in the same SDK session', async () => {
     const cwd = process.cwd();
     const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
-    const actions: (RuntimeAction | undefined)[] = [
+    sdk.calls = [
         { name: 'call_function', arguments: { name: 'factorial', args: [15] } },
         { name: 'save_variable', arguments: { name: 'fact15', value: 1307674368000 } },
-        undefined,
     ];
-    let turn = 0;
+    sdk.continueTurn.mockImplementation(async () => {
+        expect(sdk.results).toEqual(['{"value":1307674368000}', '{"value":1307674368000}']);
+    });
     try {
         const result = await run(parseMarkdown([
             '---', 'extension: semantic-prompt-language', 'version: 1', '---', '',
@@ -164,19 +189,34 @@ it('executes a factorial instruction through aborted SDK handoffs and saves the 
             '```spl', 'success fact15', '```',
         ].join('\n')), {
             cwd, logger: new Logger('silent'),
-            backend: {
-                async call(req) {
-                    if (turn === 1) expect(req.prompt).toContain('"result":{"value":1307674368000}');
-                    const action = actions[turn++];
-                    sdk.calls = action ? [action] : [];
-                    return backend.call(req);
-                },
-                close: () => backend.close(),
-            },
+            backend,
         });
         expect(result).toEqual({ status: 'success', value: 1307674368000, hasValue: true });
-        expect(turn).toBe(3);
-        expect(sdk.abort).toHaveBeenCalledTimes(2);
+        expect(sdk.prompts).toHaveLength(1);
+        expect(sdk.abort).not.toHaveBeenCalled();
+    } finally {
+        await backend.close();
+    }
+});
+
+it('fails at the blockquote on an invalid runtime call without executing subsequent actions', async () => {
+    const cwd = process.cwd();
+    const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
+    sdk.calls = [
+        { name: 'call_function', arguments: { name: 'missing', args: [] } },
+        { name: 'success', arguments: { value: 'must not run' } },
+    ];
+    try {
+        expect(await run(parseMarkdown([
+            '---', 'extension: semantic-prompt-language', 'version: 1', '---', '',
+            '> Invoke @missing.', '', '```spl', "fail 'must not reach the next block'", '```',
+        ].join('\n')), { cwd, backend, logger: new Logger('silent') })).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', line: 6, reason: expect.stringContaining('missing') },
+        });
+        expect(sdk.prompts).toHaveLength(1);
+        expect(sdk.results).toEqual([]);
+        expect(sdk.continueTurn).not.toHaveBeenCalled();
+        expect(sdk.abort).toHaveBeenCalledOnce();
     } finally {
         await backend.close();
     }
@@ -185,23 +225,25 @@ it('executes a factorial instruction through aborted SDK handoffs and saves the 
 it.each([
     'backend unavailable',
     'Timeout after 1000ms waiting for session.idle',
-])('preserves unrelated errors after queuing an action: %s', async message => {
+])('preserves unrelated errors after executing an action: %s', async message => {
     sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
     sdk.sendError = new Error(message);
     await expect(command('Save @answer')).rejects.toThrow(message);
     expect(sdk.disconnect).toHaveBeenCalledOnce();
 });
 
-it('surfaces a failed action handoff instead of reporting the queued action as successful', async () => {
+it('preserves the original failure and logs an unsuccessful abort', async () => {
     sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
     sdk.abort.mockRejectedValueOnce(new Error('abort failed'));
-
-    await expect(command('Save @answer')).rejects.toThrow('cannot hand off runtime action: abort failed');
-    expect(sdk.toolErrors).toHaveLength(1);
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    const error = new Failure('runtime_error', 'cannot save');
+    await expect(command('Save @answer', vi.fn(async () => { throw error; }))).rejects.toBe(error);
+    expect(warn).toHaveBeenCalledWith('cannot abort the Copilot turn: abort failed');
+    warn.mockRestore();
     expect(sdk.disconnect).toHaveBeenCalledOnce();
 });
 
-it('waits for in-flight MCP results before handing off a runtime action', async () => {
+it('executes runtime actions immediately while retaining in-flight MCP results', async () => {
     const cwd = process.cwd();
     const restrictions = new Restrictions(cwd);
     sdk.events = [{
@@ -220,8 +262,13 @@ it('waits for in-flight MCP results before handing off a runtime action', async 
         const response = await backend.call({
             kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, prompt: 'Search and save', restrictions,
             showReasoning: false, tools: new ToolHost(restrictions, cwd),
+            invokeAction: async () => {
+                expect(sdk.continueTurn).not.toHaveBeenCalled();
+                return 42;
+            },
         });
-        expect(response.action).toEqual(sdk.calls[0]);
+        expect(response).not.toHaveProperty('action');
+        expect(sdk.results).toEqual(['{"value":42}']);
         expect(response.toolResults).toHaveLength(1);
         expect(JSON.parse(response.toolResults![0])).toMatchObject({
             server: 'docs', tool: 'search', result: { content: 'Verified documentation' },
@@ -237,7 +284,7 @@ it.each([
     ['an empty', { data: { content: '' } }],
     ['a whitespace-only', { data: { content: '\n ' } }],
     ['no', undefined],
-])('accepts a queued action when the model ends with %s final message', async (_, reply) => {
+])('accepts completed actions when the model ends with %s final message', async (_, reply) => {
     const cwd = process.cwd();
     const restrictions = new Restrictions(cwd);
     sdk.calls = [{ name: 'save_variable', arguments: { name: 'modelFib10', value: 55 } }];
@@ -247,9 +294,10 @@ it.each([
     try {
         const response = await backend.call({
             kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, prompt: 'Save the 10th Fibonacci number to @modelFib10', restrictions,
-            showReasoning: false, tools: new ToolHost(restrictions, cwd),
+            showReasoning: false, tools: new ToolHost(restrictions, cwd), invokeAction: async () => 55,
         });
-        expect(response).toMatchObject({ action: sdk.calls[0], text: 'Runtime action queued.' });
+        expect(response).toMatchObject({ text: 'Runtime actions completed.' });
+        expect(response).not.toHaveProperty('action');
     } finally {
         await backend.close();
     }
@@ -280,9 +328,9 @@ it('registers runtime tools and configured MCP servers together for blockquotes'
     try {
         const response = await backend.call({
             kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, prompt: 'Set @answer to 42', restrictions,
-            showReasoning: false, tools: new ToolHost(restrictions, cwd),
+            showReasoning: false, tools: new ToolHost(restrictions, cwd), invokeAction: async () => 55,
         });
-        expect(response.action).toEqual(sdk.calls[0]);
+        expect(response).not.toHaveProperty('action');
         expect(sdk.configs[0].availableTools).toContain('mcp:docs-*');
         expect(sdk.configs[0].tools).toHaveLength(AGENT_TOOLS.length);
         expect(sdk.configs[0].mcpServers).toEqual({ docs: { command: 'never-start', tools: ['*'] } });
@@ -292,7 +340,7 @@ it('registers runtime tools and configured MCP servers together for blockquotes'
     }
 });
 
-it('does not treat an aborted MCP turn as a successful queued action', async () => {
+it('does not treat an aborted MCP turn as a successful completed action', async () => {
     const cwd = process.cwd();
     const restrictions = new Restrictions(cwd);
     sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
@@ -303,7 +351,7 @@ it('does not treat an aborted MCP turn as a successful queued action', async () 
     try {
         await expect(backend.call({
             kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, prompt: 'Search and save', restrictions,
-            showReasoning: false, tools: new ToolHost(restrictions, cwd),
+            showReasoning: false, tools: new ToolHost(restrictions, cwd), invokeAction: async () => 42,
         })).rejects.toThrow(sdk.sendError.message);
         expect(sdk.abort).not.toHaveBeenCalled();
         expect(sdk.disconnect).toHaveBeenCalledOnce();
@@ -319,7 +367,7 @@ it('accepts a final blockquote answer without requiring generated SPL', async ()
     expect(sdk.continueTurn).toHaveBeenCalledOnce();
 });
 
-it('retains actual MCP results for later runtime-action turns', async () => {
+it('retains actual MCP results in the response', async () => {
     sdk.events = [
         { type: 'tool.execution_start', data: { toolCallId: 'mcp-1', toolName: 'mcp:docs-search', mcpServerName: 'docs', mcpToolName: 'search', arguments: { query: 'SPL' } } },
         { type: 'tool.execution_complete', data: { toolCallId: 'mcp-1', success: true, result: { content: 'Verified documentation' } } },
@@ -330,6 +378,42 @@ it('retains actual MCP results for later runtime-action turns', async () => {
     expect(JSON.parse(response.toolResults![0])).toMatchObject({
         server: 'docs', tool: 'search', result: { content: 'Verified documentation' },
     });
+});
+
+it('aborts immediately on a failed MCP tool instead of letting the model continue', async () => {
+    sdk.events = [
+        { type: 'tool.execution_start', data: { toolCallId: 'mcp-1', toolName: 'mcp:docs-search', mcpServerName: 'docs', arguments: {} } },
+        { type: 'tool.execution_complete', data: { toolCallId: 'mcp-1', success: false, error: { message: 'server failed' } } },
+    ];
+    sdk.calls = [{ name: 'save_variable', arguments: { name: 'answer', value: 42 } }];
+    const invoke = vi.fn(async () => null);
+    await expect(command('Search and save', invoke)).rejects.toMatchObject({ statusCode: 'tool_error', reason: expect.stringContaining('server failed') });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(sdk.abort).toHaveBeenCalledOnce();
+});
+
+it('checks current MCP restrictions after a runtime action narrows them', async () => {
+    const cwd = process.cwd();
+    let restrictions = new Restrictions(cwd);
+    const backend = new CopilotBackend({
+        cwd, timeoutMs: 1000, logger: new Logger('silent'), mcpServers: { docs: { command: 'never-start' } },
+    });
+    sdk.calls = [{ name: 'restrict', arguments: { kind: 'mcp', value: 'docs/search' } }];
+    sdk.continueTurn.mockImplementation(async () => {
+        expect(await sdk.configs[0].onPermissionRequest!({
+            kind: 'mcp', serverName: 'docs', toolName: 'write', readOnly: false, toolTitle: 'Write',
+        }, { sessionId: 'test' })).toMatchObject({ kind: 'reject' });
+    });
+    try {
+        await expect(backend.call({
+            kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, prompt: 'Restrict MCP', restrictions,
+            currentRestrictions: () => restrictions,
+            invokeAction: async () => { restrictions = restrictions.with(makeRestriction('mcp', 'docs/search', cwd)); return null; },
+            showReasoning: false, tools: new ToolHost(restrictions, cwd),
+        })).rejects.toMatchObject({ statusCode: 'restriction_violation' });
+    } finally {
+        await backend.close();
+    }
 });
 
 it('keeps explicit agent expressions on their existing tool set', async () => {

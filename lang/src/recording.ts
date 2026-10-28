@@ -6,6 +6,7 @@ import type { Value } from './values.js';
 
 type Entry =
     | { request: string; outcome: Outcome }
+    | { request: string; runtime: RuntimeAction }
     | { tool: string; outcome: ToolOutcome };
 
 interface TraceRequest {
@@ -114,23 +115,40 @@ export class TraceBackend implements LlmBackend {
 
     async call(req: LlmRequest): Promise<LlmResponse> {
         const request = traceRequest(req);
+        const append = (entry: unknown) => {
+            try {
+                fs.appendFileSync(this.file, JSON.stringify(entry) + '\n');
+            } catch (e) {
+                throw new LlmError(`could not save trace: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        };
+        let actionFailed = false;
+        const invokeAction = req.invokeAction;
+        if (req.naturalLanguage && invokeAction) req = {
+            ...req,
+            invokeAction: async action => {
+                try {
+                    append({ request, runtime: action });
+                    return await invokeAction(action);
+                } catch (error) {
+                    actionFailed = true;
+                    throw error;
+                }
+            },
+        };
         let outcome: Outcome;
         let failure: unknown;
         try {
             outcome = { response: await this.backend.call(req) };
         } catch (e) {
+            if (actionFailed) throw e;
             failure = e instanceof Error ? e : new LlmError(String(e));
             outcome = { error: {
                 status_code: e instanceof Failure ? e.statusCode : 'llm_error',
                 reason: e instanceof Failure ? e.reason : e instanceof Error ? e.message : String(e),
             } };
         }
-        try {
-            fs.appendFileSync(this.file, JSON.stringify({ request, ...outcome }) + '\n');
-        } catch (e) {
-            if (!(e instanceof Error)) throw e;
-            throw new LlmError(`could not save trace: ${e.message}`);
-        }
+        append({ request, ...outcome });
         if ('error' in outcome) throw failure;
         return outcome.response;
     }
@@ -172,6 +190,9 @@ export class ReplayBackend implements LlmBackend {
         this.entries = lines.map((line, i) => {
             const entry = parseLine(line, i + 2);
             if (!isRecord(entry)) throw new LlmError(`invalid recording entry at line ${i + 2}`);
+            if (this.mode === 'workflow-replay' && isRuntimeAction(entry.runtime) && isTraceRequest(entry.request)) {
+                return { request: JSON.stringify(traceRequest(entry.request)), runtime: entry.runtime };
+            }
             if (this.mode === 'workflow-replay' && isRuntimeAction(entry.tool)) {
                 if (isToolValue(entry.value) && entry.error === undefined) {
                     return { tool: JSON.stringify(entry.tool), outcome: { value: entry.value } };
@@ -201,15 +222,22 @@ export class ReplayBackend implements LlmBackend {
 
     async call(req: LlmRequest): Promise<LlmResponse> {
         if (req.kind === 'agent' && this.mode === 'replay') throw new LlmError('agent actions cannot be replayed');
-        const entry = this.entries[this.position];
-        if (!entry) throw new LlmError(`recording exhausted at call ${this.position + 1}`);
-        if (!('request' in entry) || entry.request !== requestKey(req)) throw new LlmError(`replay request mismatch at call ${this.position + 1}`);
-        this.position++;
-        if ('error' in entry.outcome) {
-            const { status_code, reason } = entry.outcome.error;
-            throw new Failure(status_code, reason);
+        for (;;) {
+            const entry = this.entries[this.position];
+            if (!entry) throw new LlmError(`recording exhausted at call ${this.position + 1}`);
+            if (!('request' in entry) || entry.request !== requestKey(req)) throw new LlmError(`replay request mismatch at call ${this.position + 1}`);
+            this.position++;
+            if ('runtime' in entry) {
+                if (!req.naturalLanguage || !req.invokeAction) throw new LlmError('runtime trace requires a blockquote action handler');
+                await req.invokeAction(structuredClone(entry.runtime));
+                continue;
+            }
+            if ('error' in entry.outcome) {
+                const { status_code, reason } = entry.outcome.error;
+                throw new Failure(status_code, reason);
+            }
+            return structuredClone(entry.outcome.response);
         }
-        return structuredClone(entry.outcome.response);
     }
 
     async invokeTool(action: RuntimeAction, _perform: () => Promise<Value>): Promise<Value> {
