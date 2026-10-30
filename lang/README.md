@@ -40,6 +40,8 @@ Executed source, unchanged assignments/mutations and initial runtime/store basel
 When stdin and stderr are terminals, BetterTUI initially folds JSON objects/arrays. Up/Down
 selects, Enter/Space toggles, Page Up/Down scrolls, and Home/End reaches the ends. Finishing
 restores the terminal and retains one complete expanded transcript without a keypress.
+Styled event headers are bold; an animated trailing loading character appears only while running
+and is omitted from the final transcript.
 Redirected logs and embedded sinks never read input and always expand JSON with two-space
 indentation. stdout results and trace/checkpoint/store formats remain unchanged.
 If terminal-mode queries are unsupported or an alternate screen is already active,

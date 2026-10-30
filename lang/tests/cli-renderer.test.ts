@@ -520,18 +520,84 @@ describe('presentation ownership', () => {
     });
 
     describe('native event view', () => {
-        async function setup() {
+        async function setup(color = false, onError?: (error: unknown) => void) {
             const { createTestRenderer } = await import('@bettertui/core');
             const test = await createTestRenderer({ width: 100, height: 24, autoStart: false, exitOnCtrlC: false });
-            const view = await createEventView(test.renderer, false);
+            const setFrameCallback = vi.spyOn(test.renderer, 'setFrameCallback');
+            const view = await createEventView(test.renderer, color, onError);
             test.renderer.keyInput.start();
-            return { test, view, async cleanup() {
+            return { test, view, onFrame: setFrameCallback.mock.calls[0][0], async cleanup() {
                 view.destroy();
                 test.renderer.destroy();
                 await new Promise<void>(resolve => setImmediate(resolve));
                 test.cleanup();
             } };
         }
+
+        it('animates a trailing indicator even before events and between model updates, and detaches on cleanup', async () => {
+            const { test, view, onFrame, cleanup } = await setup();
+            const removeFrameCallback = vi.spyOn(test.renderer, 'removeFrameCallback');
+            try {
+                expect(view.rows).toEqual(['\u280b']);
+                onFrame(99);
+                expect(view.rows.at(-1)).toBe('\u280b');
+                onFrame(1);
+                expect(view.rows.at(-1)).toBe('\u2819');
+                const logger = new Logger('error', undefined, { eventSink: event => view.append(event), streamSink: event => view.stream(event) });
+                const interaction = { kind: 'ask', requestId: 'loading' } as const;
+                logger.modelInput(interaction, 'Prompt');
+                logger.modelStream({ type: 'update', interaction, update: { channel: 'response', messageId: 'answer', mode: 'append', text: 'Partial' } });
+                onFrame(200);
+                expect(view.rows.at(-1)).toBe('\u2838');
+                expect(view.rows.at(-2)).toContain('Partial');
+                test.renderOnce();
+                expect(stripVTControlCharacters(test.captureFrame())).toContain('\u2838');
+                logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: 'Complete' });
+                logger.modelOutput(interaction, 'Complete');
+                onFrame(700);
+                expect(view.rows.at(-1)).toBe('\u280b');
+                expect(view.rows.at(-2)).toContain('Complete');
+                test.resize(1, 3);
+                test.renderer.emit('resize', 1, 3);
+                expect(view.rows.at(-1)).toBe('\u280b');
+                expect(view.history).toHaveLength(2);
+            } finally { await cleanup(); }
+            expect(removeFrameCallback).toHaveBeenCalledExactlyOnceWith(onFrame);
+        });
+
+        it('renders bold headers for events and both streaming channels without bolding their content', async () => {
+            const { test, view, cleanup } = await setup(true);
+            try {
+                const logger = new Logger('error', undefined, { eventSink: event => view.append(event), streamSink: event => view.stream(event) });
+                const interaction = { kind: 'ask', requestId: 'bold' } as const;
+                logger.modelInput(interaction, 'Prompt');
+                for (const channel of ['response', 'reasoning'] as const) {
+                    logger.modelStream({ type: 'update', interaction, update: { channel, messageId: channel, mode: 'append', text: 'Partial' } });
+                }
+                expect(view.rows).toEqual([
+                    '\u001b[1;35m-> input ask\u001b[0m Prompt',
+                    '\u001b[1;36m<- output ask [streaming]\u001b[0m Partial',
+                    '\u001b[1;34mi info reasoning ask [streaming]\u001b[0m Partial',
+                    '\u001b[90m\u280b\u001b[0m',
+                ]);
+                test.renderOnce();
+                const frame = test.captureFrame();
+                expect(frame).toContain('\u001b[0;35;49;1m-> input ask\u001b[0;39;49m Prompt');
+                expect(frame).toContain('\u001b[0;36;49;1m<- output ask [streaming]\u001b[0;39;49m Partial');
+                expect(frame).toContain('\u001b[0;34;49;1mi info reasoning ask [streaming]\u001b[0;39;49m Partial');
+            } finally { await cleanup(); }
+        });
+
+        it('reports animation rendering failures to the renderer failure handler', async () => {
+            const onError = vi.fn();
+            const { test, onFrame, cleanup } = await setup(false, onError);
+            try {
+                const error = new Error('animation render failed');
+                vi.spyOn(test.renderer, 'requestRender').mockImplementationOnce(() => { throw error; });
+                onFrame(100);
+                expect(onError).toHaveBeenCalledExactlyOnceWith(error);
+            } finally { await cleanup(); }
+        });
 
         it('folds independently with mock keys and preserves selection/folds through arrival and resize', async () => {
             const { test, view, cleanup } = await setup();

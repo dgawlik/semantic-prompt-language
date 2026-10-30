@@ -51,8 +51,12 @@ export async function probeTerminalModes(input: ProbeInput, write: (text: string
     }
 }
 
-export async function createEventView(renderer: CliRenderer, color: boolean) {
+export async function createEventView(renderer: CliRenderer, color: boolean,
+    onError: (error: unknown) => void = error => { throw error; }) {
     const { Text, measureText } = await import('@bettertui/core');
+    const spinnerFrames = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f'];
+    let spinnerFrame = 0;
+    let elapsed = 0;
     const lines: InstanceType<typeof Text>[] = [];
     const history: LogEvent[] = [];
     const streams = new Map<string, { interaction: ModelStreamEvent['interaction']; channel: 'response' | 'reasoning'; messageId: string; text: string }>();
@@ -164,10 +168,11 @@ export async function createEventView(renderer: CliRenderer, color: boolean) {
             }
             for (const stream of streams.values()) {
                 const header = stream.channel === 'response'
-                    ? paint(`<- output ${stream.interaction.kind} [streaming]`, 36, color)
-                    : paint(`i info reasoning ${stream.interaction.kind} [streaming]`, 34, color);
+                    ? paint(`<- output ${stream.interaction.kind} [streaming]`, 36, color, true)
+                    : paint(`i info reasoning ${stream.interaction.kind} [streaming]`, 34, color, true);
                 this.rows.push(...wrap(`${header} ${stream.text}`, this.width));
             }
+            this.rows.push(paint(spinnerFrames[spinnerFrame], 90, color));
             const hintRows = wrap(hint, this.width).slice(0, Math.max(1, this.height - 1));
             const page = Math.max(1, this.height - hintRows.length);
             const max = Math.max(0, this.rows.length - page);
@@ -217,6 +222,7 @@ export async function createEventView(renderer: CliRenderer, color: boolean) {
             this.render(reveal);
         },
         destroy(): void {
+            renderer.removeFrameCallback(onFrame);
             renderer.keyHandler.off('keypress', onKey);
             renderer.off('resize', onResize);
             for (const line of lines) line.destroy();
@@ -226,9 +232,18 @@ export async function createEventView(renderer: CliRenderer, color: boolean) {
         if (!key.ctrl) view.key(key.name);
     };
     const onResize = (): void => { view.render(); };
+    const onFrame = (delta: number): void => {
+        elapsed += delta;
+        if (elapsed < 100) return;
+        spinnerFrame = (spinnerFrame + Math.floor(elapsed / 100)) % spinnerFrames.length;
+        elapsed %= 100;
+        try { view.render(); }
+        catch (error) { onError(error); }
+    };
     renderer.keyHandler.on('keypress', onKey);
     renderer.on('resize', onResize);
     view.render();
+    renderer.setFrameCallback(onFrame);
     return view;
 }
 
@@ -309,7 +324,7 @@ async function main(): Promise<void> {
                     screenMode: 'alternate-screen', externalOutputMode: 'passthrough',
                     width: initial.terminal.width, height: initial.terminal.height,
                 });
-                view = await createEventView(renderer, initial.color);
+                view = await createEventView(renderer, initial.color, error => fatal('rendering', error));
                 renderer.keyHandler.on('keypress', key => {
                     if (key.ctrl && key.name === 'c') {
                         key.preventDefault();

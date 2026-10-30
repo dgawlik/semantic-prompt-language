@@ -14,8 +14,8 @@ export function sanitize(text: string): string {
         .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '');
 }
 
-export function paint(text: string, color: number, enabled: boolean): string {
-    return enabled ? `\u001b[${color}m${text}\u001b[0m` : text;
+export function paint(text: string, color: number, enabled: boolean, bold = false): string {
+    return enabled ? `\u001b[${bold ? '1;' : ''}${color}m${text}\u001b[0m` : text;
 }
 
 export function prettyJson(source: string, color = false): string | undefined {
@@ -128,16 +128,17 @@ export function formatSegments(segments: readonly BodySegment[], color = false):
 }
 
 export function eventHeader(event: LogEvent, color = false): string {
-    if (event.origin === 'script') return paint(`[${event.kind}]`, { error: 31, warning: 33, info: 34, debug: 90 }[event.kind], color);
+    const marker = (text: string, shade: number) => paint(text, shade, color, true);
+    if (event.origin === 'script') return marker(`[${event.kind}]`, { error: 31, warning: 33, info: 34, debug: 90 }[event.kind]);
     switch (event.kind) {
-        case 'model-input': return paint(`-> input ${sanitize(event.interaction.kind)}`, 35, color);
-        case 'model-output': return paint(`<- output ${sanitize(event.interaction.kind)}${event.interaction.role === 'action' ? ' action' : ''}`, 36, color);
-        case 'state': return paint('~ state', 33, color);
-        case 'error': return paint('x error', 31, color);
-        case 'warning': return paint('! warning', 33, color);
-        case 'info': return paint('i info', 34, color);
-        case 'debug': return paint('. debug', 90, color);
-        case 'generic': return paint(`- ${sanitize(event.label)}`, 35, color);
+        case 'model-input': return marker(`-> input ${sanitize(event.interaction.kind)}`, 35);
+        case 'model-output': return marker(`<- output ${sanitize(event.interaction.kind)}${event.interaction.role === 'action' ? ' action' : ''}`, 36);
+        case 'state': return marker('~ state', 33);
+        case 'error': return marker('x error', 31);
+        case 'warning': return marker('! warning', 33);
+        case 'info': return marker('i info', 34);
+        case 'debug': return marker('. debug', 90);
+        case 'generic': return marker(`- ${sanitize(event.label)}`, 35);
     }
 }
 

@@ -444,7 +444,7 @@ success n`), {
     });
 });
 
-it('distinguishes all event directions and categories with single colored headers', () => {
+it('distinguishes all event directions and categories with single bold colored headers', () => {
     const lines: string[] = [];
     const logger = new Logger('debug', line => lines.push(line), { color: true });
     const interaction = { kind: 'ask', requestId: 'request-1' } as const;
@@ -459,11 +459,14 @@ it('distinguishes all event directions and categories with single colored header
         previous: { presence: 'unbound' }, next: { presence: 'value', valueKind: 'scalar', display: '1' },
     }] }));
     logger.llm('generic');
+    logger.info('log:', 'script body');
+    logger.modelOutput({ ...interaction, role: 'action' }, 'action body');
     const headers = [['-> input ask', 35], ['<- output ask', 36], ['x error', 31], ['! warning', 33],
-        ['i info', 34], ['. debug', 90], ['~ state', 33], ['- message', 35]];
+        ['i info', 34], ['. debug', 90], ['~ state', 33], ['- message', 35], ['[info]', 34], ['<- output ask action', 36]];
     headers.forEach(([header, color], index) => {
-        expect(lines[index]).toContain(`\u001b[${color}m${header}\u001b[0m`);
+        expect(lines[index].startsWith(`\u001b[1;${color}m${header}\u001b[0m `)).toBe(true);
         expect(stripVTControlCharacters(lines[index]).split(String(header))).toHaveLength(2);
+        expect(lines[index].match(/\u001b\[1;/g)).toHaveLength(1);
     });
 });
 
@@ -540,7 +543,7 @@ describe('console formatting', () => {
         new Logger('info', line => plain.push(line)).info('payload:', value);
         new Logger('info', line => colored.push(line), { color: true }).info('payload:', value);
         expect(stripVTControlCharacters(colored[0])).toBe(plain[0]);
-        expect(colored[0]).toContain('\u001b[34mi info\u001b[0m');
+        expect(colored[0]).toContain('\u001b[1;34mi info\u001b[0m');
         expect(colored[0]).toContain('\u001b[36m"key"\u001b[0m');
         expect(colored[0]).toContain('\u001b[32m"text"\u001b[0m');
         expect(colored[0]).toContain('\u001b[33m42\u001b[0m');

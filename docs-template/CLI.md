@@ -57,6 +57,9 @@ Automatic executed-source and control-flow step traces no longer appear at any v
 Historical checkpoint reconstruction is suppressed; new commits and ordinary trace replay remain visible.
 
 Terminal stdin and stderr enable an isolated BetterTUI view on stderr, even when stdout is piped.
+Event headers are bold when terminal styling is enabled. An animated trailing loading character
+remains visible while the workflow runs, including while waiting for model output. It disappears
+on exit and is never included in the expanded transcript or stdout.
 Generated model prefaces (runtime/document preambles, guidance and initial blockquote context)
 and every object/array start as folded summaries; the requested prompt stays visible.
 Up/Down selects a payload; Enter/Space toggles;
