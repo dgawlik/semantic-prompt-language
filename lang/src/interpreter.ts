@@ -1,5 +1,5 @@
 import type { AssignTarget, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
-import { callMethod, iterate, makeBuiltins } from './builtins.js';
+import { callMethod, isMutatingMethod, iterate, makeBuiltins } from './builtins.js';
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
 import { LlmError, buildPrompt, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import { AGENT_TOOLS, actionArguments } from './agent.js';
@@ -12,6 +12,10 @@ import { CheckpointError, SuspensionSignal, type Checkpoint, type HumanRequest }
 import { isResponse, traceRequest } from './recording.js';
 import { usesHuman } from './parser.js';
 import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
+import { randomUUID } from 'node:crypto';
+import { setImmediate as yieldExecution } from 'node:timers/promises';
+import { ObservationIdentities, StateObserver } from './state-observer.js';
+import type { ModelInteraction, ScopeKind } from './log-events.js';
 import {
     assertMutable,
     compareValues,
@@ -68,12 +72,13 @@ export async function run(program: Program, opts: RunOptions): Promise<RunResult
 
 interface SessionState {
     globals: Env;
+    identities: ObservationIdentities;
     current?: Interpreter;
 }
 
 /** An isolated interactive scope, retaining values and function closures between runs. */
 export class ExecutionSession {
-    private readonly state: SessionState = { globals: { vars: new Map() } };
+    private readonly state: SessionState = { globals: { vars: new Map() }, identities: new ObservationIdentities() };
     private running = false;
 
     async run(program: Program, opts: Omit<RunOptions, 'store' | 'checkpoint'>): Promise<RunResult> {
@@ -91,6 +96,7 @@ export class ExecutionSession {
 
 class Interpreter {
     private readonly globals: Env;
+    private readonly observer: StateObserver;
     private readonly builtins;
     private readonly store: VariableStore;
     private readonly cwd: string;
@@ -105,6 +111,7 @@ class Interpreter {
     private sourceLines: string[];
     private sourceUri?: string;
     private sourceVersion?: number;
+    private steps = 0;
 
     constructor(
         private readonly program: Program,
@@ -112,6 +119,7 @@ class Interpreter {
         private readonly sessionState?: SessionState,
     ) {
         this.globals = sessionState?.globals ?? { vars: new Map() };
+        this.observer = new StateObserver(this.globals, opts.logger, sessionState?.identities);
         this.sourceLines = program.lines;
         this.sourceUri = opts.source;
         this.sourceVersion = opts.sourceVersion;
@@ -126,13 +134,29 @@ class Interpreter {
         Object.freeze(this.runtimeEnv);
         Object.freeze(this.runtimeArgs);
         this.restrictions = new Restrictions(this.cwd);
-        this.builtins = makeBuiltins({ log: (values) => (this.sessionState?.current ?? this).logValues('info', values) });
+        this.builtins = makeBuiltins({ log: sessionState
+            ? Interpreter.sessionLog(sessionState)
+            : values => this.logValues('info', values) });
         for (const tool of Object.keys(TOOL_SPECS) as ToolName[]) {
             this.builtins.set(tool, {
                 __fn: 'builtin', name: tool,
-                call: (args) => (this.sessionState?.current ?? this).callTool(tool, args),
+                call: sessionState ? Interpreter.sessionTool(sessionState, tool) : args => this.callTool(tool, args),
             });
         }
+    }
+
+    private static sessionLog(state: SessionState): (values: Value[]) => void {
+        return values => {
+            if (!state.current) throw runtimeError('no active execution session');
+            state.current.logValues('info', values);
+        };
+    }
+
+    private static sessionTool(state: SessionState, tool: ToolName): (args: Value[]) => Promise<Value> {
+        return args => {
+            if (!state.current) throw runtimeError('no active execution session');
+            return state.current.callTool(tool, args);
+        };
     }
 
     async run(): Promise<RunResult> {
@@ -203,26 +227,35 @@ class Interpreter {
         return undefined;
     }
 
-    private childScope(parent: Env): Env {
-        return { vars: new Map(), parent };
+    private childScope(parent: Env, kind: ScopeKind = 'block', label: string = kind): Env {
+        const scope = { vars: new Map<string, Value>(), parent };
+        this.observer.scope(scope, kind, label);
+        return scope;
+    }
+
+    private commit(env: Env, name: string, value: Value): void {
+        this.observer.commit(env, name, value, !this.opts.checkpoint?.replaying);
     }
 
     // ---- statements ----------------------------------------------------
 
     private async execBlock(stmts: Stmt[], env: Env): Promise<Completion> {
-        let completion: Completion;
-        for (const s of stmts) {
-            completion = await this.execStmt(s, env);
-            if (completion && completion.k !== 'value') return completion;
+        const leave = this.observer.enter(env);
+        try {
+            let completion: Completion;
+            for (const s of stmts) {
+                completion = await this.execStmt(s, env);
+                if (completion && completion.k !== 'value') return completion;
+            }
+            return completion;
+        } finally {
+            leave();
         }
-        return completion;
     }
 
     private async execStmt(s: Stmt, env: Env): Promise<Completion> {
         try {
-            if (!this.opts.checkpoint?.replaying) {
-                this.opts.logger.deterministic(`line ${s.line} (${s.t}): ${this.sourceLines[s.line - 1]?.trim() ?? ''}`);
-            }
+            if (++this.steps % 1_024 === 0) await yieldExecution();
             return await this.execStmtInner(s, env);
         } catch (e) {
             if (e instanceof ExpressionSignal) return e.signal;
@@ -237,7 +270,7 @@ class Interpreter {
     private async execStmtInner(s: Stmt, env: Env): Promise<Completion> {
         switch (s.t) {
             case 'let':
-                env.vars.set(s.name, await this.eval(s.value, env));
+                this.commit(env, s.name, await this.eval(s.value, env));
                 return;
             case 'assign':
                 await this.execAssign(s.target, s.op, s.value, env);
@@ -258,13 +291,13 @@ class Interpreter {
                 return { k: 'return', v: s.value ? await this.eval(s.value, env) : null, hasValue: s.value !== undefined };
             case 'if': {
                 for (const b of s.branches) {
-                    if (truthy(await this.eval(b.cond, env))) return this.execBlock(b.body, this.childScope(env));
+                    if (truthy(await this.eval(b.cond, env))) return this.execBlock(b.body, this.childScope(env, 'branch'));
                 }
-                return s.orelse ? this.execBlock(s.orelse, this.childScope(env)) : undefined;
+                return s.orelse ? this.execBlock(s.orelse, this.childScope(env, 'branch')) : undefined;
             }
             case 'while': {
                 while (truthy(await this.eval(s.cond, env))) {
-                    const sig = await this.execBlock(s.body, this.childScope(env));
+                    const sig = await this.execBlock(s.body, this.childScope(env, 'iteration'));
                     if (sig?.k === 'break') break;
                     if (sig?.k === 'return') return sig;
                 }
@@ -273,7 +306,7 @@ class Interpreter {
             case 'for': {
                 const items = iterate(await this.eval(s.iter, env));
                 for (let i = 0; i < items.length; i++) {
-                    const scope = this.childScope(env);
+                    const scope = this.childScope(env, 'iteration');
                     this.bindLoopVars(s.vars, items[i], scope);
                     const sig = await this.execBlock(s.body, scope);
                     if (sig?.k === 'break') break;
@@ -286,7 +319,7 @@ class Interpreter {
                     __fn: 'user', name: s.name, params: s.params, body: s.body, closure: env,
                     source: { lines: this.sourceLines, uri: this.sourceUri, version: this.sourceVersion },
                 };
-                env.vars.set(s.name, fn);
+                this.commit(env, s.name, fn);
                 return;
             }
             case 'try': {
@@ -301,9 +334,8 @@ class Interpreter {
                     this.constraints = savedConstraints;
                     this.restrictions = savedRestrictions;
                     this.depth = savedDepth;
-                    if (!this.opts.checkpoint?.replaying) this.opts.logger.debug(`caught ${e.statusCode}: ${e.reason}`);
-                    const scope = this.childScope(env);
-                    scope.vars.set(s.errName, newDict(Object.entries(e.payload()) as [string, Value][]));
+                    const scope = this.childScope(env, 'handler');
+                    this.commit(scope, s.errName, newDict(Object.entries(e.payload()) as [string, Value][]));
                     const completion = await this.execBlock(s.handler, scope);
                     return completion?.k === 'value' ? undefined : completion;
                 }
@@ -334,7 +366,6 @@ class Interpreter {
                     for (const clause of s.clauses) {
                         const restriction = makeRestriction(clause.kind, await this.eval(clause.arg, env), this.cwd);
                         this.restrictions = this.restrictions.with(restriction);
-                        if (!this.opts.checkpoint?.replaying) this.opts.logger.debug(`restrict ${clause.kind}: ${restriction.values.join(', ')}`);
                     }
                     const completion = await this.execBlock(s.body, this.childScope(env));
                     return completion?.k === 'value' ? undefined : completion;
@@ -347,13 +378,13 @@ class Interpreter {
 
     private bindLoopVars(vars: string[], item: Value, env: Env): void {
         if (vars.length === 1) {
-            env.vars.set(vars[0], item);
+            this.commit(env, vars[0], item);
             return;
         }
         if (!isList(item) || item.length !== vars.length) {
             throw runtimeError(`cannot unpack ${typeName(item)} into ${vars.length} variables`);
         }
-        vars.forEach((v, i) => env.vars.set(v, item[i]));
+        vars.forEach((v, i) => this.commit(env, v, item[i]));
     }
 
     private async execAssign(target: AssignTarget, op: string, valueExpr: Expr, env: Env): Promise<void> {
@@ -364,7 +395,7 @@ class Interpreter {
         if (target.t === 'name') {
             const scope = this.bindingScope(target.name, env);
             if (!scope) throw runtimeError(`cannot assign '${target.name}': declare a local with let first`);
-            scope.vars.set(target.name, await compute(() => this.lookup(target.name, env)));
+            this.commit(scope, target.name, await compute(() => this.lookup(target.name, env)));
             return;
         }
         const obj = await this.eval(target.obj, env);
@@ -372,16 +403,18 @@ class Interpreter {
         if (target.t === 'member') {
             if (!isDict(obj)) throw runtimeError(`cannot set member '${target.name}' on ${typeName(obj)}`);
             const value = await compute(() => this.getKey(obj, target.name));
-            setKey(obj, target.name, value);
+            this.observer.mutate(obj, env, target.name, !this.opts.checkpoint?.replaying, () => setKey(obj, target.name, value));
             return;
         }
         const index = await this.eval(target.index, env);
         if (isList(obj)) {
             const i = this.listIndex(obj, index);
-            obj[i] = await compute(() => obj[i]);
+            const value = await compute(() => obj[i]);
+            this.observer.mutate(obj, env, String(i), !this.opts.checkpoint?.replaying, () => { obj[i] = value; });
         } else if (isDict(obj)) {
             if (typeof index !== 'string') throw runtimeError(`dict keys must be strings, got ${typeName(index)}`);
-            setKey(obj, index, await compute(() => this.getKey(obj, index)));
+            const value = await compute(() => this.getKey(obj, index));
+            this.observer.mutate(obj, env, index, !this.opts.checkpoint?.replaying, () => setKey(obj, index, value));
         } else {
             throw runtimeError(`${typeName(obj)} does not support item assignment`);
         }
@@ -496,7 +529,9 @@ class Interpreter {
         if (callee.t === 'member') {
             const obj = await this.eval(callee.obj, env);
             const args = await this.evalArgs(argExprs, env);
-            return callMethod(obj, callee.name, args);
+            return typeof obj === 'object' && obj !== null && isMutatingMethod(obj, callee.name)
+                ? this.observer.mutate(obj, env, callee.name, !this.opts.checkpoint?.replaying, () => callMethod(obj, callee.name, args))
+                : callMethod(obj, callee.name, args);
         }
         const fn = await this.eval(callee, env);
         const args = await this.evalArgs(argExprs, env);
@@ -516,7 +551,8 @@ class Interpreter {
             throw runtimeError(`${fn.name}() takes ${fn.params.length} argument(s) but ${args.length} were given`);
         }
         if (this.depth >= this.maxDepth) throw runtimeError(`maximum call depth (${this.maxDepth}) exceeded`);
-        const local: Env = { vars: new Map(fn.params.map((p, i) => [p, args[i]])), parent: fn.closure };
+        const local = this.childScope(fn.closure, 'function', `${fn.name}()`);
+        fn.params.forEach((name, index) => this.commit(local, name, args[index]));
         const savedLines = this.sourceLines;
         const savedUri = this.sourceUri;
         const savedVersion = this.sourceVersion;
@@ -635,7 +671,9 @@ class Interpreter {
         return (await this.callLlmResponse(req)).text.trim();
     }
 
-    private async callLlmResponse(req: LlmRequest): Promise<LlmResponse> {
+    private async callLlmResponse(req: LlmRequest, interaction: ModelInteraction = {
+        requestId: randomUUID(), kind: req.naturalLanguage ? 'blockquote' : req.kind,
+    }): Promise<LlmResponse> {
         const { logger, backend } = this.opts;
         if (this.program.markdown) {
             req = { ...req, prompt: [
@@ -643,7 +681,7 @@ class Interpreter {
             ].filter(Boolean).join('\n\n') };
         }
         const replaying = this.opts.checkpoint?.replaying;
-        if (!replaying) logger.llm(`llm request (${req.kind}):`, req.prompt);
+        if (!replaying) logger.modelInput(interaction, req.prompt);
         const started = Date.now();
         try {
             const perform = async () => {
@@ -661,8 +699,7 @@ class Interpreter {
             if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response; blockquotes require runtime actions, not submitted SPL');
             if (!replaying) {
                 logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
-                logger.llm(`llm response:\n${res.text}`);
-                if (res.action) logger.llm(`runtime action:\n${JSON.stringify(res.action)}`);
+                logger.modelOutput({ ...interaction, role: 'response' }, res.text);
             }
             return res;
         } catch (e) {
@@ -685,6 +722,7 @@ class Interpreter {
             }
         }
         const history: unknown[] = [];
+        let interaction: ModelInteraction = { requestId: randomUUID(), kind: 'blockquote' };
         const savedRestrictions = this.restrictions;
         const savedConstraints = this.constraints;
         this.naturalDepth++;
@@ -696,12 +734,13 @@ class Interpreter {
                 }, perform, isResponse)
                 : perform();
             const execute = async (action: RuntimeAction): Promise<unknown> => {
-                if (!checkpoint?.replaying) this.opts.logger.llm(`runtime action:\n${JSON.stringify(action)}`);
+                if (!checkpoint?.replaying) this.opts.logger.modelOutput({ ...interaction, role: 'action' }, JSON.stringify(action));
                 const result = { value: describeValue(await this.execNaturalAction(action, line, env)) };
                 history.push({ action, result });
                 return result.value;
             };
             for (;;) {
+                interaction = { requestId: randomUUID(), kind: 'blockquote' };
                 if (checkpoint?.replaying) {
                     const response = await decision(async () => { throw new CheckpointError('missing recorded runtime decision'); });
                     if (!response.action) return;
@@ -730,7 +769,7 @@ class Interpreter {
                 };
                 let response: LlmResponse;
                 try {
-                    response = await this.callLlmResponse(request);
+                    response = await this.callLlmResponse(request, interaction);
                 } catch (error) {
                     if (checkpoint && !actionFailed && error instanceof Failure) {
                         await decision(async () => { throw error; });
@@ -759,7 +798,7 @@ class Interpreter {
                 if (isFunction(this.bindingScope(name, env)?.vars.get(name)) || this.builtins.has(name)) {
                     throw runtimeError(`cannot replace function '${name}' with a variable`);
                 }
-                (this.bindingScope(name, env) ?? env).vars.set(name, args.value);
+                this.commit(this.bindingScope(name, env) ?? env, name, args.value);
                 return args.value;
             }
             case 'call_function': {

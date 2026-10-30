@@ -165,3 +165,25 @@ test('cancelling a running worker stops unbounded code and rejects queued work',
         id: 2, value: '1', source: 'cell:next', frontmatter: DEFAULT_FRONTMATTER, language: 'spl',
     }, () => {}), /cancelled/);
 });
+
+test('worker keeps state/model logs separate from explicit output and uses current cells without native UI', async t => {
+    const workerPath = path.resolve(__dirname, '..', 'notebookWorker.cjs');
+    const bundled = readFileSync(workerPath, 'utf8');
+    assert.doesNotMatch(bundled, /@bettertui|cli-renderer\.js|setRawMode/);
+    const kernel = new NotebookKernel(workerPath, process.cwd(), process.execPath, () => {});
+    t.after(() => kernel.dispose());
+    const first: { text: string; output: boolean }[] = [];
+    const second: { text: string; output: boolean }[] = [];
+    await kernel.execute({ id: 1, value: 'let items = []\ndef change(x):\n    x.append(1)',
+        source: 'cell:first', frontmatter: DEFAULT_FRONTMATTER, language: 'spl' },
+        (text, output) => first.push({ text, output }));
+    const count = first.length;
+    const result = await kernel.execute({ id: 2, value: "change(items)\nlog('explicit')\nitems",
+        source: 'cell:second', frontmatter: DEFAULT_FRONTMATTER, language: 'spl' },
+        (text, output) => second.push({ text, output }));
+    assert.equal(first.length, count);
+    assert.deepEqual(result, { id: 2, kind: 'result', text: '[\n  1\n]' });
+    assert.ok(second.some(log => log.text.startsWith('~ state') && !log.output));
+    assert.deepEqual(second.filter(log => log.output), [{ text: '[info] log: explicit', output: true }]);
+    assert.ok(!second.some(log => /deterministic|line \d+ \(/.test(log.text)));
+});

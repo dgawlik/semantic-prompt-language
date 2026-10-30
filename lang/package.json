@@ -1,6 +1,6 @@
 {
   "name": "spl-lang",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Semantic Prompt Language: a Python-like language with LLM calls built into the syntax",
   "type": "module",
   "main": "./dist/index.js",
@@ -14,7 +14,7 @@
     "docs"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=24.15.0"
   },
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
@@ -29,6 +29,7 @@
   ],
   "license": "ISC",
   "dependencies": {
+    "@bettertui/core": "0.1.1",
     "@github/copilot-sdk": "^1.0.22",
     "ajv": "^8.17.1",
     "marked": "^18.1.1",

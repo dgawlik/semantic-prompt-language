@@ -4,6 +4,9 @@ Install the CLI, sign in to GitHub Copilot, then write and refine a workflow in 
 
 ## Install
 
+Use Node.js >=24.15.0. Native BetterTUI packages support Windows, macOS and Linux on x64/arm64.
+If native rendering cannot start, the CLI diagnoses the problem and keeps complete plain logs.
+
 ```bash
 npm install -g spl-lang
 spl login
@@ -13,6 +16,17 @@ spl login
 `GITHUB_TOKEN`). Otherwise it runs GitHub's device flow and saves a token in `~/.spl`
 (override with `SPL_HOME`). `spl logout` deletes it. Workflows that never call a model,
 `--check` and replay need no login.
+
+The result goes to stdout; execution logs go to stderr with one header per event. `->` input is
+magenta, `<-` output/action cyan, `~` variable state yellow, `x` error red, `!` warning yellow,
+`i` info blue and `.` debug gray. Automatic logs show actual changes in defining scopes,
+not source statements, unchanged operations or initial runtime/store state.
+Terminal stdin/stderr enables folded JSON: Up/Down selects, Enter/Space toggles,
+Page Up/Down scrolls, and Home/End reaches the ends. Completion retains a complete expanded
+transcript without a keypress. Redirected/embedded output is always expanded and non-interactive.
+Use `--silent` to suppress execution logs; model/state logs remain at every other verbosity.
+`NO_COLOR` wins over `FORCE_COLOR`, `FORCE_COLOR=0` disables color, and forced color never
+enables input. See [CLI & runtime](CLI.md) for all output and lifecycle rules.
 
 ## Write a workflow
 

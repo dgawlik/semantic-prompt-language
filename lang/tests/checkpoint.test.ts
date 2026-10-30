@@ -8,6 +8,7 @@ import { LlmError, type LlmBackend } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { parse, usesHuman } from '../src/parser.js';
 import { ToolHost } from '../src/tools.js';
+import type { LogEvent } from '../src/log-events.js';
 
 vi.mock('node:fs', async (original) => ({ ...await original<typeof import('node:fs')>() }));
 
@@ -48,6 +49,19 @@ async function resume(source: string, answer: string, backend = unusedBackend, l
 }
 
 describe('human syntax and suspension', () => {
+    it('suppresses reconstruction at each commit but emits the newly completed last answer assignment', async () => {
+        const source = `let n = 1\nlet answer = human 'question'\nn += 1\nsuccess [n, answer]`;
+        await execute(source, Checkpoint.create(file, context(source)));
+        const history: LogEvent[] = [];
+        const result = await resume(source, 'done', unusedBackend, new Logger('error', undefined, { eventSink: event => history.push(event) }));
+        expect(result).toMatchObject({ status: 'success', value: [2, 'done'] });
+        const states = history.filter(event => event.kind === 'state');
+        expect(states.map(event => event.change.bindings[0].binding.name)).toEqual(['answer', 'n']);
+        expect(states[0].change.bindings[0]).toMatchObject({ previous: { presence: 'unbound' }, next: { display: '"done"' } });
+        const rows = fs.readFileSync(file, 'utf8').trimEnd().split('\n').map(line => JSON.parse(line));
+        expect(JSON.stringify(rows)).not.toMatch(/bindingId|scopeId|payloadId/);
+    });
+
     it('parses questions, rejects modifiers/reserved bindings, and preflights unused human expressions', async () => {
         expect(usesHuman(parse(`success 'human'`))).toBe(false);
         expect(usesHuman(parse(`def later():

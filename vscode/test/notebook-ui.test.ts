@@ -65,13 +65,19 @@ test('notebook log tails cap characters, normalize newlines and preserve Unicode
 
 test('native cells show brief runtime logs separately from explicit output and results', async t => {
     const hidden = [
+        '-> input ask private prompt',
+        '<- output ask private reply',
+        '~ state private variable',
+        '. debug implementation detail',
+        'i info reasoning: private reasoning',
         '[llm] llm request (ask):\n[llm] private prompt',
         '[llm] llm response:\n[llm] private reply',
         '[info] reasoning: private reasoning\n[info]   continued',
         '[deterministic] line 1 (expr): secret source',
         '[debug] implementation detail',
     ];
-    const visible = ['[info] model call completed', '[warn] retrying\n[warn]   temporary problem', '[error] recovered failure'];
+    const visible = ['[info] model call completed', '[warn] retrying\n[warn]   temporary problem', '[error] recovered failure',
+        'i info model call completed', '! warning retrying', 'x error recovered failure'];
     const explicit = '[info] log: ' + 'x'.repeat(4_500);
     t.mock.method(NotebookKernel.prototype, 'execute', async (
         request: ExecuteCell, log: (text: string, output: boolean) => void,

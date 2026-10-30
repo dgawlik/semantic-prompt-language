@@ -4,31 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="spl runs one Markdown workflow, prints its result on stdout and logs on stderr, and reports
-the outcome through its exit code.">
+the outcome through its exit code. Requires Node.js &gt;=24.15.0.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=976fd63789f7">
-<link rel="stylesheet" href="assets/style.css?v=976fd63789f7">
+<link rel="icon" type="image/png" href="assets/icon.png?v=accc84170a90">
+<link rel="stylesheet" href="assets/style.css?v=accc84170a90">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=976fd63789f7"></script>
-<script defer src="assets/site.js?v=976fd63789f7"></script>
+<script defer src="assets/search-index.js?v=accc84170a90"></script>
+<script defer src="assets/site.js?v=accc84170a90"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
 <header class="site-header">
   <div class="header-inner">
-    <a class="brand" href="index.html" aria-label="SPL documentation home"><img class="brand-icon" src="assets/icon.png?v=976fd63789f7" alt="" width="36" height="36"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><img class="brand-icon" src="assets/icon.png?v=accc84170a90" alt="" width="36" height="36"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
     <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
     <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.6.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.7.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
   <details class="mobile-nav"><summary>Browse documentation <span>CLI &amp; runtime</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>CLI &amp; runtime</span><span class="reading-time">5 min read</span></div>
+    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>CLI &amp; runtime</span><span class="reading-time">7 min read</span></div>
     <header class="page-heading"><h1>CLI &amp; runtime</h1><div class="lead"><p><code>spl</code> runs one Markdown workflow, prints its result on stdout and logs on stderr, and reports
-the outcome through its exit code.</p></div></header>
+the outcome through its exit code. Requires Node.js &gt;=24.15.0.</p></div></header>
     <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#variable-stores">Variable stores</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li></ul></nav></details>
     <article class="prose"><h2 id="usage">Usage<a class="heading-anchor" href="#usage" aria-label="Link to Usage">#</a></h2>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-1">spl &lt;workflow.md&gt; [options] [--arg value ...]
@@ -97,28 +97,98 @@ spl login | <span class="hljs-built_in">logout</span>
 <h2 id="output-and-exit-codes">Output and exit codes<a class="heading-anchor" href="#output-and-exit-codes" aria-label="Link to Output and exit codes">#</a></h2>
 <p>stdout gets the <code>success</code> value: strings as-is, everything else as JSON. An uncaught failure prints
 its <a href="safety.html#failure-payload">payload</a> instead. stderr gets logs, including every model prompt and
-response and a trace of executed statements. Use <code>--silent</code> when logs could expose sensitive data.</p>
-<p>Every log line uses <code>[tag] message</code>, including continuation lines and CLI diagnostics.
-Multiline payloads are indented under their header. JSON objects, arrays and JSON model responses
-use two-space indentation; JSON keys, strings, numbers, booleans and <code>null</code> have distinct colors.
-Script source traces are displayed as written rather than reformatted as JSON.</p>
+response and committed variable-state changes. Use <code>--silent</code> when logs could expose sensitive data.</p>
+<p>Each event has one header, without repeated continuation badges, panels or timestamps:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Output and exit codes reference table"><table>
+<thead>
+<tr>
+<th scope="col">Icon</th>
+<th scope="col">Category</th>
+<th scope="col">Color</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-&gt;</code></td>
+<td>Model input: ask, think, agent or blockquote</td>
+<td>Magenta</td>
+</tr>
+<tr>
+<td><code>&lt;-</code></td>
+<td>Model output or runtime action</td>
+<td>Cyan</td>
+</tr>
+<tr>
+<td><code>x</code></td>
+<td>Error</td>
+<td>Red</td>
+</tr>
+<tr>
+<td><code>!</code></td>
+<td>Warning</td>
+<td>Yellow</td>
+</tr>
+<tr>
+<td><code>i</code></td>
+<td>Information</td>
+<td>Blue</td>
+</tr>
+<tr>
+<td><code>.</code></td>
+<td>Debug</td>
+<td>Gray</td>
+</tr>
+<tr>
+<td><code>~</code></td>
+<td>Variable state</td>
+<td>Yellow</td>
+</tr>
+</tbody></table>
+</div>
+<p>Generic embedding messages have a <code>- message</code> header. Explicit script logs keep their
+<code>[info|error|debug] log:</code> prefix for embedding/notebook compatibility.
+State logs identify each affected binding&#39;s defining scope, previous value (<code>&lt;unbound&gt;</code> on
+initialization) and new value. Parameters, loop/handler bindings, closures and shared mutations
+are included. A shared mutation is one event listing all affected aliases. Same-value assignments,
+no-op methods, reads, scope exits and initial runtime/store baselines do not create events.
+Automatic executed-source and control-flow step traces no longer appear at any verbosity.
+Historical checkpoint reconstruction is suppressed; new commits and ordinary trace replay remain visible.</p>
+<p>Terminal stdin and stderr enable an isolated BetterTUI view on stderr, even when stdout is piped.
+Every object/array starts as one folded summary. Up/Down selects a payload; Enter/Space toggles;
+Page Up/Down scrolls; Home/End reaches the ends. Other folds and selection survive arrival/resize.
+Expanded JSON uses two-space indentation and preserves original numeric/string tokens and duplicate
+keys. Primitives and malformed JSON remain readable without misleading fold controls.</p>
+<p>Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
+stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
+append-only output without changing workflow results. Non-terminal stdin/stderr, <code>TERM=dumb</code>,
+embedded sinks, silent, help/version, auth, check-only and checkpoint/resume never acquire the UI.
+Before native rendering, the child queries cursor visibility and alternate-screen state.
+Unsupported queries or an already-active alternate screen select diagnosed append-only output;
+SPL does not clear an existing application&#39;s alternate screen. The parent owns the input-mode
+snapshot and cursor restoration before native code runs, including after a child crash.
+Message, label and value controls are sanitized rather than executed as terminal instructions.</p>
 <p>Colors are enabled automatically when stderr is a terminal, and disabled for redirected output
 or <code>TERM=dumb</code>. Set <code>NO_COLOR=1</code> to disable color, or <code>FORCE_COLOR=1</code> to enable it when redirecting;
 <code>FORCE_COLOR=0</code> disables color, and <code>NO_COLOR</code> takes precedence. stdout results, checkpoint
 envelopes, trace journals and variable stores remain plain, machine-readable data.
 <code>--silent</code> suppresses execution logs; usage, syntax and checkpoint-usage diagnostics still appear
-on stderr so command-line errors are not hidden.</p>
+on stderr so command-line errors are not hidden.
+<code>--log-level</code> retains ordinary severity filtering; model transcripts and state events appear at
+every non-silent level. Forced color never enables cursor controls or keyboard input.</p>
 <p>For example, <code>log(&#39;review:&#39;, review)</code> produces:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-2">[info] log: review:
-[info]   {
-[info]     &quot;findings&quot;: [],
-[info]     &quot;count&quot;: 0
-[info]   }
+{
+  &quot;findings&quot;: [],
+  &quot;count&quot;: 0
+}
 </code></pre></figure>
 <p>Embedded callers can pass structured data directly with <code>logger.info(&#39;review:&#39;, review)</code>.
 Custom logger sinks default to plain text; <code>new Logger(&#39;info&#39;, sink, { color: true })</code>
 explicitly enables styling. Non-JSON values such as errors, bigints and circular objects use
-Node&#39;s inspect format instead of losing error details or failing JSON serialization.</p>
+Node&#39;s inspect format instead of losing error details or failing JSON serialization.
+An additive <code>eventSink</code> option delivers detached readonly events instead of strings, never both.
+Neither library imports nor custom sinks load BetterTUI or start a process. Automatic observation
+uses non-invoking snapshots: callable identities, cycle references and accessor placeholders,
+without running getters, serializers or custom inspectors.</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Output and exit codes reference table"><table>
 <thead>
 <tr>

@@ -1,7 +1,7 @@
 # CLI & runtime
 
 `spl` runs one Markdown workflow, prints its result on stdout and logs on stderr, and reports
-the outcome through its exit code.
+the outcome through its exit code. Requires Node.js >=24.15.0.
 
 ## Usage
 
@@ -33,12 +33,44 @@ Each `--arg` is one string; use `--arg=--value` for values starting with a dash.
 
 stdout gets the `success` value: strings as-is, everything else as JSON. An uncaught failure prints
 its [payload](Safety.md#failure-payload) instead. stderr gets logs, including every model prompt and
-response and a trace of executed statements. Use `--silent` when logs could expose sensitive data.
+response and committed variable-state changes. Use `--silent` when logs could expose sensitive data.
 
-Every log line uses `[tag] message`, including continuation lines and CLI diagnostics.
-Multiline payloads are indented under their header. JSON objects, arrays and JSON model responses
-use two-space indentation; JSON keys, strings, numbers, booleans and `null` have distinct colors.
-Script source traces are displayed as written rather than reformatted as JSON.
+Each event has one header, without repeated continuation badges, panels or timestamps:
+
+| Icon | Category | Color |
+| --- | --- | --- |
+| `->` | Model input: ask, think, agent or blockquote | Magenta |
+| `<-` | Model output or runtime action | Cyan |
+| `x` | Error | Red |
+| `!` | Warning | Yellow |
+| `i` | Information | Blue |
+| `.` | Debug | Gray |
+| `~` | Variable state | Yellow |
+
+Generic embedding messages have a `- message` header. Explicit script logs keep their
+`[info|error|debug] log:` prefix for embedding/notebook compatibility.
+State logs identify each affected binding's defining scope, previous value (`<unbound>` on
+initialization) and new value. Parameters, loop/handler bindings, closures and shared mutations
+are included. A shared mutation is one event listing all affected aliases. Same-value assignments,
+no-op methods, reads, scope exits and initial runtime/store baselines do not create events.
+Automatic executed-source and control-flow step traces no longer appear at any verbosity.
+Historical checkpoint reconstruction is suppressed; new commits and ordinary trace replay remain visible.
+
+Terminal stdin and stderr enable an isolated BetterTUI view on stderr, even when stdout is piped.
+Every object/array starts as one folded summary. Up/Down selects a payload; Enter/Space toggles;
+Page Up/Down scrolls; Home/End reaches the ends. Other folds and selection survive arrival/resize.
+Expanded JSON uses two-space indentation and preserves original numeric/string tokens and duplicate
+keys. Primitives and malformed JSON remain readable without misleading fold controls.
+
+Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
+stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
+append-only output without changing workflow results. Non-terminal stdin/stderr, `TERM=dumb`,
+embedded sinks, silent, help/version, auth, check-only and checkpoint/resume never acquire the UI.
+Before native rendering, the child queries cursor visibility and alternate-screen state.
+Unsupported queries or an already-active alternate screen select diagnosed append-only output;
+SPL does not clear an existing application's alternate screen. The parent owns the input-mode
+snapshot and cursor restoration before native code runs, including after a child crash.
+Message, label and value controls are sanitized rather than executed as terminal instructions.
 
 Colors are enabled automatically when stderr is a terminal, and disabled for redirected output
 or `TERM=dumb`. Set `NO_COLOR=1` to disable color, or `FORCE_COLOR=1` to enable it when redirecting;
@@ -46,21 +78,27 @@ or `TERM=dumb`. Set `NO_COLOR=1` to disable color, or `FORCE_COLOR=1` to enable 
 envelopes, trace journals and variable stores remain plain, machine-readable data.
 `--silent` suppresses execution logs; usage, syntax and checkpoint-usage diagnostics still appear
 on stderr so command-line errors are not hidden.
+`--log-level` retains ordinary severity filtering; model transcripts and state events appear at
+every non-silent level. Forced color never enables cursor controls or keyboard input.
 
 For example, `log('review:', review)` produces:
 
 ```text
 [info] log: review:
-[info]   {
-[info]     "findings": [],
-[info]     "count": 0
-[info]   }
+{
+  "findings": [],
+  "count": 0
+}
 ```
 
 Embedded callers can pass structured data directly with `logger.info('review:', review)`.
 Custom logger sinks default to plain text; `new Logger('info', sink, { color: true })`
 explicitly enables styling. Non-JSON values such as errors, bigints and circular objects use
 Node's inspect format instead of losing error details or failing JSON serialization.
+An additive `eventSink` option delivers detached readonly events instead of strings, never both.
+Neither library imports nor custom sinks load BetterTUI or start a process. Automatic observation
+uses non-invoking snapshots: callable identities, cycle references and accessor placeholders,
+without running getters, serializers or custom inspectors.
 
 | Code | Meaning |
 | --- | --- |

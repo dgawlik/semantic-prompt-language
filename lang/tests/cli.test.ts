@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RUNTIME_PREAMBLE } from '../src/preamble.js';
 
@@ -177,6 +178,127 @@ success 1`;
 });
 
 describe('cli', () => {
+    it('matches the five-event offline alias smoke workflow byte for byte', () => {
+        const source = `let count = 1
+count = count
+count += 1
+let items = [1]
+let alias = items
+alias.append(2)
+success count`;
+        const result = spl(source);
+        expect(result).toMatchObject({ code: 0, out: '2\n' });
+        expect(result.err.match(/^~ state /gm)).toHaveLength(5);
+        expect(result.err).toContain('count @ global (scope-1): <unbound> -> 1');
+        expect(result.err).toContain('count @ global (scope-1): 1 -> 2');
+        const mutation = result.err.slice(result.err.lastIndexOf('~ state'));
+        expect(mutation).toContain('items @ global');
+        expect(mutation).toContain('alias @ global');
+        expect(mutation).toContain('[\n  1\n] -> [\n  1,\n  2\n]');
+        expect(result.err).not.toMatch(/\u001b|count = count|success count|\[folded\]/);
+        expect(spl(source, '--silent')).toEqual({ code: 0, out: '2\n', err: '' });
+    });
+
+    it.each([
+        [undefined, undefined, 'xterm', false], ['1', undefined, 'xterm', true],
+        ['0', undefined, 'xterm', false], ['1', '1', 'xterm', false],
+        [undefined, undefined, 'dumb', false], ['1', undefined, 'dumb', true],
+    ])('keeps redirected output append-only with FORCE_COLOR=%s NO_COLOR=%s TERM=%s', (force, noColor, term, color) => {
+        const file = path.join(dir, 'colors.md');
+        fs.writeFileSync(file, markdown("let n = 1\nlog('hi')\nsuccess n"));
+        const result = run([file], { FORCE_COLOR: force, NO_COLOR: noColor, TERM: term });
+        expect(result).toMatchObject({ code: 0, out: '1\n' });
+        expect(result.err.includes('\u001b[')).toBe(color);
+        expect(result.err.replace(/\u001b\[[\d;]*m/g, '')).not.toContain('\u001b');
+        expect(result.err).not.toContain('Enter/Space');
+    });
+
+    it('never loads native UI, spawns renderers or acquires input for excluded invocations and library sinks', () => {
+        const preload = path.join(dir, 'excluded.mjs');
+        const marker = path.join(dir, 'acquisition.txt');
+        fs.writeFileSync(preload, `import fs from 'node:fs';
+import cp from 'node:child_process';
+import { registerHooks, syncBuiltinESMExports } from 'node:module';
+const record = value => fs.appendFileSync(${JSON.stringify(marker)}, value + '\\n');
+Object.defineProperty(process.stdin, 'isTTY', { value: true });
+Object.defineProperty(process.stderr, 'isTTY', { value: true });
+process.stdin.setRawMode = () => { record('raw'); return process.stdin; };
+const on = process.stdin.on;
+process.stdin.on = function(name, ...args) { if (name === 'data' || name === 'readable') record('input'); return on.call(this, name, ...args); };
+cp.fork = () => { record('spawn'); throw new Error('test renderer forbidden'); };
+syncBuiltinESMExports();
+registerHooks({ resolve(specifier, context, next) { if (specifier.startsWith('@bettertui/')) { record('native'); throw new Error('test native forbidden'); } return next(specifier, context); } });`);
+        const file = path.join(dir, 'excluded.md');
+        fs.writeFileSync(file, markdown("success human 'question'"));
+        const journal = path.join(dir, 'excluded.jsonl');
+        const preloadUrl = pathToFileURL(preload).href;
+        const invoke = (args: string[]) => spawnSync(process.execPath, ['--import', preloadUrl, CLI, ...args], {
+            encoding: 'utf8', env: { ...process.env, TERM: 'xterm', NO_COLOR: '1', SPL_HOME: path.join(dir, 'spl-home') },
+        });
+        for (const [args, code] of [
+            [['--help'], 0], [['--version'], 0], [['logout'], 0], [[file, '--check'], 0],
+            [[file, '--checkpoint', journal], 3], [[file, '--resume', journal], 3],
+        ] as const) {
+            const result = invoke([...args]);
+            expect({ code: result.status, err: result.stderr }).toEqual({ code, err: '' });
+        }
+        fs.writeFileSync(file, markdown('let n = 1\nsuccess n'));
+        const silent = invoke([file, '--silent']);
+        expect({ code: silent.status, err: silent.stderr }).toEqual({ code: 0, err: '' });
+        const library = spawnSync(process.execPath, ['--import', preloadUrl, '--input-type=module', '-e',
+            `import { Logger } from ${JSON.stringify(new URL('../dist/index.js', import.meta.url).href)}; new Logger('info', () => {}).info('embedded');`],
+            { encoding: 'utf8' });
+        expect(library.status).toBe(0);
+        expect(fs.existsSync(marker)).toBe(false);
+    });
+
+    it('retains failed model requests only, and reports backend-close errors before printing failure results', () => {
+        const file = path.join(dir, 'failed-trace.jsonl');
+        fs.writeFileSync(file, [
+            JSON.stringify({ format: 'spl-trace', version: 1 }),
+            JSON.stringify({ request: {
+                kind: 'agent', prompt: `${RUNTIME_PREAMBLE}\n\nThink carefully about the problem before giving the final answer.\n\nAct`,
+                model: null, reasoningEffort: 'medium', showReasoning: false,
+            }, error: { status_code: 'llm_error', reason: 'backend unavailable' } }), '',
+        ].join('\n'));
+        const failed = spl("success agent 'Act'", '--replay', file);
+        expect(failed.code).toBe(1);
+        expect(JSON.parse(failed.out)).toMatchObject({ status_code: 'llm_error', reason: 'backend unavailable' });
+        expect(failed.err.match(/-> input agent/g)).toHaveLength(1);
+        expect(failed.err).not.toContain('<- output');
+        const unused = spl("log('before close')\nsuccess 'unused'", '--replay', file);
+        expect(unused.code).toBe(1);
+        expect(JSON.parse(unused.out).reason).toContain('unused');
+        expect(unused.err.indexOf('[info] log: before close')).toBeLessThan(unused.err.indexOf('x error'));
+        expect(unused.out).not.toContain('\u001b');
+    });
+
+    it('cleans up an unexpected runtime exception before returning exit 70', () => {
+        const mod = path.join(dir, 'unexpected-store.mjs');
+        fs.writeFileSync(mod, "export function createStore() { return { load() { throw new Error('unexpected load failure'); }, save() {} }; }");
+        const result = spl('success 1', '--store-module', mod);
+        expect(result).toMatchObject({ code: 70, out: '' });
+        expect(result.err).toContain('x error spl: internal error: Error: unexpected load failure');
+        expect(result.err).not.toContain('Enter/Space');
+    });
+
+    it('keeps renderer IPC and cancellation timers responsive during long deterministic execution', () => {
+        const script = `import {run,parse,Logger} from ${JSON.stringify(new URL('../dist/index.js', import.meta.url).href)};
+let active=true;
+setTimeout(()=>{active=false;},10);
+const result=await run(parse('let count = 0\\nwhile active():\\n    count += 1\\nsuccess count'),{
+backend:{async call(){throw new Error('unexpected model');},async close(){}},
+logger:new Logger('silent'),
+store:{load:()=>({active:{__fn:'builtin',name:'active',call:()=>active}}),save(){}}
+});
+if(result.status!=='success'||result.value<=0) throw new Error('loop did not complete');
+process.stdout.write('responsive\\n');`;
+        const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 2_000 });
+        expect(result.error).toBeUndefined();
+        expect(result.stdout).toBe('responsive\n');
+        expect(result.status).toBe(0);
+    });
+
     it('rejects raw SPL files and Markdown without the exact opt-in', () => {
         const raw = path.join(dir, 'legacy.spl');
         fs.writeFileSync(raw, 'success 42');
@@ -257,8 +379,8 @@ fail 'unreachable'`, '--silent');
         expect(plain.err).not.toContain('\u001b[');
         expect(colored.err).toContain('\u001b[36m"findings"\u001b[0m');
         expect(stripVTControlCharacters(colored.err)).toBe(plain.err);
-        expect(plain.err).toContain('[info] log: review:\n[info]   {\n[info]     "findings": [');
-        expect(plain.err.trimEnd().split('\n').every(line => /^\[(info|deterministic)\] /.test(line))).toBe(true);
+        expect(plain.err).toContain('[info] log: review:\n{\n  "findings": [');
+        expect(plain.err).not.toContain('[deterministic]');
         expect(run([file, '--silent'], { FORCE_COLOR: '1', NO_COLOR: undefined }).err).toBe('');
     });
 
@@ -266,10 +388,11 @@ fail 'unreachable'`, '--silent');
         const usage = run(['--unknown-option'], { NO_COLOR: '1', FORCE_COLOR: undefined });
         expect(usage.code).toBe(2);
         expect(usage.out).toBe('');
-        expect(usage.err.trimEnd().split('\n').every(line => line.startsWith('[error] '))).toBe(true);
+        expect(usage.err).toMatch(/^x error /);
+        expect(usage.err.match(/x error/g)).toHaveLength(1);
         const syntax = spl('let value =');
         expect(syntax.code).toBe(2);
-        expect(syntax.err).toContain('[error] ');
+        expect(syntax.err).toContain('x error ');
     });
 
     it('--silent suppresses logs', () => {
@@ -281,7 +404,7 @@ fail 'unreachable'`, '--silent');
     it('--log-level error hides info logs', () => {
         const r = spl(`log('hi')\nsuccess 1`, '--log-level', 'error');
         expect(r.err).not.toContain('[info]');
-        expect(r.err).toContain('[deterministic] line 8 (success): success 1');
+        expect(r.err).toBe('');
     });
 
     it('prints the failure payload to stdout and exits non-zero', () => {
@@ -445,6 +568,12 @@ export function createStore() {
         expect(help).not.toContain('--seed');
         expect(help).toContain('--mcp <file.json>');
         expect(help).toContain('--arg <value>');
+        expect(help).toContain('variable-state changes');
+        expect(help).toContain('defining scopes');
+        expect(help).toContain('no-op assignments');
+        expect(help).toContain('Enter/Space toggle');
+        expect(help).toContain('Plain/final transcripts');
+        expect(help).not.toContain('[deterministic]');
     });
 
     it('validates --mcp without starting servers, including with --check', () => {

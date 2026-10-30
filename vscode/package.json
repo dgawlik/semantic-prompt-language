@@ -73,7 +73,7 @@
           "type": "string",
           "default": "node",
           "scope": "machine",
-          "description": "Node.js executable used for isolated notebook sessions. Requires Node.js 20.19+ or 22.12+ for Copilot model calls."
+          "description": "Node.js executable used for isolated notebook sessions. The external SPL runtime requires Node.js >=24.15.0; the extension host does not load the terminal UI."
         }
       }
     },

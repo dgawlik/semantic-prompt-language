@@ -343,14 +343,18 @@ const dictMethods: Record<string, Method> = {
     },
 };
 
+const MUTATING_LIST_METHODS = new Set(['append', 'extend', 'insert', 'pop', 'remove', 'reverse', 'sort', 'clear']);
+const MUTATING_DICT_METHODS = new Set(['pop', 'update', 'clear']);
+
+export function isMutatingMethod(self: Value, name: string): boolean {
+    return isList(self) ? MUTATING_LIST_METHODS.has(name) : isDict(self) && MUTATING_DICT_METHODS.has(name);
+}
+
 export function callMethod(self: Value, name: string, args: Value[]): Value {
     const table = typeof self === 'string' ? stringMethods : isList(self) ? listMethods : isDict(self) ? dictMethods : undefined;
     if (!table || !Object.prototype.hasOwnProperty.call(table, name)) {
         throw runtimeError(`${typeName(self)} has no method '${name}'`);
     }
-    const mutating = isList(self)
-        ? ['append', 'extend', 'insert', 'pop', 'remove', 'reverse', 'sort', 'clear']
-        : isDict(self) ? ['pop', 'update', 'clear'] : [];
-    if (mutating.includes(name)) assertMutable(self);
+    if (isMutatingMethod(self, name)) assertMutable(self);
     return table[name](self, args);
 }

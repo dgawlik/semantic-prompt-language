@@ -9,6 +9,8 @@ import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
 import { ReplayBackend, TraceBackend } from '../src/recording.js';
 import { MemoryStore } from '../src/store.js';
+import type { LogEvent } from '../src/log-events.js';
+import { ToolHost } from '../src/tools.js';
 
 let dir: string;
 let file: string;
@@ -39,6 +41,51 @@ function entries() {
 }
 
 describe('workflow trace/replay', () => {
+    it('does not change results, evaluation/model/tool counts, stores or trace bytes when logging is enabled', async () => {
+        const tools = vi.spyOn(ToolHost.prototype, 'invoke').mockResolvedValue('raw result');
+        const source = `let n = 0
+def step():
+    n += 1
+    return n
+let items = []
+items.append(step())
+let input = read_file('offline')
+let answer = ask 'one'
+success [n, items, input, answer]`;
+        const outcomes: unknown[] = [];
+        for (const level of ['debug', 'silent'] as const) {
+            const target = path.join(dir, `${level}.jsonl`);
+            const backend = scripted('yes');
+            const trace = new TraceBackend(backend, target);
+            let saved = '';
+            const result = await run(parse(source), {
+                cwd: dir, backend: trace, logger: new Logger(level, () => {}),
+                store: { load: () => ({}), save: values => { saved = JSON.stringify(values); } },
+            });
+            await trace.close();
+            outcomes.push({ result, saved, trace: fs.readFileSync(target, 'utf8'), calls: backend.call.mock.calls.length });
+        }
+        expect(outcomes[0]).toEqual(outcomes[1]);
+        expect(tools).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps ordinary trace replay observable without adding event data to trace records', async () => {
+        const source = `let answer = ask 'one'\nlet items = []\nitems.append(answer)\nsuccess items`;
+        const trace = new TraceBackend(scripted('yes'), file);
+        const expected = await exec(source, trace);
+        await trace.close();
+        const history: LogEvent[] = [];
+        const replay = new ReplayBackend(file);
+        const result = await run(parse(source), {
+            backend: replay, logger: new Logger('error', undefined, { eventSink: event => history.push(event) }), cwd: dir,
+        });
+        await replay.close();
+        expect(result).toEqual(expected);
+        expect(history.filter(event => event.kind === 'state')).toHaveLength(3);
+        expect(history.filter(event => event.kind === 'model-input')).toHaveLength(1);
+        expect(JSON.stringify(entries())).not.toMatch(/bindingId|scopeId|payloadId/);
+    });
+
     it('captures common structured inputs and complete responses for every LLM operation', async () => {
         const backend = scripted('answer', 'thought', 'agent result');
         const trace = new TraceBackend(backend, file);

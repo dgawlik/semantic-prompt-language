@@ -61,7 +61,8 @@ colon. See the [language reference](https://github.com/dgawlik/semantic-prompt-l
    messages and final natural-language replies appear beneath the cell. A separate live log output
    shows cell progress, runtime information, warnings and errors, keeping the last 20 lines and
    at most 4,000 characters, including a truncation notice when older content is omitted.
-   AI transcripts, reasoning and per-statement traces stay in **Output > SPL Notebook**.
+   AI transcripts, reasoning and variable-state changes stay in **Output > SPL Notebook**.
+   Automatic executed-source traces are not emitted.
    Explicit `log(...)` messages, final replies, results and error outputs are not subject to
    this brief-log limit. Full runtime logs remain in the output channel.
 4. To add an instruction cell, insert a **code** cell, switch its language to **Markdown**, and
@@ -96,8 +97,10 @@ infinite SPL loops; rerun prerequisite cells afterward. Existing outputs may des
 session and are not saved to the Markdown file. Sessions never automatically run on open.
 
 The worker uses `node` from PATH; set **spl.notebook.nodePath** to an absolute Node.js executable
-if needed. Deterministic cells run offline. Copilot model calls require Node.js 20.19+ or 22.12+,
-and the same Copilot credentials as the CLI (`spl login` or supported environment credentials).
+if needed. The external SPL runtime requires Node.js >=24.15.0; deterministic cells run offline.
+Model calls use the same Copilot credentials as the CLI (`spl login` or supported environment credentials).
+The notebook worker does not load BetterTUI or acquire terminal input; this does not change the
+VS Code extension-host requirement.
 Relative tool paths resolve beside the notebook file. Workflows can modify files, run commands,
 and contact external services when explicitly executed; only run trusted workflows. Checkpointed
 `human` input, record/replay, and custom MCP configuration remain CLI features.

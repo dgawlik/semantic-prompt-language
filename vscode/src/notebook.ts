@@ -176,7 +176,8 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
                         outputQueue = outputQueue.then(async () => {
                             await execution.appendOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.stdout(text + '\n')]));
                         });
-                    } else if (/^\[(?:info|warn|error)\] /.test(text) && !text.startsWith('[info] reasoning:')) {
+                    } else if (/^(?:\[(?:info|warn|error)\]|i info|! warning|x error) /.test(text) &&
+                        !/^(?:\[info\]|i info) reasoning:/.test(text)) {
                         logs.append(text);
                         if (logUpdatePending) return;
                         logUpdatePending = true;

@@ -5,11 +5,42 @@ import { parse } from '../src/parser.js';
 import { parseMarkdown } from '../src/markdown.js';
 import type { LlmBackend } from '../src/llm.js';
 import { NoLlm } from './helpers.js';
+import type { LogEvent } from '../src/log-events.js';
 
 const logger = new Logger('silent');
 const options = { logger, backend: new NoLlm() };
 
 describe('interactive execution sessions', () => {
+    it('observes retained closures and aliases with current-cell sinks and shared weak identities', async () => {
+        const session = new ExecutionSession();
+        const old: LogEvent[] = [];
+        const current: LogEvent[] = [];
+        await session.run(parse(`let items = []
+def change(x):
+    x.append(1)
+let saved = None
+:
+    let captured = []
+    def update():
+        captured.append(2)
+    saved = update`), { backend: new NoLlm(), logger: new Logger('info', undefined, { eventSink: event => old.push(event) }) });
+        const before = old.length;
+        await session.run(parse('change(items)\nsaved()'), {
+            backend: new NoLlm(), logger: new Logger('info', undefined, { eventSink: event => current.push(event) }),
+        });
+        expect(old).toHaveLength(before);
+        const mutations = current.filter(event => event.kind === 'state' && event.change.operation === 'mutation');
+        expect(mutations).toHaveLength(2);
+        expect(JSON.stringify(mutations)).toContain('captured');
+        const original = old.find(event => event.kind === 'state' && event.change.bindings[0].binding.name === 'items');
+        expect(original?.kind === 'state' && mutations[0].kind === 'state' &&
+            mutations[0].change.bindings.some(delta => delta.binding.bindingId === original.change.bindings[0].binding.bindingId)).toBe(true);
+        const lines: string[] = [];
+        await session.run(parse('items.append(3)'), { backend: new NoLlm(), logger: new Logger('info', line => lines.push(line)) });
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toContain('~ state');
+    });
+
     it('retains variables, mutable aliases and closures in execution order', async () => {
         const session = new ExecutionSession();
         await session.run(parse('let count = 2\nlet items = []\nlet alias = items\ndef double():\n    return count * 2'), options);

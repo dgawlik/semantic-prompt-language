@@ -61,8 +61,24 @@ spl login
 spl examples/hi.md
 ```
 
-Requires Node.js 20+ and GitHub Copilot for model calls. From a checkout: `cd lang`, `npm install`,
+Requires Node.js >=24.15.0 and GitHub Copilot for model calls. From a checkout: `cd lang`, `npm install`,
 then `node dist/cli.js examples/hi.md`.
+
+Logs use one compact header: `->` model input (magenta), `<-` output/action (cyan),
+`~` variable state (yellow), `x` error (red), `!` warning (yellow), `i` info (blue),
+and `.` debug (gray). Explicit script logs keep their `[info|error|debug] log:` prefix.
+Automatic logs show committed variable changes in their defining scopes, not executed source.
+Same-value writes, no-op mutations and initial runtime/store state are omitted.
+
+With terminal stdin and stderr, BetterTUI starts JSON objects/arrays folded. Up/Down selects,
+Enter/Space toggles, Page Up/Down scrolls, and Home/End reaches the ends. Completion restores the
+terminal and retains one complete expanded transcript without waiting for a key. Redirected logs
+and embedded sinks are expanded and non-interactive; stdout remains the workflow result.
+Terminals that cannot report restorable modes, or already use an alternate screen, get
+diagnosed append-only output instead of risking their existing terminal state.
+`--silent` suppresses execution logs; `--log-level` keeps severity filtering, with model/state
+events at every non-silent level. `NO_COLOR` takes precedence over `FORCE_COLOR`;
+`FORCE_COLOR=0` disables color, and forcing color never enables keyboard input.
 
 ## Repository
 

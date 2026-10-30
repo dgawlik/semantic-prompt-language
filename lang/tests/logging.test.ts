@@ -5,13 +5,102 @@ import { LlmError, type LlmBackend, type LlmRequest } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
 import { NoLlm } from './helpers.js';
+import type { LogEvent } from '../src/log-events.js';
 
 afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
 });
 
-const tagged = (tag: string, text: string) => text.split('\n').map((line, i) => `[${tag}] ${i ? '  ' : ''}${line}`).join('\n');
+const tagged = (tag: string, text: string) =>
+    `${({ error: 'x error', warn: '! warning', info: 'i info', debug: '. debug', llm: '- message', deterministic: '- message' })[tag] ?? tag} ${text}`;
+
+describe('structured logging foundation', () => {
+    it('allocates contiguous visible order after successful or reentrant serialization', () => {
+        const history: LogEvent[] = [];
+        const logger = new Logger('info', undefined, { eventSink: event => history.push(event) });
+        expect(() => logger.info({ toJSON() { throw new Error('serialization failed'); } })).toThrow('serialization failed');
+        logger.info({ toJSON() { logger.info('inner'); return { outer: true }; } });
+        expect(history.map(event => event.sequence)).toEqual([1, 2]);
+        expect(new Set(history.map(event => event.id)).size).toBe(2);
+        expect(history[0].segments).toEqual([{ type: 'text', text: 'inner' }]);
+    });
+
+    it('filters before serializers, state factories and event allocation', () => {
+        const eventSink = vi.fn();
+        const serialize = vi.fn(() => 'payload');
+        const snapshot = vi.fn();
+        const logger = new Logger('silent', vi.fn(), { eventSink });
+        logger.error({ toJSON: serialize });
+        logger.state(snapshot);
+        expect(serialize).not.toHaveBeenCalled();
+        expect(snapshot).not.toHaveBeenCalled();
+        expect(eventSink).not.toHaveBeenCalled();
+    });
+
+    describe('ordered JSON payloads', () => {
+        it('retains tokens and text around multiple balanced multiline containers', () => {
+            const history: LogEvent[] = [];
+            const logger = new Logger('info', undefined, { eventSink: event => history.push(event) });
+            logger.llm('Before\nlabel: {\n"large":9007199254740993,"key":1,"key":2,"escaped":"\\\\n"\n}\nbetween [[],{},-0,1.20e+03] after');
+            const payloads = history[0].segments.filter(segment => segment.type === 'json');
+            expect(payloads).toHaveLength(2);
+            expect(payloads[0].source).toContain('"key":1,"key":2');
+            expect(payloads[1].source).toBe('[[],{},-0,1.20e+03]');
+            expect(new Set(payloads.map(payload => payload.payloadId)).size).toBe(2);
+            const text = history[0].segments.filter(segment => segment.type === 'text').map(segment => segment.text).join('');
+            expect(text).toContain('Before\nlabel:');
+            expect(text).toContain('between');
+            expect(text).toContain('after');
+        });
+
+        it.each(['{"broken":{"valid":1},}', 'not [JSON] prose', 'true', 'null', '9007199254740993', '"string"'])(
+            'does not invent folds for malformed JSON/prose/primitives: %s', value => {
+                const sink = vi.fn();
+                new Logger('info', undefined, { eventSink: sink }).info(value);
+                expect(sink.mock.calls[0][0].segments.every(segment => segment.type !== 'json')).toBe(true);
+            },
+        );
+
+        it('sanitizes labels, inspected values and controls but preserves legitimate newlines', () => {
+            const lines: string[] = [];
+            const logger = new Logger('info', line => lines.push(line));
+            logger.info('\u001b]0;hostile\u0007safe\u0000\nnext\u009b31m');
+            logger.error(new Error('\u001b[31munsafe\u001b[0m\u0007'));
+            expect(lines[0]).toBe('i info safe\nnext');
+            expect(lines.every(line => !/[\u0000\u0007\u001b\u009b]/.test(line))).toBe(true);
+        });
+    });
+
+    it('substitutes structured delivery and detaches immutable event bodies', () => {
+        const eventSink = vi.fn();
+        const stringSink = vi.fn();
+        const logger = new Logger('info', stringSink, { eventSink });
+        const payload = { count: 1 };
+        logger.info(payload);
+        payload.count = 2;
+        logger.debug('filtered');
+        logger.llm('generic');
+        logger.deterministic('explicit embedding message');
+        expect(stringSink).not.toHaveBeenCalled();
+        const events = eventSink.mock.calls.map(([event]) => event);
+        expect(events.map(event => event.sequence)).toEqual([1, 2, 3]);
+        expect(new Set(events.map(event => event.id)).size).toBe(3);
+        expect(events[0].segments[0]).toMatchObject({ type: 'json', source: '{"count":1}' });
+        expect(Object.isFrozen(events[0])).toBe(true);
+        expect(Object.isFrozen(events[0].segments)).toBe(true);
+        expect(Object.isFrozen(events[0].segments[0])).toBe(true);
+        expect(events.slice(1).map(event => event.kind)).toEqual(['generic', 'generic']);
+    });
+
+    it('keeps script prefixes and custom sinks plain without acquiring input', () => {
+        const input = vi.spyOn(process.stdin, 'on');
+        const lines: string[] = [];
+        new Logger('info', line => lines.push(line)).info('log:', 'explicit');
+        expect(lines).toEqual(['[info] log: explicit']);
+        expect(input).not.toHaveBeenCalled();
+    });
+});
 
 describe.each(['error', 'info', 'debug', 'silent'] as const)('script log levels at %s', (level) => {
     it('filters modifier logs and keeps ordinary log at info', async () => {
@@ -75,9 +164,9 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
         if (level === 'silent') {
             expect(lines).toEqual([]);
         } else {
-            expect(lines).toContain(tagged('llm', `llm request (${kind}):\n${requests[0].prompt}`));
-            expect(lines.at(-1)).toBe(tagged('llm', `llm response:\n${text}`));
-            expect(lines.some((line) => line.startsWith('[info] llm '))).toBe(level !== 'error');
+            expect(lines).toContain(`-> input ${kind} ${requests[0].prompt}`);
+            expect(lines.at(-1)).toBe(`<- output ${kind} ${text}`);
+            expect(lines.some((line) => line.startsWith('i info llm '))).toBe(level !== 'error');
         }
     });
 
@@ -95,13 +184,13 @@ describe.each(['error', 'info', 'debug', 'silent'] as const)('LLM logging at %s'
         if (level === 'silent') {
             expect(lines).toEqual([]);
         } else {
-            expect(lines).toContain('[llm] llm request (ask):\n[llm]   Failing prompt');
-            expect(lines.at(-1)).toContain('[error] llm_error: backend unavailable');
-            expect(lines.some((line) => line.startsWith('[llm] llm response:'))).toBe(false);
+            expect(lines).toContain('-> input ask Failing prompt');
+            expect(lines.at(-1)).toContain('x error llm_error: backend unavailable');
+            expect(lines.some((line) => line.startsWith('<- output'))).toBe(false);
         }
     });
 
-    it('traces only executed deterministic statements, including loop iterations', async () => {
+    it('never traces executed deterministic source, including loop iterations', async () => {
         const lines: string[] = [];
         const result = await run(parse(`let n = 0
 for i in [1, 2]:
@@ -113,14 +202,30 @@ success n`), {
             logger: new Logger(level, (line) => lines.push(line)), cwd: process.cwd(),
         });
         expect(result).toMatchObject({ status: 'success', value: 3 });
-        expect(lines).toEqual(level === 'silent' ? [] : [
-            '[deterministic] line 1 (let): let n = 0',
-            '[deterministic] line 2 (for): for i in [1, 2]:',
-            '[deterministic] line 3 (assign): n += i',
-            '[deterministic] line 3 (assign): n += i',
-            '[deterministic] line 4 (if): if False:',
-            '[deterministic] line 6 (success): success n',
-        ]);
+        expect(lines.some(line => /deterministic|line \d+ \(|let n|n \+=|if False|success n/.test(line))).toBe(false);
+    });
+});
+
+it('distinguishes all event directions and categories with single colored headers', () => {
+    const lines: string[] = [];
+    const logger = new Logger('debug', line => lines.push(line), { color: true });
+    const interaction = { kind: 'ask', requestId: 'request-1' } as const;
+    logger.modelInput(interaction, 'one\ntwo');
+    logger.modelOutput(interaction, 'three\nfour');
+    logger.error('error');
+    logger.warn('warning');
+    logger.info('info');
+    logger.debug('debug');
+    logger.state(() => ({ operation: 'initialize', bindings: [{
+        binding: { bindingId: 's1:n', name: 'n', scopeId: 's1', kind: 'global', label: 'global' },
+        previous: { presence: 'unbound' }, next: { presence: 'value', valueKind: 'scalar', display: '1' },
+    }] }));
+    logger.llm('generic');
+    const headers = [['-> input ask', 35], ['<- output ask', 36], ['x error', 31], ['! warning', 33],
+        ['i info', 34], ['. debug', 90], ['~ state', 33], ['- message', 35]];
+    headers.forEach(([header, color], index) => {
+        expect(lines[index]).toContain(`\u001b[${color}m${header}\u001b[0m`);
+        expect(stripVTControlCharacters(lines[index]).split(String(header))).toHaveLength(2);
     });
 });
 
@@ -132,18 +237,18 @@ it('preserves ordinary severity filtering', () => {
     logger.debug('hidden debug');
     logger.error('visible error');
     logger.llm('visible transcript');
-    expect(lines).toEqual(['[error] visible error', '[llm] visible transcript']);
+    expect(lines).toEqual(['x error visible error', '- message visible transcript']);
 });
 
 describe('console formatting', () => {
-    it('prefixes every line consistently across all log categories', () => {
+    it('uses one header for each multiline event across all log categories', () => {
         const lines: string[] = [];
         const logger = new Logger('debug', line => lines.push(line));
         for (const tag of ['error', 'warn', 'info', 'debug', 'llm', 'deterministic'] as const) {
             logger[tag]('First\r\nSecond\rThird');
         }
         expect(lines).toEqual(['error', 'warn', 'info', 'debug', 'llm', 'deterministic']
-            .map(tag => `[${tag}] First\n[${tag}]   Second\n[${tag}]   Third`));
+            .map(tag => tagged(tag, 'First\nSecond\nThird')));
     });
 
     it('pretty-prints structured JSON and serialized JSON without changing their values', () => {
@@ -186,7 +291,7 @@ describe('console formatting', () => {
         logger.deterministic('line 1 (let): let value = [1, 2]');
         expect(lines).toEqual([
             tagged('llm', 'Context:\n{\n  "count": 2\n}\n{"broken":}\nEnd.'),
-            '[deterministic] line 1 (let): let value = [1, 2]',
+            '- message line 1 (let): let value = [1, 2]',
         ]);
     });
 
@@ -197,7 +302,7 @@ describe('console formatting', () => {
         new Logger('info', line => plain.push(line)).info('payload:', value);
         new Logger('info', line => colored.push(line), { color: true }).info('payload:', value);
         expect(stripVTControlCharacters(colored[0])).toBe(plain[0]);
-        expect(colored[0]).toContain('\u001b[34m[info]\u001b[0m');
+        expect(colored[0]).toContain('\u001b[34mi info\u001b[0m');
         expect(colored[0]).toContain('\u001b[36m"key"\u001b[0m');
         expect(colored[0]).toContain('\u001b[32m"text"\u001b[0m');
         expect(colored[0]).toContain('\u001b[33m42\u001b[0m');
@@ -214,9 +319,9 @@ describe('console formatting', () => {
         logger.info(1n, undefined, NaN);
         logger.error(new Error('visible failure'));
         expect(lines[0]).toContain('[Circular');
-        expect(lines[1]).toBe('[info] 1n undefined NaN');
+        expect(lines[1]).toBe('i info 1n undefined NaN');
         expect(lines[2]).toContain('Error: visible failure');
-        expect(lines[2].split('\n').every(line => line.startsWith('[error] '))).toBe(true);
+        expect(lines[2].match(/x error/g)).toHaveLength(1);
     });
 
     it('does not serialize filtered log payloads', () => {
@@ -231,7 +336,7 @@ describe('console formatting', () => {
     it('strips supplied terminal escapes before applying its own consistent styling', () => {
         const lines: string[] = [];
         new Logger('info', line => lines.push(line)).info('\u001b[31mplain\u001b[0m');
-        expect(lines).toEqual(['[info] plain']);
+        expect(lines).toEqual(['i info plain']);
     });
 
     it.each([
@@ -280,7 +385,7 @@ log('review', payload)
 let write_log = log
 write_log('review', payload)
 success payload`), { backend: new NoLlm(), logger: new Logger('info', line => lines.push(line)) });
-        const expected = tagged('info', `log: review\n${JSON.stringify({ findings: [1, true, null] }, null, 2)}`);
+        const expected = `[info] log: review\n${JSON.stringify({ findings: [1, true, null] }, null, 2)}`;
         expect(lines.filter(line => line.startsWith('[info]'))).toEqual([expected, expected]);
         expect(result).toMatchObject({ status: 'success', value: { findings: [1, true, null] } });
     });

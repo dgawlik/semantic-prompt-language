@@ -17,6 +17,8 @@ import { toJson } from './values.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
 import { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
 import { Checkpoint, CheckpointError, checkpointFingerprint } from './checkpoint.js';
+import { CliLogging, canInteract } from './cli-logging.js';
+import { formatEvent, terminalColor } from './log-format.js';
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
@@ -26,8 +28,15 @@ Usage: spl <workflow.md> [options]
 
 Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
-                          All levels include LLM transcripts and [deterministic] statement traces.
-                          JSON is pretty-printed; terminal colors honor NO_COLOR / FORCE_COLOR.
+                          All levels include model input/output and variable-state changes.
+                          State logs identify defining scopes and before/after values.
+                          No source traces, reads, no-op assignments or baseline dumps.
+                          Icons: -> input (magenta), <- output (cyan), ~ state (yellow),
+                          x error (red), ! warning (yellow), i info (blue), . debug (gray).
+                          Interactive JSON starts folded: Up/Down select, Enter/Space toggle,
+                          PgUp/PgDn scroll, Home/End reach ends. Exit never waits for a key.
+                          Plain/final transcripts expand JSON with two-space indentation.
+                          NO_COLOR wins over FORCE_COLOR; FORCE_COLOR=0 disables color.
   --silent                suppress all logs; only the result is printed
   --model <id>            model override (takes precedence over frontmatter)
   --arg <value>           script argument exposed in $args (repeatable; also --arg=value)
@@ -229,7 +238,13 @@ async function main(): Promise<number> {
 
     const level = values['log-level'] ?? 'info';
     if (!['error', 'info', 'debug'].includes(level)) usageError(`invalid --log-level '${level}'`);
-    const logger = new Logger(values.silent ? 'silent' : (level as LogLevel));
+    let presentation: CliLogging | undefined;
+    const logger = new Logger(values.silent ? 'silent' : (level as LogLevel), undefined, {
+        eventSink: event => {
+            if (presentation) presentation.sink(event);
+            else process.stderr.write(formatEvent(event, terminalColor()) + '\n');
+        },
+    });
 
     const timeoutSec = Number(values.timeout ?? 300);
     if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) usageError('--timeout must be a positive number');
@@ -311,17 +326,58 @@ async function main(): Promise<number> {
         return usageError((e as Error).message);
     }
     let result: RunResult | undefined;
-    try {
-        result = await run(program, { backend, logger, store: backend.mode === 'replay' ? undefined : store, cwd, model: values.model, args: values.arg });
-    } finally {
-        try {
-            await backend.close();
-        } catch (e) {
-            if (!(e instanceof LlmError)) throw e;
-            logger.error(e.message);
-            if (result?.status !== 'failure') result = { status: 'failure', failure: new Failure('llm_error', e.message).payload() };
-        }
+    let interrupted = false;
+    let backendClosing: Promise<void> | undefined;
+    const closeBackend = () => backendClosing ??= backend.close();
+    const interrupt = (): void => {
+        if (interrupted) return;
+        interrupted = true;
+        void (async () => {
+            let deadline: ReturnType<typeof setTimeout> | undefined;
+            try {
+                await Promise.race([closeBackend(), new Promise<never>((_, reject) => {
+                    deadline = setTimeout(() => reject(new Error('backend close timed out during cancellation')), 1_000);
+                })]);
+            }
+            catch (error) { logger.error(`could not close backend: ${error instanceof Error ? error.message : String(error)}`); }
+            finally {
+                clearTimeout(deadline);
+                await presentation!.close('cancelled');
+                process.exit(130);
+            }
+        })();
+    };
+    let initialVariables: ReturnType<VariableStore['load']>;
+    try { initialVariables = store.load(); }
+    catch (error) {
+        try { await closeBackend(); }
+        catch (closeError) { logger.error(`could not close backend: ${closeError instanceof Error ? closeError.message : String(closeError)}`); }
+        throw error;
     }
+    const executionStore: VariableStore = { load: () => initialVariables, save: variables => store.save(variables) };
+    presentation = new CliLogging({
+        interactive: !values.silent && canInteract(),
+        cancel: interrupt,
+    });
+    process.on('SIGINT', interrupt);
+    await presentation.start();
+    try {
+        try {
+            result = await run(program, { backend, logger, store: backend.mode === 'replay' ? undefined : executionStore, cwd, model: values.model, args: values.arg });
+        } finally {
+            try {
+                await closeBackend();
+            } catch (e) {
+                if (!(e instanceof LlmError)) throw e;
+                logger.error(e.message);
+                if (result?.status !== 'failure') result = { status: 'failure', failure: new Failure('llm_error', e.message).payload() };
+            }
+        }
+    } finally {
+        await presentation.close(interrupted ? 'cancelled' : result?.status === 'success' ? 'completed' : 'failed');
+        process.off('SIGINT', interrupt);
+    }
+    if (interrupted) return 130;
     if (result.status === 'failure') {
         process.stdout.write(JSON.stringify(result.failure, null, 4) + '\n');
         return 1;
