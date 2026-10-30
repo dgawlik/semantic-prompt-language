@@ -80,6 +80,20 @@ let plan = think(reasoning='high') 'Plan the migration of {service}'
 
 Each call starts a fresh session. Pass context explicitly, usually through interpolation.
 
+Copilot responses stream into the interactive CLI view and notebook cell outputs while the model
+is working, including available reasoning by default. `hide=True` suppresses reasoning, not responses.
+These are previews: variables, JSON parsing,
+schema validation and repairs use the completed response, never partial chunks. Failures and cancelled
+turns do not turn partial output into a successful result. Traces and recordings retain complete
+responses rather than streaming chunks; replay does not manufacture token timing.
+
+Embedded integrations can use `LoggerOptions.streamSink` for request-scoped `ModelStreamEvent`
+updates and completion/failure notifications. Backend callers can supply `LlmRequest.onStream`.
+Updates identify a response or reasoning channel and an SDK message ID: append chunks with
+`mode: 'append'`, replace content with `mode: 'replace'`, and reset the preview when the message
+ID changes. Ordinary event/string sinks still receive complete transcripts; `LlmResponse.text`
+is always the authoritative return value.
+
 ## Agents
 
 `agent prompt` lets the model act with the runtime tools (`read_file`, `write_file`, `web_fetch`,
@@ -104,8 +118,11 @@ evaluated once and validated before the call. Unknown or duplicate names are syn
 | `schema` | JSON Schema draft-07 | Validate the answer; implies JSON |
 | `repairs` | `0`–`5` | Extra attempts after a format or schema error |
 | `reasoning` | `low` `medium` `high` | Reasoning effort, if the model supports it |
-| `show` | `True` `False` | Stream reasoning to the info log |
+| `hide` | `True` `False` (default) | Suppress reasoning display when `True`; responses remain visible |
 | `model` | model id | Per-call model |
+
+The former `show` modifier is no longer accepted. Omit `show=True` (reasoning is now visible
+by default), and replace `show=False` with `hide=True`.
 
 ```spl
 let score = ask(

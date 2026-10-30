@@ -122,7 +122,9 @@ export function stateSegments(change: StateChange, eventId: string): BodySegment
 }
 
 export function formatSegments(segments: readonly BodySegment[], color = false): string {
-    return segments.map(segment => segment.type === 'json' ? prettyJson(segment.source, color)! : segment.text).join('');
+    return segments.map(segment => segment.type === 'json' ? prettyJson(segment.source, color)!
+        : segment.type === 'preface' ? formatSegments(textSegments(segment.source, segment.payloadId, 'expanded'), color)
+        : segment.text).join('');
 }
 
 export function eventHeader(event: LogEvent, color = false): string {

@@ -44,7 +44,7 @@ hljs.registerLanguage('spl', (engine) => {
             match: [/\bdef\b/, /\s+/, /[A-Za-z_]\w*/],
             scope: { 1: 'keyword', 3: 'title.function' },
         },
-        { scope: 'attr', match: /\b(?:len|fmt|reasoning|show|schema|repairs|model|level)\b(?=\s*=(?!=))/ },
+        { scope: 'attr', match: /\b(?:len|fmt|reasoning|hide|schema|repairs|model|level)\b(?=\s*=(?!=))/ },
         { scope: 'number', match: /\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/ },
         { scope: 'operator', match: /\/\/=|\*\*|\/\/|==|!=|<=|>=|[-+*/%<>=]=?/ },
     ];

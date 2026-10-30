@@ -70,10 +70,13 @@ and `.` debug (gray). Explicit script logs keep their `[info|error|debug] log:` 
 Automatic logs show committed variable changes in their defining scopes, not executed source.
 Same-value writes, no-op mutations and initial runtime/store state are omitted.
 
-With terminal stdin and stderr, BetterTUI starts JSON objects/arrays folded. Up/Down selects,
+With terminal stdin and stderr, BetterTUI starts generated model prefaces and JSON objects/arrays
+folded, while the requested prompt stays visible. Up/Down selects,
 Enter/Space toggles, Page Up/Down scrolls, and Home/End reaches the ends. Completion restores the
 terminal and retains one complete expanded transcript without waiting for a key. Redirected logs
 and embedded sinks are expanded and non-interactive; stdout remains the workflow result.
+Copilot responses and available reasoning stream live in the terminal view and notebook cells by default.
+Use `hide=True` to suppress reasoning. Final responses, not partial chunks, drive workflow results and validation.
 Terminals that cannot report restorable modes, or already use an alternate screen, get
 diagnosed append-only output instead of risking their existing terminal state.
 `--silent` suppresses execution logs; `--log-level` keeps severity filtering, with model/state

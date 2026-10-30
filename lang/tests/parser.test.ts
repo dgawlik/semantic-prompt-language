@@ -98,7 +98,7 @@ log()`);
 @(model='test-model')
 let Contract = {'type': 'object'}
 let response = ask(schema=Contract, reasoning='high', repairs=2, model='other') 'Extract'
-let diagnosis = think(fmt='json', show=True) 'Diagnose'
+let diagnosis = think(fmt='json', hide=True) 'Diagnose'
 enforce 'Answer in English':
     forbid 'jokes':
         let result = ask 'Hi'
@@ -333,6 +333,8 @@ else:
         bad(`${command}(fmt='integer' repairs=1) 'prompt'`, /expected ',' or '\)'/);
         bad(`${command}(fmt='integer', fmt='text') 'prompt'`, /duplicate modifier/);
         bad(`${command}(unknown=1) 'prompt'`, /unknown modifier/);
+        bad(`${command}(show=True) 'prompt'`, /unknown modifier.*show/);
+        bad(`${command}(hide=True, hide=False) 'prompt'`, /duplicate modifier/);
         bad(`${command}(fmt='integer'\n 'prompt'`, /unclosed/);
     });
 

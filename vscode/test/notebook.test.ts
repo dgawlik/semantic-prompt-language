@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { decodeWorkflow, encodeWorkflow, parseWorkflowCell, DEFAULT_FRONTMATTER } from '../src/notebookFormat';
 import { NotebookKernel } from '../src/notebookKernel';
 import { extractMarkdown, parseMarkdown } from '../../lang/src/markdown.js';
+import type { ModelStreamEvent } from '../../lang/src/log-events.js';
 
 const source = (body: string) => DEFAULT_FRONTMATTER + '\n\n' + body;
 const fence = (code: string) => '```spl\n' + code + '\n```';
@@ -115,6 +117,50 @@ test('cell parsing inherits model/preamble and does not parse unrelated cells', 
     assert.deepEqual(parseWorkflowCell('Instruction.\n\nAnother paragraph.', 'markdown', header).body,
         [{ t: 'natural', text: 'Instruction.\n\nAnother paragraph.', line: 1 }]);
     assert.throws(() => decodeWorkflow('# Ordinary Markdown'), /frontmatter/);
+});
+
+test('kernel forwards live stream IPC updates without resolving the cell early', async t => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'spl-notebook-stream-'));
+    const workerPath = path.join(dir, 'worker.cjs');
+    writeFileSync(workerPath, `process.on('message', request => {
+        const interaction = { kind: 'ask', requestId: String(request.id) };
+        const event = { type: 'update', interaction, update: { channel: 'response', messageId: 'answer', mode: 'append', text: 'Partial' } };
+        process.send({ id: request.id + 1, kind: 'stream', event });
+        process.send({ id: request.id, kind: 'stream', event });
+        setTimeout(() => {
+            process.send({ id: request.id, kind: 'stream', event: { type: 'end', interaction, outcome: 'completed', response: 'Complete' } });
+            process.send({ id: request.id, kind: 'result', text: 'Complete' });
+        }, 20);
+    });`);
+    const kernel = new NotebookKernel(workerPath, process.cwd(), process.execPath, () => {});
+    t.after(() => { kernel.dispose(); rmSync(dir, { recursive: true, force: true }); });
+    const events: ModelStreamEvent[] = [];
+    let finished = false;
+    const result = await kernel.execute({
+        id: 1, value: "ask 'Prompt'", language: 'spl', frontmatter: DEFAULT_FRONTMATTER, source: 'cell:stream',
+    }, () => {}, event => {
+        assert.equal(finished, false);
+        events.push(event);
+    });
+    finished = true;
+    assert.deepEqual(events.map(event => event.type), ['update', 'end']);
+    assert.deepEqual(result, { id: 1, kind: 'result', text: 'Complete' });
+});
+
+test('kernel diagnoses invalid stream payloads rather than resolving them as cell results', async t => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'spl-notebook-stream-invalid-'));
+    const workerPath = path.join(dir, 'worker.cjs');
+    writeFileSync(workerPath, `process.on('message', request => {
+        process.send({ id: request.id, kind: 'stream', event: { type: 'update' } });
+    });`);
+    const logs: string[] = [];
+    const kernel = new NotebookKernel(workerPath, process.cwd(), process.execPath, text => logs.push(text));
+    t.after(() => { kernel.dispose(); rmSync(dir, { recursive: true, force: true }); });
+    await assert.rejects(kernel.execute({
+        id: 1, value: 'pass', language: 'spl', frontmatter: DEFAULT_FRONTMATTER, source: 'cell:stream',
+    }, () => {}), /invalid model stream event/);
+    assert.ok(logs.some(text => text.includes('invalid model stream event')));
+    assert.equal(kernel.isStopped, true);
 });
 
 test('isolated worker executes out of order, pretty prints results and survives errors', async t => {

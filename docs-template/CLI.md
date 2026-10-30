@@ -57,10 +57,18 @@ Automatic executed-source and control-flow step traces no longer appear at any v
 Historical checkpoint reconstruction is suppressed; new commits and ordinary trace replay remain visible.
 
 Terminal stdin and stderr enable an isolated BetterTUI view on stderr, even when stdout is piped.
-Every object/array starts as one folded summary. Up/Down selects a payload; Enter/Space toggles;
+Generated model prefaces (runtime/document preambles, guidance and initial blockquote context)
+and every object/array start as folded summaries; the requested prompt stays visible.
+Up/Down selects a payload; Enter/Space toggles;
 Page Up/Down scrolls; Home/End reaches the ends. Other folds and selection survive arrival/resize.
 Expanded JSON uses two-space indentation and preserves original numeric/string tokens and duplicate
 keys. Primitives and malformed JSON remain readable without misleading fold controls.
+
+Copilot responses and available reasoning stream live in this view by default; `hide=True` suppresses reasoning.
+Partial JSON is shown as text until the authoritative response arrives, when normal formatting
+and folding apply. Streaming previews are separate from immutable log events, so the final
+transcript contains each complete response once. Redirected logs remain expanded and append-only.
+`--silent` also suppresses streaming previews.
 
 Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
 stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
@@ -118,7 +126,10 @@ spl flow.md --replay run.jsonl --silent
 `--trace` writes every `ask`, `think`, `agent` and blockquote request with its raw response or failure
 to a new JSONL file. `--replay` feeds those results back without contacting Copilot or MCP servers,
 so you can iterate on code and guards for free. Requests must match exactly and in order (prompt,
-kind, model, reasoning); a mismatch, missing or unused entry fails.
+kind, model, reasoning, display setting); a mismatch, missing or unused entry fails.
+Traces and recordings retain the `showReasoning` request field: it is now `true` by default,
+and `hide=True` sets it to `false`. To replay older entries with `showReasoning:false`,
+add `hide=True` to the matching calls or record a new trace.
 
 Replay is not a dry run: explicit `read_file`, `write_file`, `shell` and web calls, and stores, still run.
 Agent actions are not repeated, and their side effects are not recreated. Blockquote decisions
@@ -126,7 +137,7 @@ rebuild shared bindings and run existing functions against recorded external-too
 
 ```json
 {"format":"spl-trace","version":1}
-{"request":{"kind":"ask","prompt":"Question","model":null,"reasoningEffort":null,"showReasoning":false},"response":{"text":"Answer","effective":{"model":"actual-model"}}}
+{"request":{"kind":"ask","prompt":"Question","model":null,"reasoningEffort":null,"showReasoning":true},"response":{"text":"Answer","effective":{"model":"actual-model"}}}
 ```
 
 The older `--record` mode writes generation-only recordings; replaying them blocks writes, shell,

@@ -3,12 +3,12 @@ export { parseMarkdown, extractMarkdown, isWorkflowMarkdown } from './markdown.j
 export { run, ExecutionSession, type RunOptions, type RunResult } from './interpreter.js';
 export { Failure, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
 export { Logger, type LogLevel, type LoggerOptions } from './logger.js';
-export type { LogEvent, LogEventSink, BodySegment, ModelInteraction, StateChange, BindingDelta, BindingReference, ScopeReference, ObservedValue } from './log-events.js';
+export type { LogEvent, LogEventSink, BodySegment, ModelInteraction, ModelStreamEvent, ModelStreamSink, StateChange, BindingDelta, BindingReference, ScopeReference, ObservedValue } from './log-events.js';
 export { CopilotBackend } from './copilot.js';
 export { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
 export { Checkpoint, CheckpointError, checkpointFingerprint, type CheckpointContext, type HumanRequest } from './checkpoint.js';
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError } from './auth.js';
 export { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
-export type { LlmBackend, LlmRequest, LlmResponse, RuntimeAction, RuntimeTool } from './llm.js';
+export type { LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, RuntimeAction, RuntimeTool } from './llm.js';
 export type { Program } from './ast.js';

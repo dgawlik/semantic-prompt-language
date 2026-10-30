@@ -21,7 +21,8 @@ The result goes to stdout; execution logs go to stderr with one header per event
 magenta, `<-` output/action cyan, `~` variable state yellow, `x` error red, `!` warning yellow,
 `i` info blue and `.` debug gray. Automatic logs show actual changes in defining scopes,
 not source statements, unchanged operations or initial runtime/store state.
-Terminal stdin/stderr enables folded JSON: Up/Down selects, Enter/Space toggles,
+Terminal stdin/stderr folds generated model prefaces and JSON by default, keeping the requested
+prompt visible: Up/Down selects, Enter/Space toggles,
 Page Up/Down scrolls, and Home/End reaches the ends. Completion retains a complete expanded
 transcript without a keypress. Redirected/embedded output is always expanded and non-interactive.
 Use `--silent` to suppress execution logs; model/state logs remain at every other verbosity.

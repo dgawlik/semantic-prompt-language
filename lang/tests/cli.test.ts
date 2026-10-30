@@ -258,7 +258,7 @@ registerHooks({ resolve(specifier, context, next) { if (specifier.startsWith('@b
             JSON.stringify({ format: 'spl-trace', version: 1 }),
             JSON.stringify({ request: {
                 kind: 'agent', prompt: `${RUNTIME_PREAMBLE}\n\nThink carefully about the problem before giving the final answer.\n\nAct`,
-                model: null, reasoningEffort: 'medium', showReasoning: false,
+                model: null, reasoningEffort: 'medium', showReasoning: true,
             }, error: { status_code: 'llm_error', reason: 'backend unavailable' } }), '',
         ].join('\n'));
         const failed = spl("success agent 'Act'", '--replay', file);
@@ -431,17 +431,22 @@ fail 'unreachable'`, '--silent');
         expect(JSON.parse(r.out)).toMatchObject({ status_code: 'runtime_error', reason: expect.stringContaining('len must be') });
     });
 
-    it('replays generation offline and blocks external actions', () => {
+    it.each([true, false])('replays generation offline and blocks external actions with showReasoning: %s', showReasoning => {
         const file = path.join(dir, 'responses.jsonl');
         fs.writeFileSync(file, [
             JSON.stringify({ format: 'spl-generation', version: 1 }),
             JSON.stringify({
-                request: JSON.stringify({ kind: 'ask', prompt: `${RUNTIME_PREAMBLE}\n\nquestion`, model: null, reasoningEffort: null, showReasoning: false }),
+                request: JSON.stringify({ kind: 'ask', prompt: `${RUNTIME_PREAMBLE}\n\nquestion`, model: null, reasoningEffort: null, showReasoning }),
                 response: { text: 'offline answer', effective: { model: 'test' } },
             }),
             '',
         ].join('\n'));
-        expect(spl(`success ask 'question'`, '--replay', file, '--silent')).toEqual({ code: 0, out: 'offline answer\n', err: '' });
+        expect(spl(`success ask${showReasoning ? '' : '(hide=True)'} 'question'`, '--replay', file, '--silent')).toEqual({ code: 0, out: 'offline answer\n', err: '' });
+        if (!showReasoning) {
+            const mismatch = spl(`success ask 'question'`, '--replay', file, '--silent');
+            expect(mismatch.code).toBe(1);
+            expect(JSON.parse(mismatch.out).reason).toContain('mismatch');
+        }
         expect(spl(`success ask 'changed'`, '--replay', file, '--silent').code).not.toBe(0);
         const empty = path.join(dir, 'empty.jsonl');
         fs.writeFileSync(empty, '{"format":"spl-generation","version":1}\n');
@@ -495,7 +500,7 @@ fail 'unreachable'`, '--silent');
             JSON.stringify({
                 request: {
                     kind: 'agent', prompt: `${RUNTIME_PREAMBLE}\n\nThink carefully about the problem before giving the final answer.\n\nAct`,
-                    model: null, reasoningEffort: 'medium', showReasoning: false,
+                    model: null, reasoningEffort: 'medium', showReasoning: true,
                 },
                 response: { text: 'offline agent', effective: { model: 'test' } },
             }),

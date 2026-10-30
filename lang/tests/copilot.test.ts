@@ -5,7 +5,7 @@ import { Logger } from '../src/logger.js';
 import { makeRestriction, Restrictions } from '../src/restrict.js';
 import { TOOL_SPECS, ToolHost } from '../src/tools.js';
 import { AGENT_TOOLS } from '../src/agent.js';
-import type { LlmRequest, RuntimeAction } from '../src/llm.js';
+import type { LlmRequest, LlmStreamUpdate, RuntimeAction } from '../src/llm.js';
 import { run } from '../src/interpreter.js';
 import { parseMarkdown } from '../src/markdown.js';
 import { Failure, SuccessSignal } from '../src/errors.js';
@@ -20,8 +20,9 @@ const sdk = vi.hoisted(() => ({
     calls: [] as RuntimeAction[],
     results: [] as unknown[],
     toolErrors: [] as unknown[],
-    events: [] as { type: string; data: object }[],
-    eventsAfterTools: [] as { type: string; data: object }[],
+    events: [] as { type: string; data: object; agentId?: string }[],
+    eventsAfterTools: [] as { type: string; data: object; agentId?: string }[],
+    unsubscribe: vi.fn(),
     prompts: [] as string[],
     sendError: undefined as Error | undefined,
     abortRejectsWait: true,
@@ -36,10 +37,13 @@ vi.mock('@github/copilot-sdk', () => ({
         async stop() { await sdk.stop(); }
         async createSession(config: SessionConfig) {
             sdk.configs.push(config);
-            const listeners = new Map<string, (event: { data: object }) => void>();
+            const listeners = new Map<string, (event: { data: object; agentId?: string }) => void>();
             let aborted = false;
             return {
-                on(type: string, handler: (event: { data: object }) => void) { listeners.set(type, handler); },
+                on(type: string, handler: (event: { data: object; agentId?: string }) => void) {
+                    listeners.set(type, handler);
+                    return () => { listeners.delete(type); sdk.unsubscribe(type); };
+                },
                 async sendAndWait({ prompt }: { prompt: string }) {
                     sdk.prompts.push(prompt);
                     for (const event of sdk.events) listeners.get(event.type)?.(event);
@@ -104,6 +108,108 @@ const command = async (prompt: string, invokeAction: NonNullable<LlmRequest['inv
         await backend.close();
     }
 };
+
+it.each(['ask', 'think', 'agent'] as const)('streams root %s messages while retaining the final SDK response', async kind => {
+    const cwd = process.cwd();
+    const restrictions = new Restrictions(cwd);
+    const updates: LlmStreamUpdate[] = [];
+    sdk.events = [
+        { type: 'assistant.message_delta', data: { messageId: 'intro', deltaContent: 'Working...' } },
+        { type: 'assistant.message_delta', agentId: 'subagent', data: { messageId: 'child', deltaContent: 'Not the answer' } },
+        { type: 'assistant.message', agentId: 'subagent', data: { messageId: 'child', content: 'Child answer' } },
+        { type: 'assistant.message_delta', data: { messageId: 'answer', deltaContent: 'Hel' } },
+        { type: 'assistant.message_delta', data: { messageId: 'answer', deltaContent: 'lo' } },
+        { type: 'assistant.message', data: { messageId: 'answer', content: 'Hello!' } },
+    ];
+    sdk.reply = { data: { content: 'Authoritative final response' } };
+    sdk.continueTurn.mockImplementation(async () => {
+        expect(updates).toHaveLength(4);
+        expect(updates.at(-1)).toMatchObject({ mode: 'replace', text: 'Hello!' });
+    });
+    const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
+    try {
+        const result = await backend.call({ kind, prompt: 'Prompt', restrictions,
+            showReasoning: false, tools: new ToolHost(restrictions, cwd), onStream: update => updates.push(update) });
+        expect(result.text).toBe('Authoritative final response');
+        expect(updates.map(update => [update.messageId, update.mode, update.text])).toEqual([
+            ['intro', 'append', 'Working...'], ['answer', 'append', 'Hel'], ['answer', 'append', 'lo'], ['answer', 'replace', 'Hello!'],
+        ]);
+        expect(sdk.configs[0]).toMatchObject({ streaming: true, includeSubAgentStreamingEvents: false });
+        expect(sdk.unsubscribe.mock.calls.map(([type]) => type)).toEqual([
+            'assistant.message_delta', 'assistant.message', 'assistant.reasoning',
+        ]);
+    } finally { await backend.close(); }
+});
+
+it.each([false, true])('streams reasoning only when requested: %s', async showReasoning => {
+    const cwd = process.cwd();
+    const restrictions = new Restrictions(cwd);
+    const updates: LlmStreamUpdate[] = [];
+    sdk.events = [
+        { type: 'assistant.reasoning_delta', data: { reasoningId: 'reason', deltaContent: 'Think' } },
+        { type: 'assistant.reasoning_delta', agentId: 'child', data: { reasoningId: 'child', deltaContent: 'Hidden child reasoning' } },
+        { type: 'assistant.reasoning', agentId: 'child', data: { reasoningId: 'child', content: 'Hidden child reasoning' } },
+        { type: 'assistant.reasoning', data: { reasoningId: 'reason', content: 'Thinking complete.' } },
+    ];
+    const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
+    try {
+        const response = await backend.call({ kind: 'think', prompt: 'Think', restrictions, showReasoning,
+            tools: new ToolHost(restrictions, cwd), onStream: update => updates.push(update) });
+        expect(response.reasoning).toBe('Thinking complete.');
+        expect(updates).toEqual(showReasoning ? [
+            { channel: 'reasoning', messageId: 'reason', mode: 'append', text: 'Think' },
+            { channel: 'reasoning', messageId: 'reason', mode: 'replace', text: 'Thinking complete.' },
+        ] : []);
+    } finally { await backend.close(); }
+});
+
+it('aborts and preserves a streaming consumer failure, cleaning up subscriptions', async () => {
+    const cwd = process.cwd();
+    const restrictions = new Restrictions(cwd);
+    const failure = new Error('preview failed');
+    sdk.events = [{ type: 'assistant.message_delta', data: { messageId: 'answer', deltaContent: 'Partial' } }];
+    const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
+    try {
+        await expect(backend.call({ kind: 'ask', prompt: 'Prompt', restrictions, showReasoning: false,
+            tools: new ToolHost(restrictions, cwd), onStream() { throw failure; } })).rejects.toBe(failure);
+        expect(sdk.abort).toHaveBeenCalledOnce();
+        expect(sdk.disconnect).toHaveBeenCalledOnce();
+        expect(sdk.unsubscribe).toHaveBeenCalledTimes(3);
+    } finally { await backend.close(); }
+});
+
+it('delivers previews before a timeout without using them as a successful response', async () => {
+    const cwd = process.cwd();
+    const restrictions = new Restrictions(cwd);
+    const onStream = vi.fn();
+    sdk.events = [{ type: 'assistant.message_delta', data: { messageId: 'answer', deltaContent: '{"valid":true}' } }];
+    sdk.sendError = new Error('Timeout waiting for session.idle');
+    const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger: new Logger('silent') });
+    try {
+        await expect(backend.call({ kind: 'ask', prompt: 'Prompt', restrictions, showReasoning: false,
+            tools: new ToolHost(restrictions, cwd), onStream })).rejects.toThrow('Timeout waiting for session.idle');
+        expect(onStream).toHaveBeenCalledOnce();
+        expect(sdk.unsubscribe).toHaveBeenCalledTimes(3);
+        expect(sdk.disconnect).toHaveBeenCalledOnce();
+    } finally { await backend.close(); }
+});
+
+it('streams blockquote output through the interpreter logger before completion', async () => {
+    const cwd = process.cwd();
+    const streams: import('../src/log-events.js').ModelStreamEvent[] = [];
+    const logger = new Logger('error', () => {}, { streamSink: event => streams.push(event) });
+    sdk.events = [{ type: 'assistant.message_delta', data: { messageId: 'answer', deltaContent: 'Partial reply' } }];
+    sdk.continueTurn.mockImplementation(async () => {
+        expect(streams).toHaveLength(1);
+        expect(streams[0]).toMatchObject({ type: 'update', interaction: { kind: 'blockquote' } });
+    });
+    const backend = new CopilotBackend({ cwd, timeoutMs: 1000, logger });
+    try {
+        const result = await run(parseMarkdown('---\nextension: semantic-prompt-language\nversion: 1\n---\n\n> Reply briefly.'), { backend, logger, cwd });
+        expect(result.status).toBe('success');
+        expect(streams.at(-1)).toMatchObject({ type: 'end', outcome: 'completed', response: 'MCP result' });
+    } finally { await backend.close(); }
+});
 
 it('executes multiple runtime actions immediately and returns their results in one session', async () => {
     sdk.calls = [

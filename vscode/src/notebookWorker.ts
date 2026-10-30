@@ -12,6 +12,10 @@ let backend: LlmBackend | undefined;
 const send = (reply: WorkerReply) => process.send?.(reply);
 const logger = new Logger('info', text => {
     if (active) send({ id: active.id, kind: 'log', text, output: /^\[(?:info|error|debug)\] log:/.test(text) });
+}, {
+    streamSink: event => {
+        if (active) send({ id: active.id, kind: 'stream', event });
+    },
 });
 const lazyBackend: LlmBackend = {
     async call(request) {
@@ -19,11 +23,7 @@ const lazyBackend: LlmBackend = {
             const { CopilotBackend } = await import('../../lang/src/copilot.js');
             backend = new CopilotBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
         }
-        const response = await backend.call(request);
-        if (active && request.naturalLanguage && !response.action) {
-            send({ id: active.id, kind: 'log', text: response.text, output: true });
-        }
-        return response;
+        return backend.call(request);
     },
     async close() { await backend?.close(); },
 };

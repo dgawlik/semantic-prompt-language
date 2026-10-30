@@ -1,7 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { parseChildMessage, type FinishReason, type LogEvent, type ParentMessage, type TerminalState } from './log-events.js';
+import { parseChildMessage, type FinishReason, type LogEvent, type ModelStreamEvent, type ParentMessage, type TerminalState } from './log-events.js';
 import { formatEvent, sanitize, terminalColor } from './log-format.js';
 
 export interface TerminalCapabilities {
@@ -70,6 +70,11 @@ export class CliLogging {
         else if (this.state === 'interactive') this.enqueue({
             version: 1, sessionId: this.sessionId, type: 'event', sequence: event.sequence, event,
         });
+    };
+
+    readonly streamSink = (event: ModelStreamEvent): void => {
+        if (this.state === 'closed') throw new Error('logging session is closed');
+        if (this.state === 'interactive') this.enqueue({ version: 1, sessionId: this.sessionId, type: 'stream', event });
     };
 
     start(): Promise<void> {

@@ -44,7 +44,7 @@ export function splLanguage(api: HLJSApi): Language {
         { scope: 'variable.language', match: /\$(?:env|args)\b/ },
         { match: [/\bdef/, /\s+/, /[A-Za-z_]\w*/], scope: { 1: 'keyword', 3: 'title.function' } },
         { match: [/\blet/, /\s+/, /[A-Za-z_]\w*/], scope: { 1: 'keyword', 3: 'variable' } },
-        { scope: 'attr', match: /\b(?:len|fmt|reasoning|show|schema|repairs|model|level)(?=\s*=(?!=))/ },
+        { scope: 'attr', match: /\b(?:len|fmt|reasoning|hide|schema|repairs|model|level)(?=\s*=(?!=))/ },
         { scope: 'title.function.invoke', match: api.regex.concat(NOT_A_CALL, /[A-Za-z_]\w*(?=\s*\()/), relevance: 0 },
     ];
     subst.contains = expression;

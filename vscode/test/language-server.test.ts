@@ -192,6 +192,8 @@ test('modifier and directive completions replace partial identifiers', () => {
         range: { start: at(source, 'rea'), end: document(source).positionAt(source.indexOf('rea') + 3) },
         newText: 'reasoning=',
     });
+    assert.equal(items.find(item => item.label === 'hide')?.textEdit?.newText, 'hide=');
+    assert.ok(!items.some(item => item.label === 'show'));
     for (const call of ['ask', 'think', 'agent']) {
         const text = `let x = ${call}(`;
         assert.deepEqual(completions(analysis(text), document(text).positionAt(text.length)).map((item) => item.label), [...MODIFIER_NAMES]);
@@ -213,6 +215,9 @@ test('hover distinguishes builtin calls, generation modifiers, and user bindings
     assert.equal(hover(analysis('constructor'), { line: 0, character: 0 }), undefined);
     assert.equal(hover(analysis('# len'), { line: 0, character: 2 }), undefined);
     assert.equal(hover(analysis("log('len')"), { line: 0, character: 5 }), undefined);
+    const hidden = "ask(hide=True) 'hello'";
+    assert.match(JSON.stringify(hover(analysis(hidden), at(hidden, 'hide'))?.contents), /Suppress model reasoning.*Defaults to False/);
+    assert.match(analysis("ask(show=True) 'hello'").diagnostics[0].message, /unknown modifier.*show/);
 });
 
 test('multiline modifiers preserve contexts through nested values and unfinished parentheses', () => {

@@ -3,7 +3,7 @@ import type { CopilotSession, ModelInfo, PermissionRequest, PermissionRequestRes
 import { loadToken } from './auth.js';
 import type { ToolName } from './ast.js';
 import { Failure } from './errors.js';
-import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel } from './llm.js';
+import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse, type LlmStreamUpdate, type ReasoningLevel } from './llm.js';
 import type { Logger } from './logger.js';
 import type { Restrictions } from './restrict.js';
 import { TOOL_SPECS } from './tools.js';
@@ -163,6 +163,8 @@ export class CopilotBackend implements LlmBackend {
 
         const baseConfig = {
             model: req.model,
+            streaming: true,
+            includeSubAgentStreamingEvents: false,
             tools,
             availableTools: [...tools.map((tool) => tool.name), ...Object.keys(mcpServers).map((name) => `mcp:${name}-*`)],
             mcpServers,
@@ -177,6 +179,8 @@ export class CopilotBackend implements LlmBackend {
             },
         };
 
+        let receiving = true;
+        const subscriptions: (() => void)[] = [];
         try {
             try {
                 session = await client.createSession({ ...baseConfig, reasoningEffort: effort });
@@ -189,26 +193,58 @@ export class CopilotBackend implements LlmBackend {
 
             const reasoning: string[] = [];
             const toolResults: string[] = [];
+            const publish = (update: LlmStreamUpdate) => {
+                if (!receiving || interruption) return;
+                try { req.onStream?.(update); }
+                catch (error) { stop(error); }
+            };
+            if (req.onStream) {
+                subscriptions.push(
+                    session.on('assistant.message_delta', event => {
+                        if (!event.agentId) publish({
+                            channel: 'response', messageId: event.data.messageId, mode: 'append', text: event.data.deltaContent,
+                        });
+                    }),
+                    session.on('assistant.message', event => {
+                        if (!event.agentId) publish({
+                            channel: 'response', messageId: event.data.messageId, mode: 'replace', text: event.data.content,
+                        });
+                    }),
+                );
+                if (req.showReasoning) subscriptions.push(
+                    session.on('assistant.reasoning_delta', event => {
+                        if (!event.agentId) publish({
+                            channel: 'reasoning', messageId: event.data.reasoningId, mode: 'append', text: event.data.deltaContent,
+                        });
+                    }),
+                );
+            }
             if (req.naturalLanguage) {
                 const mcpCalls = new Map<string, { server: string; tool: string; arguments: unknown }>();
-                session.on('tool.execution_start', ({ data }) => {
+                subscriptions.push(session.on('tool.execution_start', ({ data }) => {
+                    if (!receiving || interruption) return;
                     const server = data.mcpConfigServerName ?? data.mcpServerName;
                     if (server) mcpCalls.set(data.toolCallId, {
                         server, tool: data.mcpToolName ?? data.toolName, arguments: data.arguments,
                     });
-                });
-                session.on('tool.execution_complete', ({ data }) => {
+                }));
+                subscriptions.push(session.on('tool.execution_complete', ({ data }) => {
+                    if (!receiving || interruption) return;
                     const call = mcpCalls.get(data.toolCallId);
                     if (call) {
                         toolResults.push(JSON.stringify({ ...call, success: data.success, result: data.result, error: data.error }));
                         if (!data.success) stop(new Failure('tool_error', `MCP ${call.server}/${call.tool}: ${data.error?.message ?? 'tool execution failed'}`));
                     }
-                });
+                }));
             }
-            session.on('assistant.reasoning', (ev) => {
+            subscriptions.push(session.on('assistant.reasoning', (ev) => {
+                if (ev.agentId || !receiving || interruption) return;
                 reasoning.push(ev.data.content);
+                if (req.showReasoning) publish({
+                    channel: 'reasoning', messageId: ev.data.reasoningId, mode: 'replace', text: ev.data.content,
+                });
                 if (req.showReasoning) this.opts.logger.info(`reasoning: ${ev.data.content}`);
-            });
+            }));
 
             let answer: Awaited<ReturnType<CopilotSession['sendAndWait']>>;
             try {
@@ -238,6 +274,8 @@ export class CopilotBackend implements LlmBackend {
                 },
             };
         } finally {
+            receiving = false;
+            for (const unsubscribe of subscriptions) unsubscribe();
             await session?.disconnect().catch(() => undefined);
         }
     }

@@ -22,6 +22,13 @@ export interface Constraint {
     text: string;
 }
 
+export interface LlmStreamUpdate {
+    channel: 'response' | 'reasoning';
+    messageId: string;
+    mode: 'append' | 'replace';
+    text: string;
+}
+
 export interface LlmRequest {
     kind: 'ask' | 'think' | 'agent';
     /** The fully assembled query: constraints, restriction guidance and hints are already prepended. */
@@ -29,6 +36,8 @@ export interface LlmRequest {
     model?: string;
     reasoningEffort?: ReasoningLevel;
     showReasoning: boolean;
+    /** Live preview only; the returned response remains authoritative. */
+    onStream?: (update: LlmStreamUpdate) => void;
     restrictions: Restrictions;
     tools: ToolHost;
     /** Execute a blockquote as an agent command with immediate runtime tool calls. */
@@ -87,6 +96,10 @@ export function buildPrompt(opts: {
     constraints: readonly Constraint[];
     restrictions: Restrictions;
 }): string {
+    return buildPromptParts(opts).prompt;
+}
+
+export function buildPromptParts(opts: Parameters<typeof buildPrompt>[0]): { preface: string; prompt: string } {
     const sections: string[] = [];
     if (opts.constraints.length) {
         sections.push(
@@ -101,8 +114,9 @@ export function buildPrompt(opts: {
     if (opts.mods?.fmt && opts.mods.fmt !== 'text' && opts.mods.fmt !== 'json') {
         sections.push(`${JSON_HINT} Return ${FORMAT_CONTRACTS[opts.mods.fmt].description}.`);
     }
+    const preface = sections.join('\n\n');
     sections.push(opts.prompt);
-    return sections.join('\n\n');
+    return { preface, prompt: sections.join('\n\n') };
 }
 
 export function parseJsonResponse(text: string, format: JsonFormat = 'json'): Value {

@@ -29,7 +29,7 @@ and blockquotes is also available in other Markdown files.
 
 * **Native notebooks** for existing workflow Markdown: edit SPL fences and natural-language
   blockquotes as runnable cells, with rendered commentary, execution counts, formatted results,
-  brief live runtime logs, and errors in cell outputs and the Problems panel.
+  streamed model responses, brief live runtime logs, and errors in cell outputs and the Problems panel.
 
 The language server only reads source: it never runs workflows, calls tools or contacts models.
 Notebook execution is explicit and requires a trusted workspace. Language server errors appear
@@ -58,10 +58,14 @@ colon. See the [language reference](https://github.com/dgawlik/semantic-prompt-l
    Commentary remains rendered, editable Markdown.
 3. Use the cell Run button or VS Code's notebook shortcuts to execute any cell. A final expression,
    `return`, or `success` displays its value; objects and lists are indented. Explicit `log(...)`
-   messages and final natural-language replies appear beneath the cell. A separate live log output
+   messages and model replies appear beneath the cell. Copilot replies update live in place, including
+   available reasoning by default (`hide=True` suppresses reasoning); completion replaces the preview with the authoritative response.
+   Different requests and response/reasoning channels are kept separate, and an identical final cell result
+   is not appended again. Interrupted previews are marked explicitly and do not become successful results.
+   A separate live log output
    shows cell progress, runtime information, warnings and errors, keeping the last 20 lines and
    at most 4,000 characters, including a truncation notice when older content is omitted.
-   AI transcripts, reasoning and variable-state changes stay in **Output > SPL Notebook**.
+   Full AI transcripts and variable-state changes stay in **Output > SPL Notebook**.
    Automatic executed-source traces are not emitted.
    Explicit `log(...)` messages, final replies, results and error outputs are not subject to
    this brief-log limit. Full runtime logs remain in the output channel.

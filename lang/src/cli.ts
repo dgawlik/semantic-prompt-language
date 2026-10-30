@@ -35,6 +35,7 @@ Options:
                           x error (red), ! warning (yellow), i info (blue), . debug (gray).
                           Interactive JSON starts folded: Up/Down select, Enter/Space toggle,
                           PgUp/PgDn scroll, Home/End reach ends. Exit never waits for a key.
+                          Model responses stream live in the interactive view.
                           Plain/final transcripts expand JSON with two-space indentation.
                           NO_COLOR wins over FORCE_COLOR; FORCE_COLOR=0 disables color.
   --silent                suppress all logs; only the result is printed
@@ -244,6 +245,7 @@ async function main(): Promise<number> {
             if (presentation) presentation.sink(event);
             else process.stderr.write(formatEvent(event, terminalColor()) + '\n');
         },
+        streamSink: event => presentation?.streamSink(event),
     });
 
     const timeoutSec = Number(values.timeout ?? 300);

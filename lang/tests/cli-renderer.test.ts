@@ -55,6 +55,24 @@ function session(child = new FakeChild()) {
 }
 
 describe('renderer protocol', () => {
+    it('validates stream messages independently of persistent event ordering and rejects late updates', () => {
+        const interaction = { kind: 'ask', requestId: 'stream' };
+        const event = { type: 'update', interaction, update: { channel: 'response', messageId: 'message', mode: 'append', text: 'Partial' } };
+        const message = { version: 1, sessionId: 'stream-session', type: 'stream', event };
+        expect(parseParentMessage(message)).toEqual(message);
+        for (const update of [
+            { ...event.update, text: '\u001b[31munsafe' }, { ...event.update, channel: 'invalid' },
+            { ...event.update, messageId: '' }, { ...event.update, mode: 'unknown' },
+        ]) expect(() => parseParentMessage({ ...message, event: { ...event, update } })).toThrow(/protocol/);
+        const protocol = new RendererProtocol();
+        protocol.accept({ version: 1, sessionId: 'stream-session', type: 'initialize', color: false, terminal: { raw: false } });
+        protocol.accept({ version: 1, sessionId: 'stream-session', type: 'activate' });
+        protocol.accept(message);
+        protocol.accept({ ...message, event: { type: 'end', interaction, outcome: 'completed', response: 'Final' } });
+        expect(() => protocol.accept(message)).toThrow(/stream.*after end/);
+        expect(protocol.accept({ version: 1, sessionId: 'stream-session', type: 'finish', lastSequence: null, reason: 'completed' }).type).toBe('finish');
+    });
+
     it('rejects invalid payload tokens, embedded terminal controls and unexpected runtime fields', () => {
         const event = events()[0];
         const common = { version: 1, sessionId: 'invalid', type: 'event', sequence: 1 };
@@ -62,6 +80,26 @@ describe('renderer protocol', () => {
         expect(() => parseParentMessage({ ...common, event: { ...event, segments: [{ type: 'text', text: '\u001b[31munsafe' }] } })).toThrow(/protocol/);
         expect(() => parseParentMessage({ ...common, event: { ...event, segments: [{
             type: 'json', payloadId: `${event.id}:bad`, source: '{"invalid":}', container: 'object', summary: 'object [folded]',
+        }] } })).toThrow(/protocol/);
+    });
+
+    it('validates preface controls, identity and uniqueness alongside JSON payloads', () => {
+        const event = events()[0];
+        const preface = { type: 'preface', payloadId: `${event.id}:preface`, source: 'Generated instructions', summary: 'Generated preface [folded]' };
+        const message = { version: 1, sessionId: 'preface', type: 'event', sequence: 1, event: { ...event, segments: [preface] } };
+        expect(parseParentMessage(message)).toEqual(message);
+        for (const invalid of [
+            { ...preface, source: '\u001b[31munsafe' },
+            { ...preface, source: '' },
+            { ...preface, summary: 'unsafe\nsummary' },
+            { ...preface, payloadId: 'another-event:preface' },
+            { ...preface, container: 'object' },
+        ]) {
+            expect(() => parseParentMessage({ ...message, event: { ...event, segments: [invalid] } })).toThrow(/protocol/);
+        }
+        expect(() => parseParentMessage({ ...message, event: { ...event, segments: [preface, preface] } })).toThrow(/protocol/);
+        expect(() => parseParentMessage({ ...message, event: { ...event, segments: [preface, {
+            type: 'json', payloadId: preface.payloadId, source: '{}', container: 'object', summary: 'object [folded]',
         }] } })).toThrow(/protocol/);
     });
     it('validates version, session, fields, event identity and contiguous ordering', () => {
@@ -445,6 +483,42 @@ describe('presentation ownership', () => {
         expect(logging.state).toBe('closed');
     });
 
+    it('retains the full generated preface in the final expanded transcript', async () => {
+        const { logging, lines } = session();
+        await logging.start();
+        const logger = new Logger('error', undefined, { eventSink: logging.sink });
+        logger.modelPrompt({ kind: 'ask', requestId: 'preface' }, 'Generated instructions\n\nVisible prompt', 'Generated instructions');
+        await logging.close('completed');
+        expect(lines).toEqual(['-> input ask Generated instructions\n\nVisible prompt']);
+    });
+
+    it('forwards previews through IPC but keeps only the final response in the restored transcript', async () => {
+        const { logging, lines, child } = session();
+        await logging.start();
+        const logger = new Logger('error', undefined, { eventSink: logging.sink, streamSink: logging.streamSink });
+        const interaction = { kind: 'ask', requestId: 'stream' } as const;
+        logger.modelInput(interaction, 'Prompt');
+        logger.modelStream({ type: 'update', interaction, update: { channel: 'response', messageId: 'answer', mode: 'append', text: 'Partial' } });
+        logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: 'Complete' });
+        logger.modelOutput(interaction, 'Complete');
+        await logging.close('completed');
+        expect(child.sent.map(message => (message as ParentMessage).type)).toEqual(['initialize', 'activate', 'event', 'stream', 'stream', 'event', 'finish']);
+        expect(lines).toEqual(['-> input ask Prompt', '<- output ask Complete']);
+    });
+
+    it('keeps non-terminal streaming previews out of append-only transcripts', async () => {
+        const lines: string[] = [];
+        const logging = new CliLogging({ interactive: false, color: false, write: line => lines.push(line) });
+        await logging.start();
+        const logger = new Logger('error', undefined, { eventSink: logging.sink, streamSink: logging.streamSink });
+        const interaction = { kind: 'ask', requestId: 'plain' } as const;
+        logger.modelStream({ type: 'update', interaction, update: { channel: 'response', messageId: 'answer', mode: 'append', text: 'Partial' } });
+        logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: 'Complete' });
+        logger.modelOutput(interaction, 'Complete');
+        await logging.close('completed');
+        expect(lines).toEqual(['<- output ask Complete']);
+    });
+
     describe('native event view', () => {
         async function setup() {
             const { createTestRenderer } = await import('@bettertui/core');
@@ -499,6 +573,106 @@ describe('presentation ownership', () => {
                 expect(view.followingTail).toBe(false);
                 test.mockInput.pressPageDown();
                 expect(view.history.map(event => event.id)).toEqual(history.map(event => event.id));
+            } finally { await cleanup(); }
+        });
+
+        it('starts generated prefaces folded and preserves independent fold state with keyboard and resize', async () => {
+            const { test, view, cleanup } = await setup();
+            const capture = () => {
+                test.stdout.clear();
+                test.renderer.renderFull();
+                return stripVTControlCharacters(test.captureFrame());
+            };
+            try {
+                const logger = new Logger('error', undefined, { eventSink: event => view.append(event) });
+                const preface = 'Generated instructions\nInitial context: {"count":1}';
+                const prompt = `${preface}\n\nVisible prompt {"result":2}`;
+                logger.modelPrompt({ kind: 'ask', requestId: 'first' }, prompt, preface);
+                const initial = capture();
+                expect(initial).toContain('Generated preface [folded]');
+                expect(initial).toContain('Visible prompt');
+                expect(initial).not.toContain('Generated instructions');
+                expect(initial).not.toContain('Initial context');
+                expect(initial).toContain('object [folded]');
+                expect([...view.collapsedByPayload.values()]).toEqual([true, true]);
+                const first = view.selectedPayloadId!;
+
+                test.mockInput.pressEnter();
+                const expanded = capture();
+                expect(expanded).toContain('Generated instructions');
+                expect(expanded).toContain('"count": 1');
+                expect([...view.collapsedByPayload.values()]).toEqual([false, true]);
+                test.mockInput.pressArrow('down');
+                test.mockInput.pressKey(' ');
+                expect(capture()).toContain('"result": 2');
+
+                logger.modelPrompt({ kind: 'ask', requestId: 'second' }, prompt, preface);
+                expect([...view.collapsedByPayload.values()]).toEqual([false, false, true, true]);
+                test.resize(12, 12);
+                test.renderer.emit('resize', 12, 12);
+                test.renderOnce();
+                test.resize(100, 24);
+                test.renderer.emit('resize', 100, 24);
+                expect([...view.collapsedByPayload.values()]).toEqual([false, false, true, true]);
+                test.mockInput.pressHome();
+                expect(view.selectedPayloadId).toBe(first);
+                test.mockInput.pressKey(' ');
+                expect(view.collapsedByPayload.get(first)).toBe(true);
+                expect(capture()).not.toContain('Generated instructions');
+            } finally { await cleanup(); }
+        });
+
+        it('renders partial JSON live, isolates message IDs and replaces previews with foldable final events', async () => {
+            const { test, view, cleanup } = await setup();
+            const capture = () => {
+                test.stdout.clear();
+                test.renderer.renderFull();
+                return stripVTControlCharacters(test.captureFrame());
+            };
+            try {
+                const logger = new Logger('error', undefined, { eventSink: event => view.append(event), streamSink: event => view.stream(event) });
+                const interaction = { kind: 'ask', requestId: 'stream' } as const;
+                logger.modelInput(interaction, 'Prompt');
+                const emit = (messageId: string, text: string, channel: 'response' | 'reasoning' = 'response') =>
+                    logger.modelStream({ type: 'update', interaction, update: { messageId, text, channel, mode: 'append' } });
+                emit('intro', 'Working...');
+                expect(capture()).toContain('Working...');
+                emit('answer', '{"ans');
+                emit('answer', 'wer":');
+                const partial = capture();
+                expect(partial).toContain('[streaming]');
+                expect(partial).toContain('{"answer":');
+                expect(partial).not.toContain('Working...');
+                expect(partial).not.toContain('object [folded]');
+                emit('reason', 'Thinking', 'reasoning');
+                expect(capture()).toContain('Thinking');
+                expect(view.streams.size).toBe(2);
+                logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: '{"answer":42}' });
+                logger.modelOutput(interaction, '{"answer":42}');
+                const final = capture();
+                expect(view.streams.size).toBe(0);
+                expect(final).not.toContain('[streaming]');
+                expect(final).toContain('object [folded]');
+                test.mockInput.pressEnter();
+                expect(capture()).toContain('"answer": 42');
+                expect(view.history.map(event => event.kind)).toEqual(['model-input', 'model-output']);
+            } finally { await cleanup(); }
+        });
+
+        it('keeps nested requests independent and removes interrupted previews', async () => {
+            const { view, cleanup } = await setup();
+            try {
+                const outer = { kind: 'blockquote', requestId: 'outer' } as const;
+                const inner = { kind: 'ask', requestId: 'inner' } as const;
+                const update = { channel: 'response', messageId: 'same', mode: 'append', text: 'Partial' } as const;
+                view.stream({ type: 'update', interaction: outer, update });
+                view.stream({ type: 'update', interaction: inner, update });
+                expect(view.streams.size).toBe(2);
+                view.stream({ type: 'end', interaction: inner, outcome: 'failed' });
+                expect([...view.streams.values()].map(stream => stream.interaction.requestId)).toEqual(['outer']);
+                view.stream({ type: 'end', interaction: outer, outcome: 'failed' });
+                expect(view.streams.size).toBe(0);
+                expect(view.history).toEqual([]);
             } finally { await cleanup(); }
         });
 

@@ -51,7 +51,7 @@
   },
   "Think": {
     "prefix": "think",
-    "body": ["let ${1:answer} = think(", "    reasoning = '${2|low,medium,high|}',", "    show = ${3|False,True|},", ") '${0:problem}'"],
+    "body": ["let ${1:answer} = think(", "    reasoning = '${2|low,medium,high|}',", "    hide = ${3|False,True|},", ") '${0:problem}'"],
     "description": "Generation-only reasoning"
   },
   "Human input": {

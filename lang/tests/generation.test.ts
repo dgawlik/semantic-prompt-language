@@ -35,10 +35,12 @@ describe('generation contracts', () => {
         const { backend, calls } = scripted('not an integer', '4');
         expect(await exec(`let score = ask(
     fmt = 'integer',
-    repairs = 1
+    repairs = 1,
+    hide = True
 ) 'Rate this issue'
 success score`, backend)).toMatchObject({ status: 'success', value: 4 });
         expect(calls).toHaveLength(2);
+        expect(calls.map(call => call.showReasoning)).toEqual([false, false]);
         expect(calls[1].prompt).toContain('Previous response:\nnot an integer');
     });
 
@@ -56,13 +58,13 @@ let score = ${command}(
     repairs = option(0),
     reasoning = 'high',
     model = 'per-call',
-    show = True,
+    hide = option(True),
     schema = {'type': 'integer', 'minimum': 1, 'maximum': 5},
     ) 'Rate this issue'
 success [score, count[0]]`, backend);
-        expect(result).toMatchObject({ status: 'success', value: [5, 2] });
+        expect(result).toMatchObject({ status: 'success', value: [5, 3] });
         expect(calls).toHaveLength(1);
-        expect(calls[0]).toMatchObject({ kind: command, model: 'per-call', reasoningEffort: 'high', showReasoning: true });
+        expect(calls[0]).toMatchObject({ kind: command, model: 'per-call', reasoningEffort: 'high', showReasoning: false });
     });
 
     it.each([true, false])('evaluates only the selected generation branch for %s', async (friday) => {
@@ -79,12 +81,13 @@ success result
         expect(calls[1].prompt).toBe(friday ? 'Haiku on variance' : 'Sentence on passing time');
     });
 
-    it('composes expression-valued schema, format, reasoning, model, and show modifiers', async () => {
+    it('composes expression-valued schema, format, reasoning, model, and hide modifiers', async () => {
         const { backend, calls } = scripted('{"total": 42}');
         const result = await exec(`
 let Contract = ${schema}
 let effort = 'high'
-success ask(schema=Contract, reasoning=effort, model='test-model', show=True) 'Extract'
+let hidden = False
+success ask(schema=Contract, reasoning=effort, model='test-model', hide=hidden) 'Extract'
 `, backend);
         expect(result).toMatchObject({ status: 'success', value: { total: 42 } });
         expect(calls[0]).toMatchObject({ kind: 'ask', reasoningEffort: 'high', model: 'test-model', showReasoning: true });
@@ -268,7 +271,7 @@ success [result, count[0]]
         `ask(schema={'type':'imaginary'}) 'x'`, `ask(schema={'typo':True}) 'x'`,
         `ask(schema={'$async':True, 'type':'number'}) 'x'`,
         `ask(repairs=6, fmt='json') 'x'`, `ask(repairs=-1, fmt='json') 'x'`,
-        `ask(show='yes') 'x'`, `ask(reasoning='extreme') 'x'`,
+        `ask(hide='yes') 'x'`, `ask(hide=None) 'x'`, `ask(hide=1) 'x'`, `ask(reasoning='extreme') 'x'`,
         `ask(fmt='unsupported') 'x'`, `ask(fmt=42) 'x'`, `ask(fmt=True) 'x'`,
         `ask(fmt='text', schema=${schema}) 'x'`, `agent(repairs=1, fmt='json') 'x'`,
         `ask(fmt='text', repairs=1) 'x'`,
@@ -446,7 +449,7 @@ describe('offline generation record/replay', () => {
         for (const request of [
             { ...original, model: 'other-model' },
             { ...original, reasoningEffort: 'high' as const },
-            { ...original, showReasoning: true },
+            { ...original, showReasoning: false },
             { ...original, kind: 'think' as const },
         ]) {
             await expect(replay.call(request)).rejects.toThrow(/mismatch at call 1/);

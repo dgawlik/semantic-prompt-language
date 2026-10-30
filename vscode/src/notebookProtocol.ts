@@ -9,5 +9,9 @@ export interface ExecuteCell {
 
 export type WorkerReply =
     | { id: number; kind: 'log'; text: string; output?: boolean }
+    | { id: number; kind: 'stream'; event: ModelStreamEvent }
     | { id: number; kind: 'result'; text?: string }
     | { id: number; kind: 'error'; message: string; line: number; column: number; source: string; version?: number };
+
+export type CellResult = Exclude<WorkerReply, { kind: 'log' | 'stream' }>;
+import type { ModelStreamEvent } from '../../lang/src/log-events.js';

@@ -7,9 +7,9 @@ import { run } from '../src/interpreter.js';
 import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
-import { ReplayBackend, TraceBackend } from '../src/recording.js';
+import { RecordingBackend, ReplayBackend, TraceBackend } from '../src/recording.js';
 import { MemoryStore } from '../src/store.js';
-import type { LogEvent } from '../src/log-events.js';
+import type { LogEvent, ModelStreamEvent } from '../src/log-events.js';
 import { ToolHost } from '../src/tools.js';
 
 let dir: string;
@@ -41,6 +41,30 @@ function entries() {
 }
 
 describe('workflow trace/replay', () => {
+    it.each(['trace', 'record'])('forwards live streams in %s mode without storing or replaying ephemeral updates', async mode => {
+        const streams: ModelStreamEvent[] = [];
+        const logger = new Logger('error', () => {}, { streamSink: event => streams.push(event) });
+        const backend: LlmBackend = {
+            async call(req) {
+                req.onStream?.({ channel: 'response', messageId: 'preview-only-id', mode: 'append', text: 'Ephemeral partial' });
+                return { text: 'Complete answer', effective: {} };
+            },
+            async close() {},
+        };
+        const trace = mode === 'trace' ? new TraceBackend(backend, file) : new RecordingBackend(backend, file);
+        const program = parse(`success ask 'Prompt'`);
+        const expected = await run(program, { backend: trace, logger, cwd: dir });
+        await trace.close();
+        expect(streams.map(event => event.type)).toEqual(['update', 'end']);
+        expect(fs.readFileSync(file, 'utf8')).not.toMatch(/Ephemeral partial|preview-only-id|onStream/);
+        streams.length = 0;
+        const replay = new ReplayBackend(file);
+        expect(await run(program, { backend: replay, logger, cwd: dir })).toEqual(expected);
+        await replay.close();
+        expect(streams.map(event => event.type)).toEqual(['end']);
+        expect(streams[0]).toMatchObject({ response: 'Complete answer', outcome: 'completed' });
+    });
+
     it('does not change results, evaluation/model/tool counts, stores or trace bytes when logging is enabled', async () => {
         const tools = vi.spyOn(ToolHost.prototype, 'invoke').mockResolvedValue('raw result');
         const source = `let n = 0
@@ -89,17 +113,18 @@ success [n, items, input, answer]`;
     it('captures common structured inputs and complete responses for every LLM operation', async () => {
         const backend = scripted('answer', 'thought', 'agent result');
         const trace = new TraceBackend(backend, file);
-        const source = `success [ask(model='chosen', reasoning='high', show=True) 'Ask', think 'Think', agent 'Act']`;
+        const source = `success [ask(model='chosen', reasoning='high', hide=True) 'Ask', think 'Think', agent 'Act']`;
         const expected = await exec(source, trace);
         await trace.close();
         expect(expected).toMatchObject({ status: 'success', value: ['answer', 'thought', 'agent result'] });
         const [header, ...calls] = entries();
         expect(header).toEqual({ format: 'spl-trace', version: 1 });
         expect(calls.map((entry) => entry.request.kind)).toEqual(['ask', 'think', 'agent']);
+        expect(calls.map((entry) => entry.request.showReasoning)).toEqual([false, true, true]);
         expect(calls[0]).toEqual({
             request: {
                 kind: 'ask', prompt: backend.call.mock.calls[0][0].prompt,
-                model: 'chosen', reasoningEffort: 'high', showReasoning: true,
+                model: 'chosen', reasoningEffort: 'high', showReasoning: false,
             },
             response: {
                 text: 'answer', reasoning: 'recorded reasoning',
@@ -232,7 +257,7 @@ success [read_file('output.txt'), shell('echo traced')]
             { ...original, kind: 'agent' as const },
             { ...original, model: 'other' },
             { ...original, reasoningEffort: 'high' as const },
-            { ...original, showReasoning: true },
+            { ...original, showReasoning: false },
         ]) {
             await expect(replay.call(request)).rejects.toThrow(/mismatch at call 1/);
         }

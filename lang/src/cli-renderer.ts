@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { CliRenderer } from '@bettertui/core';
-import { RendererProtocol, type ChildMessage, type LogEvent } from './log-events.js';
-import { eventHeader, prettyJson, sanitize } from './log-format.js';
+import { RendererProtocol, type ChildMessage, type LogEvent, type ModelStreamEvent } from './log-events.js';
+import { eventHeader, formatSegments, paint, prettyJson, sanitize } from './log-format.js';
 
 interface ProbeInput {
     setRawMode(mode: boolean): void;
@@ -55,6 +55,7 @@ export async function createEventView(renderer: CliRenderer, color: boolean) {
     const { Text, measureText } = await import('@bettertui/core');
     const lines: InstanceType<typeof Text>[] = [];
     const history: LogEvent[] = [];
+    const streams = new Map<string, { interaction: ModelStreamEvent['interaction']; channel: 'response' | 'reasoning'; messageId: string; text: string }>();
     const collapsedByPayload = new Map<string, boolean>();
     const payloadOwners = new Map<string, LogEvent>();
     const expanded = new Map<string, string>();
@@ -91,6 +92,7 @@ export async function createEventView(renderer: CliRenderer, color: boolean) {
     };
     const view = {
         history: history as readonly LogEvent[],
+        streams,
         collapsedByPayload,
         selectedPayloadId: undefined as string | undefined,
         scrollPosition: 0,
@@ -102,10 +104,26 @@ export async function createEventView(renderer: CliRenderer, color: boolean) {
         append(event: LogEvent): void {
             history.push(event);
             for (const part of event.segments) {
-                if (part.type !== 'json') continue;
+                if (part.type !== 'json' && part.type !== 'preface') continue;
                 collapsedByPayload.set(part.payloadId, true);
                 payloadOwners.set(part.payloadId, event);
                 this.selectedPayloadId ??= part.payloadId;
+            }
+            this.render();
+        },
+        stream(event: ModelStreamEvent): void {
+            if (event.type === 'end') {
+                for (const [key, stream] of streams) {
+                    if (stream.interaction.requestId === event.interaction.requestId) streams.delete(key);
+                }
+            } else {
+                const { update } = event;
+                const key = `${event.interaction.requestId}:${update.channel}`;
+                const previous = streams.get(key);
+                streams.set(key, {
+                    interaction: event.interaction, channel: update.channel, messageId: update.messageId,
+                    text: update.mode === 'append' && previous?.messageId === update.messageId ? previous.text + update.text : update.text,
+                });
             }
             this.render();
         },
@@ -120,18 +138,21 @@ export async function createEventView(renderer: CliRenderer, color: boolean) {
                     let content = `${eventHeader(event, color)} `;
                     const offsets = new Map<string, number>();
                     for (const part of event.segments) {
-                        if (part.type !== 'json') { content += part.text; continue; }
+                        if (part.type !== 'json' && part.type !== 'preface') { content += part.text; continue; }
                         if (!content.endsWith('\n')) content += '\n';
                         offsets.set(part.payloadId, wrap(content, this.width).length - 1);
                         const selected = this.selectedPayloadId === part.payloadId ? '>' : ' ';
                         if (collapsedByPayload.get(part.payloadId)) {
                             const summary = `${selected} [+] ${part.summary}`;
                             content += summary.length <= this.width ? summary
-                                : `${selected}+ ${part.container === 'object' ? '{}' : '[]'}`.slice(0, this.width);
+                                : `${selected}+ ${part.type === 'preface' ? 'preface' : part.container === 'object' ? '{}' : '[]'}`.slice(0, this.width);
                         }
                         else {
                             let formatted = expanded.get(part.payloadId);
-                            if (formatted === undefined) { formatted = prettyJson(part.source, color)!; expanded.set(part.payloadId, formatted); }
+                            if (formatted === undefined) {
+                                formatted = part.type === 'json' ? prettyJson(part.source, color)! : formatSegments([part], color);
+                                expanded.set(part.payloadId, formatted);
+                            }
                             content += `${selected} [-] ${formatted}`;
                         }
                     }
@@ -140,6 +161,12 @@ export async function createEventView(renderer: CliRenderer, color: boolean) {
                 }
                 for (const [id, row] of cached.offsets) this.payloadRows.set(id, this.rows.length + row);
                 this.rows.push(...cached.rows);
+            }
+            for (const stream of streams.values()) {
+                const header = stream.channel === 'response'
+                    ? paint(`<- output ${stream.interaction.kind} [streaming]`, 36, color)
+                    : paint(`i info reasoning ${stream.interaction.kind} [streaming]`, 34, color);
+                this.rows.push(...wrap(`${header} ${stream.text}`, this.width));
             }
             const hintRows = wrap(hint, this.width).slice(0, Math.max(1, this.height - 1));
             const page = Math.max(1, this.height - hintRows.length);
@@ -297,6 +324,9 @@ async function main(): Promise<void> {
                 view!.append(message.event);
                 send({ version: 1, sessionId, type: 'accepted', sequence: message.sequence });
             } catch (error) { fatal('rendering', error); }
+        } else if (message.type === 'stream') {
+            try { view!.stream(message.event); }
+            catch (error) { fatal('rendering', error); }
         } else {
             try {
                 cleanup();

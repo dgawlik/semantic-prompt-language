@@ -20,7 +20,7 @@ export function isReservedName(name: string): boolean {
     return KEYWORDS.has(name);
 }
 
-export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'show', 'schema', 'repairs', 'model'] as const;
+export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'hide', 'schema', 'repairs', 'model'] as const;
 export const LOG_MODIFIER_NAMES = ['level'] as const;
 
 const DIRECTIVE_SCHEMA: Record<string, 'string'> = { model: 'string' };

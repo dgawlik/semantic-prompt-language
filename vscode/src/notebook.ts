@@ -7,6 +7,7 @@ import {
     type WorkflowCell,
 } from './notebookFormat';
 import { NotebookKernel } from './notebookKernel';
+import type { ModelStreamEvent } from '../../lang/src/log-events.js';
 
 class WorkflowSerializer implements vscode.NotebookSerializer {
     deserializeNotebook(content: Uint8Array): vscode.NotebookData {
@@ -168,6 +169,58 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
                 let success = false;
                 let outputQueue = Promise.resolve();
                 const logs = new NotebookLogBuffer();
+                const streams = new Map<string, {
+                    requestId: string; channel: 'response' | 'reasoning'; messageId: string; text: string;
+                    output?: vscode.NotebookCellOutput; pending: boolean; completed: boolean;
+                }>();
+                let lastResponse: string | undefined;
+                const updateStream = (requestId: string, channel: 'response' | 'reasoning', messageId: string,
+                    text: string, mode: 'append' | 'replace', completed = false) => {
+                    const key = `${requestId}:${channel}`;
+                    let state = streams.get(key);
+                    if (!state) {
+                        state = { requestId, channel, messageId, text: '', pending: false, completed: false };
+                        streams.set(key, state);
+                    }
+                    state.text = mode === 'append' && state.messageId === messageId ? state.text + text : text;
+                    state.messageId = messageId;
+                    state.completed = completed;
+                    if (state.pending) return;
+                    state.pending = true;
+                    const currentStream = state;
+                    outputQueue = outputQueue.then(async () => {
+                        currentStream.pending = false;
+                        const items = [vscode.NotebookCellOutputItem.text(
+                            currentStream.channel === 'reasoning' ? `Reasoning:\n${currentStream.text}` : currentStream.text,
+                        )];
+                        if (currentStream.output) await execution.replaceOutputItems(items, currentStream.output);
+                        else {
+                            currentStream.output = new vscode.NotebookCellOutput(items);
+                            await execution.appendOutput(currentStream.output);
+                        }
+                    });
+                };
+                const stream = (event: ModelStreamEvent) => {
+                    const id = event.interaction.requestId;
+                    if (event.type === 'update') {
+                        const { update } = event;
+                        updateStream(id, update.channel, update.messageId, update.text, update.mode);
+                    } else if (event.outcome === 'completed') {
+                        updateStream(id, 'response', 'final', event.response, 'replace', true);
+                        lastResponse = event.response.trim();
+                        if (event.reasoning !== undefined) updateStream(id, 'reasoning', 'final', event.reasoning, 'replace', true);
+                        else {
+                            const reasoning = streams.get(`${id}:reasoning`);
+                            if (reasoning) updateStream(id, 'reasoning', 'final',
+                                reasoning.text + '\n[Reasoning preview only]', 'replace', true);
+                        }
+                    } else {
+                        for (const state of streams.values()) {
+                            if (state.requestId === id) updateStream(id, state.channel, state.messageId,
+                                state.text + '\n[Model output interrupted]', 'replace');
+                        }
+                    }
+                };
                 let logOutput: vscode.NotebookCellOutput | undefined;
                 let logUpdatePending = false;
                 const log = (text: string, display = false) => {
@@ -206,7 +259,7 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
                         id: ++requestId, value: cell.document.getText(), language: cell.document.languageId,
                         frontmatter: frontmatter(notebook), source: cell.document.uri.toString(),
                         version,
-                    }, log);
+                    }, log, stream);
                     if (result.kind === 'error') {
                         const origin = notebook.getCells().find(item => item.document.uri.toString() === result.source)?.document;
                         if (origin && result.version === origin.version) {
@@ -216,12 +269,18 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
                     }
                     log(`[info] Cell completed (${Date.now() - started} ms)`);
                     await outputQueue;
-                    if (result.text !== undefined) {
+                    if (result.text !== undefined && result.text !== lastResponse) {
                         await execution.appendOutput(new vscode.NotebookCellOutput([vscode.NotebookCellOutputItem.text(result.text)]));
                     }
                     success = true;
                 } catch (error) {
                     const failure = error instanceof Error ? error : new Error(String(error));
+                    for (const state of streams.values()) {
+                        if (!state.completed && !state.text.endsWith('[Model output interrupted]')) {
+                            updateStream(state.requestId, state.channel, state.messageId,
+                                state.text + '\n[Model output interrupted]', 'replace');
+                        }
+                    }
                     log(`[error] Cell failed: ${failure.message}`);
                     await outputQueue.catch(outputError => {
                         output.appendLine(`Could not update cell output: ${String(outputError)}`);

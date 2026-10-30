@@ -1,6 +1,6 @@
 {
   "name": "spl-lang",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Semantic Prompt Language: a Python-like language with LLM calls built into the syntax",
   "type": "module",
   "main": "./dist/index.js",

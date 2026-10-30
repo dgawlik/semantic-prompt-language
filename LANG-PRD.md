@@ -131,7 +131,7 @@ evaluated once and checked at runtime before a call.
 | `len` | `word`, `sentence`, `paragraph`, `long`; prompt hint only |
 | `fmt` | `integer`, `float`, `array`, `object`, `text` (default), `boolean`, `json` (any JSON value) |
 | `reasoning` | `low`, `medium`, `high`; model support is best effort with warnings |
-| `show` | Boolean, default False; stream available model reasoning to info logs |
+| `hide` | Boolean, default False; suppress available model reasoning display when True |
 | `schema` | Strict synchronous JSON Schema draft-07 object/boolean; implies json format |
 | `repairs` | Integer 0..5; additional generation attempts, default 0 |
 | `model` | Nonempty model identifier |

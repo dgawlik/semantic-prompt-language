@@ -167,7 +167,7 @@
       "patterns": [
         {
           "name": "variable.parameter.modifier.spl",
-          "match": "\\b(?:len|fmt|reasoning|show|schema|repairs|model)\\b(?=\\s*=(?!=))"
+          "match": "\\b(?:len|fmt|reasoning|hide|schema|repairs|model)\\b(?=\\s*=(?!=))"
         },
         { "include": "#expression" }
       ]

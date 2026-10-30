@@ -1,7 +1,7 @@
 import type { AssignTarget, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
 import { callMethod, isMutatingMethod, iterate, makeBuiltins } from './builtins.js';
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
-import { LlmError, buildPrompt, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
+import { LlmError, buildPromptParts, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import { AGENT_TOOLS, actionArguments } from './agent.js';
 import { compileSchema } from './schema.js';
 import type { Logger, LogLevel } from './logger.js';
@@ -667,21 +667,30 @@ class Interpreter {
 
     // ---- LLM and tools -------------------------------------------------
 
-    private async callLlm(req: LlmRequest): Promise<string> {
-        return (await this.callLlmResponse(req)).text.trim();
+    private async callLlm(req: LlmRequest, preface: string): Promise<string> {
+        return (await this.callLlmResponse(req, undefined, preface)).text.trim();
     }
 
     private async callLlmResponse(req: LlmRequest, interaction: ModelInteraction = {
         requestId: randomUUID(), kind: req.naturalLanguage ? 'blockquote' : req.kind,
-    }): Promise<LlmResponse> {
+    }, preface = ''): Promise<LlmResponse> {
         const { logger, backend } = this.opts;
         if (this.program.markdown) {
+            preface = [RUNTIME_PREAMBLE, this.program.markdown.preamble, preface].filter(Boolean).join('\n\n');
             req = { ...req, prompt: [
                 RUNTIME_PREAMBLE, this.program.markdown.preamble, req.prompt,
             ].filter(Boolean).join('\n\n') };
         }
         const replaying = this.opts.checkpoint?.replaying;
-        if (!replaying) logger.modelInput(interaction, req.prompt);
+        if (!replaying) logger.modelPrompt(interaction, req.prompt, preface);
+        const originalStream = req.onStream;
+        let receiving = true;
+        if (!replaying && (logger.streamsModels || originalStream)) req = { ...req, onStream: update => {
+            if (!receiving) return;
+            originalStream?.(update);
+            if (update.channel !== 'reasoning' || req.showReasoning) logger.modelStream({ type: 'update', interaction, update });
+        } };
+        let completed = false;
         const started = Date.now();
         try {
             const perform = async () => {
@@ -698,6 +707,10 @@ class Interpreter {
                 : await perform();
             if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response; blockquotes require runtime actions, not submitted SPL');
             if (!replaying) {
+                receiving = false;
+                logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: res.text,
+                    ...(req.showReasoning && res.reasoning !== undefined ? { reasoning: res.reasoning } : {}) });
+                completed = true;
                 logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
                 logger.modelOutput({ ...interaction, role: 'response' }, res.text);
             }
@@ -707,6 +720,9 @@ class Interpreter {
             if (e instanceof Failure) throw e;
             if (e instanceof LlmError) throw new Failure('llm_error', e.message);
             throw new Failure('llm_error', (e as Error).message ?? String(e));
+        } finally {
+            receiving = false;
+            if (!replaying && !completed) logger.modelStream({ type: 'end', interaction, outcome: 'failed' });
         }
     }
 
@@ -748,13 +764,15 @@ class Interpreter {
                     continue;
                 }
                 let actionFailed = false;
+                const context = `${NATURAL_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings at command start:\n${JSON.stringify(bindings)}`;
+                const built = buildPromptParts({
+                    prompt: `${context}\n\nBlockquote:\n${text}\n\nCompleted turns and action results:\n${JSON.stringify(history)}`,
+                    constraints: this.constraints, restrictions: this.restrictions,
+                });
                 const request: LlmRequest = {
                     kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS,
-                    prompt: buildPrompt({
-                        prompt: `${NATURAL_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings at command start:\n${JSON.stringify(bindings)}\n\nBlockquote:\n${text}\n\nCompleted turns and action results:\n${JSON.stringify(history)}`,
-                        constraints: this.constraints, restrictions: this.restrictions,
-                    }),
-                    model: this.model, reasoningEffort: 'medium', showReasoning: false,
+                    prompt: built.prompt,
+                    model: this.model, reasoningEffort: 'medium', showReasoning: true,
                     restrictions: this.restrictions, tools: new ToolHost(this.restrictions, this.cwd),
                     currentRestrictions: () => this.restrictions,
                     invokeAction: async action => {
@@ -769,7 +787,7 @@ class Interpreter {
                 };
                 let response: LlmResponse;
                 try {
-                    response = await this.callLlmResponse(request, interaction);
+                    response = await this.callLlmResponse(request, interaction, [built.preface, context].filter(Boolean).join('\n\n'));
                 } catch (error) {
                     if (checkpoint && !actionFailed && error instanceof Failure) {
                         await decision(async () => { throw error; });
@@ -869,26 +887,27 @@ class Interpreter {
         }
         const options: Record<string, Value> = {};
         for (const [name, expr] of Object.entries(mods)) setKey(options, name, await this.eval(expr, env));
-        const { len, reasoning = kind === 'ask' ? undefined : 'medium', show = false, repairs = 0, model } = options;
+        const { len, reasoning = kind === 'ask' ? undefined : 'medium', hide = false, repairs = 0, model } = options;
         const fmt = options.fmt ?? ('schema' in options ? 'json' : 'text');
         if (len !== undefined && len !== 'word' && len !== 'sentence' && len !== 'paragraph' && len !== 'long') throw runtimeError('len must be word, sentence, paragraph, or long');
         if (fmt !== 'integer' && fmt !== 'float' && fmt !== 'array' && fmt !== 'object' && fmt !== 'text' && fmt !== 'boolean' && fmt !== 'json') {
             throw runtimeError('fmt must be integer, float, array, object, text, boolean, or json');
         }
         if (reasoning !== undefined && reasoning !== 'low' && reasoning !== 'medium' && reasoning !== 'high') throw runtimeError('reasoning must be low, medium, or high');
-        if (typeof show !== 'boolean') throw runtimeError('show must be True or False');
+        if (typeof hide !== 'boolean') throw runtimeError('hide must be True or False');
         if (model !== undefined && (typeof model !== 'string' || !model.trim())) throw runtimeError('model must be a non-empty string');
         if (typeof repairs !== 'number' || !Number.isInteger(repairs) || repairs < 0 || repairs > 5) throw runtimeError('repairs must be an integer from 0 to 5');
         if (kind === 'agent' && repairs !== 0) throw runtimeError('agents cannot use repairs: external actions must not be retried automatically');
         if (fmt === 'text' && ('schema' in options || repairs !== 0)) throw runtimeError('schema and repairs require JSON output');
         const validate = 'schema' in options ? compileSchema(options.schema) : undefined;
-        let prompt = buildPrompt({
+        const built = buildPromptParts({
             prompt: str(await this.eval(promptExpr, env)),
             mods: { len, fmt },
             thinking: reasoning !== undefined,
             constraints: this.constraints,
             restrictions: this.restrictions,
         });
+        let prompt = built.prompt;
         if (fmt === 'json') prompt += '\n\nReturn ONLY valid JSON, without prose or code fences.';
         if (validate) prompt += `\n\nThe result must satisfy this JSON Schema:\n${JSON.stringify(toJson(options.schema))}`;
         const basePrompt = prompt;
@@ -897,10 +916,10 @@ class Interpreter {
                 kind, prompt,
                 model: this.opts.model ?? model ?? this.model,
                 reasoningEffort: reasoning,
-                showReasoning: show,
+                showReasoning: !hide,
                 restrictions: this.restrictions,
                 tools: new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay'),
-            });
+            }, built.preface);
             try {
                 const value = fmt === 'text' ? text : parseJsonResponse(text, fmt);
                 validate?.(value);

@@ -13,9 +13,11 @@
     think(reasoning='low') 'why'
 #   ^^^^^ keyword.other.think.spl
 #         ^^^^^^^^^ variable.parameter.modifier.spl
-    think(show=True) 'why'
+    think(hide=True) 'why'
 #         ^^^^ variable.parameter.modifier.spl
 #              ^^^^ constant.language.spl
+    think(show=True) 'removed modifier'
+#         ^^^^ - variable.parameter.modifier.spl
     agent(schema=Contract, repairs=0) 'work'
 #   ^^^^^ keyword.other.agent.spl
 #         ^^^^^^ variable.parameter.modifier.spl

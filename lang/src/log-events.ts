@@ -1,7 +1,14 @@
 import { stripVTControlCharacters, types } from 'node:util';
+import type { LlmStreamUpdate } from './llm.js';
 
 export type BodySegment =
     | { readonly type: 'text' | 'inspection'; readonly text: string }
+    | {
+        readonly type: 'preface';
+        readonly payloadId: string;
+        readonly source: string;
+        readonly summary: string;
+    }
     | {
         readonly type: 'json';
         readonly payloadId: string;
@@ -67,6 +74,14 @@ export type LogEvent = EventBase & (
 
 export type LogEventSink = (event: LogEvent) => void;
 
+export type ModelStreamEvent = { readonly interaction: ModelInteraction } & (
+    | { readonly type: 'update'; readonly update: Readonly<LlmStreamUpdate> }
+    | { readonly type: 'end'; readonly outcome: 'completed'; readonly response: string; readonly reasoning?: string }
+    | { readonly type: 'end'; readonly outcome: 'failed' }
+);
+
+export type ModelStreamSink = (event: ModelStreamEvent) => void;
+
 export function freezeEvent(event: LogEvent): LogEvent {
     for (const segment of event.segments) Object.freeze(segment);
     Object.freeze(event.segments);
@@ -95,6 +110,7 @@ export type ParentMessage = MessageBase & (
     | { readonly type: 'initialize'; readonly color: boolean; readonly terminal: TerminalState }
     | { readonly type: 'activate' }
     | { readonly type: 'event'; readonly sequence: number; readonly event: LogEvent }
+    | { readonly type: 'stream'; readonly event: ModelStreamEvent }
     | { readonly type: 'finish'; readonly lastSequence: number | null; readonly reason: FinishReason }
 );
 export type ChildMessage = MessageBase & (
@@ -121,6 +137,24 @@ const safeText = (value: unknown): value is string => typeof value === 'string' 
     stripVTControlCharacters(value) === value && !/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(value);
 const scopeKinds: readonly unknown[] = ['global', 'block', 'branch', 'iteration', 'function', 'handler', 'retained'];
 
+export function isModelStreamEvent(value: unknown): value is ModelStreamEvent {
+    if (!record(value) || !record(value.interaction)) return false;
+    const interaction = value.interaction;
+    if (!fields(interaction, ['requestId', 'kind', 'role']) || !nonempty(interaction.requestId) ||
+        !['ask', 'think', 'agent', 'blockquote'].includes(String(interaction.kind)) ||
+        (interaction.role !== undefined && interaction.role !== 'response' && interaction.role !== 'action')) return false;
+    if (value.type === 'update') {
+        return fields(value, ['type', 'interaction', 'update']) && record(value.update) &&
+            fields(value.update, ['channel', 'messageId', 'mode', 'text']) &&
+            ['response', 'reasoning'].includes(String(value.update.channel)) && nonempty(value.update.messageId) &&
+            ['append', 'replace'].includes(String(value.update.mode)) && safeText(value.update.text);
+    }
+    if (value.type !== 'end') return false;
+    if (value.outcome === 'failed') return fields(value, ['type', 'interaction', 'outcome']);
+    return value.outcome === 'completed' && fields(value, ['type', 'interaction', 'outcome', 'response', 'reasoning']) &&
+        safeText(value.response) && (value.reasoning === undefined || safeText(value.reasoning));
+}
+
 function observed(value: unknown): boolean {
     if (!record(value)) return false;
     if (value.presence === 'unbound') return fields(value, ['presence']);
@@ -146,6 +180,9 @@ function stateChange(value: unknown): boolean {
 function segment(value: unknown, eventId: string): value is BodySegment {
     if (!record(value)) return false;
     if (value.type === 'text' || value.type === 'inspection') return fields(value, ['type', 'text']) && safeText(value.text);
+    if (value.type === 'preface') return fields(value, ['type', 'payloadId', 'source', 'summary']) &&
+        nonempty(value.payloadId) && value.payloadId.startsWith(`${eventId}:`) && safeText(value.source) &&
+        nonempty(value.source) && safeText(value.summary) && nonempty(value.summary) && !/[\r\n]/.test(value.summary);
     if (!fields(value, ['type', 'payloadId', 'container', 'source', 'summary']) ||
         value.type !== 'json' || !nonempty(value.payloadId) || !value.payloadId.startsWith(`${eventId}:`) ||
         typeof value.source !== 'string' || !safeText(value.summary) || /[\r\n]/.test(value.summary)) return false;
@@ -159,7 +196,7 @@ export function isLogEvent(value: unknown): value is LogEvent {
     if (!record(value) || !nonempty(value.id) || !sequence(value.sequence) || !Array.isArray(value.segments)) return false;
     const id = value.id;
     if (!value.segments.every(part => segment(part, id))) return false;
-    const payloadIds = value.segments.filter(part => part.type === 'json').map(part => part.payloadId);
+    const payloadIds = value.segments.filter(part => part.type === 'json' || part.type === 'preface').map(part => part.payloadId);
     if (new Set(payloadIds).size !== payloadIds.length) return false;
     const base = ['id', 'sequence', 'segments', 'kind', 'origin'];
     switch (value.kind) {
@@ -189,6 +226,8 @@ function parentMessage(value: unknown): value is ParentMessage {
         case 'event':
             return fields(value, [...base, 'sequence', 'event']) && sequence(value.sequence) &&
                 isLogEvent(value.event) && value.sequence === value.event.sequence;
+        case 'stream':
+            return fields(value, [...base, 'event']) && isModelStreamEvent(value.event);
         case 'activate': return fields(value, base);
         case 'finish':
             return fields(value, [...base, 'lastSequence', 'reason']) && finalSequence(value.lastSequence) &&
@@ -228,6 +267,7 @@ export class RendererProtocol {
     private finished = false;
     private activated = false;
     private readonly ids = new Set<string>();
+    private readonly endedStreams = new Set<string>();
 
     accept(raw: unknown): ParentMessage {
         const message = parseParentMessage(raw);
@@ -236,6 +276,10 @@ export class RendererProtocol {
         if (message.type === 'initialize') {
             if (this.sessionId) throw new Error('renderer protocol: repeated initialize');
             this.sessionId = message.sessionId;
+        } else if (message.type === 'stream') {
+            const id = message.event.interaction.requestId;
+            if (this.endedStreams.has(id)) throw new Error('renderer protocol: stream update after end');
+            if (message.event.type === 'end') this.endedStreams.add(id);
         } else {
             if (!this.sessionId) throw new Error('renderer protocol: initialize required');
             if (message.type === 'activate') {

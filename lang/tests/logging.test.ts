@@ -5,7 +5,10 @@ import { LlmError, type LlmBackend, type LlmRequest } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
 import { NoLlm } from './helpers.js';
-import type { LogEvent } from '../src/log-events.js';
+import type { LogEvent, ModelStreamEvent } from '../src/log-events.js';
+import { formatEvent, formatSegments } from '../src/log-format.js';
+import { parseMarkdown } from '../src/markdown.js';
+import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from '../src/preamble.js';
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -134,6 +137,241 @@ it.each(["'trace'", '1', 'None', 'True'])('rejects invalid log level %s before e
     });
     expect(result).toMatchObject({
         status: 'failure', failure: { status_code: 'runtime_error', reason: "log level must be 'error', 'info' or 'debug'" },
+    });
+});
+
+describe('model streaming', () => {
+    it.each(['ask', 'think', 'agent'])('streams %s previews without allocating transcript events or parsing partial JSON', async kind => {
+        const history: LogEvent[] = [];
+        const streams: ModelStreamEvent[] = [];
+        let late: LlmRequest['onStream'];
+        const logger = new Logger('error', undefined, {
+            eventSink: event => history.push(event), streamSink: event => streams.push(event),
+        });
+        const result = await run(parse(`success ${kind}(fmt='object') 'Prompt'`), {
+            logger, backend: {
+                async call(req) {
+                    late = req.onStream;
+                    req.onStream?.({ channel: 'response', messageId: 'answer', mode: 'append', text: '{"partial":' });
+                    await new Promise(resolve => setImmediate(resolve));
+                    expect(streams).toHaveLength(1);
+                    expect(history.map(event => event.kind)).toEqual(['model-input']);
+                    return { text: '{"answer":42}', effective: {} };
+                },
+                async close() {},
+            },
+        });
+        expect(result).toMatchObject({ status: 'success', value: { answer: 42 } });
+        expect(streams).toHaveLength(2);
+        expect(streams[1]).toMatchObject({ type: 'end', outcome: 'completed', response: '{"answer":42}' });
+        expect(history.map(event => event.kind)).toEqual(['model-input', 'model-output']);
+        expect(history.map(event => event.sequence)).toEqual([1, 2]);
+        expect(streams[0].interaction.requestId).toBe(streams[1].interaction.requestId);
+        late?.({ channel: 'response', messageId: 'answer', mode: 'append', text: 'late' });
+        expect(streams).toHaveLength(2);
+    });
+
+    it('does not turn a valid partial preview into success when the backend fails', async () => {
+        const history: LogEvent[] = [];
+        const streams: ModelStreamEvent[] = [];
+        const result = await run(parse(`success ask(fmt='object') 'Prompt'`), {
+            logger: new Logger('error', undefined, { eventSink: event => history.push(event), streamSink: event => streams.push(event) }),
+            backend: {
+                async call(req) {
+                    req.onStream?.({ channel: 'response', messageId: 'answer', mode: 'append', text: '{"valid":true}' });
+                    throw new LlmError('connection lost');
+                },
+                async close() {},
+            },
+        });
+        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error', reason: 'connection lost' } });
+        expect(streams.at(-1)).toMatchObject({ type: 'end', outcome: 'failed' });
+        expect(history.some(event => event.kind === 'model-output')).toBe(false);
+    });
+
+    it('keeps repairs in independent stream lifecycles and validates only complete responses', async () => {
+        const streams: ModelStreamEvent[] = [];
+        let calls = 0;
+        const result = await run(parse(`success ask(fmt='integer', repairs=1) 'Number?'`), {
+            logger: new Logger('error', () => {}, { streamSink: event => streams.push(event) }),
+            backend: {
+                async call(req) {
+                    req.onStream?.({ channel: 'response', messageId: 'same-sdk-id', mode: 'append', text: '1' });
+                    return { text: ++calls === 1 ? '"invalid"' : '7', effective: {} };
+                },
+                async close() {},
+            },
+        });
+        expect(result).toMatchObject({ status: 'success', value: 7 });
+        expect(streams.map(event => event.type)).toEqual(['update', 'end', 'update', 'end']);
+        expect(streams[0].interaction.requestId).not.toBe(streams[2].interaction.requestId);
+    });
+
+    it.each([
+        ...['ask', 'think', 'agent'].flatMap(command => [
+            { source: `success ${command} 'Prompt'`, show: true },
+            { source: `success ${command}(hide=False) 'Prompt'`, show: true },
+            { source: `success ${command}(hide=True) 'Prompt'`, show: false },
+        ]),
+        { source: '> Prompt', show: true },
+    ])('gates only reasoning previews and final reasoning: $source', async ({ source, show }) => {
+        const streams: ModelStreamEvent[] = [];
+        const program = source.startsWith('>')
+            ? parseMarkdown(`---\nextension: semantic-prompt-language\nversion: 1\n---\n\n${source}`)
+            : parse(source);
+        await run(program, {
+            logger: new Logger('error', () => {}, { streamSink: event => streams.push(event) }),
+            backend: {
+                async call(req) {
+                    expect(req.showReasoning).toBe(show);
+                    req.onStream?.({ channel: 'reasoning', messageId: 'reason', mode: 'append', text: 'Thinking' });
+                    req.onStream?.({ channel: 'response', messageId: 'answer', mode: 'append', text: 'Done' });
+                    return { text: 'Done', reasoning: 'Full reasoning', effective: {} };
+                },
+                async close() {},
+            },
+        });
+        expect(streams.filter(event => event.type === 'update' && event.update.channel === 'reasoning')).toHaveLength(show ? 1 : 0);
+        expect(streams.filter(event => event.type === 'update' && event.update.channel === 'response')).toHaveLength(1);
+        expect(streams.at(-1)).toEqual(expect.objectContaining({
+            type: 'end', outcome: 'completed', response: 'Done', ...(show ? { reasoning: 'Full reasoning' } : {}),
+        }));
+        if (!show) expect(streams.at(-1)).not.toHaveProperty('reasoning');
+    });
+
+    it('detaches and sanitizes stream updates without touching the persistent sequence', () => {
+        const streams: ModelStreamEvent[] = [];
+        const history: LogEvent[] = [];
+        const logger = new Logger('error', undefined, { eventSink: event => history.push(event), streamSink: event => streams.push(event) });
+        const update = { channel: 'response', messageId: 'answer', mode: 'append', text: '\u001b[31mSafe\u001b[0m\r\nnext\u0000' } as const;
+        logger.modelStream({ type: 'update', interaction: { kind: 'ask', requestId: 'request' }, update });
+        expect(streams[0]).toMatchObject({ update: { text: 'Safe\nnext' } });
+        expect(Object.isFrozen(streams[0])).toBe(true);
+        if (streams[0].type === 'update') expect(Object.isFrozen(streams[0].update)).toBe(true);
+        logger.modelOutput({ kind: 'ask', requestId: 'request' }, 'Done');
+        expect(history[0].sequence).toBe(1);
+        const sink = vi.fn();
+        const silent = new Logger('silent', sink, { streamSink: sink });
+        expect(silent.streamsModels).toBe(false);
+        silent.modelStream({ type: 'update', interaction: { kind: 'ask', requestId: 'request' }, update });
+        expect(sink).not.toHaveBeenCalled();
+    });
+});
+
+describe('generated model prefaces', () => {
+    const markdown = (code: string) => `---
+extension: semantic-prompt-language
+version: 1
+preamble: Document guidance.
+---
+
+\`\`\`spl
+${code}
+\`\`\``;
+
+    describe.each([false, true])('Markdown: %s', isMarkdown => {
+        it.each(['ask', 'think', 'agent'])('separates the generated %s preface without changing the request', async kind => {
+            const history: LogEvent[] = [];
+            const requests: LlmRequest[] = [];
+            const code = `enforce 'Be precise':
+    success ${kind}(len='sentence') 'Visible prompt'`;
+            const result = await run(isMarkdown ? parseMarkdown(markdown(code)) : parse(code), {
+                logger: new Logger('info', undefined, { eventSink: event => history.push(event) }),
+                backend: {
+                    async call(req) { requests.push(req); return { text: 'Done', effective: {} }; },
+                    async close() {},
+                },
+            });
+            expect(result).toMatchObject({ status: 'success', value: 'Done' });
+            const input = history.find(event => event.kind === 'model-input')!;
+            const preface = input.segments[0];
+            expect(preface).toMatchObject({ type: 'preface', summary: 'Generated preface [folded]' });
+            if (preface.type !== 'preface') throw new Error('expected generated preface');
+            expect(preface.source).toContain('Follow: Be precise');
+            expect(preface.source).toContain('Answer in a single sentence.');
+            expect(preface.source).not.toContain('Visible prompt');
+            if (isMarkdown) expect(preface.source).toContain(`${RUNTIME_PREAMBLE}\n\nDocument guidance.`);
+            expect(Object.isFrozen(preface)).toBe(true);
+            expect(formatEvent(input)).toBe(`-> input ${kind} ${requests[0].prompt}`);
+            expect(formatSegments(input.segments.slice(1))).toBe('\n\nVisible prompt');
+        });
+    });
+
+    it('does not fold an unprefaced prompt, even if it resembles generated guidance', async () => {
+        const history: LogEvent[] = [];
+        const prompt = 'Response guidance (not runtime validation):';
+        await run(parse(`success ask '${prompt}'`), {
+            logger: new Logger('error', undefined, { eventSink: event => history.push(event) }),
+            backend: { async call() { return { text: 'Done', effective: {} }; }, async close() {} },
+        });
+        expect(history[0].segments).toEqual([{ type: 'text', text: prompt }]);
+    });
+
+    it('retains the generated preface across repairs while keeping repair feedback visible', async () => {
+        const history: LogEvent[] = [];
+        const requests: LlmRequest[] = [];
+        const result = await run(parseMarkdown(markdown(`success ask(fmt='integer', repairs=1) 'Number?'`)), {
+            logger: new Logger('info', undefined, { eventSink: event => history.push(event) }),
+            backend: {
+                async call(req) {
+                    requests.push(req);
+                    return { text: requests.length === 1 ? '"bad"' : '7', effective: {} };
+                },
+                async close() {},
+            },
+        });
+        expect(result).toMatchObject({ status: 'success', value: 7 });
+        const inputs = history.filter(event => event.kind === 'model-input');
+        expect(inputs).toHaveLength(2);
+        expect(inputs.map(event => event.segments[0])).toEqual([
+            expect.objectContaining({ type: 'preface' }), expect.objectContaining({ type: 'preface' }),
+        ]);
+        const first = inputs[0].segments[0];
+        const second = inputs[1].segments[0];
+        if (first.type !== 'preface' || second.type !== 'preface') throw new Error('expected generated prefaces');
+        expect(first.source).toBe(second.source);
+        expect(first.payloadId).not.toBe(second.payloadId);
+        expect(formatSegments(inputs[1].segments.slice(1))).toContain('Validation failed:');
+        inputs.forEach((event, index) => expect(formatEvent(event)).toBe(`-> input ask ${requests[index].prompt}`));
+    });
+
+    it('groups blockquote instructions and initial context, leaving the command and completed turns visible', async () => {
+        const history: LogEvent[] = [];
+        const requests: LlmRequest[] = [];
+        const source = `${markdown("let original = {'value': 1}")}\n\n> Set @answer to 2.`;
+        await run(parseMarkdown(source), {
+            logger: new Logger('error', undefined, { eventSink: event => history.push(event) }),
+            backend: {
+                async call(req) {
+                    requests.push(req);
+                    return { text: 'Done', effective: {}, ...(requests.length === 1
+                        ? { action: { name: 'save_variable', arguments: { name: 'answer', value: 2 } } } : {}) };
+                },
+                async close() {},
+            },
+        });
+        const inputs = history.filter(event => event.kind === 'model-input');
+        expect(inputs).toHaveLength(2);
+        inputs.forEach((event, index) => {
+            const preface = event.segments[0];
+            if (preface.type !== 'preface') throw new Error('expected generated preface');
+            expect(preface.source).toContain(NATURAL_PREAMBLE);
+            expect(preface.source).toContain('Available builtin names:');
+            expect(preface.source).toContain('Shared bindings at command start:');
+            expect(preface.source).toContain('"original":{"value":1}');
+            expect(preface.source).not.toContain('Set @answer to 2.');
+            expect(formatSegments(event.segments.slice(1))).toContain('Blockquote:\nSet @answer to 2.');
+            expect(formatSegments(event.segments.slice(1))).toContain('Completed turns and action results:');
+            expect(formatSegments(event.segments)).toContain('Set @answer to 2.');
+            expect(event.segments.map(part => 'source' in part ? part.source : part.text).join('')).toBe(requests[index].prompt);
+        });
+        expect(formatSegments(inputs[1].segments.slice(1))).toContain('"save_variable"');
+    });
+
+    it('rejects mismatched prefaces instead of silently truncating the prompt', () => {
+        expect(() => new Logger('info', vi.fn()).modelPrompt(
+            { kind: 'ask', requestId: 'invalid' }, 'actual prompt', 'unrelated preface',
+        )).toThrow('model prompt must start with its generated preface');
     });
 });
 

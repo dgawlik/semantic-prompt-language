@@ -99,7 +99,7 @@ special_var    = "$env" | "$args" ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
 modifiers      = "(" , [ modifier , { "," , modifier } , [ "," ] ] , ")" ;
-modifier       = ( "len" | "fmt" | "reasoning" | "show" | "schema" | "repairs" | "model" ) , "=" , expr ;
+modifier       = ( "len" | "fmt" | "reasoning" | "hide" | "schema" | "repairs" | "model" ) , "=" , expr ;
 log_expr       = "log" , "(" , [ "level" , "=" , log_level , [ "," ] ] , ")" , call ;
 log_level      = "error" | "info" | "debug" | expr ;
 human_expr     = "human" , postfix ;

@@ -4,7 +4,8 @@ import { afterEach, test } from 'node:test';
 import { NotebookLogBuffer, registerNotebooks } from '../src/notebook';
 import { DEFAULT_FRONTMATTER } from '../src/notebookFormat';
 import { NotebookKernel } from '../src/notebookKernel';
-import type { ExecuteCell, WorkerReply } from '../src/notebookProtocol';
+import type { CellResult, ExecuteCell, WorkerReply } from '../src/notebookProtocol';
+import type { ModelStreamSink } from '../../lang/src/log-events.js';
 import { registerCopilotContext, type CopilotContextProvider } from '../src/copilotContext';
 import { parse } from '../../lang/src/parser.js';
 import * as mock from './vscodeMock';
@@ -138,6 +139,116 @@ test('native runtime logs update live, stay bounded and reset for each execution
     const rerun = mock.executions[1].outputs[0].items[0].text!;
     assert.match(rerun, /live run 2/);
     assert.doesNotMatch(rerun, /Earlier logs omitted|message 999:|live run 1/);
+});
+
+test('model replies and reasoning update in place before completion without repeating the final result', async t => {
+    t.mock.method(NotebookKernel.prototype, 'execute', async (
+        request: ExecuteCell, _log: (text: string, output: boolean) => void, stream: ModelStreamSink,
+    ): Promise<CellResult> => {
+        const interaction = { kind: 'think', requestId: String(request.id) } as const;
+        const update = (messageId: string, text: string, channel: 'response' | 'reasoning' = 'response') =>
+            stream({ type: 'update', interaction, update: { messageId, text, channel, mode: 'append' } });
+        update('intro', 'Working...');
+        await new Promise(resolve => setImmediate(resolve));
+        const execution = mock.executions.at(-1)!;
+        assert.equal(execution.ended, false);
+        assert.equal(execution.outputs[1].items[0].text, 'Working...');
+        const responseOutput = execution.outputs[1];
+        update('answer', 'Hel');
+        update('answer', 'lo');
+        update('reason', 'Think', 'reasoning');
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(execution.outputs[1], responseOutput);
+        assert.equal(responseOutput.items[0].text, 'Hello');
+        assert.equal(execution.outputs[2].items[0].text, 'Reasoning:\nThink');
+        stream({ type: 'update', interaction, update: { messageId: 'answer', text: 'Full message', channel: 'response', mode: 'replace' } });
+        stream({ type: 'end', interaction, outcome: 'completed', response: 'Authoritative answer', reasoning: 'Complete reasoning' });
+        return { id: request.id, kind: 'result', text: 'Authoritative answer' };
+    });
+    const { notebook, controller } = setup(fence("think 'Prompt'"));
+    await controller.executeHandler(notebook.getCells(), notebook);
+    const execution = mock.executions[0];
+    assert.equal(execution.success, true);
+    assert.equal(execution.outputs.length, 3);
+    assert.equal(execution.outputs[1].items[0].text, 'Authoritative answer');
+    assert.equal(execution.outputs[2].items[0].text, 'Reasoning:\nComplete reasoning');
+    assert.doesNotMatch(execution.outputs[0].items[0].text!, /Working|Hello|Complete reasoning/);
+});
+
+test('streaming updates coalesce, preserve large content and reset on rerun', async t => {
+    let runs = 0;
+    t.mock.method(NotebookKernel.prototype, 'execute', async (
+        request: ExecuteCell, _log: (text: string, output: boolean) => void, stream: ModelStreamSink,
+    ): Promise<CellResult> => {
+        const interaction = { kind: 'ask', requestId: 'same-request' } as const;
+        const content = ++runs === 1 ? 'x'.repeat(10_000) : 'New response';
+        for (const text of content) stream({
+            type: 'update', interaction, update: { channel: 'response', messageId: 'same-message', mode: 'append', text },
+        });
+        await new Promise(resolve => setImmediate(resolve));
+        const execution = mock.executions.at(-1)!;
+        assert.equal(execution.outputs.length, 2);
+        assert.equal(execution.outputs[1].items[0].text, content);
+        stream({ type: 'end', interaction, outcome: 'completed', response: content });
+        return { id: request.id, kind: 'result' };
+    });
+    const { notebook, controller } = setup(fence("let reply = ask 'Prompt'"));
+    await controller.executeHandler(notebook.getCells(), notebook);
+    assert.equal(mock.executions[0].outputs[1].items[0].text!.length, 10_000);
+    await controller.executeHandler(notebook.getCells(), notebook);
+    assert.equal(mock.executions[1].outputs[1].items[0].text, 'New response');
+});
+
+test('reasoning previews without authoritative reasoning remain explicitly identified as previews', async t => {
+    t.mock.method(NotebookKernel.prototype, 'execute', async (
+        request: ExecuteCell, _log: (text: string, output: boolean) => void, stream: ModelStreamSink,
+    ): Promise<CellResult> => {
+        const interaction = { kind: 'think', requestId: String(request.id) } as const;
+        stream({ type: 'update', interaction, update: { channel: 'reasoning', messageId: 'reason', mode: 'append', text: 'Partial thought' } });
+        stream({ type: 'end', interaction, outcome: 'completed', response: 'Answer' });
+        return { id: request.id, kind: 'result', text: 'Answer' };
+    });
+    const { notebook, controller } = setup(fence("think 'Prompt'"));
+    await controller.executeHandler(notebook.getCells(), notebook);
+    assert.equal(mock.executions[0].success, true);
+    assert.deepEqual(mock.executions[0].outputs.slice(1).map(item => item.items[0].text), [
+        'Reasoning:\nPartial thought\n[Reasoning preview only]', 'Answer',
+    ]);
+});
+
+test('nested model calls have separate outputs and completed replies also work without deltas', async t => {
+    t.mock.method(NotebookKernel.prototype, 'execute', async (
+        request: ExecuteCell, _log: (text: string, output: boolean) => void, stream: ModelStreamSink,
+    ): Promise<CellResult> => {
+        const outer = { kind: 'blockquote', requestId: 'outer' } as const;
+        const inner = { kind: 'ask', requestId: 'inner' } as const;
+        stream({ type: 'update', interaction: outer, update: { channel: 'response', messageId: 'same', mode: 'append', text: 'Outer preview' } });
+        stream({ type: 'end', interaction: inner, outcome: 'completed', response: 'Nested answer' });
+        stream({ type: 'end', interaction: outer, outcome: 'completed', response: 'Final instruction reply' });
+        return { id: request.id, kind: 'result', text: 'A different workflow result' };
+    });
+    const { notebook, controller } = setup('> Call a function.');
+    await controller.executeHandler(notebook.getCells(), notebook);
+    assert.deepEqual(mock.executions[0].outputs.slice(1).map(item => item.items[0].text), [
+        'Final instruction reply', 'Nested answer', 'A different workflow result',
+    ]);
+});
+
+test('failed or cancelled streams remain explicitly interrupted and are not successful results', async t => {
+    t.mock.method(NotebookKernel.prototype, 'execute', async (
+        _request: ExecuteCell, _log: (text: string, output: boolean) => void, stream: ModelStreamSink,
+    ): Promise<CellResult> => {
+        const interaction = { kind: 'ask', requestId: 'failed' } as const;
+        stream({ type: 'update', interaction, update: { channel: 'response', messageId: 'answer', mode: 'append', text: '{"partial":true}' } });
+        await new Promise(resolve => setImmediate(resolve));
+        throw new Error('Runtime cancelled before completion');
+    });
+    const { notebook, controller } = setup(fence("ask 'Prompt'"));
+    await controller.executeHandler(notebook.getCells(), notebook);
+    const execution = mock.executions[0];
+    assert.equal(execution.success, false);
+    assert.equal(execution.outputs[1].items[0].text, '{"partial":true}\n[Model output interrupted]');
+    assert.match(execution.outputs.at(-1)!.items[0].error!.message, /Runtime cancelled/);
 });
 
 test('runtime log limits do not truncate failure output or diagnostics', async t => {
