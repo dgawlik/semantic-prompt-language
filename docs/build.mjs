@@ -181,7 +181,7 @@ function renderPage(page, index) {
 <a class="skip-link" href="#page">Skip to content</a>
 <header class="site-header">
   <div class="header-inner">
-    <a class="brand" href="index.html" aria-label="SPL documentation home"><img class="brand-icon" src="assets/icon.png?v=${revision}" alt="" width="36" height="36"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
     <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
     <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden>${icon('search')}<span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden>${icon('sun')}${icon('moon')}</button><a class="github-link icon-button" href="${repository}" aria-label="SPL on GitHub">${icon('external')}</a></div>
   </div>

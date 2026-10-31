@@ -95,7 +95,6 @@
     .skip-link { position: fixed; inset-block-start: .5rem; inset-inline-start: .5rem; z-index: 100; padding: .65rem 1rem; background: var(--ink); color: var(--paper); transform: translateY(-200%); border-radius: .4rem; }
     .skip-link:focus { transform: translateY(0); }
     .brand { display: flex; align-items: center; gap: 1rem; text-decoration: none; flex-shrink: 0; }
-    .brand-icon { display: block; inline-size: 2.25rem; block-size: 2.25rem; object-fit: cover; border-radius: .4rem; flex-shrink: 0; }
     .brand-mark { font-size: 2.2rem; font-weight: 760; letter-spacing: -.16em; line-height: 1; }
     .brand-mark > span:first-child { color: var(--accent); }
     .brand-dot { padding-inline-start: .08em; color: var(--accent); }
