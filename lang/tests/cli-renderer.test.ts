@@ -368,6 +368,25 @@ try {
 }, 60_000);
 
 describe('presentation ownership', () => {
+    it('releases terminal ownership for human prompts and continues append-only without duplicates', async () => {
+        const { logging, child, lines, restore } = session();
+        await logging.start();
+        const [first, second] = events();
+        logging.sink(first);
+        await logging.usePlain();
+        expect(logging.state).toBe('plain');
+        expect(child.connected).toBe(false);
+        expect(restore).toHaveBeenCalledTimes(1);
+        logging.sink(second);
+        await logging.usePlain();
+        await logging.close('completed');
+        expect(lines).toHaveLength(2);
+        expect(lines[0]).toContain('i info first');
+        expect(lines[1]).toContain('- message second');
+        expect(child.sent.filter(message => (message as ParentMessage).type === 'finish')).toHaveLength(1);
+        expect(restore).toHaveBeenCalledTimes(1);
+    });
+
     it('sends an ordered queue through successful backpressure without dropping events', async () => {
         const { logging, child, lines } = session();
         await logging.start();

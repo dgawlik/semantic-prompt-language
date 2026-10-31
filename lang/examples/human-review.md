@@ -6,8 +6,13 @@ model: 'gpt-6-luna'
 
 # Human review
 
-Drafts an announcement, pauses for a reviewer, then applies the feedback. `human` never reads
-the terminal: the run exits with code 3 and a JSON question, and a later run supplies the answer.
+Drafts an announcement, asks a reviewer directly in the shell, then applies the feedback.
+Supply `--human` to answer without prompting:
+
+    spl examples/human-review.md
+    spl examples/human-review.md --human "Make the wording clearer"
+
+For noninteractive checkpoint/resume automation instead:
 
     spl examples/human-review.md --checkpoint run.jsonl --silent
     spl examples/human-review.md --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt

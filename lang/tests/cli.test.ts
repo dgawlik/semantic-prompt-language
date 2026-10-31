@@ -27,14 +27,88 @@ function markdown(script: string): string {
     return `---\nextension: semantic-prompt-language\nversion: 1\n---\n\n\`\`\`spl\n${script}\n\`\`\`\n`;
 }
 
-function run(args: string[], env: NodeJS.ProcessEnv = {}) {
+function run(args: string[], env: NodeJS.ProcessEnv = {}, input?: string) {
     const r = spawnSync(process.execPath, [CLI, ...args], {
         encoding: 'utf8',
         cwd: dir,
         env: { ...process.env, ...env, SPL_HOME: path.join(dir, 'spl-home') },
+        input,
     });
     return { code: r.status, out: r.stdout, err: r.stderr };
 }
+
+describe('direct human input CLI', () => {
+    function prompt(script: string, input: string, ...args: string[]) {
+        const file = path.join(dir, 's.md');
+        fs.writeFileSync(file, markdown(script));
+        return run([file, ...args], {}, input);
+    }
+
+    it('consumes repeatable answers in question order without prompting or a checkpoint', () => {
+        const result = spl(`let a = human 'Color?'\nlet b = human 'Fruit?'\nsuccess [a, b, $args]`,
+            '--human', '  blue\nsky  ', '--human=--apple', '--arg=script', '--silent');
+        expect(result).toEqual({ code: 0, out: '[\n  "  blue\\nsky  ",\n  "--apple",\n  [\n    "script"\n  ]\n]\n', err: '' });
+        expect(fs.existsSync(path.join(dir, 'run.jsonl'))).toBe(false);
+        expect(spl(`success human 'Empty?'`, '--human=', '--silent')).toEqual({ code: 0, out: '\n', err: '' });
+    });
+
+    it('prompts directly on stderr even when silent and retains buffered lines and whitespace', () => {
+        const result = prompt(`let a = human 'Color?'\nlet b = human 'Fruit?'\nsuccess [a, b]`,
+            '  blue  \r\n\r\n', '--silent');
+        expect(result).toEqual({ code: 0, out: '[\n  "  blue  ",\n  ""\n]\n', err: 'Color?\n> Fruit?\n> ' });
+    });
+
+    it('prompts only for remaining questions and does not consume answers in skipped expressions', () => {
+        const result = prompt(`let skipped = False and human 'Skipped?'\nlet a = human 'Color?'\nlet b = human 'Fruit?'\nsuccess [skipped, a, b]`,
+            'apple\n', '--human=blue', '--silent');
+        expect(result).toEqual({ code: 0, out: '[\n  false,\n  "blue",\n  "apple"\n]\n', err: 'Fruit?\n> ' });
+    });
+
+    it('reports EOF as a script failure instead of suspending or inventing an answer', () => {
+        const result = prompt(`success human 'Color?'`, '', '--silent');
+        expect(result.code).toBe(1);
+        expect(JSON.parse(result.out)).toMatchObject({
+            status_code: 'runtime_error', reason: expect.stringContaining('stdin ended'),
+        });
+        expect(result.err).toBe('Color?\n> ');
+    });
+
+    it('sanitizes terminal controls in questions without modifying answers', () => {
+        const result = prompt(`success human 'Color?\u001b[31m\u0007'`, 'blue\n', '--silent');
+        expect(result).toEqual({ code: 0, out: 'blue\n', err: 'Color?\n> ' });
+    });
+
+    it('handles both questions in the color-poem blockquotes in the same agent sessions', () => {
+        const preload = path.join(dir, 'human-backend.mjs');
+        const backend = new URL('../dist/copilot.js', import.meta.url).href;
+        fs.writeFileSync(preload, `import { CopilotBackend } from ${JSON.stringify(backend)};
+CopilotBackend.prototype.call = async function(request) {
+    const action = (name, args) => request.invokeAction({ name, arguments: args });
+    if (request.prompt.includes('What is your favorite color?')) {
+        await action('save_variable', { name: 'color', value: await action('ask_human', { question: 'Color?' }) });
+    } else if (request.prompt.includes('What is your favorite fruit?')) {
+        await action('save_variable', { name: 'fruit', value: await action('ask_human', { question: 'Fruit?' }) });
+    } else {
+        const color = await action('load_variable', { name: 'color' });
+        const fruit = await action('load_variable', { name: 'fruit' });
+        await action('save_variable', { name: 'poem', value: color + ' ' + fruit });
+    }
+    return { text: 'Done', effective: {} };
+};
+CopilotBackend.prototype.close = async function() {};`);
+        const example = path.resolve(__dirname, '..', 'examples', 'color-poem.md');
+        for (const [args, input, err] of [
+            [['--human=blue', '--human=apple'], '', ''],
+            [[], 'blue\napple\n', 'Color?\n> Fruit?\n> '],
+        ] as const) {
+            const result = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, CLI, example, '--silent', ...args], {
+                encoding: 'utf8', cwd: dir, input, timeout: 10_000,
+            });
+            expect({ code: result.status, out: result.stdout, err: result.stderr })
+                .toEqual({ code: 0, out: '{\n  "poem": "blue apple"\n}\n', err });
+        }
+    });
+});
 
 describe('noninteractive checkpoint CLI', () => {
     it.each(['file', 'checkpoint'] as const)('pauses, inspects, answers and completes with --resume %s', (syntax) => {
@@ -104,14 +178,14 @@ describe('noninteractive checkpoint CLI', () => {
         expect(run(['--silent', '--', '--resume.md'])).toEqual({ code: 0, out: '7\n', err: '' });
     });
 
-    it('preflights human expressions but accepts --check without creating a checkpoint', () => {
+    it('allows unused human expressions and accepts --check without creating a checkpoint', () => {
         const state = path.join(dir, 'check.jsonl');
         const script = `write_file('bad.txt', 'x')
 if False:
     human 'later'
 success 1`;
-        expect(spl(script, '--silent').code).toBe(2);
-        expect(fs.existsSync(path.join(dir, 'bad.txt'))).toBe(false);
+        expect(spl(script, '--silent')).toEqual({ code: 0, out: '1\n', err: '' });
+        expect(fs.readFileSync(path.join(dir, 'bad.txt'), 'utf8')).toBe('x');
         expect(spl(script, '--check', '--checkpoint', state)).toEqual({ code: 0, out: '', err: '' });
         expect(fs.existsSync(state)).toBe(false);
         expect(fs.existsSync(`${state}.lock`)).toBe(false);
@@ -148,6 +222,9 @@ success 1`;
         ['--checkpoint=a', '--store=b'],
         ['--checkpoint=a', '--store-module=b'],
         ['--checkpoint='],
+        ['--human'],
+        ['--checkpoint=a', '--human=yes'],
+        ['--resume=a', '--human=yes'],
     ])('rejects incompatible/invalid options: %j', (...options) => {
         const result = spl(`success 1`, ...options);
         expect(result.code).toBe(2);

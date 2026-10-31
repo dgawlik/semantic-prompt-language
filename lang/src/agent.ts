@@ -17,7 +17,7 @@ export const AGENT_TOOLS: readonly RuntimeTool[] = [
     }, ['name', 'value']),
     tool('call_function', 'Invoke an existing SPL function or builtin with positional arguments.', { name, args: { type: 'array', items: {} } }),
     tool('get_env', 'Read one environment variable. Missing variables return null.', { name: text }),
-    tool('ask_human', 'Ask a human using checkpoint/resume; returns their answer.', { question: text }),
+    tool('ask_human', 'Ask a human a question and return their answer.', { question: text }),
     tool('success', 'End the whole document successfully with a JSON value.', { value: {} }),
     tool('fail', 'End the whole document with an explicit failure.', { reason: text }),
     tool('restrict', 'Narrow restrictions for the rest of this blockquote, including function and MCP calls.', {

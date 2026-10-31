@@ -12,7 +12,7 @@ For @validate[Schema], load that schema and pass it as save_variable's schema ar
 Validate values before saving; a rejected tool call stops the command and is not retried.
 call_function invokes an existing SPL function or builtin with positional JSON arguments.
 get_env reads one read-only environment variable; load_variable('$args') reads CLI arguments.
-ask_human asks a question using checkpoint/resume and returns the answer; it requires a checkpoint.
+ask_human asks the user a question and returns their answer. Use it for @HUMAN; never invent a human answer.
 success ends the whole document successfully; fail ends it with an explicit failure. Use these only when requested.
 @ENFORCE and @FORBID are guidance for this command. Follow any requested format, schema and restrictions.
 Use restrict(kind, value) to narrow actions for the rest of this command, including functions and MCP.

@@ -104,6 +104,15 @@ export class CliLogging {
         return this.closePromise ??= this.finish(reason);
     }
 
+    async usePlain(): Promise<void> {
+        await this.startPromise;
+        if (this.failurePromise) await this.failurePromise;
+        if (this.state === 'plain') return;
+        if (this.state !== 'interactive') throw new Error('cannot release input from an inactive logging session');
+        await this.finish('completed');
+        this.state = 'plain';
+    }
+
     private async finish(reason: FinishReason): Promise<void> {
         await this.startPromise;
         if (this.failurePromise) await this.failurePromise;

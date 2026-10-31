@@ -211,7 +211,7 @@ ${code.split('\n').map(line => '    ' + line).join('\n')}`) +
         expect(fs.readFileSync(path.join(cwd, 'allowed', 'result.txt'), 'utf8')).toBe('6');
     });
 
-    it('fails immediately on human input without a checkpoint', async () => {
+    it('fails immediately on human input without a handler or checkpoint', async () => {
         const cwd = directory();
         let turn = 0;
         const result = await run(parseMarkdown(document('> Ask a human.')), {
@@ -222,6 +222,24 @@ ${code.split('\n').map(line => '    ' + line).join('\n')}`) +
         });
         expect(result).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('checkpoint') } });
         expect(turn).toBe(1);
+    });
+
+    it('returns a direct human answer to the same agent session and shared bindings', async () => {
+        const human = vi.fn(async () => '  approved\nexactly  ');
+        const source = document('> @HUMAN Approve this and save to @answer.\n\n' + fence('success answer'));
+        let turns = 0;
+        const result = await run(parseMarkdown(source), {
+            logger, human, backend: backend(async req => {
+                turns++;
+                const answer = await req.invokeAction!(action('ask_human', { question: 'Approve?' }));
+                expect(answer).toBe('  approved\nexactly  ');
+                await req.invokeAction!(action('save_variable', { name: 'answer', value: answer }));
+                return { text: 'Done', effective: {} };
+            }),
+        });
+        expect(result).toMatchObject({ status: 'success', value: '  approved\nexactly  ' });
+        expect(human).toHaveBeenCalledExactlyOnceWith('Approve?', 6);
+        expect(turns).toBe(1);
     });
 
     it('resumes agent human input without repeating completed model turns or effects', async () => {

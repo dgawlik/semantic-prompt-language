@@ -74,8 +74,37 @@ def later():
     return human 'question'`), {
             cwd: dir, backend: unusedBackend, logger: new Logger('silent'),
         });
-        expect(result).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('requires a checkpoint') } });
+        expect(result).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('requires a human handler or checkpoint') } });
         expect(fs.existsSync(path.join(dir, 'should-not-exist'))).toBe(false);
+    });
+
+    it('awaits a direct handler across functions and loops without replaying effects', async () => {
+        const human = vi.fn(async (question: string) => `  ${question}\nanswer  `);
+        const source = `let count = 0
+def collect(i):
+    count += 1
+    return human 'Question {i}'
+let answers = []
+for i in range(2):
+    answers.append(collect(i))
+success [count, answers]`;
+        expect(await run(parse(source), { backend: unusedBackend, logger: new Logger('silent'), human }))
+            .toMatchObject({ status: 'success', value: [2, ['  Question 0\nanswer  ', '  Question 1\nanswer  ']] });
+        expect(human.mock.calls).toEqual([['Question 0', 4], ['Question 1', 4]]);
+    });
+
+    it('rejects non-string questions before invoking a direct handler', async () => {
+        const human = vi.fn(() => 'unused');
+        expect(await run(parse('success human 42'), { backend: unusedBackend, logger: new Logger('silent'), human }))
+            .toMatchObject({ status: 'failure', failure: { reason: 'human question must be a string' } });
+        expect(human).not.toHaveBeenCalled();
+    });
+
+    it('does not swallow unexpected input-handler errors', async () => {
+        const error = new Error('input unavailable');
+        await expect(run(parse(`success human 'Question'`), {
+            backend: unusedBackend, logger: new Logger('silent'), human: async () => { throw error; },
+        })).rejects.toBe(error);
     });
 
     it('reconstructs functions, loops, aliases and expression evaluation across multiple pauses', async () => {

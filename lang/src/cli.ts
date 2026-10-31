@@ -3,22 +3,22 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { createInterface, type Interface } from 'node:readline';
 import type { Program } from './ast.js';
 import { CopilotBackend } from './copilot.js';
 import { AuthError, login, logout } from './auth.js';
 import { Failure, SplSyntaxError } from './errors.js';
 import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
-import { usesHuman } from './parser.js';
 import { parseMarkdown } from './markdown.js';
 import { run, type RunResult } from './interpreter.js';
 import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
-import { toJson } from './values.js';
+import { runtimeError, toJson } from './values.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
 import { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
 import { Checkpoint, CheckpointError, checkpointFingerprint } from './checkpoint.js';
 import { CliLogging, canInteract } from './cli-logging.js';
-import { formatEvent, terminalColor } from './log-format.js';
+import { formatEvent, sanitize, terminalColor } from './log-format.js';
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
@@ -41,6 +41,8 @@ Options:
   --silent                suppress all logs; only the result is printed
   --model <id>            model override (takes precedence over frontmatter)
   --arg <value>           script argument exposed in $args (repeatable; also --arg=value)
+  --human <answer>        answer a human question without prompting (repeatable, in question order)
+                          Remaining questions read one line from stdin; prompts go to stderr.
   --mcp <file.json>       MCP servers in VS Code mcp.json format
   --store <file.json>     persist top-level variables in a JSON file
   --store-module <path>   custom variable store: module exporting createStore() -> { load(), save(vars) }
@@ -62,6 +64,7 @@ Options:
   -h, --help              print this help
 
 The script result (the value of 'success' or 'return', or the failure payload) is written to stdout.
+Normal runs ask for human input directly, even with --silent.
 Resumable runs print JSON envelopes and never read stdin.
 Exit codes: 0 success, 1 uncaught script failure, 2 syntax or usage error,
 3 waiting for human input, 70 internal/infrastructure error.`;
@@ -183,6 +186,7 @@ async function main(): Promise<number> {
             silent: { type: 'boolean' },
             model: { type: 'string' },
             arg: { type: 'string', multiple: true },
+            human: { type: 'string', multiple: true },
             mcp: { type: 'string' },
             store: { type: 'string' },
             'store-module': { type: 'string' },
@@ -264,6 +268,7 @@ async function main(): Promise<number> {
         delete values.checkpoint;
     }
     const resumable = values.checkpoint !== undefined || values.resume !== undefined;
+    if (resumable && values.human !== undefined) usageError('--human cannot be combined with --checkpoint or --resume; use --answer when resuming');
     if (values.checkpoint !== undefined && values.resume !== undefined) usageError('--checkpoint and --resume are mutually exclusive');
     if ([values.checkpoint, values.resume, values['answer-for'], values['answer-file']].some((value) => value !== undefined && !value.trim())) {
         usageError('checkpoint, resume, answer-for, and answer-file require non-empty values');
@@ -304,7 +309,6 @@ async function main(): Promise<number> {
     }
     if (values.check) return 0;
     if (resumable) return checkpointCommand(source, program, values, cwd, logger, mcpServers);
-    if (usesHuman(program)) usageError('human input requires --checkpoint or --resume');
 
     let backend: LlmBackend;
     try {
@@ -329,11 +333,15 @@ async function main(): Promise<number> {
     }
     let result: RunResult | undefined;
     let interrupted = false;
+    let input: Interface | undefined;
+    let answers: AsyncIterator<string> | undefined;
+    let suppliedAnswers = 0;
     let backendClosing: Promise<void> | undefined;
     const closeBackend = () => backendClosing ??= backend.close();
     const interrupt = (): void => {
         if (interrupted) return;
         interrupted = true;
+        input?.close();
         void (async () => {
             let deadline: ReturnType<typeof setTimeout> | undefined;
             try {
@@ -361,11 +369,32 @@ async function main(): Promise<number> {
         interactive: !values.silent && canInteract(),
         cancel: interrupt,
     });
+    const human = async (question: string): Promise<string> => {
+        if (values.human !== undefined && suppliedAnswers < values.human.length) {
+            return values.human[suppliedAnswers++];
+        }
+        await presentation!.usePlain();
+        if (!input) {
+            input = createInterface({
+                input: process.stdin, output: process.stderr,
+                terminal: Boolean(process.stdin.isTTY && process.stderr.isTTY), crlfDelay: Infinity,
+            });
+            input.on('SIGINT', interrupt);
+            answers = input[Symbol.asyncIterator]();
+        }
+        process.stderr.write(sanitize(question) + '\n> ');
+        const answer = await answers!.next();
+        if (answer.done) throw runtimeError('cannot read human input: stdin ended; supply an answer with --human');
+        return answer.value;
+    };
     process.on('SIGINT', interrupt);
     await presentation.start();
     try {
         try {
-            result = await run(program, { backend, logger, store: backend.mode === 'replay' ? undefined : executionStore, cwd, model: values.model, args: values.arg });
+            result = await run(program, {
+                backend, logger, store: backend.mode === 'replay' ? undefined : executionStore,
+                cwd, model: values.model, args: values.arg, human,
+            });
         } finally {
             try {
                 await closeBackend();
@@ -376,6 +405,8 @@ async function main(): Promise<number> {
             }
         }
     } finally {
+        input?.close();
+        if (input) process.stdin.pause();
         await presentation.close(interrupted ? 'cancelled' : result?.status === 'success' ? 'completed' : 'failed');
         process.off('SIGINT', interrupt);
     }

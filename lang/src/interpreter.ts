@@ -49,6 +49,8 @@ export interface RunOptions {
     args?: readonly string[];
     maxCallDepth?: number;
     checkpoint?: Checkpoint;
+    /** Handles human expressions and blockquote ask_human calls without suspending. */
+    human?: (question: string, line: number) => string | Promise<string>;
     /** Source URI used to locate failures across interactive cells. */
     source?: string;
     sourceVersion?: number;
@@ -166,8 +168,8 @@ class Interpreter {
                 throw new CheckpointError('checkpoint runs cannot use stores or recording/replay backends');
             }
             this.opts.checkpoint?.validateSource(this.program.lines.join('\n'), this.opts.args);
-            if (!this.opts.checkpoint && usesHuman(this.program)) {
-                throw runtimeError('human input requires a checkpoint; use --checkpoint or --resume');
+            if (!this.opts.checkpoint && !this.opts.human && usesHuman(this.program)) {
+                throw runtimeError('human input requires a human handler or checkpoint');
             }
             if (this.opts.backend.mode === 'replay' && this.opts.store) {
                 throw new Failure('restriction_violation', 'replay does not allow a persistent variable store');
@@ -456,8 +458,7 @@ class Interpreter {
             case 'human': {
                 const question = await this.eval(e.prompt, env);
                 if (typeof question !== 'string') throw runtimeError('human question must be a string');
-                if (!this.opts.checkpoint) throw runtimeError('human input requires a checkpoint');
-                return this.opts.checkpoint.human(question, e.line);
+                return this.askHuman(question, e.line);
             }
             case 'list': {
                 const out: Value[] = [];
@@ -805,6 +806,14 @@ class Interpreter {
         }
     }
 
+    private async askHuman(question: string, line: number): Promise<string> {
+        if (this.opts.checkpoint) return this.opts.checkpoint.human(question, line);
+        if (!this.opts.human) throw runtimeError('human input requires a human handler or checkpoint');
+        const answer = await this.opts.human(question, line);
+        if (typeof answer !== 'string') throw runtimeError('human answer must be a string');
+        return answer;
+    }
+
     private async execNaturalAction(action: RuntimeAction, line: number, env: Env): Promise<Value> {
         const args = actionArguments(action);
         switch (action.name) {
@@ -829,8 +838,7 @@ class Interpreter {
                 this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
                 return this.externalAction(action, async () => this.getKey(this.runtimeEnv, String(args.name)));
             case 'ask_human':
-                if (!this.opts.checkpoint) throw runtimeError('human input requires a checkpoint; use --checkpoint or --resume');
-                return this.opts.checkpoint.human(String(args.question), line);
+                return this.askHuman(String(args.question), line);
             case 'success':
                 throw new SuccessSignal(args.value);
             case 'fail':

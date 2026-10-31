@@ -94,19 +94,31 @@ errors are reported before anything runs, so they cannot be caught.
 
 ## Human in the loop
 
-`human 'question'` asks a person and returns their exact answer as a string. It never reads the
-terminal. Instead the run saves its progress to a checkpoint journal, prints the question as JSON,
-and exits with code 3. A later invocation supplies the answer and continues without repeating
-completed tool or model calls.
+`human 'question'` asks a person and returns their answer as a string. In normal CLI runs, the shell
+prints the question on stderr and reads one line from stdin, preserving whitespace except the line
+ending. Execution continues immediately without a suspension or repeating completed tool/model calls.
+Use repeatable `--human <answer>` flags to supply exact answers in question order and skip prompting.
+Remaining questions prompt normally, including with `--silent`; EOF without an answer fails the script.
 
-Blockquote agents use the `ask_human` tool for the same workflow. The answer is returned to the
-agent on resume, which may then make new model calls and save it to a shared variable. Runtime
+Blockquote agents use the `ask_human` tool for the same workflow (`@HUMAN`). The answer is returned to the
+same agent session, which may then make new model calls and save it to a shared variable. Runtime
 actions completed before the question are not repeated, including actions inside invoked functions.
 
 ```spl
 let feedback = human 'What should change in the release notes?'
 assert len(feedback.strip()) > 0 'feedback must not be blank'
 ```
+
+```bash
+spl review.md                                      # asks directly and continues
+spl review.md --human "Make the wording clearer"    # supplies the answer without prompting
+```
+
+### Explicit checkpoint mode
+
+For noninteractive automation, `--checkpoint` still saves progress to a journal, prints the question
+as JSON and exits with code 3. A later `--resume` invocation supplies the answer and continues without
+repeating completed tool or model calls. These modes never read stdin and cannot use `--human`.
 
 ```bash
 spl review.md --checkpoint run.jsonl --silent        # exits 3 and prints the question

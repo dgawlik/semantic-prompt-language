@@ -27,7 +27,7 @@ Blockquotes have these tools in addition to configured MCP tools:
 | `save_variable(name, value, schema?)` | Create or update a shared JSON value; optionally validate a JSON Schema before saving |
 | `call_function(name, args)` | Invoke an existing SPL function or builtin with positional JSON arguments |
 | `get_env(name)` | Read one read-only environment value; missing values return `null` |
-| `ask_human(question)` | Pause through checkpoint/resume and return the human's answer |
+| `ask_human(question)` | Ask for human input and return the answer directly |
 | `read_file`, `write_file`, `web_fetch`, `web_search`, `shell` | Use the existing exact runtime tools |
 | `restrict(kind, value)` | Narrow restrictions for the rest of the command, including function and MCP calls |
 | `set_guidance(kind, text)` | Add `enforce`/`forbid` guidance for this command and its nested model calls |
@@ -44,7 +44,7 @@ Plain language works too. Common conventions guide the agent's tool choices:
 | `@ENFORCE text` / `@FORBID text` | Follow prompt guidance; use `set_guidance` for nested model calls |
 | `@RESTRICT fs['./src'] exec['git']` | Narrow the command's restrictions with `restrict` |
 | `@validate[Schema]` | Load `Schema` and validate the value before saving; invalid values stop the command |
-| `@HUMAN question` | Call `ask_human` (needs `--checkpoint`) |
+| `@HUMAN question` | Call `ask_human`; the shell prompts or consumes the next `--human` answer |
 | `@SUCCESS`, `@fail` | End the document |
 
 Each runtime tool call executes immediately in the interpreter and returns its real result to the
@@ -64,9 +64,11 @@ execution without repeating agent-owned external effects or contacting MCP. Gene
 `--record` cannot record blockquotes. Run only trusted documents.
 Old traces containing submitted SPL are incompatible with agent commands; record a new trace.
 
-Human input uses the existing checkpoint workflow, never a terminal prompt. Completed decisions
-and effects are replayed from the journal after `--resume`; the agent then receives the human's
-answer and continues. It may make new model calls after the answer.
+Human input prompts directly in the shell and returns the answer to the same agent session.
+Repeat `--human <answer>` to answer questions in order without prompting. The explicit
+`--checkpoint`/`--resume` workflow remains available for automation: completed decisions and effects
+are replayed from the journal after `--resume`, then the agent receives the answer and continues.
+See [Human input](Safety.md#human-in-the-loop).
 
 ## Generation: ask and think
 

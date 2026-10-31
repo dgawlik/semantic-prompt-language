@@ -7,11 +7,11 @@
 folder, for example spl examples/hi.md. Each example&#39;s header shows its arguments.">
 <meta name="color-scheme" content="light dark">
 <title>Examples - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=ff80e14c4e15">
-<link rel="stylesheet" href="assets/style.css?v=ff80e14c4e15">
+<link rel="icon" type="image/png" href="assets/icon.png?v=337805219ccb">
+<link rel="stylesheet" href="assets/style.css?v=337805219ccb">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=ff80e14c4e15"></script>
-<script defer src="assets/site.js?v=ff80e14c4e15"></script>
+<script defer src="assets/search-index.js?v=337805219ccb"></script>
+<script defer src="assets/site.js?v=337805219ccb"></script>
 </head>
 <body data-page="examples">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -56,7 +56,7 @@ folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header s
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/color-poem.md">color-poem.md</a></td>
-<td>Asking a person with <code>@HUMAN</code> (needs <code>--checkpoint</code>)</td>
+<td>Asking a person directly with <code>@HUMAN</code>, or supplying <code>--human blue --human apple</code></td>
 </tr>
 </tbody></table>
 </div>
@@ -126,7 +126,7 @@ folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header s
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/human-review.md">human-review.md</a></td>
-<td>Pausing for review with <code>--checkpoint</code> and resuming with the answer</td>
+<td>Asking for review directly, with optional checkpoint/resume automation</td>
 </tr>
 </tbody></table>
 </div>
@@ -209,7 +209,7 @@ version: 1
 Classifies open issues without labels and applies the labels only after a human approves
 the plan. Needs an authenticated <span class="hljs-code">`gh`</span> CLI. Pass <span class="hljs-code">`--arg owner/repo`</span> to target another repository.
 
-<span class="hljs-code">    spl examples/triage-issues.md --checkpoint triage.jsonl --arg owner/repo
+<span class="hljs-code">    spl examples/triage-issues.md --arg owner/repo
 </span>
 <span class="hljs-meta">```spl</span><span class="language-spl">
 <span class="hljs-keyword">let</span> repo <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>

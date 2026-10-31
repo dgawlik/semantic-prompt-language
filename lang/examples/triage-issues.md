@@ -9,7 +9,7 @@ model: 'gpt-6-luna'
 Classifies open issues without labels and applies the labels only after a human approves
 the plan. Needs an authenticated `gh` CLI. Pass `--arg owner/repo` to target another repository.
 
-    spl examples/triage-issues.md --checkpoint triage.jsonl --arg owner/repo
+    spl examples/triage-issues.md --arg owner/repo
 
 ```spl
 let repo = ''

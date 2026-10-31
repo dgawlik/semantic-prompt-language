@@ -11,7 +11,7 @@ folder, for example `spl examples/hi.md`. Each example's header shows its argume
 | [basics.md](../lang/examples/basics.md) | Checking a model's answer against exact code; guidance with `@ENFORCE` and `@FORBID` |
 | [is-friday.md](../lang/examples/is-friday.md) | Branching on a JSON answer |
 | [env.md](../lang/examples/env.md) | Reading `$env` and `--arg` values |
-| [color-poem.md](../lang/examples/color-poem.md) | Asking a person with `@HUMAN` (needs `--checkpoint`) |
+| [color-poem.md](../lang/examples/color-poem.md) | Asking a person directly with `@HUMAN`, or supplying `--human blue --human apple` |
 
 ## Developer workflows
 
@@ -36,7 +36,7 @@ folder, for example `spl examples/hi.md`. Each example's header shows its argume
 | --- | --- |
 | [mcp.md](../lang/examples/mcp.md) | An agent limited to one MCP tool |
 | [journal.md](../lang/examples/journal.md) | State across runs with `--store` |
-| [human-review.md](../lang/examples/human-review.md) | Pausing for review with `--checkpoint` and resuming with the answer |
+| [human-review.md](../lang/examples/human-review.md) | Asking for review directly, with optional checkpoint/resume automation |
 
 ## Extract an invoice
 
@@ -128,7 +128,7 @@ model: 'gpt-6-luna'
 Classifies open issues without labels and applies the labels only after a human approves
 the plan. Needs an authenticated `gh` CLI. Pass `--arg owner/repo` to target another repository.
 
-    spl examples/triage-issues.md --checkpoint triage.jsonl --arg owner/repo
+    spl examples/triage-issues.md --arg owner/repo
 
 ```spl
 let repo = ''

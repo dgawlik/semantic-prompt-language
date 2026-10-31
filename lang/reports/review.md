@@ -1,10 +1,8 @@
 # Review of repository
 
-- **MEDIUM** Validate every search redirect against network restrictions (src/tools.ts — ToolHost.webSearch())
-  - Fix: Disable automatic redirect following, inspect each redirect response, and run restrictions.checkUrl() on every redirect target before following it; enforce a maximum redirect count.
-- **MEDIUM** Close filesystem path-check/open race (src/restrict.ts — Restrictions.checkPath(); src/tools.ts — readFile()/writeFile())
-  - Fix: Avoid authorizing a canonicalized path and then opening it in a separate raceable step. Where supported, perform filesystem operations through handles opened without following links and verify the opened target and parent remain within the authorized root.
-- **HIGH** Enforce restrictive permissions on existing credential files (src/auth.ts — saveToken())
-  - Fix: After writing the credentials file, explicitly set its permissions to 0600 and ensure its parent directory is 0700. Alternatively, use safe exclusive creation and securely handle any existing file.
+- **HIGH** Existing credential files can retain overly broad permissions or redirect writes through symlinks (src/auth.ts — saveToken())
+  - Fix: Write the token to a newly created exclusive temporary file with restrictive permissions, set and verify its mode, reject a symlink destination, then atomically replace the destination.
+- **HIGH** Path validation is vulnerable to symlink-based TOCTOU escapes (src/restrict.ts — Restrictions.checkPath() / canonicalPath())
+  - Fix: Bind validation to the filesystem operation using no-follow operations and directory handles where supported; otherwise revalidate at the operation boundary and reject symlinks.
 
-3 finding(s), 1 high severity
+2 finding(s), 2 high severity

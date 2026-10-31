@@ -15,11 +15,12 @@ spl login | logout
 | Option | Description |
 | --- | --- |
 | `--arg <value>` | Script argument exposed as `$args[i]`; repeatable, also `--arg=value` |
+| `--human <answer>` | Answer a human question without prompting; repeatable in question order, also `--human=answer` |
 | `--model <id>` | Model for every call, overriding per-call and frontmatter models |
 | `--cwd <dir>` | Base folder for paths, restrictions, tools and agents (default: current) |
 | `--check` | Validate frontmatter, syntax and `--mcp` config without running |
 | `--log-level <level>` | `error`, `info` (default) or `debug` |
-| `--silent` | No logs; only the result |
+| `--silent` | No execution logs; human prompts still appear on stderr |
 | `--timeout <s>` | Per model call (default 300) |
 | `--mcp <file.json>` | MCP servers, see [MCP servers](#mcp-servers) |
 | `--trace` / `--replay <file.jsonl>` | Record or replay model calls, see [Traces and replay](#traces-and-replay) |
@@ -28,6 +29,21 @@ spl login | logout
 | `-v`, `--version` / `-h`, `--help` | Version / usage |
 
 Each `--arg` is one string; use `--arg=--value` for values starting with a dash.
+
+Normal runs handle `human` expressions and blockquote `@HUMAN` questions directly. The shell
+prints each question on stderr and reads one line from stdin, preserving whitespace except the
+line ending. Repeat `--human` to supply answers in question order without prompting:
+
+```bash
+spl lang/examples/color-poem.md
+spl lang/examples/color-poem.md --human blue --human apple
+```
+
+Supplied answers are exact strings, including empty or multiline values; use `--human=--value`
+for answers starting with a dash. Once supplied answers are exhausted, remaining questions prompt
+normally, even with `--silent`. EOF without an answer is a script failure, not a suspension.
+`--human` cannot be combined with explicit `--checkpoint` or `--resume`; those retain the
+noninteractive journal/answer workflow described in [Human input](Safety.md#human-in-the-loop).
 
 ## Output and exit codes
 
@@ -77,6 +93,8 @@ Normal finish restores input/cursor/screen state and leaves one complete expande
 stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
 append-only output without changing workflow results. Non-terminal stdin/stderr, `TERM=dumb`,
 embedded sinks, silent, help/version, auth, check-only and checkpoint/resume never acquire the UI.
+Before a human prompt, the interactive renderer exits and restores the terminal; subsequent logs
+remain append-only so only the shell reads the answer. Supplied `--human` answers do not stop the UI.
 Before native rendering, the child queries cursor visibility and alternate-screen state.
 Unsupported queries or an already-active alternate screen select diagnosed append-only output;
 SPL does not clear an existing application's alternate screen. The parent owns the input-mode
@@ -116,7 +134,7 @@ without running getters, serializers or custom inspectors.
 | `0` | Success |
 | `1` | Script failure |
 | `2` | Syntax or usage error |
-| `3` | Waiting for human input |
+| `3` | Waiting for human input in explicit checkpoint/resume mode |
 | `70` | Internal or infrastructure error |
 
 ## Traces and replay
@@ -229,6 +247,10 @@ try {
 
 `run` returns `success` (with `value`), `failure` (with `failure`), or `waiting_for_input` when given a
 `Checkpoint`. Options include `backend`, `logger`, `cwd`, `args` (default `[]`, never `process.argv`),
-`store`, `model` and `checkpoint`. Wrap a backend in `TraceBackend` to record, or use `ReplayBackend`
+`store`, `model`, `human` and `checkpoint`. A `human(question, line)` handler returns a string or
+`Promise<string>` for both human expressions and blockquote `ask_human` calls. Embedded runs never
+read stdin themselves; provide this handler or a checkpoint when requesting human input.
+A checkpoint takes precedence over the handler and retains suspension semantics.
+Wrap a backend in `TraceBackend` to record, or use `ReplayBackend`
 to replay; close it to check for unused entries. A custom backend implements `call(request)` and `close()`;
 only requests of kind `agent` may run tools. Raw `parse` and `run` still accept plain SPL source.
