@@ -8,7 +8,7 @@ Both share variables, tools and guards; blockquotes are never compiled into SPL.
 Language has LLM and Agent calls built in, support for tools and MCP.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
-[Examples](lang\examples) | [Presentation](presentations\SPL-New-Starters.pdf)
+[Examples](lang/examples) | [Presentation](presentations/SPL-New-Starters.pdf)
 
 ````markdown
 ---
