@@ -105,6 +105,13 @@ export async function createEventView(renderer: CliRenderer, color: boolean,
         height: renderer.terminalHeight,
         rows: [] as string[],
         payloadRows: new Map<string, number>(),
+        pageSize(): number {
+            const hintRows = Math.min(wrap(hint, this.width).length, Math.max(1, this.height - 1));
+            return Math.max(1, this.height - hintRows);
+        },
+        maxScroll(): number {
+            return Math.max(0, this.rows.length - this.pageSize());
+        },
         append(event: LogEvent): void {
             history.push(event);
             for (const part of event.segments) {
@@ -174,12 +181,15 @@ export async function createEventView(renderer: CliRenderer, color: boolean,
             }
             this.rows.push(paint(spinnerFrames[spinnerFrame], 90, color));
             const hintRows = wrap(hint, this.width).slice(0, Math.max(1, this.height - 1));
-            const page = Math.max(1, this.height - hintRows.length);
-            const max = Math.max(0, this.rows.length - page);
+            const page = this.pageSize();
+            const max = this.maxScroll();
             if (this.followingTail) this.scrollPosition = max;
             if (revealSelection && this.selectedPayloadId) {
                 const row = this.payloadRows.get(this.selectedPayloadId);
-                if (row !== undefined && (row < this.scrollPosition || row >= this.scrollPosition + page)) this.scrollPosition = row;
+                if (row !== undefined) {
+                    if (row < this.scrollPosition) this.scrollPosition = row;
+                    else if (row >= this.scrollPosition + page) this.scrollPosition = row - page + 1;
+                }
             }
             this.scrollPosition = Math.max(0, Math.min(max, this.scrollPosition));
             const visible = [...this.rows.slice(this.scrollPosition, this.scrollPosition + page), ...hintRows];
@@ -199,27 +209,35 @@ export async function createEventView(renderer: CliRenderer, color: boolean,
             const old = this.selectedPayloadId;
             const index = old === undefined ? 0 : ids.indexOf(old);
             let reveal = false;
-            const page = Math.max(1, this.height - wrap(hint, this.width).length);
+            const page = this.pageSize();
+            const visibleIds = ids.filter(id => {
+                const row = this.payloadRows.get(id)!;
+                return row >= this.scrollPosition && row < this.scrollPosition + page;
+            });
             if (name === 'up' || name === 'down') {
-                this.selectedPayloadId = ids[Math.max(0, Math.min(ids.length - 1, index + (name === 'up' ? -1 : 1)))];
-                this.followingTail = false;
-                reveal = true;
+                const direction = name === 'up' ? -1 : 1;
+                const next = old && visibleIds.includes(old) ? ids[index + direction]
+                    : name === 'up' ? visibleIds.at(-1) : visibleIds[0];
+                if (next) {
+                    this.selectedPayloadId = next;
+                    reveal = true;
+                } else this.scrollPosition += direction;
             } else if (name === 'return' || name === 'enter' || name === 'space' || name === ' ') {
-                if (old) { collapsedByPayload.set(old, !collapsedByPayload.get(old)); cache.delete(payloadOwners.get(old)!); }
-                this.followingTail = false;
+                if (!old || !visibleIds.includes(old)) return;
+                collapsedByPayload.set(old, !collapsedByPayload.get(old));
+                cache.delete(payloadOwners.get(old)!);
                 reveal = true;
             } else if (name === 'pageup' || name === 'pagedown') {
                 this.scrollPosition += name === 'pageup' ? -page : page;
-                this.followingTail = false;
             } else if (name === 'home' || name === 'end') {
                 this.selectedPayloadId = name === 'home' ? ids[0] : ids.at(-1);
-                this.scrollPosition = name === 'home' ? 0 : this.rows.length;
-                this.followingTail = name === 'end';
-                reveal = true;
+                this.scrollPosition = name === 'home' ? 0 : this.maxScroll();
             } else return;
+            this.followingTail = false;
             if (old) cache.delete(payloadOwners.get(old)!);
             if (this.selectedPayloadId) cache.delete(payloadOwners.get(this.selectedPayloadId)!);
             this.render(reveal);
+            this.followingTail = this.scrollPosition === this.maxScroll();
         },
         destroy(): void {
             renderer.removeFrameCallback(onFrame);

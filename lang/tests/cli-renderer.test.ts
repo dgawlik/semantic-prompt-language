@@ -618,6 +618,116 @@ describe('presentation ownership', () => {
             } finally { await cleanup(); }
         });
 
+        it('pauses text-only output when scrolling up and resumes at the bottom with arrows or Page Down', async () => {
+            const { test, view, onFrame, cleanup } = await setup();
+            try {
+                const logger = new Logger('info', undefined, { eventSink: event => view.append(event), streamSink: event => view.stream(event) });
+                logger.info(Array.from({ length: 60 }, (_, i) => `line ${i}`).join('\n'));
+                expect(view.scrollPosition).toBe(view.maxScroll());
+                test.mockInput.pressEnter();
+                expect(view.followingTail).toBe(true);
+                test.mockInput.pressArrow('up');
+                const paused = view.scrollPosition;
+                expect(paused).toBe(view.maxScroll() - 1);
+                expect(view.followingTail).toBe(false);
+                logger.info('new event');
+                const interaction = { kind: 'ask', requestId: 'paused' } as const;
+                logger.modelStream({ type: 'update', interaction, update: {
+                    channel: 'response', messageId: 'answer', mode: 'append', text: 'live preview\nanother line',
+                } });
+                onFrame(100);
+                expect(view.scrollPosition).toBe(paused);
+                expect(view.followingTail).toBe(false);
+                for (let steps = 0; steps < view.rows.length && !view.followingTail; steps++) test.mockInput.pressArrow('down');
+                expect(view.followingTail).toBe(true);
+                test.stdout.clear();
+                test.renderer.renderFull();
+                expect(stripVTControlCharacters(test.captureFrame())).toContain('another line');
+                logger.info('following again');
+                expect(view.scrollPosition).toBe(view.maxScroll());
+                test.mockInput.pressPageUp();
+                const pageUp = view.scrollPosition;
+                expect(view.followingTail).toBe(false);
+                logger.info('while reading');
+                onFrame(100);
+                expect(view.scrollPosition).toBe(pageUp);
+                for (let steps = 0; steps < view.rows.length && !view.followingTail; steps++) test.mockInput.pressPageDown();
+                expect(view.followingTail).toBe(true);
+                logger.info('following Page Down');
+                expect(view.scrollPosition).toBe(view.maxScroll());
+            } finally { await cleanup(); }
+        });
+
+        it('does not jump to a stale payload after scrolling and End reaches past the last payload', async () => {
+            const { test, view, cleanup } = await setup();
+            try {
+                const logger = new Logger('info', undefined, { eventSink: event => view.append(event) });
+                for (let i = 0; i < 30; i++) logger.info({ i });
+                const first = view.selectedPayloadId!;
+                const bottom = view.scrollPosition;
+                expect(view.payloadRows.get(first)).toBeLessThan(bottom);
+                test.mockInput.pressEnter();
+                expect(view.scrollPosition).toBe(bottom);
+                expect(view.collapsedByPayload.get(first)).toBe(true);
+                expect(view.followingTail).toBe(true);
+                test.mockInput.pressArrow('up');
+                expect(view.selectedPayloadId).not.toBe(first);
+                expect(view.payloadRows.get(view.selectedPayloadId!)!).toBeGreaterThanOrEqual(bottom);
+                expect(view.scrollPosition).toBe(bottom);
+                logger.info(Array.from({ length: 60 }, (_, i) => `trailing text ${i}`).join('\n'));
+                test.mockInput.pressHome();
+                expect(view.scrollPosition).toBe(0);
+                expect(view.followingTail).toBe(false);
+                test.mockInput.pressEnd();
+                expect(view.scrollPosition).toBe(view.maxScroll());
+                expect(view.followingTail).toBe(true);
+                test.mockInput.pressKey(' ');
+                expect(view.scrollPosition).toBe(view.maxScroll());
+                expect(view.followingTail).toBe(true);
+                test.stdout.clear();
+                test.renderer.renderFull();
+                expect(stripVTControlCharacters(test.captureFrame())).toContain('trailing text 59');
+            } finally { await cleanup(); }
+        });
+
+        it('keeps expanded payloads readable until scrolling back to the bottom', async () => {
+            const { test, view, onFrame, cleanup } = await setup();
+            try {
+                const logger = new Logger('info', undefined, { eventSink: event => view.append(event) });
+                logger.info({ lines: Array.from({ length: 60 }, (_, i) => i) });
+                test.mockInput.pressEnter();
+                expect(view.scrollPosition).toBe(0);
+                expect(view.followingTail).toBe(false);
+                const selected = view.selectedPayloadId!;
+                logger.info('arrived during inspection');
+                onFrame(100);
+                expect(view.scrollPosition).toBe(0);
+                expect(view.selectedPayloadId).toBe(selected);
+                expect(view.collapsedByPayload.get(selected)).toBe(false);
+                for (let steps = 0; steps < view.rows.length && !view.followingTail; steps++) test.mockInput.pressPageDown();
+                expect(view.followingTail).toBe(true);
+                logger.info('tail is live');
+                expect(view.scrollPosition).toBe(view.maxScroll());
+            } finally { await cleanup(); }
+        });
+
+        it('uses the rendered page size when scrolling in a narrow terminal', async () => {
+            const { test, view, cleanup } = await setup();
+            try {
+                test.resize(1, 3);
+                test.renderer.emit('resize', 1, 3);
+                const logger = new Logger('info', undefined, { eventSink: event => view.append(event) });
+                logger.info('abcdef');
+                expect(view.pageSize()).toBe(1);
+                test.mockInput.pressPageUp();
+                expect(view.scrollPosition).toBe(view.maxScroll() - 1);
+                expect(view.followingTail).toBe(false);
+                test.mockInput.pressPageDown();
+                expect(view.scrollPosition).toBe(view.maxScroll());
+                expect(view.followingTail).toBe(true);
+            } finally { await cleanup(); }
+        });
+
         it('folds independently with mock keys and preserves selection/folds through arrival and resize', async () => {
             const { test, view, cleanup } = await setup();
             try {
@@ -651,11 +761,11 @@ describe('presentation ownership', () => {
                 expect([...view.collapsedByPayload.values()]).toEqual([false, false, true]);
                 test.mockInput.pressHome();
                 expect(view.selectedPayloadId).toBe(first);
-                expect(view.followingTail).toBe(false);
+                expect(view.followingTail).toBe(true);
                 test.mockInput.pressEnd();
                 expect(view.followingTail).toBe(true);
                 test.mockInput.pressPageUp();
-                expect(view.followingTail).toBe(false);
+                expect(view.followingTail).toBe(true);
                 test.mockInput.pressPageDown();
                 expect(view.history.map(event => event.id)).toEqual(history.map(event => event.id));
             } finally { await cleanup(); }

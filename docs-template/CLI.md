@@ -78,8 +78,12 @@ remains visible while the workflow runs, including while waiting for model outpu
 on exit and is never included in the expanded transcript or stdout.
 Generated model prefaces (runtime/document preambles, guidance and initial blockquote context)
 and every object/array start as folded summaries; the requested prompt stays visible.
-Up/Down selects a payload; Enter/Space toggles;
+Up/Down selects a payload in the viewport or scrolls text; Enter/Space toggles a visible selection;
 Page Up/Down scrolls; Home/End reaches the ends. Other folds and selection survive arrival/resize.
+The view initially follows new output. Scrolling away from the bottom pauses following, not
+execution; scrolling back to the bottom with arrows, Page Down or End resumes following.
+Enter/Space never jumps to an off-screen selection, and End reaches the output tail even when
+text or a streaming preview extends beyond the last payload.
 Expanded JSON uses two-space indentation and preserves original numeric/string tokens and duplicate
 keys. Primitives and malformed JSON remain readable without misleading fold controls.
 

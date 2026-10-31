@@ -44,7 +44,10 @@ binding's defining scope and before/after values, including aliases and retained
 Executed source, unchanged assignments/mutations and initial runtime/store baselines are not logged.
 
 When stdin and stderr are terminals, BetterTUI initially folds JSON objects/arrays. Up/Down
-selects, Enter/Space toggles, Page Up/Down scrolls, and Home/End reaches the ends. Finishing
+selects payloads (or scrolls text), Enter/Space toggles a visible selection, Page Up/Down scrolls,
+and Home/End reaches the ends. Output follows the tail initially; scrolling away pauses following
+without pausing execution. Scrolling back to the bottom resumes following automatically.
+Off-screen selections do not pull the viewport back when pressing Enter/Space. Finishing
 restores the terminal and retains one complete expanded transcript without a keypress.
 Styled event headers are bold; an animated trailing loading character appears only while running
 and is omitted from the final transcript.
