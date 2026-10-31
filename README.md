@@ -2,47 +2,70 @@
 
 # SPL: Semantic Prompt Language
 
-Executable Markdown for AI workflows. `spl` fences hold exact, Python-like code; blockquotes hold
-natural-language agent commands. Both share variables, tools and guards; blockquotes are never compiled into SPL.
+Executable Markdown for AI workflows.
+SPL is dual purpose: either natural language or python works.
+Both share variables, tools and guards; blockquotes are never compiled into SPL.
+Language has LLM and Agent calls built in, support for tools and MCP.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
-[Examples](docs-template/Examples.md) | [Grammar](docs-template/Grammar.md) |
-[Specification](LANG-PRD.md)
+[Examples](lang\examples) | [Presentation](presentations\SPL-New-Starters.pdf)
 
 ````markdown
 ---
-extension: semantic-prompt-language
+extension: 'semantic-prompt-language'
 version: 1
+model: 'gpt-6.1-terra'
 ---
 
-```spl
-let invoice = read_file('invoice.txt')
-```
+# Generate Presentation
 
-> Extract the line items and total from @invoice as JSON and save it to @data
+This example presents how to use the tool to generate presentation for itself.
 
 ```spl
-let sum = 0
-for line in data.lines:
-    sum += line.amount
-assert abs(sum - data.total) < 0.01 'line items do not add up'
-success data
+let slide1 = '''
+    Semantic Prompt Language is a python language with LLM calls built in; 
+    forget callback hell of most agentic frameworks;
+    run automations with high reliablity
+''';
+
+let slide2 = '''
+    Getting started -> 
+    1. installation from npm
+    2. setting up vscode
+    3. running examples/basics.md
+'''
+
+let slide3 = '''
+    Blocks and code fences -> explanation what blockquote does the internal tool it uses;
+    most compact and descriptive example of deterministic syntax
+'''
+
+let slide4 = '''
+    Checkpoints, replay and human input -> when program crashes rereun it with llms responses
+    saved; human input with in-terminal input and via flags
+'''
+
+let slide5 = '''
+    Restrictions and mcps; how restrictions work, enforce and forbid -> soft, restriction -> hard, 
+    way to invoke mcp
+'''
+
+enforce 'Use modern-web-standards skill':
+    forbid 'Hallucinating':
+        agent '''
+
+            Create beautiful presentation of this repo for new-starters. Limit output to 5 pages html and pdf.
+
+            Slide1 - {slide1}
+            Slide2 - {slide2}
+            Slide3 - {slide3}
+            Slide4 - {slide4}
+            Slide5 - {slide5}
+
+            Save to folder presentations
+'''
 ```
 ````
-
-## Block syntax migration
-
-**Breaking change:** blocks now use `:` followed by a newline and an indented, nonempty body,
-not braces. Use spaces (4 recommended), never tabs for indentation. Replace empty bodies with
-`pass`; inline suites are not supported. Dedents must match a previous indentation level;
-unexpected indentation or a missing body is a syntax error. Blank and comment-only lines do
-not affect indentation. Semicolons separate simple statements only.
-
-Dictionaries `{...}` and string interpolation `{expr}` are unchanged. Newlines inside `()`, `[]`
-and dictionaries are insignificant; explicit `\` continuation still works. Each block remains
-a lexical child scope: `let` declares locally, while assignment updates the nearest declaration,
-unlike Python. Anonymous value-producing blocks use a bare colon; see
-[Language](docs-template/Language.md#bindings-and-scopes) and the [grammar](docs-template/Grammar.md).
 
 ## Why SPL?
 
@@ -61,27 +84,11 @@ spl login
 spl examples/hi.md
 ```
 
-Requires Node.js >=24.15.0 and GitHub Copilot for model calls. From a checkout: `cd lang`, `npm install`,
+Requires Node.js >=24.15.0 and GitHub Copilot credentials for model calls. 
+
+From a checkout: `cd lang`, `npm install`,
 then `node dist/cli.js examples/hi.md`.
 
-Logs use one compact header: `->` model input (magenta), `<-` output/action (cyan),
-`~` variable state (yellow), `x` error (red), `!` warning (yellow), `i` info (blue),
-and `.` debug (gray). Explicit script logs keep their `[info|error|debug] log:` prefix.
-Automatic logs show committed variable changes in their defining scopes, not executed source.
-Same-value writes, no-op mutations and initial runtime/store state are omitted.
-
-With terminal stdin and stderr, BetterTUI starts generated model prefaces and JSON objects/arrays
-folded, while the requested prompt stays visible. Up/Down selects,
-Enter/Space toggles, Page Up/Down scrolls, and Home/End reaches the ends. Completion restores the
-terminal and retains one complete expanded transcript without waiting for a key. Redirected logs
-and embedded sinks are expanded and non-interactive; stdout remains the workflow result.
-Copilot responses and available reasoning stream live in the terminal view and notebook cells by default.
-Use `hide=True` to suppress reasoning. Final responses, not partial chunks, drive workflow results and validation.
-Terminals that cannot report restorable modes, or already use an alternate screen, get
-diagnosed append-only output instead of risking their existing terminal state.
-`--silent` suppresses execution logs; `--log-level` keeps severity filtering, with model/state
-events at every non-silent level. `NO_COLOR` takes precedence over `FORCE_COLOR`;
-`FORCE_COLOR=0` disables color, and forcing color never enables keyboard input.
 
 ## Repository
 
@@ -116,3 +123,11 @@ npm run docs:check
 ```
 
 Preview with `python -m http.server 8765 --directory docs`.
+
+## Contributing
+
+Especially in this early phase of development the feedback is very important.
+
+Something does not work -> file an issue.
+
+PRs are welcome, I'm looking for Co-Founders.

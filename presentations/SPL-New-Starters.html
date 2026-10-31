@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="A five-slide introduction to Semantic Prompt Language: installation, executable Markdown, recovery, human input, restrictions and MCP.">
+<title>SPL / A new starter's field guide</title>
+<style>
+:root { font-family: 'Segoe UI', Arial, sans-serif; color: #172824; background: #dedfd9; font-size: 16px; --paper: #f7f6ef; --ink: #172824; --muted: #52645d; --line: #d5dbd1; --orange: #b44320; --lime: #daef9d; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: inherit; text-underline-offset: .2em; }
+a:focus-visible, button:focus-visible { outline: 3px solid #b44320; outline-offset: 5px; }
+.toolbar { max-inline-size: 1280px; margin: 0 auto; padding: 18px 24px; display: flex; align-items: center; flex-wrap: wrap; gap: 16px; font-size: 14px; }
+.toolbar strong { margin-inline-end: auto; }
+.toolbar nav { display: flex; flex-wrap: wrap; gap: 14px; }
+.toolbar button { border: 1px solid var(--ink); border-radius: 6px; padding: 9px 15px; background: var(--ink); color: var(--paper); font: inherit; cursor: pointer; }
+main { max-inline-size: 1280px; margin-inline: auto; display: grid; gap: 28px; padding-block-end: 28px; }
+.slide { inline-size: 100%; min-block-size: 720px; aspect-ratio: 16 / 9; background: var(--paper); padding: 38px 52px 24px; display: flex; flex-direction: column; position: relative; box-shadow: 0 12px 32px #17282416; scroll-margin-block-start: 20px; }
+.topline, .footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.topline { font-size: 12px; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.mark { background: var(--ink); color: var(--lime); padding: 7px 9px; font-size: 15px; letter-spacing: -.04em; border-radius: 7px; }
+.chapter { color: var(--muted); }
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: 70px; line-height: 1.02; letter-spacing: -.065em; font-weight: 650; }
+h2 { font-size: 45px; line-height: 1.08; letter-spacing: -.045em; font-weight: 650; margin-block: 24px 10px; }
+h3 { font-size: 23px; letter-spacing: -.025em; line-height: 1.2; margin-block-end: 12px; }
+p { line-height: 1.5; }
+.subtitle { color: var(--muted); font-size: 19px; max-inline-size: 980px; }
+.content { flex: 1; min-inline-size: 0; padding-block: 24px 20px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.card { border: 1px solid var(--line); border-radius: 14px; padding: 24px; min-inline-size: 0; }
+.card p { font-size: 16px; }
+.label { font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .13em; color: var(--orange); margin-block-end: 14px; }
+.footer { border-block-start: 1px solid var(--line); padding-block-start: 14px; font-size: 11px; color: var(--muted); margin-block-start: auto; }
+.footer a { text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+.page { color: var(--ink); white-space: nowrap; font-weight: 700; letter-spacing: .12em; }
+code, pre { font-family: Consolas, 'Cascadia Code', monospace; }
+code { font-size: .91em; }
+pre { margin: 14px 0; padding: 20px; border-radius: 10px; background: var(--ink); color: #f5f6ed; font-size: 15px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+pre code { font-size: inherit; }
+.kw { color: #daef9d; }
+.str { color: #f6c397; }
+.comment { color: #a9bbb0; }
+.note { font-size: 13px !important; color: var(--muted); line-height: 1.45; }
+.callout { border-inline-start: 3px solid var(--orange); padding-inline-start: 14px; margin-block-start: 18px; font-size: 15px; line-height: 1.45; }
+.number { display: inline-grid; place-items: center; inline-size: 38px; block-size: 38px; border-radius: 50%; background: var(--lime); font-weight: 700; margin-block-end: 20px; }
+.hero { background: var(--ink); color: var(--paper); }
+.hero .mark { color: var(--ink); background: var(--lime); }
+.hero .chapter, .hero .footer { color: #b6c6ba; }
+.hero .footer { border-color: #40544a; }
+.hero .page { color: var(--paper); }
+.hero-layout { display: grid; grid-template-columns: 1.08fr 1fr; gap: 55px; align-items: center; }
+.hero .eyebrow { color: var(--lime); font-size: 12px; font-weight: 700; letter-spacing: .16em; margin-block-end: 18px; }
+.hero h1 span { color: var(--lime); }
+.hero .lead { color: #d3ded4; font-size: 22px; line-height: 1.4; margin-block-start: 22px; max-inline-size: 510px; }
+.hero pre { background: #233b30; border: 1px solid #4d6858; font-size: 16px; margin-block: 0 20px; padding: 26px; }
+.hero .label { color: #edb493; }
+.hero-tags { display: flex; flex-wrap: wrap; gap: 9px; margin-block-start: 24px; }
+.hero-tags span { border: 1px solid #66816d; border-radius: 30px; padding: 8px 12px; color: #d9e6d8; font-size: 12px; }
+.ribbon { background: var(--lime); color: var(--ink); border-radius: 10px; padding: 17px 20px; font-size: 16px; line-height: 1.45; }
+.hero .runtime { color: #b6c6ba; margin-block-start: 15px; font-size: 12px; }
+.steps .card { background: #fffdf7; }
+.steps pre { padding: 16px; font-size: 14px; }
+.steps h3 { font-size: 24px; }
+.workflow pre { margin: 0; font-size: 16px; padding: 22px 26px; }
+.workflow .code-title { padding: 10px 18px; border: 1px solid var(--line); border-radius: 10px 10px 0 0; font-size: 12px; color: var(--muted); }
+.workflow .code-title + pre { border-radius: 0 0 10px 10px; }
+.tool-row { display: grid; grid-template-columns: 36px minmax(0,1fr); gap: 12px; padding-block: 12px; border-block-end: 1px solid var(--line); }
+.tool-row .number { inline-size: 30px; block-size: 30px; font-size: 12px; margin: 0; }
+.tool-row p { font-size: 15px; }
+.tool-row code { font-weight: 700; }
+.recovery .content { padding-block-start: 20px; }
+.recovery .card { padding: 20px; }
+.recovery pre { font-size: 13px; padding: 16px; margin-block: 10px; line-height: 1.5; }
+.recovery .human-strip { display: grid; grid-template-columns: .9fr 1.1fr; gap: 24px; align-items: center; margin-block-start: 18px; padding: 18px 22px; border-radius: 12px; background: #e8eddf; }
+.recovery .human-strip pre { margin: 0; }
+.recovery h3 { font-size: 21px; margin-block-end: 8px; }
+.safety .card { padding: 22px; }
+.safety pre { font-size: 14px; margin-block: 10px; padding: 17px; }
+.safety .guidance { display: flex; gap: 14px; align-items: flex-start; padding-block: 14px; border-block-end: 1px solid var(--line); }
+.badge { font-size: 11px; font-weight: 750; letter-spacing: .08em; border-radius: 4px; padding: 5px 7px; background: #f0dece; color: #853a20; flex-shrink: 0; }
+.badge.hard { color: #23452b; background: var(--lime); }
+.safety .guidance p { font-size: 15px; }
+.safety .callout { font-size: 13px; }
+@media screen and (max-width: 1100px) {
+ .slide { padding: 32px; aspect-ratio: auto; }
+ h1 { font-size: 56px; } h2 { font-size: 39px; }
+ .hero-layout { gap: 28px; } .hero pre { font-size: 14px; padding: 20px; }
+ .grid3 { grid-template-columns: 1fr; }
+ .steps .card { display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 0 18px; }
+ .steps .number { grid-row: span 5; }
+}
+@media screen and (max-width: 700px) {
+ main { gap: 16px; padding-block-end: 16px; }
+ .slide { padding: 25px 20px; min-block-size: auto; }
+ .topline { font-size: 10px; gap: 12px; } .chapter { max-inline-size: 115px; text-align: end; }
+ h1 { font-size: 49px; } h2 { font-size: 34px; }
+ .hero-layout, .grid2, .recovery .human-strip { grid-template-columns: 1fr; }
+ .hero .lead { font-size: 19px; } .subtitle { font-size: 17px; }
+ .content { padding-block: 24px; } .card { padding: 20px; }
+ .footer { align-items: flex-end; font-size: 10px; }
+ .workflow pre { padding: 20px; font-size: 14px; }
+}
+@media print, screen and (min-width: 1101px) {
+ .workflow .content { padding-block: 12px 8px; }
+ .workflow pre { font-size: 14px; line-height: 1.4; padding: 16px 20px; }
+ .workflow .tool-row { padding-block: 8px; }
+ .workflow .callout { margin-block-start: 10px; }
+ .recovery .content, .safety .content { padding-block: 10px 8px; }
+ .recovery .card, .safety .card { padding: 14px; }
+ .recovery pre, .safety pre { font-size: 12px; line-height: 1.35; padding: 12px; margin-block: 8px; }
+ .recovery .human-strip { margin-block-start: 10px; padding: 12px 16px; }
+ .recovery .note, .safety .note { font-size: 12px !important; }
+ .recovery .callout, .safety .callout { margin-block-start: 8px; }
+ .safety .guidance { padding-block: 8px; }
+}
+@media print {
+ @page { size: 13.333333in 7.5in; margin: 0; }
+ html, body { margin: 0; padding: 0; background: white; }
+ body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+ .toolbar { display: none; }
+ main { inline-size: 1280px; max-inline-size: none; margin: 0; padding: 0; display: block; }
+ .slide { inline-size: 1280px; block-size: 720px; min-block-size: 0; aspect-ratio: auto; box-shadow: none; break-after: page; break-inside: avoid; }
+ .slide:last-child { break-after: auto; }
+ a { text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<header class="toolbar">
+<strong>SPL / New starter's field guide</strong>
+<nav aria-label="Slide navigation"><a href="#intro">01</a><a href="#start">02</a><a href="#syntax">03</a><a href="#recovery">04</a><a href="#safety">05</a></nav>
+<button type="button" id="print" hidden>Print / Save PDF</button>
+</header>
+<main aria-label="Five-slide introduction to SPL">
+<section class="slide hero" id="intro" aria-labelledby="title1">
+<div class="topline"><div class="brand"><span class="mark">spl</span> Semantic Prompt Language</div><span class="chapter">A new starter's field guide</span></div>
+<div class="content hero-layout">
+<div><p class="eyebrow">EXACT CODE. NATURAL LANGUAGE. ONE FILE.</p><h1 id="title1">Less plumbing.<br>More <span>purpose.</span></h1><p class="lead">A Python-like language with LLM calls built in. Forget the callback hell of agentic frameworks.</p><div class="hero-tags"><span>Executable Markdown</span><span>Shared variables</span><span>Explicit guards</span></div></div>
+<div><p class="label">A workflow you can read, not a graph to untangle</p><pre><code><span class="kw">let</span> notes = read_file(<span class="str">'notes.txt'</span>)
+<span class="kw">let</span> summary = <span class="kw">ask</span>(len=<span class="str">'sentence'</span>) <span class="str">'Summarize: {notes}'</span></code></pre><div class="ribbon"><strong>Build reliable automations.</strong><br>Keep control flow deterministic. Validate model output. Record decisions. Bound actions.</div><p class="runtime">Python-like syntax, not Python itself. The interpreter runs on Node.js; model calls use GitHub Copilot.</p></div>
+</div>
+<div class="footer"><a href="https://github.com/dgawlik/semantic-prompt-language">dgawlik / semantic-prompt-language</a><span class="page">01 / 05</span></div>
+</section>
+<section class="slide steps" id="start" aria-labelledby="title2">
+<div class="topline"><div class="brand"><span class="mark">spl</span> Starter kit</div><span class="chapter">Install / Edit / Run</span></div>
+<h2 id="title2">Your first working workflow.</h2><p class="subtitle">Node.js 24.15.0+ for the CLI and notebook runtime. GitHub Copilot credentials for model calls.</p>
+<div class="content grid3">
+<article class="card"><span class="number">1</span><h3>Install from npm</h3><p>Install the CLI and authenticate:</p><pre><code>npm install -g spl-lang
+spl login</code></pre><p class="note">Open this repository checkout in VS Code. The npm package installs the runtime, not this repository's example files.</p></article>
+<article class="card"><span class="number">2</span><h3>Set up VS Code</h3><p>Install <a href="https://marketplace.visualstudio.com/items?itemName=spl-lang.spl-lang-vscode">SPL - Semantic Prompt Language</a> by <strong>spl-lang</strong> from Extensions.</p><pre><code>code --install-extension spl-lang.spl-lang-vscode</code></pre><p class="note">Requires VS Code 1.82+. Get syntax highlighting, diagnostics, completions and runnable Markdown notebooks.</p></article>
+<article class="card"><span class="number">3</span><h3>Run the basics</h3><p>From the repository root:</p><pre><code>cd lang
+spl examples\basics.md --check
+spl examples\basics.md</code></pre><p class="note">Or open <code>lang\examples\basics.md</code>, run <strong>SPL: Open as Notebook</strong>, select <strong>SPL Runtime</strong>, then run cells in order in a trusted workspace.</p></article>
+</div>
+<p class="callout" style="margin:0 0 22px"><strong>What you'll see:</strong> exact functions, agent instructions, shared values and an assertion comparing Fibonacci results. <code>--check</code> validates syntax without calling a model; live calls use the example's configured model.</p>
+<div class="footer"><span>Sources: <a href="https://dgawlik.github.io/semantic-prompt-language/getting-started.html">Getting started</a> / <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/vscode/README.md">VS Code</a> / <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/basics.md">basics.md</a></span><span class="page">02 / 05</span></div>
+</section>
+<section class="slide workflow" id="syntax" aria-labelledby="title3">
+<div class="topline"><div class="brand"><span class="mark">spl</span> The mental model</div><span class="chapter">One document / One shared scope</span></div>
+<h2 id="title3">Two executable surfaces. Zero magic glue.</h2><p class="subtitle">Only <code>spl</code> fences and blockquotes execute. All other Markdown is commentary.</p>
+<div class="content grid2">
+<div><div class="code-title">double.md / a complete, minimal workflow</div><pre><code><span class="comment">---
+extension: semantic-prompt-language
+version: 1
+---</span>
+```spl
+<span class="kw">def</span> double(n):
+    <span class="kw">return</span> n * 2
+```
+
+<span class="str">&gt; Invoke @double with 21 -&gt; @answer</span>
+
+```spl
+<span class="kw">assert</span> answer == 42 <span class="str">'wrong result'</span>
+<span class="kw">success</span> answer
+```</code></pre></div>
+<div><p class="label">What the blockquote does internally</p><h3>It is an agent command.<br>Not generated SPL.</h3><p style="font-size:16px; margin-block-end:8px">The model chooses tools against the real interpreter. For this instruction, the intended tool sequence is:</p><div class="tool-row"><span class="number">1</span><p><code>call_function('double', [21])</code><br>Invokes the existing deterministic function.</p></div><div class="tool-row"><span class="number">2</span><p><code>save_variable('answer', 42)</code><br>Saves the result into the shared scope.</p></div><div class="tool-row"><span class="number">3</span><p>The next fence checks <code>answer</code>.<br>The model's prose alone never creates a variable.</p></div><p class="callout"><strong>Exact fences:</strong> Python-like <code>:</code> + indentation, <code>let</code> bindings and deterministic control flow. <strong>ask / think</strong> generate values without tools; <strong>agent / blockquotes</strong> can act.</p><p class="note" style="margin-block-start:12px"><code>@name</code> marks a binding or operation, not text substitution. <code>let</code> is local to a block; assignment updates the nearest declaration.</p></div>
+</div>
+<div class="footer"><span>Sources: <a href="https://dgawlik.github.io/semantic-prompt-language/llm-commands.html">Natural language &amp; models</a> / <a href="https://dgawlik.github.io/semantic-prompt-language/language.html">Language reference</a></span><span class="page">03 / 05</span></div>
+</section>
+<section class="slide recovery" id="recovery" aria-labelledby="title4">
+<div class="topline"><div class="brand"><span class="mark">spl</span> Continuity &amp; control</div><span class="chapter">Record / Resume / Ask a person</span></div>
+<h2 id="title4">Keep decisions. Recover deliberately.</h2><p class="subtitle">Saved model responses reduce repeat work. Checkpoint journals and trace replay solve different problems.</p>
+<div class="content">
+<div class="grid2">
+<article class="card"><p class="label">Checkpoint / Continue the same run</p><h3>Preserve completed work</h3><pre><code>spl flow.md --checkpoint run.jsonl
+spl flow.md --resume run.jsonl
+spl flow.md --resume run.jsonl --answer-for REQUEST_ID --answer "Approved"</code></pre><p class="note"> A human question exits <strong>3</strong> with JSON; answer using its <code>request_id</code>. Resume reconstructs completed steps without repeating completed tool/model calls.</p><p class="callout">After a crash, resume the same journal in the same workspace with the same script, runtime, options and environment. An interrupted action requires manual recovery; the journal is not a filesystem snapshot.</p></article>
+<article class="card"><p class="label">Trace / Re-test against saved answers</p><h3>Replay code and guards</h3><pre><code>spl flow.md --trace calls.jsonl
+spl flow.md --replay calls.jsonl</code></pre><p class="note">Replay returns recorded responses without contacting Copilot or MCP. Requests must match exactly, in order; changed prompts require a new trace.</p><p class="callout"><strong>Not a dry run:</strong> explicit file, shell and web tools still execute. Agent-owned external effects are not repeated or recreated. Keep traces and journals private; they contain prompts and answers.</p></article>
+</div>
+<div class="human-strip"><div><h3>Human input, two ways</h3><p class="note">Normal runs prompt in the terminal. Repeat <code>--human</code> to answer in question order; remaining questions still prompt. Blockquotes use <code>ask_human</code> via <code>@HUMAN</code>.</p></div><pre><code><span class="kw">let</span> feedback = <span class="kw">human</span> <span class="str">'What should change?'</span>
+<span class="comment"># CLI: prompt, or supply an answer</span>
+spl review.md
+spl review.md --human "Make it clearer"</code></pre></div>
+<p class="note" style="margin-block-start:12px"><strong>Choose a mode:</strong> <code>--human</code> cannot combine with checkpoint/resume; checkpoints cannot combine with trace/replay or variable stores.</p>
+</div>
+<div class="footer"><span>Sources: <a href="https://dgawlik.github.io/semantic-prompt-language/cli.html">CLI &amp; runtime</a> / <a href="https://dgawlik.github.io/semantic-prompt-language/safety.html">Human in the loop</a></span><span class="page">04 / 05</span></div>
+</section>
+<section class="slide safety" id="safety" aria-labelledby="title5">
+<div class="topline"><div class="brand"><span class="mark">spl</span> Safe boundaries</div><span class="chapter">Guidance is not enforcement</span></div>
+<h2 id="title5">Guide the model. Restrict the actions.</h2><p class="subtitle">MCP extends agent tools. Runtime restrictions define which actions those agents may take.</p>
+<div class="content grid2">
+<article class="card"><p class="label">Soft instructions / Hard checks</p><div class="guidance"><span class="badge">SOFT</span><p><strong><code>enforce</code> / <code>forbid</code></strong> add prompt guidance to nested model calls. They do not validate an answer or guarantee compliance.</p></div><div class="guidance"><span class="badge hard">HARD</span><p><strong><code>restrict</code></strong> checks runtime actions. Blocked calls raise <code>restriction_violation</code>. Use schemas and <code>assert</code> to validate data.</p></div><pre><code><span class="kw">restrict</span> fs <span class="str">'./out'</span>, mcp <span class="str">'docs/search'</span>:
+    <span class="kw">let</span> report = <span class="kw">agent</span> <span class="str">'Use only allowed tools'</span></code></pre><p class="note">Restrictions can also limit network hosts and executables. File paths, redirect hosts, executable names and MCP server/tool names are checked. Nested scopes intersect: they can only narrow access.</p><p class="callout"><strong>Know the boundary:</strong> unrestricted categories are allowed by default. Restrictions are not an OS sandbox; allowed programs and MCP servers remain trusted.</p></article>
+<article class="card"><p class="label">MCP / Wire it once, invoke through an agent</p><h3>Expose a docs search tool</h3><p class="note">Example <code>mcp.json</code> (VS Code format):</p><pre><code>{"servers":{"docs":{
+  "type":"stdio", "command":"node",
+  "args":["tools/docs-server.js"],
+  "tools":["search"]
+}}}</code></pre><p class="note">Provide your own trusted server script exposing <code>search</code>; this config is illustrative. Keep credentials in environment variables, never in the config.</p><pre><code>spl flow.md --mcp mcp.json
+
+<span class="kw">let</span> answer = <span class="str">''</span>
+<span class="kw">restrict</span> mcp <span class="str">'docs/search'</span>:
+    answer = <span class="kw">agent</span> <span class="str">'Use docs/search to find setup docs'</span></code></pre><p class="note">Configured MCP tools are available to <strong>agent expressions and blockquotes only</strong>, never <code>ask</code> or <code>think</code>. Out-of-scope MCP tools are hidden and rejected if requested.</p></article>
+</div>
+<div class="footer"><span>Sources: <a href="https://dgawlik.github.io/semantic-prompt-language/safety.html">Restrictions</a> / <a href="https://dgawlik.github.io/semantic-prompt-language/cli.html">MCP servers</a> / <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/mcp.md">mcp.md</a></span><span class="page">05 / 05</span></div>
+</section>
+</main>
+<script>
+const printButton = document.getElementById('print');
+printButton.hidden = false;
+printButton.addEventListener('click', () => window.print());
+</script>
+</body>
+</html>
