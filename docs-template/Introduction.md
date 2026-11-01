@@ -15,7 +15,10 @@ model: 'gpt-6-luna'
 
 This example highlights some SPL features helpful in automation of day to day workflow
 
-> read the repository you are in and list security vulnerabilities grouped in categories high, medium, low. each category should be an array of issues with each issue json object with name, cwe-id, link to file and describtion. save to @vulnerabilities
+> read the repository you are in and list security vulnerabilities grouped 
+> in categories high, medium, low. each category should be an array of issues 
+> with each issue json object with name, cwe-id, link to file and describtion. 
+> save to @vulnerabilities
 
 ```spl
 log(vulnerabilities)
