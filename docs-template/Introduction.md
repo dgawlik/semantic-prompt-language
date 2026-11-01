@@ -1,6 +1,6 @@
 # Build AI workflows in minutes, not hours
 
-Run all your workflows in Markdown editor. SPL understands both code and natural language. `spl` code fences hold exact, Python-like code; blockquotes hold natural-language agent commands. Both share one scope, the same tools and the same guards, so each step can be written in whichever form reads best.
+Turn Markdown into runnable AI workflows—natural-language steps alongside deterministic code, validation, and human approval.
 
 `hi.md`
 
