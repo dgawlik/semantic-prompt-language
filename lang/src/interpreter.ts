@@ -5,11 +5,12 @@ import { LlmError, buildPromptParts, parseJsonResponse, type Constraint, type Ll
 import { AGENT_TOOLS, actionArguments } from './agent.js';
 import { compileSchema } from './schema.js';
 import type { Logger, LogLevel } from './logger.js';
-import { Restrictions, makeRestriction } from './restrict.js';
+import { Restrictions, makeRestriction, type Restriction } from './restrict.js';
 import { MemoryStore, type VariableStore } from './store.js';
 import { ToolHost, TOOL_SPECS } from './tools.js';
 import { CheckpointError, SuspensionSignal, type Checkpoint, type HumanRequest } from './checkpoint.js';
-import { isResponse, traceRequest } from './recording.js';
+import { isResponse, isToolValue, traceRequest } from './recording.js';
+import { Pin, PinError } from './pin.js';
 import { usesHuman } from './parser.js';
 import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
 import { randomUUID } from 'node:crypto';
@@ -49,6 +50,8 @@ export interface RunOptions {
     args?: readonly string[];
     maxCallDepth?: number;
     checkpoint?: Checkpoint;
+    /** Capture a successful workflow for deterministic Markdown replay. */
+    pin?: Pin;
     /** Handles human expressions and blockquote ask_human calls without suspending. */
     human?: (question: string, line: number) => string | Promise<string>;
     /** Source URI used to locate failures across interactive cells. */
@@ -69,7 +72,18 @@ class ExpressionSignal {
 }
 
 export async function run(program: Program, opts: RunOptions): Promise<RunResult> {
-    return new Interpreter(program, opts).run();
+    try {
+        if (program.markdown?.lock && opts.pin) throw new PinError('cannot pin an already locked workflow');
+        const pin = opts.pin ?? (program.markdown?.lock ? Pin.replay(program.markdown.lock) : undefined);
+        pin?.validateOptions(opts);
+        const result = await new Interpreter(program, { ...opts, pin }).run();
+        pin?.assertConsumed();
+        return result;
+    } catch (error) {
+        if (!(error instanceof PinError)) throw error;
+        opts.logger.error(error.message);
+        return { status: 'failure', failure: new Failure('runtime_error', error.message).payload() };
+    }
 }
 
 interface SessionState {
@@ -83,8 +97,9 @@ export class ExecutionSession {
     private readonly state: SessionState = { globals: { vars: new Map() }, identities: new ObservationIdentities() };
     private running = false;
 
-    async run(program: Program, opts: Omit<RunOptions, 'store' | 'checkpoint'>): Promise<RunResult> {
+    async run(program: Program, opts: Omit<RunOptions, 'store' | 'checkpoint' | 'pin'>): Promise<RunResult> {
         if (this.running) throw new Error('an execution session can only run one cell at a time');
+        if (program.markdown?.lock) throw new PinError('locked workflows must run standalone with run(), not in an execution session');
         this.running = true;
         try {
             this.state.current = new Interpreter(program, opts, this.state);
@@ -125,14 +140,15 @@ class Interpreter {
         this.sourceLines = program.lines;
         this.sourceUri = opts.source;
         this.sourceVersion = opts.sourceVersion;
-        this.cwd = opts.cwd ?? process.cwd();
+        this.cwd = opts.pin?.data.context.cwd ?? opts.cwd ?? process.cwd();
         this.store = opts.store ?? new MemoryStore();
-        this.model = opts.model ?? program.directives.model;
+        this.model = opts.pin?.data.context.model ?? opts.model ?? program.directives.model;
         this.maxDepth = opts.maxCallDepth ?? 200;
-        for (const [name, value] of Object.entries(process.env)) {
+        const environment = opts.pin?.replaying ? opts.pin.data.environment ?? {} : process.env;
+        for (const [name, value] of Object.entries(environment)) {
             if (value !== undefined) setKey(this.runtimeEnv, name, value);
         }
-        this.runtimeArgs = [...(opts.checkpoint?.args ?? opts.args ?? [])];
+        this.runtimeArgs = [...(opts.pin?.data.context.args ?? opts.checkpoint?.args ?? opts.args ?? [])];
         Object.freeze(this.runtimeEnv);
         Object.freeze(this.runtimeArgs);
         this.restrictions = new Restrictions(this.cwd);
@@ -168,13 +184,17 @@ class Interpreter {
                 throw new CheckpointError('checkpoint runs cannot use stores or recording/replay backends');
             }
             this.opts.checkpoint?.validateSource(this.program.lines.join('\n'), this.opts.args);
-            if (!this.opts.checkpoint && !this.opts.human && usesHuman(this.program)) {
+            if (!this.opts.checkpoint && !this.opts.pin?.replaying && !this.opts.human && usesHuman(this.program)) {
                 throw runtimeError('human input requires a human handler or checkpoint');
             }
             if (this.opts.backend.mode === 'replay' && this.opts.store) {
                 throw new Failure('restriction_violation', 'replay does not allow a persistent variable store');
             }
-            for (const [k, v] of Object.entries(this.store.load())) this.globals.vars.set(k, v);
+            const variables = this.opts.pin
+                ? await this.opts.pin.effect({ kind: 'store' }, () => this.store.load(),
+                    (value): value is Record<string, Value> => isDict(value) && Object.values(value).every(isToolValue))
+                : this.store.load();
+            for (const [k, v] of Object.entries(variables)) this.globals.vars.set(k, v);
             const signal = await this.execBlock(this.program.body, this.globals);
             this.opts.checkpoint?.assertConsumed();
             if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
@@ -195,7 +215,7 @@ class Interpreter {
             throw e;
         } finally {
             try {
-                if (!this.sessionState && !this.opts.checkpoint && this.opts.backend.mode !== 'replay') {
+                if (!this.sessionState && !this.opts.checkpoint && !this.opts.pin?.replaying && this.opts.backend.mode !== 'replay') {
                     const snapshot: Record<string, Value> = {};
                     for (const [k, v] of this.globals.vars) if (!isFunction(v)) snapshot[k] = v;
                     this.store.save(snapshot);
@@ -366,7 +386,7 @@ class Interpreter {
                 const saved = this.restrictions;
                 try {
                     for (const clause of s.clauses) {
-                        const restriction = makeRestriction(clause.kind, await this.eval(clause.arg, env), this.cwd);
+                        const restriction = await this.makeRestriction(clause.kind, await this.eval(clause.arg, env));
                         this.restrictions = this.restrictions.with(restriction);
                     }
                     const completion = await this.execBlock(s.body, this.childScope(env));
@@ -453,7 +473,10 @@ class Interpreter {
             }
             case 'name': return this.lookup(e.name, env);
             case 'special':
-                if (e.name === 'env') this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
+                if (e.name === 'env') {
+                    this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
+                    this.opts.pin?.observeEnvironment(this.runtimeEnv);
+                }
                 return e.name === 'env' ? this.runtimeEnv : this.runtimeArgs;
             case 'human': {
                 const question = await this.eval(e.prompt, env);
@@ -698,13 +721,14 @@ class Interpreter {
                 try {
                     return await backend.call(req);
                 } catch (error) {
-                    if (error instanceof Failure || error instanceof CheckpointError ||
+                    if (error instanceof Failure || error instanceof CheckpointError || error instanceof PinError ||
                         error instanceof SuccessSignal || error instanceof SuspensionSignal) throw error;
                     throw new Failure('llm_error', error instanceof Error ? error.message : String(error));
                 }
             };
-            const res = this.opts.checkpoint && !req.naturalLanguage
-                ? await this.opts.checkpoint.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
+            const journal = this.opts.checkpoint ?? this.opts.pin;
+            const res = journal && !req.naturalLanguage
+                ? await journal.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
                 : await perform();
             if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response; blockquotes require runtime actions, not submitted SPL');
             if (!replaying) {
@@ -717,7 +741,7 @@ class Interpreter {
             }
             return res;
         } catch (e) {
-            if (e instanceof CheckpointError || e instanceof SuspensionSignal || e instanceof SuccessSignal) throw e;
+            if (e instanceof CheckpointError || e instanceof PinError || e instanceof SuspensionSignal || e instanceof SuccessSignal) throw e;
             if (e instanceof Failure) throw e;
             if (e instanceof LlmError) throw new Failure('llm_error', e.message);
             throw new Failure('llm_error', (e as Error).message ?? String(e));
@@ -745,8 +769,9 @@ class Interpreter {
         this.naturalDepth++;
         try {
             const checkpoint = this.opts.checkpoint;
-            const decision = (perform: () => Promise<LlmResponse>) => checkpoint
-                ? checkpoint.effect({
+            const journal = checkpoint ?? this.opts.pin;
+            const decision = (perform: () => Promise<LlmResponse>) => journal
+                ? journal.effect({
                     kind: 'natural', text, line, history: JSON.stringify(history), restrictions: this.restrictions.list,
                 }, perform, isResponse)
                 : perform();
@@ -758,8 +783,8 @@ class Interpreter {
             };
             for (;;) {
                 interaction = { requestId: randomUUID(), kind: 'blockquote' };
-                if (checkpoint?.replaying) {
-                    const response = await decision(async () => { throw new CheckpointError('missing recorded runtime decision'); });
+                if (checkpoint?.replaying || this.opts.pin?.replaying) {
+                    const response = await decision(async () => { throw new PinError('missing recorded runtime decision'); });
                     if (!response.action) return;
                     await execute(response.action);
                     continue;
@@ -790,7 +815,7 @@ class Interpreter {
                 try {
                     response = await this.callLlmResponse(request, interaction, [built.preface, context].filter(Boolean).join('\n\n'));
                 } catch (error) {
-                    if (checkpoint && !actionFailed && error instanceof Failure) {
+                    if (journal && !actionFailed && error instanceof Failure) {
                         await decision(async () => { throw error; });
                     }
                     throw error;
@@ -808,6 +833,12 @@ class Interpreter {
 
     private async askHuman(question: string, line: number): Promise<string> {
         if (this.opts.checkpoint) return this.opts.checkpoint.human(question, line);
+        if (this.opts.pin) return this.opts.pin.effect({ kind: 'human', question, line },
+            () => this.directHuman(question, line), (value): value is string => typeof value === 'string');
+        return this.directHuman(question, line);
+    }
+
+    private async directHuman(question: string, line: number): Promise<string> {
         if (!this.opts.human) throw runtimeError('human input requires a human handler or checkpoint');
         const answer = await this.opts.human(question, line);
         if (typeof answer !== 'string') throw runtimeError('human answer must be a string');
@@ -836,6 +867,7 @@ class Interpreter {
             }
             case 'get_env':
                 this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
+                this.opts.pin?.observeEnvironment(this.runtimeEnv);
                 return this.externalAction(action, async () => this.getKey(this.runtimeEnv, String(args.name)));
             case 'ask_human':
                 return this.askHuman(String(args.question), line);
@@ -846,7 +878,7 @@ class Interpreter {
             case 'restrict': {
                 const kind = args.kind;
                 if (kind !== 'fs' && kind !== 'exec' && kind !== 'net' && kind !== 'mcp') throw runtimeError('invalid restriction kind');
-                this.restrictions = this.restrictions.with(makeRestriction(kind, args.value, this.cwd));
+                this.restrictions = this.restrictions.with(await this.makeRestriction(kind, args.value));
                 return null;
             }
             case 'set_guidance': {
@@ -884,8 +916,18 @@ class Interpreter {
         const perform = () => this.naturalDepth
             ? this.externalAction({ name: tool, arguments: { ...params, restrictions: this.restrictions.list } }, invoke)
             : invoke();
-        return this.opts.checkpoint
-            ? this.opts.checkpoint.effect({ kind: 'tool', tool, params, restrictions: this.restrictions.list }, perform, (value): value is string => typeof value === 'string')
+        const journal = this.opts.checkpoint ?? this.opts.pin;
+        return journal
+            ? journal.effect({ kind: 'tool', tool, params, restrictions: this.restrictions.list }, perform, (value): value is string => typeof value === 'string')
+            : perform();
+    }
+
+    private async makeRestriction(kind: Restriction['kind'], value: Value): Promise<Restriction> {
+        const perform = () => makeRestriction(kind, value, this.cwd);
+        return this.opts.pin
+            ? this.opts.pin.effect({ kind: 'restriction', restriction: kind, value }, perform,
+                (result): result is Restriction => isDict(result) && result.kind === kind
+                    && Array.isArray(result.values) && result.values.every(item => typeof item === 'string'))
             : perform();
     }
 
@@ -922,7 +964,7 @@ class Interpreter {
         for (let attempt = 0; ; attempt++) {
             const text = await this.callLlm({
                 kind, prompt,
-                model: this.opts.model ?? model ?? this.model,
+                model: this.opts.pin?.data.context.model ?? this.opts.model ?? model ?? this.model,
                 reasoningEffort: reasoning,
                 showReasoning: !hide,
                 restrictions: this.restrictions,

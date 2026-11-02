@@ -27,6 +27,7 @@ spl workflow.md [--arg value ...] [--model id] [--provider openai|anthropic|goog
                 [--human answer ...]
                 [--store file.json | --store-module module]
                 [--trace file.jsonl | --record file.jsonl | --replay file.jsonl]
+                [--pin]
                 [--log-level error|info|debug] [--silent] [--check]
 spl workflow.md --checkpoint run.jsonl
 spl workflow.md --resume run.jsonl [--answer-for ID (--answer text | --answer-file file)]
@@ -37,6 +38,14 @@ spl logout [openai|anthropic|google]
 The result goes to stdout and logs to stderr. Exit codes: `0` success, `1` script failure,
 `2` syntax or usage error, `3` waiting for human input in explicit checkpoint mode, `70` internal error.
 See [CLI & runtime](../docs-template/CLI.md).
+
+`spl workflow.md --pin` runs normally and, only on success, creates `workflow.locked.md`.
+The original Markdown is retained, with a journal in double blockquotes (`>>`).
+Run `spl workflow.locked.md` to replay the same model responses, runtime decisions, tool results
+and human answers without contacting providers/MCP, repeating side effects or prompting.
+Arguments, model overrides, initial variables and any accessed environment snapshot are pinned too.
+Existing locked files are never overwritten. Pinning cannot be combined with checkpoint/resume
+or trace/record/replay. Keep locked files private: they contain captured responses and external inputs.
 
 Normal runs ask human questions directly on stderr and read one line from stdin. Supply repeatable
 `--human <answer>` flags to skip prompting in question order, for example

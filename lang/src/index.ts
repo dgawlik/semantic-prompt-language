@@ -7,6 +7,7 @@ export type { LogEvent, LogEventSink, BodySegment, ModelInteraction, ModelStream
 export { CopilotBackend } from './copilot.js';
 export { AiBackend, type AiBackendOptions } from './ai.js';
 export { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
+export { Pin, PinError, type PinData } from './pin.js';
 export { Checkpoint, CheckpointError, checkpointFingerprint, type CheckpointContext, type HumanRequest } from './checkpoint.js';
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError, type Provider } from './auth.js';

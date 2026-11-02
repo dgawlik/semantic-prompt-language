@@ -20,6 +20,7 @@ import { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
 import { Checkpoint, CheckpointError, checkpointFingerprint } from './checkpoint.js';
 import { CliLogging, canInteract } from './cli-logging.js';
 import { formatEvent, sanitize, terminalColor } from './log-format.js';
+import { Pin } from './pin.js';
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
@@ -53,6 +54,8 @@ Options:
   --record <file.jsonl>   record generation responses (new file; no agents)
   --replay <file.jsonl>   replay LLM results without model providers/MCP; explicit script tools still run
                           Legacy --record files allow only local reads and no stores.
+  --pin                   on success, save <workflow>.locked.md with responses in double blockquotes
+                          Locked workflows replay without models, tools, stores or human prompts.
   --checkpoint <file>    start a new resumable run; with --resume, continue that journal
                           New runs never overwrite an existing file.
   --resume [file]        inspect pending input, or resume with an answer
@@ -223,6 +226,7 @@ async function main(): Promise<number> {
             trace: { type: 'string' },
             record: { type: 'string' },
             replay: { type: 'string' },
+            pin: { type: 'boolean' },
             checkpoint: { type: 'string' },
             resume: { type: 'string' },
             'answer-for': { type: 'string' },
@@ -305,6 +309,9 @@ async function main(): Promise<number> {
         delete values.checkpoint;
     }
     const resumable = values.checkpoint !== undefined || values.resume !== undefined;
+    if (values.pin && (resumable || values.trace !== undefined || values.record !== undefined || values.replay !== undefined)) {
+        usageError('--pin cannot be combined with --checkpoint, --resume, --trace, --record, or --replay');
+    }
     if (resumable && values.human !== undefined) usageError('--human cannot be combined with --checkpoint or --resume; use --answer when resuming');
     if (values.checkpoint !== undefined && values.resume !== undefined) usageError('--checkpoint and --resume are mutually exclusive');
     if ([values.checkpoint, values.resume, values['answer-for'], values['answer-file']].some((value) => value !== undefined && !value.trim())) {
@@ -338,6 +345,16 @@ async function main(): Promise<number> {
         }
         throw e;
     }
+    const locked = program.markdown?.lock !== undefined;
+    if (/\.locked\.md$/i.test(file) && !locked) usageError('locked workflow is missing its execution journal');
+    if (locked && (values.pin || resumable || [values.trace, values.record, values.replay, values.store, values['store-module'], values.mcp, values.human]
+        .some(value => value !== undefined))) {
+        usageError('locked workflows cannot use --pin, checkpoint/resume, trace/record/replay, stores, --mcp, or --human');
+    }
+    const lockedFile = file.replace(/\.md$/i, '.locked.md');
+    if (values.pin && !values.check && fs.existsSync(lockedFile)) {
+        usageError(`cannot pin: '${lockedFile}' already exists; move or remove it first`);
+    }
     let mcpServers: McpServers | undefined;
     try {
         mcpServers = values.mcp ? loadMcpConfig(values.mcp, cwd) : undefined;
@@ -349,7 +366,11 @@ async function main(): Promise<number> {
 
     let backend: LlmBackend;
     try {
-        if (values.replay) backend = new ReplayBackend(values.replay);
+        if (locked) backend = {
+            async call() { throw new LlmError('locked workflows cannot call a model'); },
+            async close() {},
+        };
+        else if (values.replay) backend = new ReplayBackend(values.replay);
         else {
             backend = new AiBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider });
             if (values.record) backend = new RecordingBackend(backend, values.record);
@@ -402,6 +423,7 @@ async function main(): Promise<number> {
         throw error;
     }
     const executionStore: VariableStore = { load: () => initialVariables, save: variables => store.save(variables) };
+    const pin = values.pin ? Pin.capture(source, { cwd, args: values.arg ?? [], model: values.model }) : undefined;
     presentation = new CliLogging({
         interactive: !values.silent && canInteract(),
         cancel: interrupt,
@@ -429,8 +451,9 @@ async function main(): Promise<number> {
     try {
         try {
             result = await run(program, {
-                backend, logger, store: backend.mode === 'replay' ? undefined : executionStore,
-                cwd, model: values.model, args: values.arg, human,
+                backend, logger, store: backend.mode === 'replay' || locked ? undefined : executionStore,
+                cwd: locked && values.cwd === undefined ? undefined : cwd,
+                model: values.model, args: values.arg, human, pin,
             });
         } finally {
             try {
@@ -453,6 +476,14 @@ async function main(): Promise<number> {
         return 1;
     }
     if (result.status === 'waiting_for_input') throw new CheckpointError('unexpected human suspension without a checkpoint', 'infrastructure');
+    if (pin) {
+        try {
+            fs.writeFileSync(lockedFile, pin.toMarkdown(source), { flag: 'wx', mode: 0o600 });
+        } catch (error) {
+            new Logger('error').error(`spl: cannot save pinned workflow '${lockedFile}': ${error instanceof Error ? error.message : String(error)}`);
+            return 70;
+        }
+    }
     if (result.hasValue) {
         const v = result.value;
         process.stdout.write((typeof v === 'string' ? v : JSON.stringify(toJson(v), null, 2)) + '\n');

@@ -72,5 +72,6 @@ export interface Program {
     directives: Directives;
     body: Stmt[];
     lines: string[];
-    markdown?: { preamble?: string };
+    markdown?: { preamble?: string; lock?: PinData };
 }
+import type { PinData } from './pin.js';

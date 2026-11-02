@@ -37,6 +37,134 @@ function run(args: string[], env: NodeJS.ProcessEnv = {}, input?: string) {
     return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
+describe('pinned workflow CLI', () => {
+    it('saves a successful run beside its source and replays all external inputs without calls, effects or prompts', () => {
+        const preload = path.join(dir, 'pin-backend.mjs');
+        const backend = new URL('../dist/ai.js', import.meta.url).href;
+        const tools = new URL('../dist/tools.js', import.meta.url).href;
+        fs.writeFileSync(preload, `import fs from 'node:fs';
+import { AiBackend } from ${JSON.stringify(backend)};
+import { ToolHost } from ${JSON.stringify(tools)};
+AiBackend.prototype.call = async function(request) {
+    if (process.env.PIN_REPLAY) throw new Error('unexpected model call');
+    fs.appendFileSync('calls.txt', request.model + '\\n');
+    return { text: 'captured answer', reasoning: 'captured reasoning', effective: { model: request.model } };
+};
+AiBackend.prototype.close = async function() {};
+const invoke = ToolHost.prototype.invoke;
+ToolHost.prototype.invoke = async function(...args) {
+    if (process.env.PIN_REPLAY) throw new Error('unexpected tool call');
+    return invoke.apply(this, args);
+};`);
+        const env = {
+            NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`,
+            SPL_PIN_CLI: 'original environment',
+        };
+        const source = markdown(`let input = read_file('input.txt')
+let answer = ask(model='other') 'Answer {input}'
+let approval = human 'Approve?'
+write_file('effect.txt', approval)
+seed.append('changed')
+success [answer, approval, $env.SPL_PIN_CLI, $args, seed]`);
+        const file = path.join(dir, 'flow.md');
+        const locked = path.join(dir, 'flow.locked.md');
+        fs.writeFileSync(file, source);
+        fs.writeFileSync(path.join(dir, 'input.txt'), 'original input');
+        fs.writeFileSync(path.join(dir, 'variables.json'), JSON.stringify({ seed: ['initial'] }));
+        const first = run([file, '--pin', '--silent', '--human=  approved  ', '--model=pinned-model',
+            '--arg=original', '--store=variables.json'], env);
+        expect(first.code).toBe(0);
+        expect(first.err).toBe('');
+        expect(JSON.parse(first.out)).toEqual([
+            'captured answer', '  approved  ', 'original environment', ['original'], ['initial', 'changed'],
+        ]);
+        expect(fs.readFileSync(file, 'utf8')).toBe(source);
+        const lockedSource = fs.readFileSync(locked, 'utf8');
+        expect(lockedSource.startsWith(source)).toBe(true);
+        expect(lockedSource).toContain('>> ```spl-lock');
+        expect(lockedSource).toContain('captured reasoning');
+        fs.unlinkSync(path.join(dir, 'effect.txt'));
+        fs.unlinkSync(path.join(dir, 'input.txt'));
+        fs.writeFileSync(path.join(dir, 'variables.json'), 'invalid and must not be loaded');
+        const replay = run([locked, '--silent'], { ...env, PIN_REPLAY: '1', SPL_PIN_CLI: 'changed environment' });
+        expect(replay).toEqual(first);
+        expect(fs.readFileSync(path.join(dir, 'calls.txt'), 'utf8')).toBe('pinned-model\n');
+        expect(fs.existsSync(path.join(dir, 'effect.txt'))).toBe(false);
+        expect(fs.readFileSync(locked, 'utf8')).toBe(lockedSource);
+    });
+
+    it('uses a sibling .locked.md path, independently of --cwd, including uppercase Markdown extensions', () => {
+        const base = path.join(dir, 'base');
+        fs.mkdirSync(base);
+        const file = path.join(dir, 'FLOW.MD');
+        fs.writeFileSync(file, markdown('success 42'));
+        expect(run([file, '--pin', '--cwd', base, '--silent'])).toEqual({ code: 0, out: '42\n', err: '' });
+        expect(fs.existsSync(path.join(dir, 'FLOW.locked.md'))).toBe(true);
+        expect(fs.existsSync(path.join(base, 'FLOW.locked.md'))).toBe(false);
+        expect(run([path.join(dir, 'FLOW.locked.md'), '--silent'])).toEqual({ code: 0, out: '42\n', err: '' });
+    });
+
+    it('does not pin failures or syntax checks, and refuses to overwrite a lock before executing', () => {
+        const locked = path.join(dir, 's.locked.md');
+        expect(spl("fail 'failed'", '--pin', '--silent').code).toBe(1);
+        expect(fs.existsSync(locked)).toBe(false);
+        expect(spl('let =', '--pin', '--silent').code).toBe(2);
+        expect(fs.existsSync(locked)).toBe(false);
+        expect(spl("success ask 'Not executed'", '--pin', '--check', '--silent'))
+            .toEqual({ code: 0, out: '', err: '' });
+        expect(fs.existsSync(locked)).toBe(false);
+        fs.writeFileSync(locked, 'existing content');
+        const result = spl("write_file('should-not-exist', 'content')", '--pin', '--silent');
+        expect(result.code).toBe(2);
+        expect(result.err).toContain('already exists');
+        expect(fs.readFileSync(locked, 'utf8')).toBe('existing content');
+        expect(fs.existsSync(path.join(dir, 'should-not-exist'))).toBe(false);
+    });
+
+    it('does not publish a lock when backend cleanup fails', () => {
+        const preload = path.join(dir, 'close-failure.mjs');
+        fs.writeFileSync(preload, `import { AiBackend } from ${JSON.stringify(new URL('../dist/ai.js', import.meta.url).href)};
+import { LlmError } from ${JSON.stringify(new URL('../dist/llm.js', import.meta.url).href)};
+AiBackend.prototype.close = async function() { throw new LlmError('cleanup failed'); };`);
+        const file = path.join(dir, 'flow.md');
+        fs.writeFileSync(file, markdown('success 42'));
+        const result = run([file, '--pin', '--silent'], {
+            NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`,
+        });
+        expect(result.code).toBe(1);
+        expect(JSON.parse(result.out)).toMatchObject({ status_code: 'llm_error', reason: 'cleanup failed' });
+        expect(fs.existsSync(path.join(dir, 'flow.locked.md'))).toBe(false);
+    });
+
+    it.each(['--trace=trace.jsonl', '--record=record.jsonl', '--replay=replay.jsonl', '--checkpoint=checkpoint.jsonl', '--resume=checkpoint.jsonl'])(
+        'rejects --pin with %s before running', option => {
+            const result = spl('success 42', '--pin', option, '--silent');
+            expect(result.code).toBe(2);
+            expect(result.err).toContain('--pin cannot be combined');
+            expect(fs.existsSync(path.join(dir, 's.locked.md'))).toBe(false);
+        },
+    );
+
+    it('rejects live overrides and missing journals without falling back to execution', () => {
+        expect(spl('success $args', '--pin', '--arg=original', '--silent').code).toBe(0);
+        const locked = path.join(dir, 's.locked.md');
+        for (const option of ['--pin', '--store=variables.json', '--mcp=missing.json', '--human=answer', '--trace=trace.jsonl']) {
+            const result = run([locked, option, '--silent']);
+            expect(result.code).toBe(2);
+            expect(result.err).toContain('locked workflows cannot');
+        }
+        for (const option of ['--arg=changed', '--model=changed', `--cwd=${path.join(dir, 'other')}`]) {
+            const result = run([locked, option, '--silent']);
+            expect(result.code).toBe(1);
+            expect(JSON.parse(result.out)).toMatchObject({ reason: expect.stringContaining('options mismatch') });
+        }
+        fs.writeFileSync(locked, markdown("success ask 'Must not run live'"));
+        const missing = run([locked, '--silent']);
+        expect(missing.code).toBe(2);
+        expect(missing.err).toContain('missing its execution journal');
+    });
+});
+
 describe('direct human input CLI', () => {
     function prompt(script: string, input: string, ...args: string[]) {
         const file = path.join(dir, 's.md');

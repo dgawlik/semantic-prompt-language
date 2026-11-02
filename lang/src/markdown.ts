@@ -3,6 +3,7 @@ import { isMap, parseDocument } from 'yaml';
 import type { Program } from './ast.js';
 import { SplSyntaxError } from './errors.js';
 import { parse } from './parser.js';
+import { parsePin, validatePinSource, type PinData } from './pin.js';
 
 export const EXTENSION = 'semantic-prompt-language';
 
@@ -17,6 +18,7 @@ export interface MarkdownDocument {
     model?: string;
     preamble?: string;
     blocks: MarkdownBlock[];
+    lock?: PinData;
     /** Same positions as the document, with everything except SPL code blanked. */
     code: string;
 }
@@ -73,12 +75,18 @@ export function extractMarkdown(source: string): MarkdownDocument {
     const masked = lines.map((line) => ' '.repeat(line.length));
     const body = lines.slice(end + 1).join('\n');
     const blocks: MarkdownBlock[] = [];
+    let lock: PinData | undefined;
+    let lockSource: string | undefined;
+    let lockLine = 1;
     let cursor = 0;
     for (const token of Lexer.lex(body)) {
         const start = body.indexOf(token.raw, cursor);
         if (start < 0) throw new SplSyntaxError('cannot locate Markdown block', end + 2, 1);
         cursor = start + token.raw.length;
         const line = end + 2 + body.slice(0, start).split('\n').length - 1;
+        if (token.type === 'code' && token.lang === 'spl-lock') {
+            throw new SplSyntaxError('locked workflow journals require a double blockquote', line, 1);
+        }
         if (token.type === 'code' && token.lang === 'spl') {
             const rawLines = token.raw.trimEnd().split('\n');
             const fence = /^ {0,3}(`{3,}|~{3,})spl\s*$/.exec(rawLines[0]);
@@ -91,13 +99,31 @@ export function extractMarkdown(source: string): MarkdownDocument {
             rawLines.slice(1, -1).forEach((text, i) => { masked[line + i] = text; });
             blocks.push({ kind: 'spl', text, line: line + 1, endLine: line + rawLines.length - 2 });
         } else if (token.type === 'blockquote') {
+            const outer = (token.tokens ?? []).filter(item => item.type !== 'space');
+            const inner = outer.length === 1 && outer[0].type === 'blockquote'
+                ? (outer[0].tokens ?? []).filter(item => item.type !== 'space') : [];
+            if (inner.length === 1 && inner[0].type === 'code' && inner[0].lang === 'spl-lock') {
+                if (lock) throw new SplSyntaxError('duplicate locked workflow journal', line, 1);
+                if (!/^```spl-lock[ \t]*\n[\s\S]*\n```[ \t]*$/.test(inner[0].raw.trimEnd())) {
+                    throw new SplSyntaxError('invalid or unterminated locked workflow journal fence', line, 1);
+                }
+                lock = parsePin(inner[0].text, line);
+                const offset = lines.slice(0, end + 1).join('\n').length + 1 + start;
+                lockSource = normalized.slice(0, offset) + normalized.slice(offset + token.raw.length);
+                lockLine = line;
+                continue;
+            }
+            if (/(?:^|\n) {0,3}(?:>[ \t]*)*[`~]{3,}spl-lock\b/.test(token.raw)) {
+                throw new SplSyntaxError('invalid locked workflow double blockquote', line, 1);
+            }
             blocks.push({
                 kind: 'natural', text: token.text,
                 line, endLine: line + token.raw.trimEnd().split('\n').length - 1,
             });
         }
     }
-    return { model, preamble, blocks, code: masked.join('\n') };
+    if (lock) validatePinSource(lock, lockSource!, lockLine);
+    return { model, preamble, blocks, code: masked.join('\n'), ...(lock ? { lock } : {}) };
 }
 
 export function parseMarkdown(source: string): Program {
@@ -105,7 +131,7 @@ export function parseMarkdown(source: string): Program {
     const program: Program = {
         directives: { model: document.model },
         body: [], lines: source.split(/\r?\n/),
-        markdown: { preamble: document.preamble },
+        markdown: { preamble: document.preamble, ...(document.lock ? { lock: document.lock } : {}) },
     };
     for (const block of document.blocks) {
         if (block.kind === 'natural') {

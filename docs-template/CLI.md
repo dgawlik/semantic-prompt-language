@@ -26,6 +26,7 @@ spl logout [openai|anthropic|google]
 | `--timeout <s>` | Per model call (default 300) |
 | `--mcp <file.json>` | MCP servers, see [MCP servers](#mcp-servers) |
 | `--trace` / `--replay <file.jsonl>` | Record or replay model calls, see [Traces and replay](#traces-and-replay) |
+| `--pin` | Save a successful workflow as self-contained [locked Markdown](#pinned-workflows) |
 | `--store <file.json>` / `--store-module <path>` | Persist top-level variables, see [Variable stores](#variable-stores) |
 | `--checkpoint`, `--resume`, `--answer-for`, `--answer`, `--answer-file` | [Human input](Safety.md#human-in-the-loop) |
 | `-v`, `--version` / `-h`, `--help` | Version / usage |
@@ -170,6 +171,41 @@ rebuild shared bindings and run existing functions against recorded external-too
 The older `--record` mode writes generation-only recordings; replaying them blocks writes, shell,
 network, agents (including blockquotes) and stores. Traces and recordings contain full prompts,
 answers and requested environment values, so keep them private.
+
+## Pinned workflows
+
+```bash
+spl flow.md --pin
+spl flow.locked.md
+```
+
+`--pin` runs the workflow normally. Only after successful execution and backend cleanup does it
+create a sibling `flow.locked.md`; the original file is unchanged, and an existing locked file is
+never overwritten. `--check --pin` only validates and writes nothing. Failed or interrupted runs
+do not produce a locked workflow.
+
+The locked document retains the original Markdown and appends a versioned JSON execution journal
+inside a double blockquote (`>>`) with a `spl-lock` fence. It includes every returned model response
+(including repair attempts and reasoning), blockquote runtime decisions, explicit tool outcomes and
+human answers. This block is data, never another instruction to a model.
+
+The runtime recognizes the journal automatically, including through the embedding `run` API.
+Locked workflows are standalone; `ExecutionSession` rejects them instead of mixing pinned inputs with retained state.
+It substitutes recorded answers and reconstructs shared state deterministically: no model/provider
+or MCP calls, file/network/shell operations, repeated writes, variable-store access or human prompts.
+The initial variable-store snapshot, script arguments, CLI model override and working directory are
+retained. When `$env` or a blockquote environment tool is used, the environment snapshot is retained
+as well. Replay checks source identity, execution options, request order and complete journal
+consumption; missing, malformed, mismatched or unused entries fail without falling back to live calls.
+
+Pinning cannot be combined with checkpoint/resume or trace/record/replay. Locked workflows also
+reject stores, MCP configuration and supplied human answers. Explicit argument, model or working-directory
+overrides must match the pinned values. To change the workflow or its inputs, run the original file
+with `--pin` again after moving or removing the old locked file.
+
+**Keep locked files private.** Responses, human answers, file contents, initial variables and any
+accessed environment snapshot can contain secrets. Pinning is not a sandbox: the original run still
+performs all requested actions; locked replay does not repeat those actions or recreate their effects.
 
 ## Variable stores
 

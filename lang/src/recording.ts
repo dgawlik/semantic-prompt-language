@@ -48,7 +48,7 @@ export function isResponse(value: unknown): value is LlmResponse {
         && !('spl' in value);
 }
 
-function isToolValue(value: unknown): value is Value {
+export function isToolValue(value: unknown): value is Value {
     return value === null || typeof value === 'string' || typeof value === 'boolean'
         || (typeof value === 'number' && Number.isFinite(value))
         || (Array.isArray(value) && value.every(isToolValue))
