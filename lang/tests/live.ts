@@ -1,4 +1,4 @@
-import { authStatus } from '../src/auth.js';
+import { resolveProvider } from '../src/auth.js';
 import { CopilotBackend } from '../src/copilot.js';
 import type { LlmBackend, LlmRequest, LlmResponse } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
@@ -23,8 +23,7 @@ export class RecordingCopilot implements LlmBackend {
 }
 
 /** Live tests require explicit opt-in as well as authentication. */
-export const live: boolean = process.env.SPL_LIVE_TESTS === '1' && await authStatus()
-    .then((s) => s.isAuthenticated)
-    .catch(() => false);
+export const live: boolean = process.env.SPL_LIVE_TESTS === '1';
+if (live) resolveProvider();
 
 export const LIVE_TIMEOUT = 180_000;

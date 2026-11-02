@@ -1,6 +1,6 @@
 # Getting started
 
-Install the CLI, sign in to GitHub Copilot, then write and refine a workflow in a short edit-run loop.
+Install the CLI, configure OpenAI, Anthropic or Google credentials, then write and refine a workflow in a short edit-run loop.
 
 ## Install
 
@@ -9,13 +9,26 @@ If native rendering cannot start, the CLI diagnoses the problem and keeps comple
 
 ```bash
 npm install -g spl-lang
-spl login
+spl login openai           # or anthropic / google
 ```
 
-`spl login` reuses existing credentials (Copilot CLI, `gh`, or `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`,
-`GITHUB_TOKEN`). Otherwise it runs GitHub's device flow and saves a token in `~/.spl`
-(override with `SPL_HOME`). `spl logout` deletes it. Workflows that never call a model,
-`--check` and replay need no login.
+`spl login <provider>` prompts for an API key without echoing it and saves a separate key for each
+provider in `~/.spl/credentials.json` (override the folder with `SPL_HOME`). It also selects that
+provider as the default. If the provider's environment key is already set, login selects the
+provider without prompting or copying the environment secret into the file.
+Keys are configured locally; login does not make a billable request or verify account access.
+
+Alternatively, set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY`.
+Google also accepts `GOOGLE_API_KEY` and `GEMINI_API_KEY`, in that order after the canonical name.
+Environment keys take precedence over saved keys. A single configured provider is detected
+automatically. With multiple providers, select one with `--provider`, `SPL_PROVIDER`, a model
+such as `--model google/gemini-2.5-flash`, or a saved login default.
+See [Models and authentication](CLI.md#models-and-authentication) for precedence and defaults.
+
+`spl logout <provider>` removes only that provider's saved key/default; `spl logout` deletes all
+saved credentials. Neither changes environment variables. GitHub Copilot tokens and CLI logins
+are no longer used. This is API-key login, not browser/subscription OAuth.
+Workflows that never call a model, `--check` and replay need no login.
 
 The result goes to stdout; execution logs go to stderr with one header per event. `->` input is
 magenta, `<-` output/action cyan, `~` variable state yellow, `x` error red, `!` warning yellow,

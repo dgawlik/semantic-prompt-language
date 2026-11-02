@@ -9,7 +9,8 @@ the outcome through its exit code. Requires Node.js >=24.15.0.
 spl <workflow.md> [options] [--arg value ...]
 spl <workflow.md> --checkpoint run.jsonl
 spl <workflow.md> --resume run.jsonl [--answer-for ID (--answer text | --answer-file file)]
-spl login | logout
+spl login <openai|anthropic|google>
+spl logout [openai|anthropic|google]
 ```
 
 | Option | Description |
@@ -17,6 +18,7 @@ spl login | logout
 | `--arg <value>` | Script argument exposed as `$args[i]`; repeatable, also `--arg=value` |
 | `--human <answer>` | Answer a human question without prompting; repeatable in question order, also `--human=answer` |
 | `--model <id>` | Model for every call, overriding per-call and frontmatter models |
+| `--provider <name>` | `openai`, `anthropic` or `google`; model IDs also accept `provider/model` |
 | `--cwd <dir>` | Base folder for paths, restrictions, tools and agents (default: current) |
 | `--check` | Validate frontmatter, syntax and `--mcp` config without running |
 | `--log-level <level>` | `error`, `info` (default) or `debug` |
@@ -87,7 +89,7 @@ text or a streaming preview extends beyond the last payload.
 Expanded JSON uses two-space indentation and preserves original numeric/string tokens and duplicate
 keys. Primitives and malformed JSON remain readable without misleading fold controls.
 
-Copilot responses and available reasoning stream live in this view by default; `hide=True` suppresses reasoning.
+Model responses and available reasoning stream live in this view by default; `hide=True` suppresses reasoning.
 Partial JSON is shown as text until the authoritative response arrives, when normal formatting
 and folding apply. Streaming previews are separate from immutable log events, so the final
 transcript contains each complete response once. Redirected logs remain expanded and append-only.
@@ -149,7 +151,7 @@ spl flow.md --replay run.jsonl --silent
 ```
 
 `--trace` writes every `ask`, `think`, `agent` and blockquote request with its raw response or failure
-to a new JSONL file. `--replay` feeds those results back without contacting Copilot or MCP servers,
+to a new JSONL file. `--replay` feeds those results back without contacting model providers or MCP servers,
 so you can iterate on code and guards for free. Requests must match exactly and in order (prompt,
 kind, model, reasoning, display setting); a mismatch, missing or unused entry fails.
 Traces and recordings retain the `showReasoning` request field: it is now `true` by default,
@@ -226,19 +228,38 @@ file without starting servers. Only load configurations you trust.
 
 ## Models and authentication
 
-Every model call goes to GitHub Copilot through the Copilot SDK in a fresh session. See
-[Getting started](Getting-started.md#install) for `spl login`. A call without credentials fails with
-`llm_error`. The SDK has no temperature or seed, so live output is not reproducible. Contain variance
-with schemas, assertions and traces.
+Every model call uses Vercel AI SDK with OpenAI, Anthropic or Google in a fresh conversation.
+See [Getting started](Getting-started.md#install) for API-key login and environment variables.
+A call without credentials, or a provider/model access error, fails with `llm_error`.
+Deterministic workflows, check-only operations and replay do not initialize providers or MCP.
+
+Model precedence is unchanged: CLI `--model`, per-call `model`, frontmatter `model`, provider default.
+IDs may be bare (`claude-sonnet-4-5`, `gemini-2.5-flash`, `gpt-4.1`) or qualified
+(`anthropic/claude-sonnet-4-5`). Recognizable bare IDs infer their provider; custom IDs can be
+qualified or used with `--provider`. Unknown models are passed unchanged to the selected provider
+and fail if unavailable; there is no fallback to another model.
+
+Provider selection uses explicit `--provider`, then the model's prefix/inferred provider,
+then `SPL_PROVIDER`, then the saved login default, then a single configured provider.
+An explicit provider conflicting with the model's provider is an error. Multiple configured
+providers without a selection are an error, not an arbitrary choice.
+Defaults are `gpt-4.1` (OpenAI), `claude-sonnet-4-5` (Anthropic), and `gemini-2.5-flash` (Google).
+
+SPL reasoning levels map to OpenAI reasoning effort, Anthropic thinking budgets/adaptive effort,
+and Google thinking budgets/levels. Unsupported recognized combinations warn and use the model
+default; effective provider, model and reasoning effort are retained in traces. Runtime tools
+execute sequentially, MCP results remain traceable, and timeout/cancellation never accepts a
+partial answer. Failed actions are not automatically retried.
+Live output remains non-reproducible; contain variance with schemas, assertions and traces.
 
 ## Embedding
 
 ```js
-import { parseMarkdown, run, Logger, CopilotBackend } from 'spl-lang';
+import { parseMarkdown, run, Logger, AiBackend } from 'spl-lang';
 import fs from 'node:fs';
 
 const logger = new Logger('silent');
-const backend = new CopilotBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
+const backend = new AiBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
 try {
   const program = parseMarkdown(fs.readFileSync('flow.md', 'utf8'));
   const result = await run(program, { backend, logger, cwd: process.cwd(), args: ['first'] });
@@ -258,3 +279,5 @@ A checkpoint takes precedence over the handler and retains suspension semantics.
 Wrap a backend in `TraceBackend` to record, or use `ReplayBackend`
 to replay; close it to check for unused entries. A custom backend implements `call(request)` and `close()`;
 only requests of kind `agent` may run tools. Raw `parse` and `run` still accept plain SPL source.
+`AiBackend` accepts an optional `provider` alongside `logger`, `cwd`, `timeoutMs` and `mcpServers`.
+The previous `CopilotBackend` export is an alias for embedding compatibility, not a Copilot connection.

@@ -144,7 +144,7 @@ The pending question looks like this:
 * Finished runs print `{"status": "success", "run_id": ..., "value": ...}` or a failure envelope.
 * Exit codes: `0` success, `1` failure, `2` usage or invalid answer, `3` waiting, `70` journal error.
 
-Resume needs the same workspace, script, runtime, `--model`/`--mcp` options and environment. The
+Resume needs the same workspace, script, runtime, `--model`/`--provider`/`--mcp` options and environment. The
 journal is not a snapshot: files changed in between stay changed. If a run was interrupted mid-action,
 SPL refuses to guess and asks for manual recovery. Checkpoints cannot be combined with stores or
 trace/replay. Journals contain prompts and answers, so keep them private.

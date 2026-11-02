@@ -3,13 +3,49 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { fork } from 'node:child_process';
 import { decodeWorkflow, encodeWorkflow, parseWorkflowCell, DEFAULT_FRONTMATTER } from '../src/notebookFormat';
 import { NotebookKernel } from '../src/notebookKernel';
 import { extractMarkdown, parseMarkdown } from '../../lang/src/markdown.js';
 import type { ModelStreamEvent } from '../../lang/src/log-events.js';
+import type { WorkerReply } from '../src/notebookProtocol';
 
 const source = (body: string) => DEFAULT_FRONTMATTER + '\n\n' + body;
 const fence = (code: string) => '```spl\n' + code + '\n```';
+
+test('packaged notebook lazily loads the AI SDK backend and reports missing provider credentials', { timeout: 5000 }, async t => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), 'spl-notebook-provider-'));
+    const worker = fork(path.resolve(__dirname, '..', 'notebookWorker.cjs'), [], {
+        cwd: directory, execArgv: [], silent: true,
+        env: {
+            ...process.env, SPL_HOME: directory, SPL_PROVIDER: '',
+            OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '',
+            GOOGLE_GENERATIVE_AI_API_KEY: '', GOOGLE_API_KEY: '', GEMINI_API_KEY: '',
+        },
+    });
+    t.after(async () => {
+        if (worker.exitCode === null && worker.signalCode === null) {
+            const exited = new Promise<void>(resolve => worker.once('exit', () => resolve()));
+            worker.kill();
+            await exited;
+        }
+        rmSync(directory, { recursive: true, force: true });
+    });
+    const response = new Promise<WorkerReply>((resolve, reject) => {
+        worker.once('error', reject);
+        worker.once('exit', () => reject(new Error('worker exited before replying')));
+        worker.on('message', (message: WorkerReply) => {
+            if (message.kind === 'error' || message.kind === 'result') resolve(message);
+        });
+    });
+    worker.send({
+        id: 1, value: "ask(model='openai/gpt-4.1') 'Hi'", language: 'spl',
+        frontmatter: DEFAULT_FRONTMATTER, source: 'cell:provider', version: 1,
+    });
+    const result = await response;
+    assert.equal(result.kind, 'error');
+    if (result.kind === 'error') assert.match(result.message, /llm_error: no API key for openai/);
+});
 
 test('notebook codec roundtrips every shipped workflow exactly', () => {
     const examples = path.resolve(__dirname, '..', '..', '..', 'lang', 'examples');

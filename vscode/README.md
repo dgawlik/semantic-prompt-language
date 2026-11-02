@@ -58,7 +58,7 @@ colon. See the [language reference](https://github.com/dgawlik/semantic-prompt-l
    Commentary remains rendered, editable Markdown.
 3. Use the cell Run button or VS Code's notebook shortcuts to execute any cell. A final expression,
    `return`, or `success` displays its value; objects and lists are indented. Explicit `log(...)`
-   messages and model replies appear beneath the cell. Copilot replies update live in place, including
+   messages and model replies appear beneath the cell. Model replies update live in place, including
    available reasoning by default (`hide=True` suppresses reasoning); completion replaces the preview with the authoritative response.
    Different requests and response/reasoning channels are kept separate, and an identical final cell result
    is not appended again. Interrupted previews are marked explicitly and do not become successful results.
@@ -86,11 +86,9 @@ function closures. Cells run sequentially in the order you request, **not** docu
 use the current state without replaying earlier cells. Undefined dependencies are reported as
 runtime errors. A failure retains assignments already performed, as in Jupyter. Changing or
 deleting source does not undo its previous execution; rerun the cell or reset the session.
-Natural-language cells hand queued runtime actions back immediately instead of waiting for a
-post-tool model reply. When MCP tools are configured, the turn finishes normally so external
-calls can complete and their results are retained.
-The SDK's abort notification for an intentional action handoff is not an execution failure;
-unexpected aborts, failed handoffs and other backend errors are still reported.
+Natural-language cells execute runtime actions sequentially and return their real results to the
+same model conversation. Actions can finish without final prose; unexpected aborts and backend
+errors are still reported, and no new action starts after a failure.
 Syntax errors are highlighted while editing, and runtime failures point to the responsible cell
 (including previously defined functions). Edited function definitions must be rerun before their
 old failure location can be highlighted again.
@@ -102,7 +100,11 @@ session and are not saved to the Markdown file. Sessions never automatically run
 
 The worker uses `node` from PATH; set **spl.notebook.nodePath** to an absolute Node.js executable
 if needed. The external SPL runtime requires Node.js >=24.15.0; deterministic cells run offline.
-Model calls use the same Copilot credentials as the CLI (`spl login` or supported environment credentials).
+Model calls use the CLI's Vercel AI SDK provider configuration: `spl login openai`, `spl login anthropic`
+or `spl login google`, or `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`
+(`GOOGLE_API_KEY` / `GEMINI_API_KEY` also work). With multiple providers, use the saved login default,
+`SPL_PROVIDER`, or a document model such as `anthropic/claude-sonnet-4-5`. Environment keys override
+saved keys. Restart VS Code after changing its inherited environment.
 The notebook worker does not load BetterTUI or acquire terminal input; this does not change the
 VS Code extension-host requirement.
 Relative tool paths resolve beside the notebook file. Workflows can modify files, run commands,

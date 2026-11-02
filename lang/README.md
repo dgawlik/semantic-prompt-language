@@ -10,22 +10,28 @@ natural-language blockquotes. Requires Node.js >=24.15.0. See the
 
 ```sh
 npm install -g spl-lang      # or, in this folder: npm install && node dist/cli.js
-spl login
+spl login openai           # or anthropic / google
 spl examples/hi.md
 ```
 
-`spl login` reuses Copilot CLI, `gh` or `GH_TOKEN`/`GITHUB_TOKEN` credentials, or runs GitHub's device
-flow. Workflows without model calls, `--check` and replay work without signing in.
+`spl login <provider>` securely prompts for an API key and saves a per-provider key and default
+provider in `~/.spl/credentials.json` (`SPL_HOME` overrides the folder). Environment credentials
+take precedence: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `GOOGLE_GENERATIVE_AI_API_KEY`
+(also `GOOGLE_API_KEY` / `GEMINI_API_KEY`). With multiple configured providers, use `--provider`,
+`SPL_PROVIDER`, a provider/model ID, or a saved login default. Login is API-key configuration,
+not subscription OAuth; legacy GitHub credentials are no longer used.
+Workflows without model calls, `--check` and replay work without signing in.
 
 ```text
-spl workflow.md [--arg value ...] [--model id] [--cwd dir] [--mcp file.json] [--timeout s]
+spl workflow.md [--arg value ...] [--model id] [--provider openai|anthropic|google] [--cwd dir] [--mcp file.json] [--timeout s]
                 [--human answer ...]
                 [--store file.json | --store-module module]
                 [--trace file.jsonl | --record file.jsonl | --replay file.jsonl]
                 [--log-level error|info|debug] [--silent] [--check]
 spl workflow.md --checkpoint run.jsonl
 spl workflow.md --resume run.jsonl [--answer-for ID (--answer text | --answer-file file)]
-spl login | logout
+spl login <openai|anthropic|google>
+spl logout [openai|anthropic|google]
 ```
 
 The result goes to stdout and logs to stderr. Exit codes: `0` success, `1` script failure,
@@ -91,10 +97,10 @@ and [Guards & failures](../docs-template/Safety.md).
 ## Embedding
 
 ```js
-import { parseMarkdown, run, Logger, CopilotBackend } from 'spl-lang';
+import { parseMarkdown, run, Logger, AiBackend } from 'spl-lang';
 
 const logger = new Logger('silent');
-const backend = new CopilotBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
+const backend = new AiBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
 try {
   const result = await run(parseMarkdown(source), { backend, logger, args: ['first'] });
   console.log(result);
@@ -105,6 +111,7 @@ try {
 
 Also exported: `parse` (raw SPL), `TraceBackend`, `ReplayBackend`, `RecordingBackend`, variable stores,
 `Checkpoint`, authentication helpers and types. See [Embedding](../docs-template/CLI.md#embedding).
+`CopilotBackend` remains an alias of `AiBackend` for existing embedding imports.
 Embedded callers provide a `human(question, line)` handler returning a string or `Promise<string>`
 to answer directly; the interpreter never reads stdin itself. A checkpoint still takes precedence
 and suspends for externally supplied answers.

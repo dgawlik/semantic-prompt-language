@@ -646,6 +646,7 @@ export function createStore() {
         const help = run(['--help']).out;
         expect(help).toContain('spl login');
         expect(help).toContain('spl logout');
+        expect(help).toContain('--provider <name>');
         expect(help).not.toContain('--backend');
         expect(help).not.toContain('--seed');
         expect(help).toContain('--mcp <file.json>');
@@ -656,6 +657,39 @@ export function createStore() {
         expect(help).toContain('Enter/Space toggle');
         expect(help).toContain('Plain/final transcripts');
         expect(help).not.toContain('[deterministic]');
+    });
+
+    it('requires a valid login provider and stores keys without echoing them', () => {
+        const env = {
+            OPENAI_API_KEY: undefined, ANTHROPIC_API_KEY: undefined,
+            GOOGLE_GENERATIVE_AI_API_KEY: undefined, GOOGLE_API_KEY: undefined, GEMINI_API_KEY: undefined,
+            SPL_PROVIDER: undefined,
+        };
+        expect(run(['login'], env).code).toBe(2);
+        expect(run(['login', 'unknown'], env).code).toBe(2);
+        expect(run(['login', 'openai', '--provider', 'google'], env).code).toBe(2);
+        const result = run(['login', 'openai'], env, 'private-openai-test-key\n');
+        expect(result.code).toBe(0);
+        expect(result.out).toContain('Default provider: openai');
+        expect(result.out + result.err).not.toContain('private-openai-test-key');
+        expect(JSON.parse(fs.readFileSync(path.join(dir, 'spl-home', 'credentials.json'), 'utf8'))).toEqual({
+            provider: 'openai', keys: { openai: 'private-openai-test-key' },
+        });
+        expect(run(['login', 'google'], env, 'private-google-test-key\n').code).toBe(0);
+        expect(run(['logout', 'openai'], env).code).toBe(0);
+        expect(JSON.parse(fs.readFileSync(path.join(dir, 'spl-home', 'credentials.json'), 'utf8'))).toEqual({
+            provider: 'google', keys: { google: 'private-google-test-key' },
+        });
+    });
+
+    it('selects environment credentials without prompting and fails login cleanly on EOF', () => {
+        const env = { OPENAI_API_KEY: 'environment-test-key' };
+        const result = run(['login', '--provider', 'openai'], env);
+        expect(result).toEqual({ code: 0, out: 'Configured openai using OPENAI_API_KEY. Default provider: openai.\n', err: '' });
+        expect(fs.readFileSync(path.join(dir, 'spl-home', 'credentials.json'), 'utf8')).not.toContain(env.OPENAI_API_KEY);
+        const eof = run(['login', 'anthropic'], { ANTHROPIC_API_KEY: undefined }, '');
+        expect(eof.code).toBe(1);
+        expect(eof.err).toContain('stdin ended');
     });
 
     it('validates --mcp without starting servers, including with --check', () => {

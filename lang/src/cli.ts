@@ -4,9 +4,10 @@ import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { createInterface, type Interface } from 'node:readline';
+import { Writable } from 'node:stream';
 import type { Program } from './ast.js';
-import { CopilotBackend } from './copilot.js';
-import { AuthError, login, logout } from './auth.js';
+import { AiBackend } from './ai.js';
+import { AuthError, login, logout, parseProvider, type Provider } from './auth.js';
 import { Failure, SplSyntaxError } from './errors.js';
 import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
@@ -23,8 +24,8 @@ import { formatEvent, sanitize, terminalColor } from './log-format.js';
 const HELP = `spl - Semantic Prompt Language interpreter
 
 Usage: spl <workflow.md> [options]
-       spl login               authenticate with GitHub Copilot (device flow in the browser)
-       spl logout              remove the credentials saved by 'spl login'
+       spl login <provider>    configure an API key and default provider: openai | anthropic | google
+       spl logout [provider]   remove saved credentials (environment variables are unchanged)
 
 Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
@@ -40,6 +41,7 @@ Options:
                           NO_COLOR wins over FORCE_COLOR; FORCE_COLOR=0 disables color.
   --silent                suppress all logs; only the result is printed
   --model <id>            model override (takes precedence over frontmatter)
+  --provider <name>       openai | anthropic | google; model IDs may use provider/model
   --arg <value>           script argument exposed in $args (repeatable; also --arg=value)
   --human <answer>        answer a human question without prompting (repeatable, in question order)
                           Remaining questions read one line from stdin; prompts go to stderr.
@@ -49,7 +51,7 @@ Options:
   --timeout <seconds>     per LLM call timeout (default: 300)
   --trace <file.jsonl>    trace all LLM requests, responses, and failures (new file)
   --record <file.jsonl>   record generation responses (new file; no agents)
-  --replay <file.jsonl>   replay LLM results without Copilot/MCP; explicit script tools still run
+  --replay <file.jsonl>   replay LLM results without model providers/MCP; explicit script tools still run
                           Legacy --record files allow only local reads and no stores.
   --checkpoint <file>    start a new resumable run; with --resume, continue that journal
                           New runs never overwrite an existing file.
@@ -62,6 +64,12 @@ Options:
   --check                 validate script syntax and any --mcp config without executing
   -v, --version           print version
   -h, --help              print this help
+
+Provider environment:
+  OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY
+  Google aliases: GOOGLE_API_KEY, GEMINI_API_KEY (canonical name wins).
+  SPL_PROVIDER selects a default; SPL_HOME overrides the saved-credentials folder.
+  Environment keys override saved keys. Login configures API keys, not OAuth.
 
 The script result (the value of 'success' or 'return', or the failure payload) is written to stdout.
 Normal runs ask for human input directly, even with --silent.
@@ -80,6 +88,7 @@ function usageError(msg: string): never {
 }
 
 interface CheckpointCliOptions {
+    provider?: string;
     checkpoint?: string;
     resume?: string;
     'answer-for'?: string;
@@ -104,7 +113,7 @@ async function checkpointCommand(
         ]);
         const context = {
             source, runtime, cwd, args: values.arg,
-            configuration: { model: values.model ?? null, mcp: mcpServers ?? null },
+            configuration: { model: values.model ?? null, provider: values.provider ?? null, mcp: mcpServers ?? null },
         };
         checkpoint = values.resume !== undefined
             ? Checkpoint.resume(values.resume, context)
@@ -126,7 +135,8 @@ async function checkpointCommand(
             }
             checkpoint.answer(values['answer-for']!, answer!);
         }
-        const backend = new CopilotBackend({ logger, cwd, timeoutMs: Number(values.timeout ?? 300) * 1000, mcpServers });
+        const backend = new AiBackend({ logger, cwd, timeoutMs: Number(values.timeout ?? 300) * 1000, mcpServers,
+            provider: values.provider ? parseProvider(values.provider) : undefined });
         let result: RunResult;
         try {
             result = await run(program, { backend, logger, cwd, model: values.model, checkpoint });
@@ -154,10 +164,28 @@ async function checkpointCommand(
     }
 }
 
-async function loginCommand(): Promise<number> {
+async function readApiKey(provider: Provider): Promise<string> {
+    process.stderr.write(`${provider} API key (input hidden): `);
+    const muted = new Writable({ write(_chunk, _encoding, callback) { callback(); } });
+    const input = createInterface({ input: process.stdin, output: muted, terminal: Boolean(process.stdin.isTTY) });
     try {
-        const status = await login((line) => process.stdout.write(line + '\n'));
-        process.stdout.write(`Authenticated with GitHub Copilot${status.login ? ` as ${status.login}` : ''}.\n`);
+        return await new Promise<string>((resolve, reject) => {
+            let answered = false;
+            input.on('SIGINT', () => reject(new AuthError('login cancelled')));
+            input.on('close', () => { if (!answered) reject(new AuthError('stdin ended before an API key was supplied')); });
+            input.question('', key => { answered = true; resolve(key); });
+        });
+    } finally {
+        input.close();
+        muted.end();
+        process.stderr.write('\n');
+    }
+}
+
+async function loginCommand(provider: Provider): Promise<number> {
+    try {
+        const status = await login(provider, () => readApiKey(provider));
+        process.stdout.write(`Configured ${status.provider} using ${status.source}. Default provider: ${status.provider}.\n`);
         return 0;
     } catch (e) {
         if (!(e instanceof AuthError)) throw e;
@@ -166,9 +194,9 @@ async function loginCommand(): Promise<number> {
     }
 }
 
-function logoutCommand(): number {
+function logoutCommand(provider?: Provider): number {
     try {
-        process.stdout.write(logout() ? 'Saved credentials removed.\n' : 'No saved credentials.\n');
+        process.stdout.write(logout(provider) ? 'Saved credentials removed.\n' : 'No saved credentials.\n');
         return 0;
     } catch (e) {
         if (!(e instanceof AuthError)) throw e;
@@ -185,6 +213,7 @@ async function main(): Promise<number> {
             'log-level': { type: 'string' },
             silent: { type: 'boolean' },
             model: { type: 'string' },
+            provider: { type: 'string' },
             arg: { type: 'string', multiple: true },
             human: { type: 'string', multiple: true },
             mcp: { type: 'string' },
@@ -235,9 +264,17 @@ async function main(): Promise<number> {
         process.stdout.write(version() + '\n');
         return 0;
     }
+    let provider: Provider | undefined;
+    try { provider = values.provider === undefined ? undefined : parseProvider(values.provider); }
+    catch (error) { return usageError((error as Error).message); }
     if (positionals[0] === 'login' || positionals[0] === 'logout') {
-        if (positionals.length !== 1) usageError(`'${positionals[0]}' takes no arguments`);
-        return positionals[0] === 'login' ? loginCommand() : logoutCommand();
+        if (positionals.length > 2 || (positionals[1] !== undefined && provider !== undefined)) {
+            usageError(`use '${positionals[0]} [provider]' or '${positionals[0]} --provider <name>'`);
+        }
+        try { provider ??= positionals[1] === undefined ? undefined : parseProvider(positionals[1]); }
+        catch (error) { return usageError((error as Error).message); }
+        if (positionals[0] === 'login' && !provider) usageError('login requires a provider: openai, anthropic, or google');
+        return positionals[0] === 'login' ? loginCommand(provider!) : logoutCommand(provider);
     }
     if (positionals.length !== 1) usageError('expected exactly one script file');
 
@@ -314,7 +351,7 @@ async function main(): Promise<number> {
     try {
         if (values.replay) backend = new ReplayBackend(values.replay);
         else {
-            backend = new CopilotBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers });
+            backend = new AiBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider });
             if (values.record) backend = new RecordingBackend(backend, values.record);
             if (values.trace) backend = new TraceBackend(backend, values.trace);
         }

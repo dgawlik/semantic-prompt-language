@@ -82,7 +82,7 @@ let plan = think(reasoning='high') 'Plan the migration of {service}'
 
 Each call starts a fresh session. Pass context explicitly, usually through interpolation.
 
-Copilot responses stream into the interactive CLI view and notebook cell outputs while the model
+Model responses stream into the interactive CLI view and notebook cell outputs while the model
 is working, including available reasoning by default. `hide=True` suppresses reasoning, not responses.
 These are previews: variables, JSON parsing,
 schema validation and repairs use the completed response, never partial chunks. Failures and cancelled
@@ -133,7 +133,9 @@ let score = ask(
 ) 'Rate this issue from 1 to 5: {issue}'
 ```
 
-Model precedence: CLI `--model`, then the per-call `model`, then frontmatter `model`, then the SDK default.
+Model precedence: CLI `--model`, then the per-call `model`, then frontmatter `model`, then the
+provider default. OpenAI, Anthropic and Google are supported through Vercel AI SDK; use bare
+model IDs or `provider/model`. See [Models and authentication](CLI.md#models-and-authentication).
 
 ## Output formats
 

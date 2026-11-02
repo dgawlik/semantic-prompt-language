@@ -20,8 +20,8 @@ const logger = new Logger('info', text => {
 const lazyBackend: LlmBackend = {
     async call(request) {
         if (!backend) {
-            const { CopilotBackend } = await import('../../lang/src/copilot.js');
-            backend = new CopilotBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
+            const { AiBackend } = await import('../../lang/src/ai.js');
+            backend = new AiBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
         }
         return backend.call(request);
     },

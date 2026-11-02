@@ -1,7 +1,16 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { MCPServerConfig } from '@github/copilot-sdk';
 import type { Restrictions } from './restrict.js';
+
+interface McpCommon {
+    tools?: string[];
+    timeout?: number;
+}
+
+export type MCPServerConfig = McpCommon & (
+    { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string>; workingDirectory?: string }
+    | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> }
+);
 
 export type McpServers = Record<string, MCPServerConfig>;
 

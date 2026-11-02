@@ -17,7 +17,7 @@ await build({
     platform: 'node',
     format: 'cjs',
     target: 'node18',
-    external: ['vscode', '@github/copilot-sdk'],
+    external: ['vscode', 'ai', '@ai-sdk/*'],
     sourcemap: true,
     logLevel: 'info',
 });

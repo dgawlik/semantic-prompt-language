@@ -80,11 +80,16 @@ enforce 'Use modern-web-standards skill':
 
 ```sh
 npm install -g spl-lang
-spl login
+spl login openai         # or anthropic / google
 spl examples/hi.md
 ```
 
-Requires Node.js >=24.15.0 and GitHub Copilot credentials for model calls. 
+Requires Node.js >=24.15.0. Model calls use Vercel AI SDK with OpenAI, Anthropic or Google.
+Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` (also
+`GOOGLE_API_KEY` / `GEMINI_API_KEY`), or use `spl login <provider>` to save a key and default provider.
+Environment keys override saved keys. With multiple providers and no saved default, select one
+using `--provider`, `SPL_PROVIDER` or a model such as `--model anthropic/claude-sonnet-4-5`.
+Legacy GitHub Copilot credentials are no longer used. Login configures API keys, not subscription OAuth.
 
 From a checkout: `cd lang`, `npm install`,
 then `node dist/cli.js examples/hi.md`.
