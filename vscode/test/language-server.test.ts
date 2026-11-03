@@ -160,6 +160,9 @@ test('eval has required-argument diagnostics, completions and semantic evaluatio
     const result = analysis(source);
     assert.deepEqual(result.diagnostics, []);
     assert.match(JSON.stringify(hover(result, at(source, 'eval'))?.contents), /semantic similarity/);
+    assert.match(JSON.stringify(hover(result, at(source, 'eval'))?.contents), /local TF-IDF cosine/);
+    assert.match(JSON.stringify(hover(result, at(source, 'eval'))?.contents), /no model call/);
+    assert.match(JSON.stringify(hover(result, at(source, 'actual='))?.contents), /local TF-IDF cosine/);
     for (const name of EVAL_ARGUMENT_NAMES) {
         assert.ok(hover(result, at(source, `${name}=`)));
         assert.equal(definition(result, at(source, `${name}=`)), undefined);

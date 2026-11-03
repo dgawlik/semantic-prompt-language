@@ -54,7 +54,7 @@ export const keywords: Record<string, string> = {
     try: 'Handle a script failure with an except block.',
     except: 'Bind a caught failure with status, status_code, reason, command, and line fields.',
     assert: 'Validate a condition, optionally followed by a failure message expression.',
-    eval: 'eval(expected=llm1, actual=llm2, cutoff=0.9) uses an LLM judge to score semantic similarity from 0 to 1. Logs the score and raises assertion_failed below cutoff. All three named arguments are required; this is a statement, not an expression.',
+    eval: 'eval(expected=llm1, actual=llm2, cutoff=0.9) approximates semantic similarity using local TF-IDF cosine scoring from 0 to 1, with no model call. Measures word overlap, not paraphrase meaning. Logs the score and raises assertion_failed below cutoff. All three named arguments are required; this is a statement, not an expression.',
     fail: 'Stop with explicit_failure and a reason expression.',
     success: 'End the entire script successfully with an optional result, even inside a function.',
     enforce: 'Add scoped positive prompt guidance. This does not validate model compliance.',
@@ -78,7 +78,7 @@ export const keywords: Record<string, string> = {
 
 export const modifiers: Record<string, Help> = {
     expected: { signature: 'expected=value', description: 'Reference output for eval(...). Accepts text or other JSON-compatible values.' },
-    actual: { signature: 'actual=value', description: 'Output compared with expected by the eval(...) LLM judge.' },
+    actual: { signature: 'actual=value', description: 'Output compared with expected by local TF-IDF cosine scoring in eval(...). Accepts text or other JSON-compatible values, serialized as JSON text.' },
     cutoff: { signature: 'cutoff=0..1', description: 'Required finite similarity threshold for eval(...). Scores equal to or above it pass; 0.9 means 90% similarity, not a statistical percentile.' },
     seed: { signature: 'seed=0..2147483647', description: 'Optional integer seed in randomness(...). Google supports seeded sampling; OpenAI Responses and Anthropic warn and ignore it. A seed does not guarantee identical responses.' },
     temperature: { signature: 'temperature=0..2', description: 'Optional sampling temperature in randomness(...). Lower values reduce variability; 0 requests greedy sampling where supported. Anthropic caps at 1; unsupported models/thinking warn and ignore it.' },

@@ -6,11 +6,11 @@
 <meta name="description" content="Turn Markdown into runnable AI workflows—natural-language steps alongside deterministic code, validation, and human approval.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=b93c5e99d42b">
-<link rel="stylesheet" href="assets/style.css?v=b93c5e99d42b">
+<link rel="icon" type="image/png" href="assets/icon.png?v=490d69ee00af">
+<link rel="stylesheet" href="assets/style.css?v=490d69ee00af">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=b93c5e99d42b"></script>
-<script defer src="assets/site.js?v=b93c5e99d42b"></script>
+<script defer src="assets/search-index.js?v=490d69ee00af"></script>
+<script defer src="assets/site.js?v=490d69ee00af"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -70,8 +70,8 @@ version: 1
 
 <span class="hljs-section"># Randomness Controls</span>
 
-This document shows how to limit randomness in LLM prompts and compare their semantic similarity.
-Sampling is best-effort; the evaluation uses an additional model call rather than exact equality.
+This document shows how to limit randomness in LLM prompts and approximate their text similarity.
+Sampling is best-effort; evaluation uses local TF-IDF cosine scoring with no additional model call.
 
 <span class="hljs-meta">```spl</span><span class="language-spl">
 <span class="hljs-keyword">let</span> recipe1 <span class="hljs-operator">=</span> <span class="hljs-keyword">randomness</span>(<span class="hljs-attr">seed</span><span class="hljs-operator">=</span><span class="hljs-number">13</span>, <span class="hljs-attr">temperature</span><span class="hljs-operator">=</span><span class="hljs-number">0.0</span>, <span class="hljs-attr">top_p</span><span class="hljs-operator">=</span><span class="hljs-number">1.0</span>) \
@@ -81,7 +81,7 @@ Sampling is best-effort; the evaluation uses an additional model call rather tha
                 <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;a recipe for an apple pie&#x27;</span>;
 <span class="hljs-keyword">eval</span>(<span class="hljs-attr">expected</span><span class="hljs-operator">=</span>recipe1, <span class="hljs-attr">actual</span><span class="hljs-operator">=</span>recipe2, <span class="hljs-attr">cutoff</span><span class="hljs-operator">=</span><span class="hljs-number">0.9</span>)
 
-<span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;The recipes are at least 90% semantically similar&#x27;</span>
+<span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;The recipes have a TF-IDF cosine similarity of at least 0.9&#x27;</span>
 </span><span class="hljs-meta">```</span>
 
 </code></pre></figure>

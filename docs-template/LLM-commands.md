@@ -206,12 +206,13 @@ See the official [OpenAI](https://ai-sdk.dev/providers/ai-sdk-providers/openai),
 
 ## Semantic evaluation
 
-`eval(expected=llm1, actual=llm2, cutoff=0.9)` compares two outputs with an LLM judge.
+`eval(expected=llm1, actual=llm2, cutoff=0.9)` compares two outputs locally using TF-IDF
+and cosine similarity. It makes no additional model call.
 It is an assertion-style statement, not a function or expression:
 
 ```spl
 let llm1 = ask 'Describe an apple pie'
-let llm2 = ask 'Describe an apple pie in different words'
+let llm2 = ask 'Describe an apple pie'
 eval(expected=llm1, actual=llm2, cutoff=0.9)
 success 'Similar enough'
 ```
@@ -222,21 +223,30 @@ accept strings or other JSON-compatible values, including structured model outpu
 Functions and non-finite numbers are rejected. `cutoff` must be a finite number from `0` to `1`,
 inclusive; booleans and numeric strings are not accepted.
 
-The judge scores shared meaning and details, ignoring wording and formatting differences.
-`1` means equivalent content and `0` means unrelated or contradictory content. Missing,
-conflicting, or unsupported details lower the score. `0.9` means 90% similarity, not a statistical
-percentile. A score equal to the cutoff passes; a score below it raises `assertion_failed` with
-the score and cutoff in the failure reason. The score is also logged at info level.
+Strings are compared directly; other values are serialized as JSON text. Text is Unicode-normalized
+(NFKC), lowercased and split into letter/number tokens, retaining combining marks. Punctuation
+and word order are ignored. All words are retained, including negation; there is no stemming or
+synonym expansion. Each comparison uses its two inputs as the corpus, raw term counts as TF,
+and smoothed `IDF = 1 + ln(3 / (1 + document_frequency))`.
 
-Each evaluation makes one generation-only `ask` call using the current document model or
-CLI/embedding model override. It has no tools and does not regenerate either output.
-The cutoff is checked locally, not shown to the judge. Invalid JSON or a judge score outside
-`0..1` raises `invalid_format`; authentication and transport failures raise `llm_error`.
-Evaluation does not retry or convert judge errors into a passing score.
+Cosine similarity scores the resulting vectors from `0` to `1`. Identical token-frequency
+proportions score `1`; no shared tokens score `0`. If either input has no tokens, the score is
+`1` only when the normalized, trimmed texts are identical, otherwise `0`.
+A score equal to the cutoff passes; a score below it raises `assertion_failed` with
+the score and cutoff in the failure reason. Comparison uses the unrounded score, which is also
+logged at info level.
 
-Judge scores are subjective and may vary; this is not a calibrated probability or a deterministic
-text metric. Traces and recordings retain the judge response, and replay rechecks the cutoff
-without another model call. Pinned workflows and checkpoints also retain evaluations.
+This is a deterministic **word-overlap approximation**, not a semantic judge or calibrated
+probability. Paraphrases with different words can score low; contradictory texts with shared
+words can score high. Structured values are not compared by schema, types or nesting.
+Recalibrate cutoffs using representative outputs rather than reusing LLM-judge thresholds.
+Use `assert` and schemas when exact content or structure matters.
+
+Evaluation does not use the document model or CLI/embedding model override and does not regenerate
+either output. Traces, recordings, pinned workflows and checkpoints retain only the original
+model/tool effects; evaluation is recomputed locally on replay or resume.
+Recreate recordings, pinned workflows and checkpoints produced by the former LLM-judge evaluator:
+their extra judge entries are no longer consumed.
 
 ## Output formats
 

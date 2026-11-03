@@ -99,8 +99,10 @@ success rating
   load/save shared variables, read environment values, request human input, and use
   runtime tools and configured MCP servers. Explicit `agent` expressions keep their existing tool set.
 * `fmt`, `schema`, `repairs` and `assert` check output; `enforce`/`forbid` only guide prompts.
-* `eval(expected=llm1, actual=llm2, cutoff=0.9)` uses an LLM judge to assert semantic similarity
-  at or above a `0..1` cutoff. It logs the score and raises `assertion_failed` below the cutoff.
+* `eval(expected=llm1, actual=llm2, cutoff=0.9)` uses local TF-IDF cosine similarity with no
+  additional model call. It logs the `0..1` score and raises `assertion_failed` below the cutoff.
+  This measures word overlap, not paraphrase meaning; recalibrate thresholds previously used
+  with the LLM judge. Recreate old recordings, pins and checkpoints containing judge calls.
 * **Breaking syntax change:** blocks use `:` plus a newline and an indented nonempty body, not
   braces. Use spaces (4 recommended), no inline suites, and `pass` for empty bodies. Dicts and
   interpolation keep their braces; blocks still create lexical child scopes. See the
