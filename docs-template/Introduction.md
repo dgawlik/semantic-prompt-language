@@ -54,6 +54,7 @@ model: 'gpt-6-luna'
 
 This document shows how to limit randomness in LLM prompts and approximate their text similarity.
 Sampling is best-effort; evaluation uses local TF-IDF cosine scoring with no additional model call.
+`Eval` tests your prompts against your golden-runs.
 
 ```spl
 let recipe1 = randomness(seed=13, temperature=0.0, top_p=0.0001) \
