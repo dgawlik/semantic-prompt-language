@@ -10,10 +10,10 @@ This document shows how to limit randomness in LLM prompts and approximate their
 Sampling is best-effort; evaluation uses local TF-IDF cosine scoring with no additional model call.
 
 ```spl
-let recipe1 = randomness(seed=13, temperature=0.0, top_p=1.0) \
+let recipe1 = randomness(seed=13, temperature=0.0, top_p=0.0001) \
                 ask(tokens=1024) 'a recipe for an apple pie';
 
-let recipe2 = randomness(seed=13, temperature=0.0, top_p=1.0) \
+let recipe2 = randomness(seed=13, temperature=0.0, top_p=0.0001) \
                 ask(tokens=1024) 'a recipe for an apple pie';
 eval(expected=recipe1, actual=recipe2, cutoff=0.9)
 
