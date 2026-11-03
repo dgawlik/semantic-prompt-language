@@ -17,7 +17,7 @@ await build({
     platform: 'node',
     format: 'cjs',
     target: 'node18',
-    external: ['vscode', 'ai', '@ai-sdk/*'],
+    external: ['vscode', '@ai-sdk/mcp', '@ai-sdk/mcp/*', 'openai', '@anthropic-ai/sdk', '@google/genai'],
     sourcemap: true,
     logLevel: 'info',
 });

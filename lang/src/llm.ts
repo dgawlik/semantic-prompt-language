@@ -6,6 +6,15 @@ import { fromJson, isDict, isList, type Value } from './values.js';
 
 export type ReasoningLevel = 'low' | 'medium' | 'high';
 
+export function isTokenBudget(value: unknown): value is number {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+export function validateTokens(value: unknown): number {
+    if (!isTokenBudget(value)) throw new Failure('runtime_error', 'tokens must be a positive safe integer');
+    return value;
+}
+
 export interface Randomness {
     seed?: number;
     temperature?: number;
@@ -64,6 +73,8 @@ export interface LlmRequest {
     model?: string;
     reasoningEffort?: ReasoningLevel;
     randomness?: Randomness;
+    /** Maximum generated tokens per model turn, including reasoning. */
+    tokens?: number;
     showReasoning: boolean;
     /** Live preview only; the returned response remains authoritative. */
     onStream?: (update: LlmStreamUpdate) => void;

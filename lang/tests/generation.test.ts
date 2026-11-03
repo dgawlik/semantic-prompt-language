@@ -58,13 +58,45 @@ let score = ${command}(
     repairs = option(0),
     reasoning = 'high',
     model = 'per-call',
+    tokens = option(2048),
     hide = option(True),
     schema = {'type': 'integer', 'minimum': 1, 'maximum': 5},
     ) 'Rate this issue'
 success [score, count[0]]`, backend);
-        expect(result).toMatchObject({ status: 'success', value: [5, 3] });
+        expect(result).toMatchObject({ status: 'success', value: [5, 4] });
         expect(calls).toHaveLength(1);
-        expect(calls[0]).toMatchObject({ kind: command, model: 'per-call', reasoningEffort: 'high', showReasoning: false });
+        expect(calls[0]).toMatchObject({ kind: command, model: 'per-call', tokens: 2048, reasoningEffort: 'high', showReasoning: false });
+    });
+
+    it.each(['ask', 'think', 'agent'])('validates %s token budgets before evaluating the prompt or contacting a model', async command => {
+        for (const invalid of ['0', '-1', '1.5', 'True', "'2048'", 'None', '9007199254740992', '1e400']) {
+            const { backend, calls } = scripted();
+            expect(await exec(`success ${command}(tokens=${invalid}) read_file('missing')`, backend)).toMatchObject({
+                status: 'failure', failure: { status_code: 'runtime_error', reason: 'tokens must be a positive safe integer' },
+            });
+            expect(calls).toHaveLength(0);
+        }
+        expect(() => parse(`${command}(tokens=1, tokens=2) 'Prompt'`)).toThrow(/duplicate modifier/);
+    });
+
+    it('reuses a token-budget expression for every repair without changing the prompt contract', async () => {
+        const { backend, calls } = scripted('not JSON', '42');
+        const result = await exec(`let count = [0]
+def budget():
+    count[0] += 1
+    return 2048
+let answer = randomness(seed=0) ask(tokens=budget(), fmt='integer', repairs=1) 'Prompt'
+success [answer, count[0]]`, backend);
+        expect(result).toMatchObject({ status: 'success', value: [42, 1] });
+        expect(calls).toHaveLength(2);
+        for (const call of calls) expect(call).toMatchObject({ tokens: 2048, randomness: { seed: 0 } });
+        expect(calls[0].prompt).not.toContain('2048');
+    });
+
+    it.each([1, Number.MAX_SAFE_INTEGER])('accepts the token-budget boundary %s', async tokens => {
+        const { backend, calls } = scripted('answer');
+        expect(await exec(`success ask(tokens=${tokens}) 'Prompt'`, backend)).toMatchObject({ status: 'success', value: 'answer' });
+        expect(calls[0].tokens).toBe(tokens);
     });
 
     it.each([true, false])('evaluates only the selected generation branch for %s', async (friday) => {
@@ -390,6 +422,20 @@ success x`, backend)).toMatchObject({ status: 'success', value: 2 });
 });
 
 describe('offline generation record/replay', () => {
+    it('matches token budgets and preserves them through recorded repairs', async () => {
+        const file = path.join(dir, 'tokens.jsonl');
+        const source = `success ask(tokens=2048, fmt='integer', repairs=1) 'Prompt'`;
+        const recording = new RecordingBackend(scripted('invalid', '42').backend, file);
+        const expected = await exec(source, recording);
+        await recording.close();
+        const replay = new ReplayBackend(file);
+        expect(await exec(source.replace('2048', '4096'), replay)).toMatchObject({
+            status: 'failure', failure: { reason: expect.stringContaining('mismatch') },
+        });
+        expect(await exec(source, replay)).toEqual(expected);
+        await replay.close();
+    });
+
     it('matches ordered requests and replays repairs without a live backend', async () => {
         const file = path.join(dir, 'run.jsonl');
         const source = `success ask(schema=${schema}, repairs=1) 'Extract'`;

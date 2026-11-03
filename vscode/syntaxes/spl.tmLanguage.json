@@ -169,7 +169,7 @@
       "patterns": [
         {
           "name": "variable.parameter.modifier.spl",
-          "match": "\\b(?:len|fmt|reasoning|hide|schema|repairs|model|seed|temperature|top_p|expected|actual|cutoff)\\b(?=\\s*=(?!=))"
+          "match": "\\b(?:len|fmt|reasoning|hide|schema|repairs|model|tokens|seed|temperature|top_p|expected|actual|cutoff)\\b(?=\\s*=(?!=))"
         },
         { "include": "#expression" }
       ]

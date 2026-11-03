@@ -32,9 +32,9 @@ const fence = (code: string) => '```spl\n' + code + '\n```';
 
 test('Markdown preview highlights randomness prefixes and sampling parameters', () => {
     const markdown = extendMarkdownIt({ options: { highlight: (_code: string, _lang: string, _attrs: string) => 'fallback' } });
-    const html = markdown.options.highlight("randomness(seed=42, temperature=0, top_p=0.01) ask 'Prompt'", 'spl', '');
+    const html = markdown.options.highlight("randomness(seed=42, temperature=0, top_p=0.01) ask(tokens=2048) 'Prompt'", 'spl', '');
     assert.ok(html.includes('<span class="hljs-keyword">randomness</span>'));
-    for (const name of ['seed', 'temperature', 'top_p']) assert.ok(html.includes(`<span class="hljs-attr">${name}</span>`), name);
+    for (const name of ['seed', 'temperature', 'top_p', 'tokens']) assert.ok(html.includes(`<span class="hljs-attr">${name}</span>`), name);
     assert.equal(markdown.options.highlight('other language', 'text', ''), 'fallback');
 });
 

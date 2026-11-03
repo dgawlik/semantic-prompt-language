@@ -155,6 +155,19 @@ test('randomness has prefix diagnostics, parameter-specific completions and help
     assert.match(analysis('let randomness = 1').diagnostics[0].message, /reserved word/);
 });
 
+test('generation token budgets have syntax support, completion and hover help', () => {
+    for (const command of ['ask', 'think', 'agent']) {
+        const source = `${command}(tokens=2048) 'Prompt'`;
+        const result = analysis(source);
+        assert.deepEqual(result.diagnostics, []);
+        assert.match(JSON.stringify(hover(result, at(source, 'tokens'))?.contents), /Maximum generated tokens per model turn/);
+        const prefix = `${command}(tok`;
+        const items = completions(analysis(prefix), document(prefix).positionAt(prefix.length));
+        assert.equal(items.find(item => item.label === 'tokens')?.textEdit?.newText, 'tokens=');
+    }
+    assert.match(analysis("ask(tokens=1, tokens=2) 'Prompt'").diagnostics[0].message, /duplicate modifier/);
+});
+
 test('eval has required-argument diagnostics, completions and semantic evaluation help', () => {
     const source = "let llm1 = 'Reference'\nlet llm2 = 'Candidate'\neval(expected=llm1, actual=llm2, cutoff=0.9)";
     const result = analysis(source);

@@ -2,8 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MockLanguageModelV4 } from 'ai/test';
-import type { LanguageModelV4StreamPart, LanguageModelV4CallOptions } from '@ai-sdk/provider';
+import type { ModelStreamPart, ModelCallOptions, ToolOutput } from '../src/ai-native.js';
 import { AiBackend, reasoningOptions } from '../src/ai.js';
 import { CopilotBackend } from '../src/copilot.js';
 import { Logger } from '../src/logger.js';
@@ -16,39 +15,31 @@ import { parseMarkdown } from '../src/markdown.js';
 import { Failure, SuccessSignal } from '../src/errors.js';
 
 const sdk = vi.hoisted(() => ({
-    model: undefined as unknown,
+    model: vi.fn(),
     openai: vi.fn(),
     anthropic: vi.fn(),
     google: vi.fn(),
     mcp: vi.fn(),
 }));
-vi.mock('@ai-sdk/openai', () => ({ createOpenAI: (options: unknown) => {
-    sdk.openai(options);
-    return { responses: () => sdk.model };
-} }));
-vi.mock('@ai-sdk/anthropic', () => ({ createAnthropic: (options: unknown) => {
-    sdk.anthropic(options);
-    return () => sdk.model;
-} }));
-vi.mock('@ai-sdk/google', () => ({ createGoogleGenerativeAI: (options: unknown) => {
-    sdk.google(options);
-    return () => sdk.model;
+vi.mock('../src/ai-native.js', () => ({ createNativeModel: (provider: 'openai' | 'anthropic' | 'google', apiKey: string) => {
+    sdk[provider]({ apiKey });
+    return sdk.model();
 } }));
 vi.mock('@ai-sdk/mcp', () => ({ createMCPClient: (options: unknown) => sdk.mcp(options) }));
 
 let cwd: string;
 let backend: AiBackend;
-let requests: LanguageModelV4CallOptions[];
-let steps: LanguageModelV4StreamPart[][];
-let streamOverride: ((options: LanguageModelV4CallOptions) => ReadableStream<LanguageModelV4StreamPart>) | undefined;
-const usage = { inputTokens: { total: 1 }, outputTokens: { total: 1 } };
-const finish = (unified: 'stop' | 'tool-calls' | 'length' | 'content-filter' | 'error' = 'stop'): LanguageModelV4StreamPart =>
-    ({ type: 'finish', finishReason: { unified, raw: unified }, usage });
-const text = (value: string): LanguageModelV4StreamPart[] => [
+type TestCallOptions = Omit<ModelCallOptions, 'prompt'> & { prompt: { role: string; content: unknown }[] };
+let requests: TestCallOptions[];
+let steps: ModelStreamPart[][];
+let streamOverride: ((options: TestCallOptions) => ReadableStream<ModelStreamPart>) | undefined;
+const finish = (reason: 'stop' | 'tool-calls' | 'length' | 'content-filter' | 'error' = 'stop'): ModelStreamPart =>
+    ({ type: 'finish', reason });
+const text = (value: string): ModelStreamPart[] => [
     { type: 'text-start', id: 'answer' }, { type: 'text-delta', id: 'answer', delta: value }, { type: 'text-end', id: 'answer' },
 ];
-const call = (name: string, args: unknown, id = name): LanguageModelV4StreamPart =>
-    ({ type: 'tool-call', toolCallId: id, toolName: name, input: JSON.stringify(args) });
+const call = (name: string, args: unknown, id = name): ModelStreamPart =>
+    ({ type: 'tool-call', toolCallId: id, toolName: name, input: args });
 const request = (overrides: Partial<LlmRequest> = {}): LlmRequest => {
     const restrictions = new Restrictions(cwd);
     return { kind: 'ask', prompt: 'Prompt', restrictions, showReasoning: false, tools: new ToolHost(restrictions, cwd), ...overrides };
@@ -76,16 +67,34 @@ beforeEach(() => {
     requests = [];
     steps = [[...text('Final answer'), finish()]];
     streamOverride = undefined;
-    sdk.model = new MockLanguageModelV4({
-        doStream: async options => {
-            requests.push(options);
-            return { stream: streamOverride?.(options) ?? new ReadableStream({
-                start(controller) {
-                    for (const part of steps.shift() ?? []) controller.enqueue(part);
-                    controller.close();
-                },
-            }) };
-        },
+    sdk.model.mockImplementation(() => {
+        let prompt: TestCallOptions['prompt'] = [];
+        return {
+            addToolResults(outputs: ToolOutput[]) {
+                prompt.push({ role: 'tool', content: outputs });
+            },
+            async *stream(options: ModelCallOptions) {
+                if (!prompt.length) prompt = [{ role: 'user', content: [{ type: 'text', text: options.prompt }] }];
+                const captured = { ...options, prompt: [...prompt] };
+                requests.push(captured);
+                const stream = streamOverride?.(captured) ?? new ReadableStream<ModelStreamPart>({
+                    start(controller) {
+                        for (const part of steps.shift() ?? []) controller.enqueue(part);
+                        controller.close();
+                    },
+                });
+                const reader = stream.getReader();
+                try {
+                    for (;;) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        yield value;
+                    }
+                } finally {
+                    reader.releaseLock();
+                }
+            },
+        };
     });
     sdk.mcp.mockReset().mockResolvedValue(client());
     backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('silent') });
@@ -102,9 +111,9 @@ it('retains the old backend import as an alias, not a second implementation', ()
 
 it.each([
     ['openai/gpt-4.1', 'openai'], ['anthropic/claude-sonnet-4-5', 'anthropic'], ['google/gemini-2.5-flash', 'google'],
-] as const)('uses the %s provider through the real AI SDK stream pipeline', async (model, provider) => {
+] as const)('uses the %s provider through the native adapter', async (model, provider) => {
     const result = await backend.call(request({ model }));
-    expect(result).toMatchObject({ text: 'Final answer', effective: { backend: 'vercel-ai-sdk', provider } });
+    expect(result).toMatchObject({ text: 'Final answer', effective: { backend: 'native-sdk', provider } });
     expect(sdk[provider]).toHaveBeenCalledWith({ apiKey: `test-${provider}-key` });
     expect(requests[0].prompt.at(-1)).toMatchObject({ role: 'user', content: [{ type: 'text', text: 'Prompt' }] });
 });
@@ -121,7 +130,7 @@ it.each(['ask', 'think', 'agent'] as const)('streams %s text and keeps calls iso
     expect(requests[1].prompt.filter(message => message.role !== 'system')).toHaveLength(1);
 });
 
-it.each(['ask', 'think', 'agent'] as const)('forwards %s sampling to the SDK without modifying the prompt or reasoning', async kind => {
+it.each(['ask', 'think', 'agent'] as const)('forwards %s sampling to the client without modifying the prompt or reasoning', async kind => {
     const result = await backend.call(request({
         kind, model: 'google/gemini-2.5-flash', reasoningEffort: 'high',
         randomness: { seed: 42, temperature: 0, top_p: 0.01 },
@@ -136,6 +145,7 @@ it.each(['ask', 'think', 'agent'] as const)('forwards %s sampling to the SDK wit
 
 it('routes unsupported sampling warnings through the host logger and does not claim rejected controls were effective', async () => {
     steps[0].unshift({ type: 'stream-start', warnings: [
+        { type: 'unsupported', feature: 'seed', details: 'does not support randomness.seed' },
         { type: 'unsupported', feature: 'temperature', details: 'unsupported by this model' },
         { type: 'unsupported', feature: 'topP', details: 'unsupported by this model' },
     ] });
@@ -150,6 +160,12 @@ it('routes unsupported sampling warnings through the host logger and does not cl
     } finally {
         warn.mockRestore();
     }
+});
+
+it.each([0, -1, 1.5, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])('rejects invalid embedded token budget %s before invoking a provider', async tokens => {
+    await expect(backend.call(request({ tokens }))).rejects.toMatchObject({ statusCode: 'runtime_error' });
+    expect(requests).toHaveLength(0);
+    expect(sdk.model).not.toHaveBeenCalled();
 });
 
 it('validates sampling on direct embedded backend calls before invoking any provider', async () => {

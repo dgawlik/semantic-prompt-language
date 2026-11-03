@@ -124,6 +124,7 @@ evaluated once and validated before the call. Unknown or duplicate names are syn
 | `reasoning` | `low` `medium` `high` | Reasoning effort, if the model supports it |
 | `hide` | `True` `False` (default) | Suppress reasoning display when `True`; responses remain visible |
 | `model` | model id | Per-call model |
+| `tokens` | Positive safe integer | Maximum generated tokens per model turn, including reasoning |
 
 The former `show` modifier is no longer accepted. Omit `show=True` (reasoning is now visible
 by default), and replace `show=False` with `hide=True`.
@@ -132,11 +133,24 @@ by default), and replace `show=False` with `hide=True`.
 let score = ask(
     fmt='integer',
     repairs=1,
+    tokens=2048,
 ) 'Rate this issue from 1 to 5: {issue}'
 ```
 
+`tokens` is a hard generation budget, not a length hint or a separate thinking budget.
+The same limit applies independently to every repair attempt and agent tool-continuation turn.
+Omitting it preserves existing provider defaults. It maps to OpenAI `max_output_tokens`
+(or `max_completion_tokens` for seeded calls), Anthropic `max_tokens`, and Google `maxOutputTokens`.
+Invalid values fail before the model call; provider/model limits still apply. Legacy Anthropic
+manual thinking requires `tokens` to exceed its reasoning budget (`low`: 1024, `medium`: 4096,
+`high`: 16384); conflicting settings fail rather than silently enlarging the generation budget.
+If the model hits its token limit, the call fails with `llm_error`, not a successful partial answer,
+and format/schema repairs do not retry the truncated turn.
+Explicit budgets are recorded in `effective.tokens` and participate in recording/trace request
+matching, so changing a budget cannot silently reuse an old answer.
+
 Model precedence: CLI `--model`, then the per-call `model`, then frontmatter `model`, then the
-provider default. OpenAI, Anthropic and Google are supported through Vercel AI SDK; use bare
+provider default. OpenAI, Anthropic and Google are supported through their official clients; use bare
 model IDs or `provider/model`. See [Models and authentication](CLI.md#models-and-authentication).
 
 ## Randomness controls
@@ -173,10 +187,15 @@ Out-of-range values, booleans, strings and `None` are runtime errors before the 
 Sampling values belong in `randomness(...)`, not in `ask(...)`/`think(...)`/`agent(...)`.
 
 Provider limitations are diagnosed with warnings; the runtime keeps supported controls without
-changing the model or API, and preserves explicitly requested reasoning:
+changing the model, and preserves explicitly requested reasoning:
 
-* **OpenAI:** the existing Responses API supports temperature and `top_p` on compatible models,
-  but not seeds. Compatible GPT-5.1+ and GPT-6 models accept sampling with reasoning effort `none`.
+* **OpenAI:** seeded calls use Chat Completions, which accepts `seed`; unseeded calls retain
+  the Responses API. Chat Completions does not expose reasoning summaries, so requested
+  summaries warn and are omitted; reasoning effort and runtime/MCP tool continuations are retained.
+  Tool definitions and parallel-tool settings are omitted when no tools are enabled.
+  Seeds are best-effort and deprecated by the upstream API, not a guarantee of identical output.
+  Models must support Chat Completions; provider errors surface without retrying on a different API.
+  Compatible GPT-5.1+ and GPT-6 models accept sampling with reasoning effort `none`.
   Models that require reasoning, or calls with explicit reasoning, may remove sampling controls.
   The provider adapter diagnoses model-specific restrictions.
 * **Google:** the Generate Content API receives `seed`, `temperature` and `topP`. A fixed seed
@@ -196,7 +215,7 @@ default numeric value was sent.
 cannot honor that setting; `null` does not mean thinking is disabled.
 Traces, recordings, checkpoints and pinned workflows include requested
 sampling controls in request identity; changing them cannot silently reuse an old response.
-Calls without randomness retain compatibility with existing replay files.
+Calls without randomness or `tokens` retain compatibility with existing replay files.
 
 Even extreme settings cannot guarantee identical outputs from hosted models. Use
 [`--pin`](CLI.md#pinned-workflows) for fully deterministic offline replay.

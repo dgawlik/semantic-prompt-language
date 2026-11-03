@@ -13,7 +13,7 @@ import type { WorkerReply } from '../src/notebookProtocol';
 const source = (body: string) => DEFAULT_FRONTMATTER + '\n\n' + body;
 const fence = (code: string) => '```spl\n' + code + '\n```';
 
-test('packaged notebook lazily loads the AI SDK backend and reports missing provider credentials', { timeout: 5000 }, async t => {
+test('packaged notebook lazily loads the native backend and reports missing provider credentials', { timeout: 5000 }, async t => {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'spl-notebook-provider-'));
     const worker = fork(path.resolve(__dirname, '..', 'notebookWorker.cjs'), [], {
         cwd: directory, execArgv: [], silent: true,

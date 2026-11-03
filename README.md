@@ -84,7 +84,8 @@ spl login openai         # or anthropic / google
 spl examples/hi.md
 ```
 
-Requires Node.js >=24.15.0. Model calls use Vercel AI SDK with OpenAI, Anthropic or Google.
+Requires Node.js >=24.15.0. Model calls use the official OpenAI, Anthropic and Google clients.
+Model logs identify the backend as `native-sdk`; existing recordings remain replayable.
 Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` (also
 `GOOGLE_API_KEY` / `GEMINI_API_KEY`), or use `spl login <provider>` to save a key and default provider.
 Environment keys override saved keys. With multiple providers and no saved default, select one

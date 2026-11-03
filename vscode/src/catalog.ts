@@ -80,7 +80,7 @@ export const modifiers: Record<string, Help> = {
     expected: { signature: 'expected=value', description: 'Reference output for eval(...). Accepts text or other JSON-compatible values.' },
     actual: { signature: 'actual=value', description: 'Output compared with expected by local TF-IDF cosine scoring in eval(...). Accepts text or other JSON-compatible values, serialized as JSON text.' },
     cutoff: { signature: 'cutoff=0..1', description: 'Required finite similarity threshold for eval(...). Scores equal to or above it pass; 0.9 means 90% similarity, not a statistical percentile.' },
-    seed: { signature: 'seed=0..2147483647', description: 'Optional integer seed in randomness(...). Google supports seeded sampling; OpenAI Responses and Anthropic warn and ignore it. A seed does not guarantee identical responses.' },
+    seed: { signature: 'seed=0..2147483647', description: 'Optional integer seed in randomness(...). Google supports seeded sampling; seeded OpenAI calls use Chat Completions without reasoning summaries. Anthropic warns and ignores it. A seed does not guarantee identical responses.' },
     temperature: { signature: 'temperature=0..2', description: 'Optional sampling temperature in randomness(...). Lower values reduce variability; 0 requests greedy sampling where supported. Anthropic caps at 1; unsupported models/thinking warn and ignore it.' },
     top_p: { signature: 'top_p=0..1', description: 'Optional nucleus-sampling probability in randomness(...). Lower values narrow token choices. Anthropic ignores top_p when temperature is also supplied or thinking is enabled. Omitted values use provider defaults.' },
     level: { signature: 'level=error | info | debug', description: 'Log severity, default info. Accepts bare level names, strings or expressions. Debug messages are emitted only at debug log level.' },
@@ -91,4 +91,5 @@ export const modifiers: Record<string, Help> = {
     schema: { signature: 'schema=expression', description: 'Validate against synchronous strict JSON Schema draft-07. Implies JSON output.' },
     repairs: { signature: 'repairs=0..5', description: 'Additional generation attempts for JSON/shape errors only. Agents require zero.' },
     model: { signature: "model='model-id'", description: 'Non-empty model ID. Precedence: CLI override, per-call modifier, header directive, SDK default.' },
+    tokens: { signature: 'tokens=positive integer', description: 'Maximum generated tokens per model turn, including reasoning. Reused for repairs and agent continuations; omission preserves provider defaults. Legacy Anthropic thinking budgets must be smaller than tokens. Truncation is an LLM error, not successful partial output.' },
 };

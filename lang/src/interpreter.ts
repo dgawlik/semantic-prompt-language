@@ -1,7 +1,7 @@
 import type { AssignTarget, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
 import { callMethod, isMutatingMethod, iterate, makeBuiltins } from './builtins.js';
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
-import { LlmError, buildPromptParts, parseJsonResponse, validateRandomness, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
+import { LlmError, buildPromptParts, parseJsonResponse, validateRandomness, validateTokens, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import { AGENT_TOOLS, actionArguments } from './agent.js';
 import { compileSchema } from './schema.js';
 import type { Logger, LogLevel } from './logger.js';
@@ -967,6 +967,7 @@ class Interpreter {
         const options: Record<string, Value> = {};
         for (const [name, expr] of Object.entries(mods)) setKey(options, name, await this.eval(expr, env));
         const { len, reasoning = kind === 'ask' || randomness !== undefined ? undefined : 'medium', hide = false, repairs = 0, model } = options;
+        const tokens = 'tokens' in options ? validateTokens(options.tokens) : undefined;
         const fmt = options.fmt ?? ('schema' in options ? 'json' : 'text');
         if (len !== undefined && len !== 'word' && len !== 'sentence' && len !== 'paragraph' && len !== 'long') throw runtimeError('len must be word, sentence, paragraph, or long');
         if (fmt !== 'integer' && fmt !== 'float' && fmt !== 'array' && fmt !== 'object' && fmt !== 'text' && fmt !== 'boolean' && fmt !== 'json') {
@@ -995,6 +996,7 @@ class Interpreter {
                 kind, prompt,
                 model: this.opts.pin?.data.context.model ?? this.opts.model ?? model ?? this.model,
                 reasoningEffort: reasoning,
+                ...(tokens !== undefined ? { tokens } : {}),
                 ...(randomness !== undefined ? { randomness: { ...randomness } } : {}),
                 showReasoning: !hide,
                 restrictions: this.restrictions,

@@ -264,7 +264,7 @@ file without starting servers. Only load configurations you trust.
 
 ## Models and authentication
 
-Every model call uses Vercel AI SDK with OpenAI, Anthropic or Google in a fresh conversation.
+Every model call uses the official OpenAI, Anthropic or Google client in a fresh conversation.
 See [Getting started](Getting-started.md#install) for API-key login and environment variables.
 A call without credentials, or a provider/model access error, fails with `llm_error`.
 Deterministic workflows, check-only operations and replay do not initialize providers or MCP.

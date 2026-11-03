@@ -238,6 +238,43 @@ CopilotBackend.prototype.close = async function() {};`);
     });
 });
 
+it('runs the randomness example through tool-free seeded OpenAI requests', () => {
+    const preload = path.join(dir, 'randomness-provider.mjs');
+    const requests = path.join(dir, 'requests.jsonl');
+    fs.writeFileSync(preload, `import fs from 'node:fs';
+globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    fs.appendFileSync(${JSON.stringify(requests)}, JSON.stringify({url: String(url), body}) + '\\n');
+    if ('parallel_tool_calls' in body && !body.tools?.length) return new Response(JSON.stringify({
+        error: {message: "'parallel_tool_calls' is only allowed when 'tools' are specified."}
+    }), {status: 400, headers: {'content-type': 'application/json'}});
+    const chunk = (delta, finish_reason = null) => ({
+        id: 'chat_1', object: 'chat.completion.chunk', created: 1, model: body.model,
+        choices: [{index: 0, delta, finish_reason}]
+    });
+    return new Response([
+        chunk({content: 'Bake apples in a pastry crust with sugar and cinnamon.'}),
+        chunk({}, 'stop')
+    ].map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join(''),
+        {headers: {'content-type': 'text/event-stream'}});
+};`);
+    const result = run([path.resolve(__dirname, '..', 'examples', 'randomness.md'), '--silent'], {
+        OPENAI_API_KEY: 'test-openai',
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`,
+    });
+    expect(result).toEqual({
+        code: 0, out: 'The recipes have a TF-IDF cosine similarity of at least 0.9\n', err: '',
+    });
+    const calls = fs.readFileSync(requests, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    expect(calls).toHaveLength(2);
+    for (const { url, body } of calls) {
+        expect(url).toContain('/chat/completions');
+        expect(body).toMatchObject({ model: 'gpt-6-luna', seed: 13, temperature: 0, top_p: 1, max_completion_tokens: 1024 });
+        expect(body).not.toHaveProperty('tools');
+        expect(body).not.toHaveProperty('parallel_tool_calls');
+    }
+});
+
 describe('noninteractive checkpoint CLI', () => {
     it.each(['file', 'checkpoint'] as const)('pauses, inspects, answers and completes with --resume %s', (syntax) => {
         const state = path.join(dir, 'run.jsonl');

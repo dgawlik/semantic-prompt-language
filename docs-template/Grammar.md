@@ -103,7 +103,7 @@ special_var    = "$env" | "$args" ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
 modifiers      = "(" , [ modifier , { "," , modifier } , [ "," ] ] , ")" ;
-modifier       = ( "len" | "fmt" | "reasoning" | "hide" | "schema" | "repairs" | "model" ) , "=" , expr ;
+modifier       = ( "len" | "fmt" | "reasoning" | "hide" | "schema" | "repairs" | "model" | "tokens" ) , "=" , expr ;
 randomness_expr = "randomness" , "(" , [ sampling , { "," , sampling } , [ "," ] ] , ")"
                 , ( "ask" | "think" | "agent" ) , [ modifiers ] , postfix ;
 sampling       = ( "seed" | "temperature" | "top_p" ) , "=" , expr ;

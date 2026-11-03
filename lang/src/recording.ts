@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import { Failure, type StatusCode } from './errors.js';
-import { LlmError, isRandomness, validateRandomness, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
+import { LlmError, isRandomness, isTokenBudget, validateRandomness, validateTokens, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import { isRuntimeAction } from './agent.js';
 import type { Value } from './values.js';
 
@@ -15,6 +15,7 @@ interface TraceRequest {
     model: string | null;
     reasoningEffort: LlmRequest['reasoningEffort'] | null;
     randomness?: LlmRequest['randomness'];
+    tokens?: number;
     showReasoning: boolean;
     naturalLanguage?: boolean;
 }
@@ -31,6 +32,7 @@ export function traceRequest(req: LlmRequest | TraceRequest): TraceRequest {
         reasoningEffort: req.reasoningEffort ?? null, showReasoning: req.showReasoning,
         ...(req.naturalLanguage ? { naturalLanguage: true } : {}),
         ...(req.randomness !== undefined ? { randomness: validateRandomness(req.randomness) } : {}),
+        ...(req.tokens !== undefined ? { tokens: validateTokens(req.tokens) } : {}),
     };
 }
 
@@ -63,7 +65,8 @@ function isTraceRequest(value: unknown): value is TraceRequest {
         && (value.reasoningEffort === null || value.reasoningEffort === 'low' || value.reasoningEffort === 'medium' || value.reasoningEffort === 'high')
         && typeof value.showReasoning === 'boolean'
         && (value.naturalLanguage === undefined || typeof value.naturalLanguage === 'boolean')
-        && (value.randomness === undefined || isRandomness(value.randomness));
+        && (value.randomness === undefined || isRandomness(value.randomness))
+        && (value.tokens === undefined || isTokenBudget(value.tokens));
 }
 
 export function isTraceError(value: unknown): value is Extract<Outcome, { error: unknown }>['error'] {

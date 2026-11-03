@@ -20,7 +20,7 @@ export function isReservedName(name: string): boolean {
     return KEYWORDS.has(name);
 }
 
-export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'hide', 'schema', 'repairs', 'model'] as const;
+export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'hide', 'schema', 'repairs', 'model', 'tokens'] as const;
 export const LOG_MODIFIER_NAMES = ['level'] as const;
 export const RANDOMNESS_MODIFIER_NAMES = ['seed', 'temperature', 'top_p'] as const;
 export const EVAL_ARGUMENT_NAMES = ['expected', 'actual', 'cutoff'] as const;

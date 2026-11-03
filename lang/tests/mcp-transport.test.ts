@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MockLanguageModelV4 } from 'ai/test';
+import type { ModelCallOptions, ModelStreamPart, ToolOutput } from '../src/ai-native.js';
 import { reply } from './fixtures/mcp-server.mjs';
 import { AiBackend } from '../src/ai.js';
 import { Logger } from '../src/logger.js';
@@ -12,8 +12,10 @@ import { Restrictions } from '../src/restrict.js';
 import { ToolHost } from '../src/tools.js';
 import type { MCPServerConfig } from '../src/mcp.js';
 
-const sdk = vi.hoisted(() => ({ model: undefined as unknown }));
-vi.mock('@ai-sdk/openai', () => ({ createOpenAI: () => ({ responses: () => sdk.model }) }));
+const sdk = vi.hoisted(() => ({ stream: vi.fn(), outputs: undefined as unknown }));
+vi.mock('../src/ai-native.js', () => ({ createNativeModel: () => ({
+    stream: sdk.stream, addToolResults: (outputs: ToolOutput[]) => { sdk.outputs = outputs; },
+}) }));
 let directory: string;
 let backend: AiBackend | undefined;
 let server: Server | undefined;
@@ -36,7 +38,10 @@ afterEach(async () => {
 it.each(['stdio', 'http', 'sse'] as const)('executes a tool over real %s MCP transport', async type => {
     let config: MCPServerConfig;
     if (type === 'stdio') {
-        config = { command: process.execPath, args: [fileURLToPath(new URL('./fixtures/mcp-server.mjs', import.meta.url)), 'stdio'] };
+        config = {
+            command: process.execPath, args: [fileURLToPath(new URL('./fixtures/mcp-server.mjs', import.meta.url)), 'stdio'],
+            workingDirectory: fileURLToPath(new URL('./fixtures', import.meta.url)),
+        };
     } else {
         let events: ServerResponse | undefined;
         server = createServer(async (request, response) => {
@@ -62,24 +67,17 @@ it.each(['stdio', 'http', 'sse'] as const)('executes a tool over real %s MCP tra
         config = { type, url: `http://127.0.0.1:${address.port}/mcp` };
     }
     let step = 0;
-    sdk.model = new MockLanguageModelV4({ doStream: async options => {
+    sdk.stream.mockImplementation(async function* (options: ModelCallOptions): AsyncGenerator<ModelStreamPart> {
         expect(options.tools?.map(tool => tool.name)).toContain('mcp_0_0');
         const first = step++ === 0;
-        return { stream: new ReadableStream({ start(controller) {
-            if (first) controller.enqueue({ type: 'tool-call', toolCallId: 'echo', toolName: 'mcp_0_0', input: '{"message":"real MCP result"}' });
-            else {
-                expect(JSON.stringify(options.prompt)).toContain('real MCP result');
-                controller.enqueue({ type: 'text-start', id: 'text' });
-                controller.enqueue({ type: 'text-delta', id: 'text', delta: 'Done' });
-                controller.enqueue({ type: 'text-end', id: 'text' });
-            }
-            controller.enqueue({
-                type: 'finish', finishReason: { unified: first ? 'tool-calls' : 'stop', raw: undefined },
-                usage: { inputTokens: {}, outputTokens: {} },
-            });
-            controller.close();
-        } }) };
-    } });
+        if (first) yield { type: 'tool-call', toolCallId: 'echo', toolName: 'mcp_0_0', input: { message: 'real MCP result' } };
+        else {
+            expect(JSON.stringify(sdk.outputs)).toContain('real MCP result');
+            yield { type: 'text-delta', id: 'text', delta: 'Done' };
+            yield { type: 'text-end', id: 'text' };
+        }
+        yield { type: 'finish', reason: first ? 'tool-calls' : 'stop' };
+    });
     const restrictions = new Restrictions(directory);
     backend = new AiBackend({ cwd: directory, timeoutMs: 3000, logger: new Logger('silent'), mcpServers: { fixture: config } });
     const result = await backend.call({

@@ -84,7 +84,7 @@ success 'The recipes have a TF-IDF cosine similarity of at least 0.9'
 3. A blockquote sends its text, visible bindings and runtime tools to an agent. The model calls
    tools to invoke functions, read environment values, request human input and load/save shared variables.
    It never submits generated SPL.
-4. `ask`, `think` and `agent` use OpenAI, Anthropic or Google through Vercel AI SDK, one fresh conversation per call.
+4. `ask`, `think` and `agent` use the official OpenAI, Anthropic and Google clients, one fresh conversation per call.
 5. `success` prints the result on stdout. Logs go to stderr.
 
 ## Non-goals

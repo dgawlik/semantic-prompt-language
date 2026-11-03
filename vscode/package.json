@@ -2,7 +2,7 @@
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
   "description": "Executable Markdown with SPL blocks and natural-language workflows",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "publisher": "spl-lang",
    "icon": "icon.png",
   "license": "ISC",
@@ -124,11 +124,10 @@
     "package": "vsce package --skip-license"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.94",
-    "@ai-sdk/google": "^4.0.109",
     "@ai-sdk/mcp": "^2.0.88",
-    "@ai-sdk/openai": "^4.0.106",
-    "ai": "^7.0.159",
+    "@anthropic-ai/sdk": "^1.4.0",
+    "@google/genai": "^2.32.0",
+    "openai": "^7.48.0",
     "highlight.js": "^11.12.0",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",

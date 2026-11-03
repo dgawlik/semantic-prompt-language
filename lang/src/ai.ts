@@ -1,14 +1,10 @@
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createMCPClient, type MCPClient } from '@ai-sdk/mcp';
 import { StdioMCPTransport } from '@ai-sdk/mcp/mcp-stdio';
-import type { LanguageModelV4StreamPart } from '@ai-sdk/provider';
-import { jsonSchema, streamText, wrapLanguageModel, type ModelMessage, type ToolSet, type ToolModelMessage } from 'ai';
 import { Ajv } from 'ajv';
+import { createNativeModel, type ProviderOptions, type ToolOutput } from './ai-native.js';
 import { AuthError, resolveProvider, type Provider } from './auth.js';
 import { Failure } from './errors.js';
-import { LlmError, validateRandomness, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel } from './llm.js';
+import { LlmError, validateRandomness, validateTokens, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel, type RuntimeTool } from './llm.js';
 import type { Logger } from './logger.js';
 import { configuredMcpTool, filterMcpServers, type McpServers } from './mcp.js';
 import { TOOL_SPECS } from './tools.js';
@@ -21,7 +17,6 @@ const SYSTEM_MESSAGE = [
 
 const ajv = new Ajv({ strict: false, allErrors: true, addUsedSchema: false });
 const budgets: Record<ReasoningLevel, number> = { low: 1024, medium: 4096, high: 16384 };
-type ProviderOptions = NonNullable<Parameters<typeof streamText>[0]['providerOptions']>;
 
 export interface AiBackendOptions {
     logger: Logger;
@@ -29,12 +24,6 @@ export interface AiBackendOptions {
     timeoutMs: number;
     provider?: Provider;
     mcpServers?: McpServers;
-}
-
-function modelFor(provider: Provider, apiKey: string, model: string) {
-    if (provider === 'anthropic') return createAnthropic({ apiKey })(model);
-    if (provider === 'google') return createGoogleGenerativeAI({ apiKey })(model);
-    return createOpenAI({ apiKey }).responses(model);
 }
 
 export function reasoningOptions(
@@ -56,10 +45,10 @@ export function reasoningOptions(
     }
     if (provider === 'openai' && openaiReasoning && !/^o1-(?:mini|preview)/.test(model)
         && (!/^gpt-5-pro(?:-|$)/.test(model) || effort === 'high')) {
-        options.openai.reasoningEffort = effort;
+        (options.openai ??= {}).reasoningEffort = effort;
     } else if (provider === 'anthropic' && anthropicReasoning) {
         const adaptive = /^claude-(?:(?:opus|sonnet)-4-[6-9]|(?:sonnet|opus|haiku|fable)-[5-9])/.test(model);
-        options.anthropic.thinking = adaptive ? { type: 'adaptive' } : { type: 'enabled', budgetTokens: budgets[effort] };
+        (options.anthropic ??= {}).thinking = adaptive ? { type: 'adaptive' } : { type: 'enabled', budgetTokens: budgets[effort] };
         if (adaptive) options.anthropic.effort = effort;
     } else if (provider === 'google' && googleReasoning) {
         // Gemini 3 Pro supports low/high, but not medium.
@@ -125,6 +114,7 @@ export class AiBackend implements LlmBackend {
         const perform = async (): Promise<LlmResponse> => {
             const selected = resolveProvider(req.model, this.opts.provider);
             const randomness = req.randomness === undefined ? undefined : validateRandomness(req.randomness);
+            const tokens = req.tokens === undefined ? undefined : validateTokens(req.tokens);
             const reasoning = reasoningOptions(selected.provider, selected.model, req.reasoningEffort, req.showReasoning,
                 this.opts.logger, randomness !== undefined);
             let effectiveReasoningEffort = reasoning.effort;
@@ -133,51 +123,20 @@ export class AiBackend implements LlmBackend {
                 temperature: randomness?.temperature,
                 topP: randomness?.top_p,
             };
-            if (sampling.seed !== undefined && selected.provider !== 'google') {
-                this.opts.logger.warn(`${selected.provider}/${selected.model} does not support randomness.seed; using the provider default`);
-                sampling.seed = undefined;
-            }
             if (sampling.temperature !== undefined && sampling.temperature > 1 && selected.provider === 'anthropic') {
                 this.opts.logger.warn(`anthropic/${selected.model} supports temperature at most 1; clamping randomness.temperature to 1`);
                 sampling.temperature = 1;
             }
             const effectiveSampling = { ...sampling };
-            const model = wrapLanguageModel({
-                model: modelFor(selected.provider, selected.apiKey, selected.model),
-                middleware: {
-                    specificationVersion: 'v4',
-                    wrapStream: async ({ doStream }) => {
-                        const result = await doStream();
-                        return { ...result, stream: result.stream.pipeThrough(new TransformStream<LanguageModelV4StreamPart, LanguageModelV4StreamPart>({
-                            transform: (part, output) => {
-                                if (part.type !== 'stream-start') return output.enqueue(part);
-                                if (receiving && !signal.aborted) {
-                                    for (const warning of part.warnings) {
-                                        if ((warning.type === 'unsupported' || warning.type === 'compatibility')
-                                            && warning.feature === 'reasoning') effectiveReasoningEffort = undefined;
-                                        // Let the provider adapter own model-specific compatibility, including thinking.
-                                        if (warning.type === 'unsupported') {
-                                            if (warning.feature === 'seed') effectiveSampling.seed = undefined;
-                                            if (warning.feature === 'temperature') effectiveSampling.temperature = undefined;
-                                            if (warning.feature === 'topP') effectiveSampling.topP = undefined;
-                                        }
-                                        this.opts.logger.warn(`model '${selected.model}': ${JSON.stringify(warning)}`);
-                                    }
-                                }
-                                // Keep SDK global warning output from bypassing the host's logger and --silent.
-                                output.enqueue({ ...part, warnings: [] });
-                            },
-                        })) };
-                    },
-                },
-            });
-            const tools: ToolSet = {};
+            const model = await createNativeModel(selected.provider, selected.apiKey, selected.model, this.opts.logger);
+            check();
+            const tools: RuntimeTool[] = [];
             const registered = new Map<string, RegisteredTool>();
             const add = (name: string, description: string, parameters: Record<string, unknown>, invoke: RegisteredTool['invoke']) => {
-                if (Object.hasOwn(tools, name)) throw new LlmError(`duplicate tool '${name}'`);
+                if (registered.has(name)) throw new LlmError(`duplicate tool '${name}'`);
                 const validate = ajv.compile(parameters);
                 if ('$async' in validate && validate.$async) throw new LlmError(`tool '${name}' has an unsupported asynchronous schema`);
-                tools[name] = { description, inputSchema: jsonSchema(parameters), strict: false };
+                tools.push({ name, description, parameters });
                 registered.set(name, { invoke, validate });
             };
             const toolResults: string[] = [];
@@ -268,36 +227,37 @@ export class AiBackend implements LlmBackend {
                     serverIndex++;
                 }
             }
-            const messages: ModelMessage[] = [{ role: 'user', content: req.prompt }];
             const reasons: string[] = [];
             for (let step = 0; ; step++) {
                 check();
-                const stream = streamText({
-                    model,
-                    system: SYSTEM_MESSAGE, messages, tools,
+                const stream = model.stream({
+                    system: SYSTEM_MESSAGE, prompt: req.prompt, tools,
                     providerOptions: reasoning.options, abortSignal: signal,
                     reasoning: reasoning.effort === 'none' ? 'none' : undefined,
+                    tokens,
                     ...sampling,
-                    maxRetries: 0, streamRetries: 0,
-                    onError: () => {}, // The error part below is authoritative; never write SDK diagnostics to stdout.
                 });
-                const outputs: ToolModelMessage['content'] = [];
+                const outputs: ToolOutput[] = [];
                 const fragments = new Map<string, string>();
+                let finish = 'unknown';
+                let modelId = selected.model;
                 const publish = (channel: 'response' | 'reasoning', id: string, mode: 'append' | 'replace', text: string) => {
                     if (!receiving || signal.aborted || (channel === 'reasoning' && !req.showReasoning)) return;
                     try { req.onStream?.({ channel, messageId: `${step}:${id}`, mode, text }); }
                     catch (error) { stop(error); }
                 };
-                for await (const part of stream.fullStream) {
+                for await (const part of stream) {
                     check();
                     if (part.type === 'text-delta' || part.type === 'reasoning-delta') {
                         const channel = part.type === 'text-delta' ? 'response' : 'reasoning';
                         const key = `${channel}:${part.id}`;
-                        fragments.set(key, (fragments.get(key) ?? '') + part.text);
-                        publish(channel, part.id, 'append', part.text);
+                        fragments.set(key, (fragments.get(key) ?? '') + part.delta);
+                        publish(channel, part.id, 'append', part.delta);
                     } else if (part.type === 'text-end' || part.type === 'reasoning-end') {
                         const channel = part.type === 'text-end' ? 'response' : 'reasoning';
-                        const text = fragments.get(`${channel}:${part.id}`) ?? '';
+                        const key = `${channel}:${part.id}`;
+                        const text = part.text ?? fragments.get(key) ?? '';
+                        fragments.set(key, text);
                         publish(channel, part.id, 'replace', text);
                     } else if (part.type === 'tool-input-start' || part.type === 'tool-call') {
                         if (req.kind !== 'agent' || !registered.has(part.toolName) || part.providerExecuted) {
@@ -313,40 +273,49 @@ export class AiBackend implements LlmBackend {
                         }
                         const output = await handler.invoke({ ...input });
                         check();
-                        outputs.push({ type: 'tool-result', toolCallId: part.toolCallId, toolName: part.toolName, output: { type: 'text', value: output } });
+                        outputs.push({ toolCallId: part.toolCallId, toolName: part.toolName, value: output });
                     } else if (part.type === 'tool-error') {
                         stop(new Failure(req.naturalLanguage ? 'runtime_error' : 'tool_error', `tool '${part.toolName}': ${String(part.error)}`));
-                    } else if (part.type === 'error') {
-                        throw part.error;
-                    } else if (part.type === 'abort') {
-                        throw new LlmError(part.reason ?? 'the model turn was aborted');
-                    } else if (part.type === 'start-step') {
-                        for (const warning of part.warnings) this.opts.logger.warn(`model '${selected.model}': ${JSON.stringify(warning)}`);
+                    } else if (part.type === 'stream-start') {
+                        for (const warning of part.warnings) {
+                            if (warning.feature === 'reasoning') effectiveReasoningEffort = undefined;
+                            if (warning.type === 'unsupported') {
+                                if (warning.feature === 'seed') effectiveSampling.seed = undefined;
+                                if (warning.feature === 'temperature') effectiveSampling.temperature = undefined;
+                                if (warning.feature === 'topP') effectiveSampling.topP = undefined;
+                            }
+                            this.opts.logger.warn(`model '${selected.model}': ${JSON.stringify(warning)}`);
+                        }
+                    } else if (part.type === 'finish') {
+                        finish = part.reason;
+                        modelId = part.modelId ?? selected.model;
                     }
                 }
                 check();
-                const reason = await stream.reasoningText;
+                const collected = (channel: 'response' | 'reasoning') => [...fragments]
+                    .filter(([key]) => key.startsWith(`${channel}:`)).map(([, text]) => text).join(channel === 'reasoning' ? '\n' : '');
+                const reason = collected('reasoning');
                 if (reason) {
                     reasons.push(reason);
                     if (req.showReasoning) this.opts.logger.info(`reasoning: ${reason}`);
                 }
-                const finish = await stream.finishReason;
                 if (finish !== 'stop' && finish !== 'tool-calls') throw new LlmError(`model turn did not complete (${finish})`);
                 if (outputs.length) {
-                    messages.push(...(await stream.response).messages, { role: 'tool', content: outputs });
+                    model.addToolResults(outputs);
                     continue;
                 }
                 if (finish === 'tool-calls') throw new LlmError('the model ended with no executable tool calls');
-                const content = await stream.text;
+                const content = collected('response');
                 const text = actionExecuted && !content.trim() ? 'Runtime actions completed.' : content;
                 if (!text.trim()) throw new LlmError('the model returned an empty response');
                 return {
                     text, reasoning: reasons.length ? reasons.join('\n') : undefined,
                     ...(toolResults.length ? { toolResults } : {}),
                     effective: {
-                        backend: 'vercel-ai-sdk', provider: selected.provider,
-                        model: (await stream.response).modelId ?? selected.model,
+                        backend: 'native-sdk', provider: selected.provider,
+                        model: modelId,
                         reasoningEffort: effectiveReasoningEffort ?? null,
+                        ...(tokens !== undefined ? { tokens } : {}),
                         ...(randomness !== undefined ? { randomness: {
                             seed: effectiveSampling.seed ?? null,
                             temperature: effectiveSampling.temperature ?? null,

@@ -101,7 +101,7 @@ session and are not saved to the Markdown file. Sessions never automatically run
 
 The worker uses `node` from PATH; set **spl.notebook.nodePath** to an absolute Node.js executable
 if needed. The external SPL runtime requires Node.js >=24.15.0; deterministic cells run offline.
-Model calls use the CLI's Vercel AI SDK provider configuration: `spl login openai`, `spl login anthropic`
+Model calls use the CLI's official OpenAI, Anthropic and Google clients and provider configuration: `spl login openai`, `spl login anthropic`
 or `spl login google`, or `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`
 (`GOOGLE_API_KEY` / `GEMINI_API_KEY` also work). With multiple providers, use the saved login default,
 `SPL_PROVIDER`, or a document model such as `anthropic/claude-sonnet-4-5`. Environment keys override
