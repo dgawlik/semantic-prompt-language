@@ -6,11 +6,11 @@
 <meta name="description" content="Turn Markdown into runnable AI workflows—natural-language steps alongside deterministic code, validation, and human approval.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=b1d3d050e6ef">
-<link rel="stylesheet" href="assets/style.css?v=b1d3d050e6ef">
+<link rel="icon" type="image/png" href="assets/icon.png?v=ccb3f72dab1f">
+<link rel="stylesheet" href="assets/style.css?v=ccb3f72dab1f">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=b1d3d050e6ef"></script>
-<script defer src="assets/site.js?v=b1d3d050e6ef"></script>
+<script defer src="assets/search-index.js?v=ccb3f72dab1f"></script>
+<script defer src="assets/site.js?v=ccb3f72dab1f"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -61,7 +61,8 @@ This example highlights some SPL features helpful in automation of day to day wo
 </code></pre></figure>
 <h2 id="control-randomness">Control Randomness<a class="heading-anchor" href="#control-randomness" aria-label="Link to Control Randomness">#</a></h2>
 <p>The language has built in constructs that limit LLM drift and let you concisely
-define what you are expecting.</p>
+define what you are expecting.
+Set temperature near to zero and top_p to small value (ex. 0.0001) and it guarantees 95% reproducibility.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-2">---
 extension: &#x27;semantic-prompt-language&#x27;
 version: 1

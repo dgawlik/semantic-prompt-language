@@ -41,6 +41,7 @@ success 'Analyzed'
 
 The language has built in constructs that limit LLM drift and let you concisely
 define what you are expecting.
+Set temperature near to zero and top_p to small value (ex. 0.0001) and it guarantees 95% reproducibility.
 
 ````markdown
 ---
