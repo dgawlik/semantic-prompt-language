@@ -18,6 +18,13 @@ for (const name of ['randomness', 'seed', 'temperature', 'top_p', 'ask']) {
     assert.ok(token?.scopes.includes(name === 'randomness' ? 'keyword.other.randomness.spl'
         : name === 'ask' ? 'keyword.other.ask.spl' : 'variable.parameter.modifier.spl'), name);
 }
+const evaluation = 'eval(expected=llm1, actual=llm2, cutoff=0.9)';
+const evaluationTokens = grammar.tokenizeLine(evaluation, vsctm.INITIAL).tokens;
+for (const name of ['eval', 'expected', 'actual', 'cutoff']) {
+    const start = evaluation.indexOf(name);
+    const token = evaluationTokens.find(token => token.startIndex <= start && token.endIndex >= start + name.length);
+    assert.ok(token?.scopes.includes(name === 'eval' ? 'keyword.control.result.spl' : 'variable.parameter.modifier.spl'), name);
+}
 for (const fence of ['```', '~~~~']) {
     let stack = markdown.tokenizeLine(`${fence}spl`, vsctm.INITIAL).ruleStack;
     const code = markdown.tokenizeLine('let count = 42', stack);

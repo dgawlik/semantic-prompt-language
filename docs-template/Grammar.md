@@ -56,11 +56,15 @@ block          = ":" , NL , INDENT , statement , { statement } , DEDENT ;
 
 simple_stmt    = declaration | assignment
                | "return" , [ expr ] | "success" , [ expr ]
-               | "assert" , expr , [ expr ] | "fail" , expr
+               | "assert" , expr , [ expr ] | eval_stmt | "fail" , expr
                | "break" | "continue" | "pass" | expr ;
                  (* a compound statement or block-valued expression is not an
                     inline semicolon suite; its body must use block layout *)
 declaration    = "let" , NAME , "=" , expr ;
+eval_stmt      = "eval" , "(" , eval_arg , { "," , eval_arg } , [ "," ] , ")" ;
+eval_arg       = ( "expected" | "actual" | "cutoff" ) , "=" , expr ;
+                 (* each argument is required exactly once, in any order;
+                    eval is an assertion-style statement, not an expression *)
 assignment     = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
 target         = NAME | postfix , "." , NAME | postfix , "[" , expr , "]" ;
 if_stmt        = "if" , expr , block , { "elif" , expr , block } , [ "else" , block ] ;
@@ -127,7 +131,7 @@ EOF            = ? end of input ? ;
    Blank/comment-only lines produce no indentation changes and are ignored.
    Indentation tabs, inline suites, empty bodies and inconsistent dedents are errors.
    $env and $args are read-only; other $-names are syntax errors.
-   Reserved words: let if elif else for in while def return try except assert fail success
+   Reserved words: let if elif else for in while def return try except assert eval fail success
    enforce forbid restrict randomness ask think agent human break continue pass and or not True False None. *)
 ```
 

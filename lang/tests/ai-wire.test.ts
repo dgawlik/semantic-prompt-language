@@ -144,6 +144,113 @@ it.each([
 });
 
 it.each([
+    ['openai', 'gpt-5.1'],
+    ['openai', 'gpt-5.2'],
+    ['openai', 'gpt-6-luna'],
+    ['openai', 'gpt-6.1-terra'],
+    ['anthropic', 'claude-sonnet-4-5'],
+    ['anthropic', 'claude-sonnet-4-6'],
+    ['anthropic', 'claude-opus-4-8'],
+    ['google', 'gemini-2.5-flash'],
+] as const)('disables default thinking for sampled %s/%s on every continuation', async (provider, model) => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return sse(providerEvents(provider, bodies.length === 1));
+    }));
+    const restrictions = new Restrictions(home);
+    const result = await backend.call({
+        kind: 'agent', naturalLanguage: true, model: `${provider}/${model}`,
+        prompt: 'Save the answer', showReasoning: true, restrictions,
+        randomness: { temperature: 0 },
+        tools: new ToolHost(restrictions, home), runtimeTools: AGENT_TOOLS, invokeAction: async () => 42,
+    });
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+        if (provider === 'google') {
+            expect(body.generationConfig).toMatchObject({
+                temperature: 0, thinkingConfig: { thinkingBudget: 0, includeThoughts: true },
+            });
+        } else if (provider === 'openai') {
+            expect(body).toMatchObject({ temperature: 0, reasoning: { effort: 'none' } });
+        } else {
+            expect(body.thinking).toEqual({ type: 'disabled' });
+            if (model === 'claude-opus-4-8') expect(body).not.toHaveProperty('temperature');
+            else expect(body.temperature).toBe(0);
+        }
+    }
+    expect(result.effective.reasoningEffort).toBe('none');
+    expect(result.effective.randomness).toEqual({
+        seed: null, top_p: null,
+        temperature: model === 'claude-opus-4-8' ? null : 0,
+    });
+});
+
+it.each([
+    ['openai', 'gpt-6-luna'],
+    ['anthropic', 'claude-sonnet-4-5'],
+    ['google', 'gemini-2.5-flash'],
+] as const)('preserves explicit reasoning overrides with sampling for %s/%s', async (provider, model) => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return sse(providerEvents(provider, false));
+    }));
+    const restrictions = new Restrictions(home);
+    for (const effort of ['low', 'medium', 'high'] as const) {
+        const result = await backend.call({
+            kind: 'think', model: `${provider}/${model}`, reasoningEffort: effort,
+            prompt: 'Prompt', showReasoning: true, restrictions,
+            tools: new ToolHost(restrictions, home), randomness: { temperature: 0 },
+        });
+        expect(result.effective.reasoningEffort).toBe(effort);
+        const body = bodies.at(-1)!;
+        if (provider === 'openai') {
+            expect(body.reasoning).toMatchObject({ effort });
+            expect(body).not.toHaveProperty('temperature');
+        } else if (provider === 'anthropic') {
+            expect(body.thinking).toMatchObject({ type: 'enabled' });
+            expect(body).not.toHaveProperty('temperature');
+        } else {
+            expect(body.generationConfig).toMatchObject({ temperature: 0, thinkingConfig: {
+                thinkingBudget: { low: 1024, medium: 4096, high: 16384 }[effort],
+            } });
+        }
+    }
+});
+
+it.each([
+    ['openai', 'gpt-5', { reasoning: { effort: 'minimal' } }],
+    ['openai', 'gpt-6-astra', { reasoning: { effort: 'low' } }],
+    ['google', 'gemini-2.5-pro', { generationConfig: { thinkingConfig: { thinkingBudget: 128 } } }],
+    ['google', 'gemini-3-flash-preview', { generationConfig: { thinkingConfig: { thinkingLevel: 'minimal' } } }],
+    ['anthropic', 'claude-opus-5-5', { output_config: { effort: 'low' } }],
+    ['anthropic', 'claude-sonnet-5-5', { thinking: { type: 'between_tools' } }],
+] as const)('warns when %s/%s cannot disable thinking, including an empty randomness prefix', async (provider, model, expected) => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return sse(providerEvents(provider, false));
+    }));
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    try {
+        const restrictions = new Restrictions(home);
+        const result = await backend.call({
+            kind: 'ask', model: `${provider}/${model}`, prompt: 'Prompt', showReasoning: true,
+            restrictions, tools: new ToolHost(restrictions, home), randomness: {},
+        });
+        expect(bodies).toHaveLength(1);
+        expect(bodies[0]).toMatchObject(expected);
+        if (model === 'claude-opus-5-5') expect(bodies[0]).not.toHaveProperty('thinking');
+        expect(result.effective.reasoningEffort).toBeNull();
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"feature":"reasoning"'));
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"type":"compatibility"'));
+    } finally {
+        warn.mockRestore();
+    }
+});
+
+it.each([
     ['openai', 'gpt-4.1'],
     ['anthropic', 'claude-3-5-haiku-20241022'],
     ['google', 'gemini-2.5-flash'],

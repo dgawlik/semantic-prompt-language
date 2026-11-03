@@ -11,6 +11,7 @@ and blockquotes is also available in other Markdown files.
 * **Diagnostics** from the interpreter's own parser, updated as you type.
 * **Completions** for keywords, built-ins, tools, modifiers, `$env`/`$args`, visible bindings, and
   `@name` references in blockquotes.
+  `eval(...)` includes named-argument help for `expected`, `actual`, and the `0..1` similarity `cutoff`.
 * **Copilot inline context** for SPL notebook code cells: native syntax rules and parser-checked
   examples guide AI ghost-text suggestions toward SPL colon-and-indentation blocks, `let`
   declarations and model calls

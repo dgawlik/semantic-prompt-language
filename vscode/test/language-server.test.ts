@@ -16,7 +16,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyze, completions, definition, documentSymbols, hover } from '../src/features';
 import { builtins } from '../src/catalog';
 import { makeBuiltins } from '../../lang/src/builtins.js';
-import { MODIFIER_NAMES, RANDOMNESS_MODIFIER_NAMES } from '../../lang/src/parser.js';
+import { EVAL_ARGUMENT_NAMES, MODIFIER_NAMES, RANDOMNESS_MODIFIER_NAMES } from '../../lang/src/parser.js';
 
 const root = path.resolve(__dirname, '..', '..');
 const uri = 'file:///test.spl';
@@ -153,6 +153,30 @@ test('randomness has prefix diagnostics, parameter-specific completions and help
     assert.match(analysis("randomness(seed=1) human 'Prompt'").diagnostics[0].message, /must prefix/);
     assert.match(analysis("randomness(bad=1) ask 'Prompt'").diagnostics[0].message, /unknown modifier/);
     assert.match(analysis('let randomness = 1').diagnostics[0].message, /reserved word/);
+});
+
+test('eval has required-argument diagnostics, completions and semantic evaluation help', () => {
+    const source = "let llm1 = 'Reference'\nlet llm2 = 'Candidate'\neval(expected=llm1, actual=llm2, cutoff=0.9)";
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    assert.match(JSON.stringify(hover(result, at(source, 'eval'))?.contents), /semantic similarity/);
+    for (const name of EVAL_ARGUMENT_NAMES) {
+        assert.ok(hover(result, at(source, `${name}=`)));
+        assert.equal(definition(result, at(source, `${name}=`)), undefined);
+    }
+    assert.equal(definition(result, at(source, 'llm1', 1))?.range.start.line, 0);
+    for (const prefix of ['eval(', 'eval(\n    ', 'eval(expected=llm1, cu']) {
+        const items = completions(analysis(prefix), document(prefix).positionAt(prefix.length));
+        assert.deepEqual(items.map(item => item.label), [...EVAL_ARGUMENT_NAMES]);
+        for (const item of items) assert.equal(item.textEdit?.newText, `${item.label}=`);
+    }
+    const valuePrefix = "let llm1 = 'Reference'\nlet llm2 = 'Candidate'\neval(expected=ll";
+    const values = completions(analysis(valuePrefix), document(valuePrefix).positionAt(valuePrefix.length));
+    for (const name of ['llm1', 'llm2']) assert.ok(values.some(item => item.label === name));
+    assert.ok(!values.some(item => item.textEdit?.newText === 'cutoff='));
+    assert.ok(completions(analysis(''), { line: 0, character: 0 }).some(item => item.label === 'eval'));
+    assert.match(analysis("eval(expected='x', actual='x')").diagnostics[0].message, /cutoff/);
+    assert.match(analysis('let eval = 1').diagnostics[0].message, /reserved word/);
 });
 
 test('all snippets expand to valid current SPL syntax', () => {

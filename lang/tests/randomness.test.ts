@@ -54,7 +54,7 @@ success value`;
         });
     });
 
-    it('evaluates sampling before modifiers and prompt, once per call rather than per repair', async () => {
+    it.each(['ask', 'think'] as const)('evaluates sampling before modifiers and prompt, once per %s rather than per repair', async command => {
         const backend = scripted('bad JSON', '3');
         const source = `let order = []
 def option(name, value):
@@ -64,7 +64,7 @@ let value = randomness(
     seed=option('seed', 42),
     top_p=option('top_p', 0.1),
     temperature=option('temperature', 0),
-) ask(fmt=option('fmt', 'integer'), repairs=option('repairs', 1)) option('prompt', 'Number?')
+) ${command}(fmt=option('fmt', 'integer'), repairs=option('repairs', 1)) option('prompt', 'Number?')
 success [value, order]`;
         expect(await run(parse(source), { backend, logger, cwd })).toMatchObject({
             status: 'success', value: [3, ['seed', 'top_p', 'temperature', 'fmt', 'repairs', 'prompt']],
@@ -72,7 +72,24 @@ success [value, order]`;
         expect(backend.call.mock.calls.map(([req]) => req.randomness)).toEqual([
             { seed: 42, temperature: 0, top_p: 0.1 }, { seed: 42, temperature: 0, top_p: 0.1 },
         ]);
+        expect(backend.call.mock.calls.map(([req]) => req.reasoningEffort)).toEqual([undefined, undefined]);
         expect(backend.call.mock.calls[1][0].prompt).toContain('Previous response:\nbad JSON');
+    });
+
+    it.each(['ask', 'think', 'agent'] as const)('disables implicit reasoning for prefixed %s while preserving explicit overrides', async command => {
+        const backend = scripted('default', 'empty', 'explicit', 'ordinary');
+        expect(await run(parse(`success [
+    randomness(temperature=0) ${command} 'Default',
+    randomness() ${command} 'Empty',
+    randomness(temperature=0) ${command}(reasoning='high') 'Explicit',
+    ${command} 'Ordinary',
+]`), { backend, logger, cwd })).toMatchObject({ status: 'success' });
+        expect(backend.call.mock.calls.map(([req]) => req.reasoningEffort)).toEqual([
+            undefined, undefined, 'high', command === 'ask' ? undefined : 'medium',
+        ]);
+        expect(backend.call.mock.calls.map(([req]) => req.prompt.includes('Think carefully'))).toEqual([
+            false, false, true, command !== 'ask',
+        ]);
     });
 
     it('keeps sampling local to its expression, with provider defaults for omitted controls', async () => {
@@ -158,14 +175,17 @@ success randomness(${parameters}) ask prompt()`;
 });
 
 describe('sampling journal identity', () => {
-    it.each(['record', 'trace'] as const)('retains sampling in %s, compares it on replay, and preserves absent fields in old calls', async mode => {
+    it.each([
+        ['record', 'ask'], ['record', 'think'], ['trace', 'ask'], ['trace', 'think'], ['trace', 'agent'],
+    ] as const)('retains sampling in %s for %s, compares it on replay, and preserves absent fields in old calls', async (mode, command) => {
         const file = path.join(cwd, 'recording.jsonl');
         const backend = scripted('answer');
         const recording = mode === 'record' ? new RecordingBackend(backend, file) : new TraceBackend(backend, file);
-        const source = "success randomness(top_p=0.1, seed=42, temperature=0) ask 'Prompt'";
+        const source = `success randomness(top_p=0.1, seed=42, temperature=0) ${command} 'Prompt'`;
         const expected = await run(parse(source), { backend: recording, logger, cwd });
         await recording.close();
         const request = backend.call.mock.calls[0][0];
+        expect(traceRequest(request).reasoningEffort).toBeNull();
         expect(traceRequest(request).randomness).toEqual({ seed: 42, temperature: 0, top_p: 0.1 });
         expect(traceRequest({ ...request, randomness: undefined })).not.toHaveProperty('randomness');
         const replay = new ReplayBackend(file);

@@ -22,6 +22,12 @@ describe('documentation syntax highlighting', () => {
         for (const name of ['seed', 'temperature', 'top_p']) expect(html).toContain(`<span class="hljs-attr">${name}</span>`);
     });
 
+    it('highlights semantic evaluation and its named arguments', () => {
+        const html = highlight('eval(expected=llm1, actual=llm2, cutoff=0.9)');
+        expect(html).toContain('<span class="hljs-keyword">eval</span>');
+        for (const name of ['expected', 'actual', 'cutoff']) expect(html).toContain(`<span class="hljs-attr">${name}</span>`);
+    });
+
     it('highlights interpolations in every non-raw quote style', () => {
         for (const quote of ["'", '"', "'''", '"""']) {
             const html = highlight(`${quote}Total: {round(total, 2)}${quote}`);

@@ -7,11 +7,11 @@
 checked while parsing; modifier values and schemas are checked at runtime.">
 <meta name="color-scheme" content="light dark">
 <title>Grammar - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=01dc737a66da">
-<link rel="stylesheet" href="assets/style.css?v=01dc737a66da">
+<link rel="icon" type="image/png" href="assets/icon.png?v=b93c5e99d42b">
+<link rel="stylesheet" href="assets/style.css?v=b93c5e99d42b">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=01dc737a66da"></script>
-<script defer src="assets/site.js?v=01dc737a66da"></script>
+<script defer src="assets/search-index.js?v=b93c5e99d42b"></script>
+<script defer src="assets/site.js?v=b93c5e99d42b"></script>
 </head>
 <body data-page="grammar">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -76,11 +76,15 @@ with a block can end there without another physical newline.</p>
 
 <span class="hljs-attribute">simple_stmt</span>    = declaration | assignment
                | <span class="hljs-string">&quot;return&quot;</span> , [ expr ] | <span class="hljs-string">&quot;success&quot;</span> , [ expr ]
-               | <span class="hljs-string">&quot;assert&quot;</span> , expr , [ expr ] | <span class="hljs-string">&quot;fail&quot;</span> , expr
+               | <span class="hljs-string">&quot;assert&quot;</span> , expr , [ expr ] | eval_stmt | <span class="hljs-string">&quot;fail&quot;</span> , expr
                | <span class="hljs-string">&quot;break&quot;</span> | <span class="hljs-string">&quot;continue&quot;</span> | <span class="hljs-string">&quot;pass&quot;</span> | expr ;
                  <span class="hljs-comment">(* a compound statement or block-valued expression is not an
                     inline semicolon suite; its body must use block layout *)</span>
 <span class="hljs-attribute">declaration</span>    = <span class="hljs-string">&quot;let&quot;</span> , NAME , <span class="hljs-string">&quot;=&quot;</span> , expr ;
+<span class="hljs-attribute">eval_stmt</span>      = <span class="hljs-string">&quot;eval&quot;</span> , <span class="hljs-string">&quot;(&quot;</span> , eval_arg , { <span class="hljs-string">&quot;,&quot;</span> , eval_arg } , [ <span class="hljs-string">&quot;,&quot;</span> ] , <span class="hljs-string">&quot;)&quot;</span> ;
+<span class="hljs-attribute">eval_arg</span>       = ( <span class="hljs-string">&quot;expected&quot;</span> | <span class="hljs-string">&quot;actual&quot;</span> | <span class="hljs-string">&quot;cutoff&quot;</span> ) , <span class="hljs-string">&quot;=&quot;</span> , expr ;
+                 <span class="hljs-comment">(* each argument is required exactly once, in any order;
+                    eval is an assertion-style statement, not an expression *)</span>
 <span class="hljs-attribute">assignment</span>     = target , ( <span class="hljs-string">&quot;=&quot;</span> | <span class="hljs-string">&quot;+=&quot;</span> | <span class="hljs-string">&quot;-=&quot;</span> | <span class="hljs-string">&quot;*=&quot;</span> | <span class="hljs-string">&quot;/=&quot;</span> | <span class="hljs-string">&quot;//=&quot;</span> | <span class="hljs-string">&quot;%=&quot;</span> ) , expr ;
 <span class="hljs-attribute">target</span>         = NAME | postfix , <span class="hljs-string">&quot;.&quot;</span> , NAME | postfix , <span class="hljs-string">&quot;[&quot;</span> , expr , <span class="hljs-string">&quot;]&quot;</span> ;
 <span class="hljs-attribute">if_stmt</span>        = <span class="hljs-string">&quot;if&quot;</span> , expr , block , { <span class="hljs-string">&quot;elif&quot;</span> , expr , block } , [ <span class="hljs-string">&quot;else&quot;</span> , block ] ;
@@ -147,7 +151,7 @@ NUMBER         = digit+ , [ &quot;</span>.&quot; , digit+ ] , [ ( &quot;e&quot; 
    Blank/comment-only lines produce no indentation changes and are ignored.
    Indentation tabs, inline suites, empty bodies and inconsistent dedents are errors.
    $env and $args are read-only; other $-names are syntax errors.
-   Reserved words: let if elif else for in while def return try except assert fail success
+   Reserved words: let if elif else for in while def return try except assert eval fail success
    enforce forbid restrict randomness ask think agent human break continue pass and or not True False None. *)</span>
 </code></pre></figure>
 <h2 id="block-expressions">Block expressions<a class="heading-anchor" href="#block-expressions" aria-label="Link to Block expressions">#</a></h2>

@@ -382,6 +382,31 @@ it('requests available Google reasoning even without an explicit effort, and avo
     expect(reasoningOptions('openai', 'gpt-4.1', undefined, true, new Logger('silent')).options.openai).not.toHaveProperty('reasoningSummary');
 });
 
+it.each([
+    ['openai', 'gpt-6-luna'],
+    ['anthropic', 'claude-sonnet-4-5'],
+    ['google', 'gemini-2.5-flash'],
+] as const)('requests portable disabled reasoning for sampled %s calls, but preserves explicit effort', async (provider, model) => {
+    steps.push([...text('Explicit answer'), finish()], [...text('Empty prefix answer'), finish()]);
+    const sampled = { model: `${provider}/${model}`, randomness: { temperature: 0 } };
+    expect(await backend.call(request(sampled))).toMatchObject({ effective: { reasoningEffort: 'none' } });
+    expect(requests[0].reasoning).toBe('none');
+    expect(await backend.call(request({ ...sampled, reasoningEffort: 'high' })))
+        .toMatchObject({ effective: { reasoningEffort: 'high' } });
+    expect(requests[1].reasoning).toBeUndefined();
+    expect(await backend.call(request({ ...sampled, randomness: {} })))
+        .toMatchObject({ effective: { reasoningEffort: 'none' } });
+    expect(requests[2].reasoning).toBe('none');
+});
+
+it.each([
+    ['openai', 'gpt-4.1'],
+    ['anthropic', 'claude-3-5-haiku-20241022'],
+    ['google', 'gemini-2.0-flash'],
+] as const)('does not send thinking controls to non-reasoning %s models', (provider, model) => {
+    expect(reasoningOptions(provider, model, undefined, true, new Logger('silent'), true)).not.toHaveProperty('effort');
+});
+
 it('routes provider warnings through the SPL logger instead of leaking global SDK warnings', async () => {
     steps[0].unshift({ type: 'stream-start', warnings: [{ type: 'unsupported', feature: 'test setting' }] });
     const warn = vi.spyOn(Logger.prototype, 'warn');

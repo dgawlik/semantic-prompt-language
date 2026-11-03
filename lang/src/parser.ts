@@ -11,7 +11,7 @@ import { SplSyntaxError } from './errors.js';
 import { tokenize, type StringPart, type Token } from './lexer.js';
 
 const KEYWORDS = new Set([
-    'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
+    'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'eval', 'fail',
     'success', 'enforce', 'forbid', 'restrict', 'randomness', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass', 'and', 'or', 'not',
     'True', 'False', 'None',
 ]);
@@ -23,6 +23,7 @@ export function isReservedName(name: string): boolean {
 export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'hide', 'schema', 'repairs', 'model'] as const;
 export const LOG_MODIFIER_NAMES = ['level'] as const;
 export const RANDOMNESS_MODIFIER_NAMES = ['seed', 'temperature', 'top_p'] as const;
+export const EVAL_ARGUMENT_NAMES = ['expected', 'actual', 'cutoff'] as const;
 
 const DIRECTIVE_SCHEMA: Record<string, 'string'> = { model: 'string' };
 
@@ -294,6 +295,13 @@ class Parser {
                     const cond = this.parseExpr();
                     const message = this.atStatementEnd() ? undefined : this.parseExpr();
                     return { t: 'assert', line, cond, message };
+                }
+                case 'eval': {
+                    this.next();
+                    const args = this.parseMods('eval');
+                    const missing = EVAL_ARGUMENT_NAMES.filter(name => !(name in args));
+                    if (missing.length) this.fail(`eval requires named arguments: ${missing.join(', ')}`, t);
+                    return { t: 'eval', line, args };
                 }
                 case 'fail': {
                     this.next();
@@ -714,21 +722,22 @@ class Parser {
         return { t: token.value, mods, prompt: this.parsePrompt(token.value), randomness };
     }
 
-    private parseMods(cmd: 'ask' | 'think' | 'agent' | 'log' | 'randomness'): Record<string, Expr> {
+    private parseMods(cmd: 'ask' | 'think' | 'agent' | 'log' | 'randomness' | 'eval'): Record<string, Expr> {
         this.expectOp('(');
         this.skipNl();
         const out: Record<string, Expr> = {};
         const allowed: readonly string[] = cmd === 'log' ? LOG_MODIFIER_NAMES
-            : cmd === 'randomness' ? RANDOMNESS_MODIFIER_NAMES : MODIFIER_NAMES;
+            : cmd === 'randomness' ? RANDOMNESS_MODIFIER_NAMES : cmd === 'eval' ? EVAL_ARGUMENT_NAMES : MODIFIER_NAMES;
         while (!this.isOp(')')) {
             const nameTok = this.tok;
-            if (nameTok.type !== 'name') this.fail(`expected a modifier name in '${cmd}(...)'; the prompt belongs after ')'`);
+            if (nameTok.type !== 'name') this.fail(cmd === 'eval' ? "expected a named argument in 'eval(...)'"
+                : `expected a modifier name in '${cmd}(...)'; the prompt belongs after ')'`);
             const name = (nameTok as { value: string }).value;
             this.next();
             if (!allowed.includes(name)) {
-                this.fail(`unknown modifier '${name}' for '${cmd}' (allowed: ${allowed.join(', ')})`, nameTok);
+                this.fail(`unknown ${cmd === 'eval' ? 'argument' : 'modifier'} '${name}' for '${cmd}' (allowed: ${allowed.join(', ')})`, nameTok);
             }
-            if (name in out) this.fail(`duplicate modifier '${name}'`, nameTok);
+            if (name in out) this.fail(`duplicate ${cmd === 'eval' ? 'argument' : 'modifier'} '${name}'`, nameTok);
             this.expectOp('=');
             out[name] = this.parseExpr();
             const value = out[name];

@@ -58,6 +58,7 @@ export type Stmt = Base &
         | { t: 'return'; value?: Expr }
         | { t: 'try'; body: Stmt[]; errName: string; handler: Stmt[] }
         | { t: 'assert'; cond: Expr; message?: Expr }
+        | { t: 'eval'; args: Record<string, Expr> }
         | { t: 'fail'; reason: Expr }
         | { t: 'success'; value?: Expr }
         | { t: 'constraint'; kind: 'enforce' | 'forbid'; text: Expr; body: Stmt[] }

@@ -93,11 +93,14 @@ success rating
 * `ask` and `think` generate values without tools; `agent` can act, within `restrict` scopes.
 * Prefix any generation call with `randomness(seed=42, temperature=0, top_p=0.01)` to control
   sampling. Each parameter is optional; without the prefix, provider/model defaults are unchanged.
+  The prefix disables thinking where supported unless an explicit `reasoning` modifier overrides it.
   Unsupported controls warn and are ignored. Sampling is best-effort; use `--pin` for deterministic replay.
 * Blockquotes run as agent commands, not generated SPL. Their tools can call existing functions,
   load/save shared variables, read environment values, request human input, and use
   runtime tools and configured MCP servers. Explicit `agent` expressions keep their existing tool set.
 * `fmt`, `schema`, `repairs` and `assert` check output; `enforce`/`forbid` only guide prompts.
+* `eval(expected=llm1, actual=llm2, cutoff=0.9)` uses an LLM judge to assert semantic similarity
+  at or above a `0..1` cutoff. It logs the score and raises `assertion_failed` below the cutoff.
 * **Breaking syntax change:** blocks use `:` plus a newline and an indented nonempty body, not
   braces. Use spaces (4 recommended), no inline suites, and `pass` for empty bodies. Dicts and
   interpolation keep their braces; blocks still create lexical child scopes. See the

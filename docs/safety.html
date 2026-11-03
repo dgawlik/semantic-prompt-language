@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Model output varies, so SPL makes checks explicit: restrict limits actions, assert and schemas
-check data, failures can be caught, and human hands decisions to a person.">
+check data, eval checks semantic similarity, failures can be caught, and human hands decisions to a person.">
 <meta name="color-scheme" content="light dark">
 <title>Guards &amp; failures - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=01dc737a66da">
-<link rel="stylesheet" href="assets/style.css?v=01dc737a66da">
+<link rel="icon" type="image/png" href="assets/icon.png?v=b93c5e99d42b">
+<link rel="stylesheet" href="assets/style.css?v=b93c5e99d42b">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=01dc737a66da"></script>
-<script defer src="assets/site.js?v=01dc737a66da"></script>
+<script defer src="assets/search-index.js?v=b93c5e99d42b"></script>
+<script defer src="assets/site.js?v=b93c5e99d42b"></script>
 </head>
 <body data-page="safety">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -28,7 +28,7 @@ check data, failures can be caught, and human hands decisions to a person.">
   <main id="page" tabindex="-1">
     <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Guards &amp; failures</span><span class="reading-time">5 min read</span></div>
     <header class="page-heading"><h1>Guards &amp; failures</h1><div class="lead"><p>Model output varies, so SPL makes checks explicit: <code>restrict</code> limits actions, <code>assert</code> and schemas
-check data, failures can be caught, and <code>human</code> hands decisions to a person.</p></div></header>
+check data, <code>eval</code> checks semantic similarity, failures can be caught, and <code>human</code> hands decisions to a person.</p></div></header>
     <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#restrictions">Restrictions</a></li><li class="toc-level-2"><a href="#assertions-fail-and-success">Assertions, fail and success</a></li><li class="toc-level-2"><a href="#failure-payload">Failure payload</a></li><li class="toc-level-2"><a href="#try--except">try / except</a></li><li class="toc-level-2"><a href="#human-in-the-loop">Human in the loop</a></li><li class="toc-level-3"><a href="#explicit-checkpoint-mode">Explicit checkpoint mode</a></li></ul></nav></details>
     <article class="prose"><h2 id="restrictions">Restrictions<a class="heading-anchor" href="#restrictions" aria-label="Link to Restrictions">#</a></h2>
 <p><code>restrict</code> limits what tools and agents may touch inside its block. Outside any restriction,
@@ -86,6 +86,9 @@ MCP servers themselves are trusted and not sandboxed.</li>
 </code></pre></figure>
 <ul>
 <li><code>assert condition &#39;message&#39;</code> raises <code>assertion_failed</code> when the condition is false.</li>
+<li><a href="llm-commands.html#semantic-evaluation"><code>eval(expected=llm1, actual=llm2, cutoff=0.9)</code></a>
+uses an additional LLM judge call and raises <code>assertion_failed</code> below the similarity cutoff.
+Scores are subjective, not a substitute for schema validation or deterministic checks.</li>
 <li><code>fail reason</code> raises <code>explicit_failure</code>.</li>
 <li><code>success value</code> ends the document immediately, even from inside a function.
 <code>return</code> exits a function, or the document at top level.</li>
@@ -117,7 +120,7 @@ MCP servers themselves are trusted and not sandboxed.</li>
 </tr>
 <tr>
 <td><code>assertion_failed</code></td>
-<td>An <code>assert</code> was false</td>
+<td>An <code>assert</code> was false or <code>eval</code> scored below its cutoff</td>
 </tr>
 <tr>
 <td><code>explicit_failure</code></td>

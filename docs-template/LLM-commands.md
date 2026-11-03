@@ -72,7 +72,8 @@ See [Human input](Safety.md#human-in-the-loop).
 
 ## Generation: ask and think
 
-`ask prompt` returns the model's answer as a value. `think` is the same with medium reasoning by default.
+`ask prompt` returns the model's answer as a value. `think` is the same with medium reasoning by default,
+unless prefixed with [`randomness(...)`](#randomness-controls).
 Neither has tools: they cannot read files, browse or run commands.
 
 ```spl
@@ -100,7 +101,8 @@ is always the authoritative return value.
 
 `agent prompt` lets the model act with the runtime tools (`read_file`, `write_file`, `web_fetch`,
 `web_search`, `shell`) and any configured MCP tools. Actions are checked against active restrictions.
-Agents default to medium reasoning and never use repairs, so a failed check never repeats their actions.
+Agents default to medium reasoning unless prefixed with [`randomness(...)`](#randomness-controls),
+and never use repairs, so a failed check never repeats their actions.
 
 ```spl
 let report = ''
@@ -150,9 +152,15 @@ let result = randomness(top_p=0.1) agent 'Inspect the project and summarize'
 
 Parameters are optional named expressions, evaluated once, left to right, before command modifiers
 and the prompt. The same values are reused for every repair attempt and agent tool-continuation turn.
-`randomness()` and calls without the prefix use the provider/model defaults; no seed, temperature or
-`top_p` is invented. This prefix applies only to its immediately following generation expression,
+Omitted sampling controls use provider/model defaults; no seed, temperature or `top_p` is invented.
+This prefix applies only to its immediately following generation expression,
 not to surrounding code or Markdown blockquotes.
+
+The prefix, including `randomness()`, disables thinking by default where the model supports it.
+It replaces the implicit medium reasoning of `think` and `agent`; an explicit
+`reasoning='low'`, `'medium'` or `'high'` always takes precedence. Models that cannot disable thinking
+use the SDK's lowest supported thinking setting with a compatibility warning. Calls without the
+prefix retain their existing reasoning behavior.
 
 | Parameter | Accepted values | Meaning |
 | --- | --- | --- |
@@ -165,21 +173,28 @@ Out-of-range values, booleans, strings and `None` are runtime errors before the 
 Sampling values belong in `randomness(...)`, not in `ask(...)`/`think(...)`/`agent(...)`.
 
 Provider limitations are diagnosed with warnings; the runtime keeps supported controls without
-changing the model, API or reasoning behavior:
+changing the model or API, and preserves explicitly requested reasoning:
 
 * **OpenAI:** the existing Responses API supports temperature and `top_p` on compatible models,
-  but not seeds. Reasoning models commonly remove sampling controls; newer GPT-6 models do not
-  support them. The provider adapter diagnoses model-specific restrictions.
+  but not seeds. Compatible GPT-5.1+ and GPT-6 models accept sampling with reasoning effort `none`.
+  Models that require reasoning, or calls with explicit reasoning, may remove sampling controls.
+  The provider adapter diagnoses model-specific restrictions.
 * **Google:** the Generate Content API receives `seed`, `temperature` and `topP`. A fixed seed
   with low temperature and a small nucleus is best-effort repeatability, not a guarantee.
+  Gemini 2.5 Flash supports disabling thinking with a zero budget; Gemini 2.5 Pro and Gemini 3
+  models retain their lowest supported thinking setting with a warning.
 * **Anthropic:** seeds are unsupported. Temperature is capped at `1` with a warning. On compatible
   non-thinking models, set either temperature or `top_p`; if both are supplied, temperature wins
   and the adapter warns that `top_p` is ignored. Thinking and newer models may reject sampling
   altogether; unsupported controls are removed with warnings.
 
 The response's `effective.randomness` records controls actually retained by the provider adapter.
+For sampling controls,
 `null` means the control was omitted/unsupported and provider defaults apply, not that a particular
-default numeric value was sent. Traces, recordings, checkpoints and pinned workflows include requested
+default numeric value was sent.
+`effective.reasoningEffort` is `none` when disabling thinking is honored, or `null` when the adapter
+cannot honor that setting; `null` does not mean thinking is disabled.
+Traces, recordings, checkpoints and pinned workflows include requested
 sampling controls in request identity; changing them cannot silently reuse an old response.
 Calls without randomness retain compatibility with existing replay files.
 
@@ -188,6 +203,40 @@ Even extreme settings cannot guarantee identical outputs from hosted models. Use
 See the official [OpenAI](https://ai-sdk.dev/providers/ai-sdk-providers/openai),
 [Google](https://ai-sdk.dev/providers/ai-sdk-providers/google) and
 [Anthropic](https://ai-sdk.dev/providers/ai-sdk-providers/anthropic) adapter documentation.
+
+## Semantic evaluation
+
+`eval(expected=llm1, actual=llm2, cutoff=0.9)` compares two outputs with an LLM judge.
+It is an assertion-style statement, not a function or expression:
+
+```spl
+let llm1 = ask 'Describe an apple pie'
+let llm2 = ask 'Describe an apple pie in different words'
+eval(expected=llm1, actual=llm2, cutoff=0.9)
+success 'Similar enough'
+```
+
+All three named arguments are required and may appear in any order. Their expressions are
+evaluated once, left to right. `expected` is the reference and `actual` is the candidate; both
+accept strings or other JSON-compatible values, including structured model outputs.
+Functions and non-finite numbers are rejected. `cutoff` must be a finite number from `0` to `1`,
+inclusive; booleans and numeric strings are not accepted.
+
+The judge scores shared meaning and details, ignoring wording and formatting differences.
+`1` means equivalent content and `0` means unrelated or contradictory content. Missing,
+conflicting, or unsupported details lower the score. `0.9` means 90% similarity, not a statistical
+percentile. A score equal to the cutoff passes; a score below it raises `assertion_failed` with
+the score and cutoff in the failure reason. The score is also logged at info level.
+
+Each evaluation makes one generation-only `ask` call using the current document model or
+CLI/embedding model override. It has no tools and does not regenerate either output.
+The cutoff is checked locally, not shown to the judge. Invalid JSON or a judge score outside
+`0..1` raises `invalid_format`; authentication and transport failures raise `llm_error`.
+Evaluation does not retry or convert judge errors into a passing score.
+
+Judge scores are subjective and may vary; this is not a calibrated probability or a deterministic
+text metric. Traces and recordings retain the judge response, and replay rechecks the cutoff
+without another model call. Pinned workflows and checkpoints also retain evaluations.
 
 ## Output formats
 

@@ -39,19 +39,25 @@ function modelFor(provider: Provider, apiKey: string, model: string) {
 
 export function reasoningOptions(
     provider: Provider, model: string, effort: ReasoningLevel | undefined, showReasoning: boolean, logger: Logger,
-): { options: ProviderOptions; effort?: ReasoningLevel } {
+    disableThinking = false,
+): { options: ProviderOptions; effort?: ReasoningLevel | 'none' } {
     const openaiReasoning = /^(?:o[134](?:-|$)|gpt-[5-9](?:[.-]|$))/.test(model);
     const googleReasoning = /^gemini-(?:2\.5|[3-9])/.test(model);
+    const anthropicReasoning = /^claude-(?:(?:sonnet|opus|haiku|fable)-[4-9]|3-7)/.test(model);
     const options: ProviderOptions = provider === 'openai'
         ? { openai: { parallelToolCalls: false, store: false,
             ...(openaiReasoning ? { reasoningSummary: showReasoning ? 'auto' : null } : {}) } }
         : provider === 'anthropic' ? { anthropic: { disableParallelToolUse: true } }
         : googleReasoning ? { google: { thinkingConfig: { includeThoughts: showReasoning } } } : {};
-    if (!effort) return { options };
+    if (!effort) {
+        const supportsReasoning = provider === 'openai' ? openaiReasoning
+            : provider === 'google' ? googleReasoning : anthropicReasoning;
+        return { options, ...(disableThinking && supportsReasoning ? { effort: 'none' } : {}) };
+    }
     if (provider === 'openai' && openaiReasoning && !/^o1-(?:mini|preview)/.test(model)
         && (!/^gpt-5-pro(?:-|$)/.test(model) || effort === 'high')) {
         options.openai.reasoningEffort = effort;
-    } else if (provider === 'anthropic' && /^claude-(?:(?:sonnet|opus|haiku|fable)-[4-9]|3-7)/.test(model)) {
+    } else if (provider === 'anthropic' && anthropicReasoning) {
         const adaptive = /^claude-(?:(?:opus|sonnet)-4-[6-9]|(?:sonnet|opus|haiku|fable)-[5-9])/.test(model);
         options.anthropic.thinking = adaptive ? { type: 'adaptive' } : { type: 'enabled', budgetTokens: budgets[effort] };
         if (adaptive) options.anthropic.effort = effort;
@@ -118,8 +124,10 @@ export class AiBackend implements LlmBackend {
         let receiving = true;
         const perform = async (): Promise<LlmResponse> => {
             const selected = resolveProvider(req.model, this.opts.provider);
-            const reasoning = reasoningOptions(selected.provider, selected.model, req.reasoningEffort, req.showReasoning, this.opts.logger);
             const randomness = req.randomness === undefined ? undefined : validateRandomness(req.randomness);
+            const reasoning = reasoningOptions(selected.provider, selected.model, req.reasoningEffort, req.showReasoning,
+                this.opts.logger, randomness !== undefined);
+            let effectiveReasoningEffort = reasoning.effort;
             const sampling = {
                 seed: randomness?.seed,
                 temperature: randomness?.temperature,
@@ -145,6 +153,8 @@ export class AiBackend implements LlmBackend {
                                 if (part.type !== 'stream-start') return output.enqueue(part);
                                 if (receiving && !signal.aborted) {
                                     for (const warning of part.warnings) {
+                                        if ((warning.type === 'unsupported' || warning.type === 'compatibility')
+                                            && warning.feature === 'reasoning') effectiveReasoningEffort = undefined;
                                         // Let the provider adapter own model-specific compatibility, including thinking.
                                         if (warning.type === 'unsupported') {
                                             if (warning.feature === 'seed') effectiveSampling.seed = undefined;
@@ -266,6 +276,7 @@ export class AiBackend implements LlmBackend {
                     model,
                     system: SYSTEM_MESSAGE, messages, tools,
                     providerOptions: reasoning.options, abortSignal: signal,
+                    reasoning: reasoning.effort === 'none' ? 'none' : undefined,
                     ...sampling,
                     maxRetries: 0, streamRetries: 0,
                     onError: () => {}, // The error part below is authoritative; never write SDK diagnostics to stdout.
@@ -335,7 +346,7 @@ export class AiBackend implements LlmBackend {
                     effective: {
                         backend: 'vercel-ai-sdk', provider: selected.provider,
                         model: (await stream.response).modelId ?? selected.model,
-                        reasoningEffort: reasoning.effort ?? null,
+                        reasoningEffort: effectiveReasoningEffort ?? null,
                         ...(randomness !== undefined ? { randomness: {
                             seed: effectiveSampling.seed ?? null,
                             temperature: effectiveSampling.temperature ?? null,
