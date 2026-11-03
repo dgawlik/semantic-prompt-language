@@ -1,7 +1,7 @@
 import type { AssignTarget, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
 import { callMethod, isMutatingMethod, iterate, makeBuiltins } from './builtins.js';
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
-import { LlmError, buildPromptParts, parseJsonResponse, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
+import { LlmError, buildPromptParts, parseJsonResponse, validateRandomness, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import { AGENT_TOOLS, actionArguments } from './agent.js';
 import { compileSchema } from './schema.js';
 import type { Logger, LogLevel } from './logger.js';
@@ -537,7 +537,7 @@ class Interpreter {
             case 'ask':
             case 'think':
             case 'agent':
-                return this.evalGeneration(e.t, e.mods, e.prompt, env);
+                return this.evalGeneration(e.t, e.mods, e.prompt, env, e.randomness);
         }
     }
 
@@ -931,10 +931,15 @@ class Interpreter {
             : perform();
     }
 
-    private async evalGeneration(kind: LlmRequest['kind'], mods: Record<string, Expr>, promptExpr: Expr, env: Env): Promise<Value> {
+    private async evalGeneration(
+        kind: LlmRequest['kind'], mods: Record<string, Expr>, promptExpr: Expr, env: Env, randomnessMods?: Record<string, Expr>,
+    ): Promise<Value> {
         if (kind === 'agent' && (this.opts.backend.mode === 'record' || this.opts.backend.mode === 'replay')) {
             throw new Failure('restriction_violation', 'agents cannot run in record/replay mode; record generation-only workflows');
         }
+        const randomnessValues: Record<string, Value> = {};
+        for (const [name, expr] of Object.entries(randomnessMods ?? {})) setKey(randomnessValues, name, await this.eval(expr, env));
+        const randomness = randomnessMods === undefined ? undefined : validateRandomness(randomnessValues);
         const options: Record<string, Value> = {};
         for (const [name, expr] of Object.entries(mods)) setKey(options, name, await this.eval(expr, env));
         const { len, reasoning = kind === 'ask' ? undefined : 'medium', hide = false, repairs = 0, model } = options;
@@ -966,6 +971,7 @@ class Interpreter {
                 kind, prompt,
                 model: this.opts.pin?.data.context.model ?? this.opts.model ?? model ?? this.model,
                 reasoningEffort: reasoning,
+                ...(randomness !== undefined ? { randomness: { ...randomness } } : {}),
                 showReasoning: !hide,
                 restrictions: this.restrictions,
                 tools: new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay'),

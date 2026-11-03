@@ -16,7 +16,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyze, completions, definition, documentSymbols, hover } from '../src/features';
 import { builtins } from '../src/catalog';
 import { makeBuiltins } from '../../lang/src/builtins.js';
-import { MODIFIER_NAMES } from '../../lang/src/parser.js';
+import { MODIFIER_NAMES, RANDOMNESS_MODIFIER_NAMES } from '../../lang/src/parser.js';
 
 const root = path.resolve(__dirname, '..', '..');
 const uri = 'file:///test.spl';
@@ -132,6 +132,27 @@ test('human input has keyword help and no model modifier completion', () => {
     const items = completions(analysis(incomplete), document(incomplete).positionAt(incomplete.length));
     for (const name of MODIFIER_NAMES) assert.ok(!items.some((item) => item.label === name && item.textEdit?.newText === `${name}=`));
     assert.match(analysis("human(fmt='text') 'question'").diagnostics[0].message, /does not accept modifiers/);
+});
+
+test('randomness has prefix diagnostics, parameter-specific completions and help', () => {
+    const source = "let answer = randomness(seed=42, temperature=0, top_p=0.01) ask(fmt='integer') 'Prompt'";
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    assert.match(JSON.stringify(hover(result, at(source, 'randomness'))?.contents), /Prefix ask, think or agent/);
+    for (const name of RANDOMNESS_MODIFIER_NAMES) {
+        assert.match(JSON.stringify(hover(result, at(source, `${name}=`))?.contents), /randomness/);
+    }
+    for (const prefix of ['randomness(', 'randomness(\n    ', 'randomness(seed=42, te']) {
+        const items = completions(analysis(prefix), document(prefix).positionAt(prefix.length));
+        assert.deepEqual(items.map(item => item.label), [...RANDOMNESS_MODIFIER_NAMES]);
+        for (const item of items) assert.equal(item.textEdit?.newText, `${item.label}=`);
+    }
+    const call = "randomness(seed=42) ask(";
+    assert.deepEqual(completions(analysis(call), document(call).positionAt(call.length)).map(item => item.label), [...MODIFIER_NAMES]);
+    assert.ok(completions(analysis(''), { line: 0, character: 0 }).some(item => item.label === 'randomness'));
+    assert.match(analysis("randomness(seed=1) human 'Prompt'").diagnostics[0].message, /must prefix/);
+    assert.match(analysis("randomness(bad=1) ask 'Prompt'").diagnostics[0].message, /unknown modifier/);
+    assert.match(analysis('let randomness = 1').diagnostics[0].message, /reserved word/);
 });
 
 test('all snippets expand to valid current SPL syntax', () => {

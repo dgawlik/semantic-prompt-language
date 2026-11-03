@@ -22,7 +22,7 @@ export type Expr =
     | { t: 'if'; branches: { cond: Expr; body: Stmt[] }[]; orelse?: Stmt[]; line: number }
     | { t: 'log'; level: Expr; args: Expr[] }
     | { t: 'human'; prompt: Expr; line: number }
-    | { t: 'ask' | 'think' | 'agent'; mods: Record<string, Expr>; prompt: Expr };
+    | { t: 'ask' | 'think' | 'agent'; mods: Record<string, Expr>; prompt: Expr; randomness?: Record<string, Expr> };
 
 export interface AskMods {
     len?: 'word' | 'sentence' | 'paragraph' | 'long';

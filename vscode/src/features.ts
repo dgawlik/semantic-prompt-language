@@ -6,7 +6,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
-import { LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
+import { LOG_MODIFIER_NAMES, MODIFIER_NAMES, RANDOMNESS_MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
 import { builtins, keywords, modifiers, specialVariables, type Help } from './catalog';
 
@@ -244,8 +244,8 @@ function nameAt(analysis: Analysis, position: Position): NamedToken | undefined 
         position.character < token.col - 1 + token.value.length);
 }
 
-function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' | 'log' | undefined {
-    const stack: { op: string; context?: 'call' | 'directive' | 'log' }[] = [];
+function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' | 'log' | 'randomness' | undefined {
+    const stack: { op: string; context?: 'call' | 'directive' | 'log' | 'randomness' }[] = [];
     const tokens = analysis.tokens;
     for (let i = 0; i < tokens.length && offset(analysis.document, tokens[i]) < at; i++) {
         const token = tokens[i];
@@ -260,6 +260,7 @@ function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' |
             const context = token.value !== '(' ? undefined : isOp(previous, '@') ? 'directive' :
                 isOp(beforePrevious, '.') ? undefined :
                 isName(previous) && previous.value === 'log' && logOptions ? 'log' :
+                isName(previous) && previous.value === 'randomness' ? 'randomness' :
                 isName(previous) && ['ask', 'think', 'agent'].includes(previous.value) ? 'call' : undefined;
             stack.push({ op: token.value, context });
         } else if (['}', ')', ']'].includes(token.value)) {
@@ -276,7 +277,8 @@ export function completions(analysis: Analysis, position: Position): CompletionI
     const range = { start: analysis.document.positionAt(at - prefix.length), end: position };
     const context = modifierContext(analysis, at - prefix.length);
     const modifierItems: CompletionItem[] = context
-        ? (context === 'directive' ? ['model'] : context === 'log' ? LOG_MODIFIER_NAMES : MODIFIER_NAMES).map((name) => ({
+        ? (context === 'directive' ? ['model'] : context === 'log' ? LOG_MODIFIER_NAMES
+            : context === 'randomness' ? RANDOMNESS_MODIFIER_NAMES : MODIFIER_NAMES).map((name) => ({
             label: name,
             kind: CompletionItemKind.Property,
             detail: modifiers[name].signature,

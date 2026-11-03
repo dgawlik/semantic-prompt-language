@@ -16,6 +16,12 @@ describe('documentation syntax highlighting', () => {
         expect(html).toContain('<span class="hljs-built_in">log</span>');
     });
 
+    it('highlights randomness as a keyword and sampling parameters inside the prefix', () => {
+        const html = highlight("let answer = randomness(seed=42, temperature=0, top_p=0.01) ask 'Prompt'");
+        expect(html).toContain('<span class="hljs-keyword">randomness</span>');
+        for (const name of ['seed', 'temperature', 'top_p']) expect(html).toContain(`<span class="hljs-attr">${name}</span>`);
+    });
+
     it('highlights interpolations in every non-raw quote style', () => {
         for (const quote of ["'", '"', "'''", '"""']) {
             const html = highlight(`${quote}Total: {round(total, 2)}${quote}`);

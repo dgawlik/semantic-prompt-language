@@ -6,6 +6,34 @@ import { fromJson, isDict, isList, type Value } from './values.js';
 
 export type ReasoningLevel = 'low' | 'medium' | 'high';
 
+export interface Randomness {
+    seed?: number;
+    temperature?: number;
+    top_p?: number;
+}
+
+export function isRandomness(value: unknown): value is Randomness {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+        && Object.keys(value).every(key => ['seed', 'temperature', 'top_p'].includes(key))
+        && (!('seed' in value) || value.seed === undefined || typeof value.seed === 'number' && Number.isInteger(value.seed)
+            && value.seed >= 0 && value.seed <= 2147483647)
+        && (!('temperature' in value) || value.temperature === undefined || typeof value.temperature === 'number'
+            && Number.isFinite(value.temperature) && value.temperature >= 0 && value.temperature <= 2)
+        && (!('top_p' in value) || value.top_p === undefined || typeof value.top_p === 'number'
+            && Number.isFinite(value.top_p) && value.top_p >= 0 && value.top_p <= 1);
+}
+
+export function validateRandomness(value: unknown): Randomness {
+    if (!isRandomness(value)) {
+        throw new Failure('runtime_error', 'randomness requires seed=integer in 0..2147483647, temperature=number in 0..2, and top_p=number in 0..1; parameters are optional');
+    }
+    return {
+        ...(value.seed !== undefined ? { seed: value.seed } : {}),
+        ...(value.temperature !== undefined ? { temperature: value.temperature } : {}),
+        ...(value.top_p !== undefined ? { top_p: value.top_p } : {}),
+    };
+}
+
 export interface RuntimeTool {
     name: string;
     description: string;
@@ -35,6 +63,7 @@ export interface LlmRequest {
     prompt: string;
     model?: string;
     reasoningEffort?: ReasoningLevel;
+    randomness?: Randomness;
     showReasoning: boolean;
     /** Live preview only; the returned response remains authoritative. */
     onStream?: (update: LlmStreamUpdate) => void;

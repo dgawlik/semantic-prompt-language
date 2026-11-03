@@ -137,6 +137,58 @@ Model precedence: CLI `--model`, then the per-call `model`, then frontmatter `mo
 provider default. OpenAI, Anthropic and Google are supported through Vercel AI SDK; use bare
 model IDs or `provider/model`. See [Models and authentication](CLI.md#models-and-authentication).
 
+## Randomness controls
+
+Prefix `ask`, `think` or `agent` with `randomness(...)` to control sampling independently of the
+command's existing modifiers:
+
+```spl
+let answer = randomness(seed=42, temperature=0, top_p=0.01) ask 'Answer precisely'
+let plan = randomness(temperature=0) think(reasoning='high') 'Plan the migration'
+let result = randomness(top_p=0.1) agent 'Inspect the project and summarize'
+```
+
+Parameters are optional named expressions, evaluated once, left to right, before command modifiers
+and the prompt. The same values are reused for every repair attempt and agent tool-continuation turn.
+`randomness()` and calls without the prefix use the provider/model defaults; no seed, temperature or
+`top_p` is invented. This prefix applies only to its immediately following generation expression,
+not to surrounding code or Markdown blockquotes.
+
+| Parameter | Accepted values | Meaning |
+| --- | --- | --- |
+| `seed` | Integer `0..2147483647` | Request repeatable sampling where the provider supports it |
+| `temperature` | Finite number `0..2` | Lower values reduce variability; `0` requests greedy sampling where supported |
+| `top_p` | Finite number `0..1` | Nucleus sampling; smaller values narrow token choices (`1` does not narrow them) |
+
+Unknown/duplicate names or a prefix not followed by `ask`, `think` or `agent` are syntax errors.
+Out-of-range values, booleans, strings and `None` are runtime errors before the model call.
+Sampling values belong in `randomness(...)`, not in `ask(...)`/`think(...)`/`agent(...)`.
+
+Provider limitations are diagnosed with warnings; the runtime keeps supported controls without
+changing the model, API or reasoning behavior:
+
+* **OpenAI:** the existing Responses API supports temperature and `top_p` on compatible models,
+  but not seeds. Reasoning models commonly remove sampling controls; newer GPT-6 models do not
+  support them. The provider adapter diagnoses model-specific restrictions.
+* **Google:** the Generate Content API receives `seed`, `temperature` and `topP`. A fixed seed
+  with low temperature and a small nucleus is best-effort repeatability, not a guarantee.
+* **Anthropic:** seeds are unsupported. Temperature is capped at `1` with a warning. On compatible
+  non-thinking models, set either temperature or `top_p`; if both are supplied, temperature wins
+  and the adapter warns that `top_p` is ignored. Thinking and newer models may reject sampling
+  altogether; unsupported controls are removed with warnings.
+
+The response's `effective.randomness` records controls actually retained by the provider adapter.
+`null` means the control was omitted/unsupported and provider defaults apply, not that a particular
+default numeric value was sent. Traces, recordings, checkpoints and pinned workflows include requested
+sampling controls in request identity; changing them cannot silently reuse an old response.
+Calls without randomness retain compatibility with existing replay files.
+
+Even extreme settings cannot guarantee identical outputs from hosted models. Use
+[`--pin`](CLI.md#pinned-workflows) for fully deterministic offline replay.
+See the official [OpenAI](https://ai-sdk.dev/providers/ai-sdk-providers/openai),
+[Google](https://ai-sdk.dev/providers/ai-sdk-providers/google) and
+[Anthropic](https://ai-sdk.dev/providers/ai-sdk-providers/anthropic) adapter documentation.
+
 ## Output formats
 
 | `fmt` | Accepts |

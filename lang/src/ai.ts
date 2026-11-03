@@ -8,7 +8,7 @@ import { jsonSchema, streamText, wrapLanguageModel, type ModelMessage, type Tool
 import { Ajv } from 'ajv';
 import { AuthError, resolveProvider, type Provider } from './auth.js';
 import { Failure } from './errors.js';
-import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel } from './llm.js';
+import { LlmError, validateRandomness, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel } from './llm.js';
 import type { Logger } from './logger.js';
 import { configuredMcpTool, filterMcpServers, type McpServers } from './mcp.js';
 import { TOOL_SPECS } from './tools.js';
@@ -119,6 +119,21 @@ export class AiBackend implements LlmBackend {
         const perform = async (): Promise<LlmResponse> => {
             const selected = resolveProvider(req.model, this.opts.provider);
             const reasoning = reasoningOptions(selected.provider, selected.model, req.reasoningEffort, req.showReasoning, this.opts.logger);
+            const randomness = req.randomness === undefined ? undefined : validateRandomness(req.randomness);
+            const sampling = {
+                seed: randomness?.seed,
+                temperature: randomness?.temperature,
+                topP: randomness?.top_p,
+            };
+            if (sampling.seed !== undefined && selected.provider !== 'google') {
+                this.opts.logger.warn(`${selected.provider}/${selected.model} does not support randomness.seed; using the provider default`);
+                sampling.seed = undefined;
+            }
+            if (sampling.temperature !== undefined && sampling.temperature > 1 && selected.provider === 'anthropic') {
+                this.opts.logger.warn(`anthropic/${selected.model} supports temperature at most 1; clamping randomness.temperature to 1`);
+                sampling.temperature = 1;
+            }
+            const effectiveSampling = { ...sampling };
             const model = wrapLanguageModel({
                 model: modelFor(selected.provider, selected.apiKey, selected.model),
                 middleware: {
@@ -129,7 +144,15 @@ export class AiBackend implements LlmBackend {
                             transform: (part, output) => {
                                 if (part.type !== 'stream-start') return output.enqueue(part);
                                 if (receiving && !signal.aborted) {
-                                    for (const warning of part.warnings) this.opts.logger.warn(`model '${selected.model}': ${JSON.stringify(warning)}`);
+                                    for (const warning of part.warnings) {
+                                        // Let the provider adapter own model-specific compatibility, including thinking.
+                                        if (warning.type === 'unsupported') {
+                                            if (warning.feature === 'seed') effectiveSampling.seed = undefined;
+                                            if (warning.feature === 'temperature') effectiveSampling.temperature = undefined;
+                                            if (warning.feature === 'topP') effectiveSampling.topP = undefined;
+                                        }
+                                        this.opts.logger.warn(`model '${selected.model}': ${JSON.stringify(warning)}`);
+                                    }
                                 }
                                 // Keep SDK global warning output from bypassing the host's logger and --silent.
                                 output.enqueue({ ...part, warnings: [] });
@@ -243,6 +266,7 @@ export class AiBackend implements LlmBackend {
                     model,
                     system: SYSTEM_MESSAGE, messages, tools,
                     providerOptions: reasoning.options, abortSignal: signal,
+                    ...sampling,
                     maxRetries: 0, streamRetries: 0,
                     onError: () => {}, // The error part below is authoritative; never write SDK diagnostics to stdout.
                 });
@@ -312,6 +336,11 @@ export class AiBackend implements LlmBackend {
                         backend: 'vercel-ai-sdk', provider: selected.provider,
                         model: (await stream.response).modelId ?? selected.model,
                         reasoningEffort: reasoning.effort ?? null,
+                        ...(randomness !== undefined ? { randomness: {
+                            seed: effectiveSampling.seed ?? null,
+                            temperature: effectiveSampling.temperature ?? null,
+                            top_p: effectiveSampling.topP ?? null,
+                        } } : {}),
                     },
                 };
             }

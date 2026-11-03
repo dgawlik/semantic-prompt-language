@@ -7,6 +7,7 @@ import { NotebookKernel } from '../src/notebookKernel';
 import type { CellResult, ExecuteCell, WorkerReply } from '../src/notebookProtocol';
 import type { ModelStreamSink } from '../../lang/src/log-events.js';
 import { registerCopilotContext, type CopilotContextProvider } from '../src/copilotContext';
+import { extendMarkdownIt } from '../src/markdownPreview';
 import { parse } from '../../lang/src/parser.js';
 import * as mock from './vscodeMock';
 
@@ -28,6 +29,14 @@ const setup = (body: string) => {
     return { notebook, controller: mock.controllers[0], serializer, data, source };
 };
 const fence = (code: string) => '```spl\n' + code + '\n```';
+
+test('Markdown preview highlights randomness prefixes and sampling parameters', () => {
+    const markdown = extendMarkdownIt({ options: { highlight: (_code: string, _lang: string, _attrs: string) => 'fallback' } });
+    const html = markdown.options.highlight("randomness(seed=42, temperature=0, top_p=0.01) ask 'Prompt'", 'spl', '');
+    assert.ok(html.includes('<span class="hljs-keyword">randomness</span>'));
+    for (const name of ['seed', 'temperature', 'top_p']) assert.ok(html.includes(`<span class="hljs-attr">${name}</span>`), name);
+    assert.equal(markdown.options.highlight('other language', 'text', ''), 'fallback');
+});
 
 test('notebook log tails include their truncation notice within the 20-line limit', () => {
     const logs = new NotebookLogBuffer();
@@ -331,6 +340,7 @@ for (const id of ['GitHub.copilot-chat', 'GitHub.copilot']) {
         assert.ok(traits.every(trait => trait.importance === 100));
         assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /colon followed by a newline/);
         assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /let name = expression/);
+        assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /randomness\(seed=42, temperature=0, top_p=0\.01\)/);
         const example = traits.find(trait => trait.name === 'SPL example')?.value;
         assert.ok(example);
         assert.doesNotThrow(() => parse(example));

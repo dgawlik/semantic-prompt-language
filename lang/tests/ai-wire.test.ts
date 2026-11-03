@@ -8,6 +8,7 @@ import { AGENT_TOOLS } from '../src/agent.js';
 import { Logger } from '../src/logger.js';
 import { Restrictions } from '../src/restrict.js';
 import { ToolHost } from '../src/tools.js';
+import type { Randomness } from '../src/llm.js';
 
 let home: string;
 let backend: AiBackend;
@@ -99,4 +100,128 @@ it.each(PROVIDERS)('surfaces %s authentication/model errors without fallback or 
         restrictions, tools: new ToolHost(restrictions, home),
     })).rejects.toThrow();
     expect(fetch).toHaveBeenCalledOnce();
+});
+
+it.each([
+    ['openai', 'gpt-4.1'],
+    ['anthropic', 'claude-3-5-haiku-20241022'],
+    ['google', 'gemini-2.5-flash'],
+] as const)('sends supported %s sampling controls on every agent continuation and records unsupported controls accurately', async (provider, model) => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return sse(providerEvents(provider, bodies.length === 1));
+    }));
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    try {
+        const restrictions = new Restrictions(home);
+        const result = await backend.call({
+            kind: 'agent', naturalLanguage: true, model: `${provider}/${model}`,
+            prompt: 'Save the answer', showReasoning: false, restrictions,
+            randomness: { seed: 42, temperature: 0, top_p: 0.01 },
+            tools: new ToolHost(restrictions, home), runtimeTools: AGENT_TOOLS, invokeAction: async () => 42,
+        });
+        expect(bodies).toHaveLength(2);
+        for (const body of bodies) {
+            if (provider === 'google') expect(body.generationConfig).toMatchObject({ seed: 42, temperature: 0, topP: 0.01 });
+            else {
+                expect(body.temperature).toBe(0);
+                expect(body).not.toHaveProperty('seed');
+                if (provider === 'openai') expect(body.top_p).toBe(0.01);
+                else expect(body).not.toHaveProperty('top_p');
+            }
+        }
+        expect(result.effective.randomness).toEqual({
+            seed: provider === 'google' ? 42 : null,
+            temperature: 0,
+            top_p: provider === 'anthropic' ? null : 0.01,
+        });
+        if (provider !== 'google') expect(warn).toHaveBeenCalledWith(expect.stringContaining('does not support randomness.seed'));
+        if (provider === 'anthropic') expect(warn).toHaveBeenCalledWith(expect.stringContaining('topP is ignored'));
+    } finally {
+        warn.mockRestore();
+    }
+});
+
+it.each([
+    ['openai', 'gpt-4.1'],
+    ['anthropic', 'claude-3-5-haiku-20241022'],
+    ['google', 'gemini-2.5-flash'],
+] as const)('leaves %s defaults unset and supports top_p alone without manufacturing a temperature', async (provider, model) => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return sse(providerEvents(provider, false));
+    }));
+    const restrictions = new Restrictions(home);
+    for (const randomness of [undefined, {}, { top_p: 0 }] as (Randomness | undefined)[]) {
+        const result = await backend.call({
+            kind: 'ask', model: `${provider}/${model}`, prompt: 'Prompt', showReasoning: false, restrictions,
+            tools: new ToolHost(restrictions, home), randomness,
+        });
+        if (randomness === undefined) expect(result.effective).not.toHaveProperty('randomness');
+        else expect(result.effective.randomness).toEqual({ seed: null, temperature: null, top_p: randomness.top_p ?? null });
+    }
+    const settings = bodies.map(body => provider === 'google' ? body.generationConfig : body);
+    for (const body of settings) {
+        expect(body).not.toHaveProperty('temperature');
+        expect(body).not.toHaveProperty('seed');
+    }
+    for (const body of settings.slice(0, 2)) expect(body).not.toHaveProperty(provider === 'google' ? 'topP' : 'top_p');
+    expect(settings[2]).toHaveProperty(provider === 'google' ? 'topP' : 'top_p', 0);
+});
+
+it.each([
+    ['openai', 'gpt-5', 'high'],
+    ['openai', 'gpt-6-astra', 'high'],
+    ['anthropic', 'claude-sonnet-4-5', 'high'],
+    ['anthropic', 'claude-opus-4-8', undefined],
+] as const)('warns and omits sampling rejected by %s/%s without disabling reasoning or changing APIs', async (provider, model, reasoningEffort) => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return sse(providerEvents(provider, false));
+    }));
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    try {
+        const restrictions = new Restrictions(home);
+        const result = await backend.call({
+            kind: 'think', model: `${provider}/${model}`, reasoningEffort, prompt: 'Prompt', showReasoning: false, restrictions,
+            tools: new ToolHost(restrictions, home), randomness: { seed: 42, temperature: 0, top_p: 0.01 },
+        });
+        expect(bodies).toHaveLength(1);
+        expect(bodies[0]).not.toHaveProperty('temperature');
+        expect(bodies[0]).not.toHaveProperty('top_p');
+        expect(bodies[0]).not.toHaveProperty('seed');
+        if (reasoningEffort !== undefined) {
+            if (provider === 'openai') expect(bodies[0].reasoning).toMatchObject({ effort: reasoningEffort });
+            else expect(bodies[0].thinking).toMatchObject({ type: 'enabled' });
+        }
+        expect(result.effective.randomness).toEqual({ seed: null, temperature: null, top_p: null });
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"feature":"temperature"'));
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"feature":"topP"'));
+    } finally {
+        warn.mockRestore();
+    }
+});
+
+it('caps Anthropic temperature at its supported maximum and reports the actual sent value', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(String(init.body)));
+        return sse(providerEvents('anthropic', false));
+    }));
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    try {
+        const restrictions = new Restrictions(home);
+        const result = await backend.call({
+            kind: 'ask', model: 'anthropic/claude-3-5-haiku-20241022', prompt: 'Prompt', showReasoning: false, restrictions,
+            tools: new ToolHost(restrictions, home), randomness: { temperature: 2 },
+        });
+        expect(bodies[0].temperature).toBe(1);
+        expect(result.effective.randomness).toEqual({ seed: null, temperature: 1, top_p: null });
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('clamping randomness.temperature to 1'));
+    } finally {
+        warn.mockRestore();
+    }
 });

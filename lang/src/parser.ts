@@ -12,7 +12,7 @@ import { tokenize, type StringPart, type Token } from './lexer.js';
 
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
-    'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass', 'and', 'or', 'not',
+    'success', 'enforce', 'forbid', 'restrict', 'randomness', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass', 'and', 'or', 'not',
     'True', 'False', 'None',
 ]);
 
@@ -22,6 +22,7 @@ export function isReservedName(name: string): boolean {
 
 export const MODIFIER_NAMES = ['len', 'fmt', 'reasoning', 'hide', 'schema', 'repairs', 'model'] as const;
 export const LOG_MODIFIER_NAMES = ['level'] as const;
+export const RANDOMNESS_MODIFIER_NAMES = ['seed', 'temperature', 'top_p'] as const;
 
 const DIRECTIVE_SCHEMA: Record<string, 'string'> = { model: 'string' };
 
@@ -519,6 +520,7 @@ class Parser {
             const mods = this.isOp('(') ? this.parseMods('ask') : {};
             return { t: 'ask', mods, prompt: this.parsePrompt('ask') };
         }
+        if (this.isName('randomness')) return this.parseRandomness();
         if (this.isName('human')) return this.parseHuman();
         return this.parsePower();
     }
@@ -653,6 +655,7 @@ class Parser {
             case 'False': this.next(); return { t: 'bool', v: false };
             case 'None': this.next(); return { t: 'none' };
             case 'human': return this.parseHuman();
+            case 'randomness': return this.parseRandomness();
             case 'if': return this.parseIf();
             case 'log':
                 if (this.isOp('{', this.peekAt(1))) this.fail("brace modifiers have been removed; use log(level=debug)(value)");
@@ -698,11 +701,25 @@ class Parser {
         if (this.isOp('{')) this.fail(`brace modifiers have been removed; use ${cmd}(...) 'prompt'`);
     }
 
-    private parseMods(cmd: 'ask' | 'think' | 'agent' | 'log'): Record<string, Expr> {
+    private parseRandomness(): Expr {
+        this.expectKeyword('randomness');
+        const randomness = this.parseMods('randomness');
+        const token = this.tok;
+        if (token.type !== 'name' || (token.value !== 'ask' && token.value !== 'think' && token.value !== 'agent')) {
+            this.fail("'randomness(...)' must prefix ask, think or agent");
+        }
+        this.next();
+        this.rejectBraceMods(token.value);
+        const mods = this.isOp('(') ? this.parseMods(token.value) : {};
+        return { t: token.value, mods, prompt: this.parsePrompt(token.value), randomness };
+    }
+
+    private parseMods(cmd: 'ask' | 'think' | 'agent' | 'log' | 'randomness'): Record<string, Expr> {
         this.expectOp('(');
         this.skipNl();
         const out: Record<string, Expr> = {};
-        const allowed: readonly string[] = cmd === 'log' ? LOG_MODIFIER_NAMES : MODIFIER_NAMES;
+        const allowed: readonly string[] = cmd === 'log' ? LOG_MODIFIER_NAMES
+            : cmd === 'randomness' ? RANDOMNESS_MODIFIER_NAMES : MODIFIER_NAMES;
         while (!this.isOp(')')) {
             const nameTok = this.tok;
             if (nameTok.type !== 'name') this.fail(`expected a modifier name in '${cmd}(...)'; the prompt belongs after ')'`);

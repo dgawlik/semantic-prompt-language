@@ -91,6 +91,9 @@ success rating
 
 * Exact tools `read_file`, `write_file`, `web_fetch`, `web_search` and `shell` never call a model.
 * `ask` and `think` generate values without tools; `agent` can act, within `restrict` scopes.
+* Prefix any generation call with `randomness(seed=42, temperature=0, top_p=0.01)` to control
+  sampling. Each parameter is optional; without the prefix, provider/model defaults are unchanged.
+  Unsupported controls warn and are ignored. Sampling is best-effort; use `--pin` for deterministic replay.
 * Blockquotes run as agent commands, not generated SPL. Their tools can call existing functions,
   load/save shared variables, read environment values, request human input, and use
   runtime tools and configured MCP servers. Explicit `agent` expressions keep their existing tool set.

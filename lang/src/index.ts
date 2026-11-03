@@ -12,5 +12,5 @@ export { Checkpoint, CheckpointError, checkpointFingerprint, type CheckpointCont
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError, type Provider } from './auth.js';
 export { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
-export type { LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, RuntimeAction, RuntimeTool } from './llm.js';
+export type { LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, RuntimeAction, RuntimeTool } from './llm.js';
 export type { Program } from './ast.js';

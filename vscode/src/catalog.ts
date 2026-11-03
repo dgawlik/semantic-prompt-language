@@ -59,6 +59,7 @@ export const keywords: Record<string, string> = {
     enforce: 'Add scoped positive prompt guidance. This does not validate model compliance.',
     forbid: 'Add scoped negative prompt guidance. This does not validate model compliance.',
     restrict: 'Restrict fs, net, exec, or mcp actions in a block. Nested restrictions intersect.',
+    randomness: "Prefix ask, think or agent with randomness(seed=42, temperature=0, top_p=0.01). Optional expression-valued controls; omitted values use provider defaults. Unsupported controls warn. Sampling is best-effort, not guaranteed deterministic replay.",
     ask: "Generation-only call: ask(fmt='integer', repairs=1) 'prompt'. Modifiers are optional; the prompt stays outside parentheses. No tools or MCP access.",
     think: 'Generation-only model call with default medium reasoning. No tools or MCP access.',
     agent: 'Explicit model-directed actions using runtime/MCP tools subject to active restrictions.',
@@ -75,6 +76,9 @@ export const keywords: Record<string, string> = {
 };
 
 export const modifiers: Record<string, Help> = {
+    seed: { signature: 'seed=0..2147483647', description: 'Optional integer seed in randomness(...). Google supports seeded sampling; OpenAI Responses and Anthropic warn and ignore it. A seed does not guarantee identical responses.' },
+    temperature: { signature: 'temperature=0..2', description: 'Optional sampling temperature in randomness(...). Lower values reduce variability; 0 requests greedy sampling where supported. Anthropic caps at 1; unsupported models/thinking warn and ignore it.' },
+    top_p: { signature: 'top_p=0..1', description: 'Optional nucleus-sampling probability in randomness(...). Lower values narrow token choices. Anthropic ignores top_p when temperature is also supplied or thinking is enabled. Omitted values use provider defaults.' },
     level: { signature: 'level=error | info | debug', description: 'Log severity, default info. Accepts bare level names, strings or expressions. Debug messages are emitted only at debug log level.' },
     len: { signature: "len='word' | 'sentence' | 'paragraph' | 'long'", description: 'Requested output length (guidance only).' },
     fmt: { signature: "fmt='integer' | 'float' | 'array' | 'object' | 'text' | 'boolean' | 'json'", description: 'Text returns trimmed prose. Other formats require strict JSON of the selected type; float accepts any finite number, object excludes arrays, and json accepts any JSON value. Markdown fences and prose are rejected for JSON formats.' },

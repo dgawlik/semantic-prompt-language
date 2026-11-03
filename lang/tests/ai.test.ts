@@ -121,6 +121,54 @@ it.each(['ask', 'think', 'agent'] as const)('streams %s text and keeps calls iso
     expect(requests[1].prompt.filter(message => message.role !== 'system')).toHaveLength(1);
 });
 
+it.each(['ask', 'think', 'agent'] as const)('forwards %s sampling to the SDK without modifying the prompt or reasoning', async kind => {
+    const result = await backend.call(request({
+        kind, model: 'google/gemini-2.5-flash', reasoningEffort: 'high',
+        randomness: { seed: 42, temperature: 0, top_p: 0.01 },
+    }));
+    expect(requests[0]).toMatchObject({
+        seed: 42, temperature: 0, topP: 0.01,
+        providerOptions: { google: { thinkingConfig: { thinkingBudget: 16384 } } },
+    });
+    expect(requests[0].prompt.at(-1)).toMatchObject({ role: 'user', content: [{ type: 'text', text: 'Prompt' }] });
+    expect(result.effective).toMatchObject({ reasoningEffort: 'high', randomness: { seed: 42, temperature: 0, top_p: 0.01 } });
+});
+
+it('routes unsupported sampling warnings through the host logger and does not claim rejected controls were effective', async () => {
+    steps[0].unshift({ type: 'stream-start', warnings: [
+        { type: 'unsupported', feature: 'temperature', details: 'unsupported by this model' },
+        { type: 'unsupported', feature: 'topP', details: 'unsupported by this model' },
+    ] });
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    try {
+        const result = await backend.call(request({ randomness: { seed: 42, temperature: 0, top_p: 0.01 } }));
+        expect(result.effective.randomness).toEqual({ seed: null, temperature: null, top_p: null });
+        expect(warn).toHaveBeenCalledTimes(3);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('does not support randomness.seed'));
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"feature":"temperature"'));
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"feature":"topP"'));
+    } finally {
+        warn.mockRestore();
+    }
+});
+
+it('validates sampling on direct embedded backend calls before invoking any provider', async () => {
+    const invalid = { temperature: Number.NaN };
+    await expect(backend.call(request({ randomness: invalid }))).rejects.toMatchObject({ statusCode: 'runtime_error' });
+    expect(requests).toHaveLength(0);
+    expect(sdk.openai).not.toHaveBeenCalled();
+    expect(sdk.anthropic).not.toHaveBeenCalled();
+    expect(sdk.google).not.toHaveBeenCalled();
+});
+
+it('normalizes optional undefined sampling fields from embedded callers to provider defaults', async () => {
+    const result = await backend.call(request({ randomness: { seed: undefined, temperature: undefined, top_p: undefined } }));
+    expect(requests[0].seed).toBeUndefined();
+    expect(requests[0].temperature).toBeUndefined();
+    expect(requests[0].topP).toBeUndefined();
+    expect(result.effective.randomness).toEqual({ seed: null, temperature: null, top_p: null });
+});
+
 it.each([false, true])('returns reasoning, but exposes live reasoning only when requested: %s', async showReasoning => {
     steps = [[
         { type: 'reasoning-start', id: 'reason' }, { type: 'reasoning-delta', id: 'reason', delta: 'Thinking.' },

@@ -10,6 +10,14 @@ import { loadGrammar, root, vsctm } from './load-grammar.mjs';
 const ASSERT = /^#(\s*)(\^+)\s+(.+?)\s*$/;
 const grammar = await loadGrammar();
 const markdown = await loadGrammar('text.html.markdown');
+const sampled = "let answer = randomness(seed=42, temperature=0, top_p=0.01) ask 'Prompt'";
+const sampledTokens = grammar.tokenizeLine(sampled, vsctm.INITIAL).tokens;
+for (const name of ['randomness', 'seed', 'temperature', 'top_p', 'ask']) {
+    const start = sampled.indexOf(name);
+    const token = sampledTokens.find(token => token.startIndex <= start && token.endIndex >= start + name.length);
+    assert.ok(token?.scopes.includes(name === 'randomness' ? 'keyword.other.randomness.spl'
+        : name === 'ask' ? 'keyword.other.ask.spl' : 'variable.parameter.modifier.spl'), name);
+}
 for (const fence of ['```', '~~~~']) {
     let stack = markdown.tokenizeLine(`${fence}spl`, vsctm.INITIAL).ruleStack;
     const code = markdown.tokenizeLine('let count = 42', stack);

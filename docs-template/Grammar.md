@@ -85,7 +85,7 @@ comparison     = sum , { ( "==" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not" 
 sum            = term , { ( "+" | "-" ) , term } ;
 term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
 unary          = ( "-" | "+" ) , unary | "ask" , [ modifiers ] , postfix
-               | human_expr | power ;
+               | randomness_expr | human_expr | power ;
 power          = postfix , [ "**" , unary ] ;
 postfix        = primary , { call | index | slice | member } ;
 call           = "(" , [ expr , { "," , expr } , [ "," ] ] , ")" ;
@@ -93,13 +93,16 @@ index          = "[" , expr , "]" ;
 slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
 member         = "." , NAME ;
 primary        = NUMBER | string | "True" | "False" | "None" | NAME | special_var
-               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr | human_expr
+               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr | human_expr | randomness_expr
                | ( "think" | "agent" ) , [ modifiers ] , postfix ;
 special_var    = "$env" | "$args" ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
 modifiers      = "(" , [ modifier , { "," , modifier } , [ "," ] ] , ")" ;
 modifier       = ( "len" | "fmt" | "reasoning" | "hide" | "schema" | "repairs" | "model" ) , "=" , expr ;
+randomness_expr = "randomness" , "(" , [ sampling , { "," , sampling } , [ "," ] ] , ")"
+                , ( "ask" | "think" | "agent" ) , [ modifiers ] , postfix ;
+sampling       = ( "seed" | "temperature" | "top_p" ) , "=" , expr ;
 log_expr       = "log" , "(" , [ "level" , "=" , log_level , [ "," ] ] , ")" , call ;
 log_level      = "error" | "info" | "debug" | expr ;
 human_expr     = "human" , postfix ;
@@ -125,7 +128,7 @@ EOF            = ? end of input ? ;
    Indentation tabs, inline suites, empty bodies and inconsistent dedents are errors.
    $env and $args are read-only; other $-names are syntax errors.
    Reserved words: let if elif else for in while def return try except assert fail success
-   enforce forbid restrict ask think agent human break continue pass and or not True False None. *)
+   enforce forbid restrict randomness ask think agent human break continue pass and or not True False None. *)
 ```
 
 ## Block expressions
