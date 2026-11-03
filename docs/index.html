@@ -6,11 +6,11 @@
 <meta name="description" content="Turn Markdown into runnable AI workflows—natural-language steps alongside deterministic code, validation, and human approval.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=ccb3f72dab1f">
-<link rel="stylesheet" href="assets/style.css?v=ccb3f72dab1f">
+<link rel="icon" type="image/png" href="assets/icon.png?v=487bf79f46c6">
+<link rel="stylesheet" href="assets/style.css?v=487bf79f46c6">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=ccb3f72dab1f"></script>
-<script defer src="assets/site.js?v=ccb3f72dab1f"></script>
+<script defer src="assets/search-index.js?v=487bf79f46c6"></script>
+<script defer src="assets/site.js?v=487bf79f46c6"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -76,10 +76,10 @@ Sampling is best-effort; evaluation uses local TF-IDF cosine scoring with no add
 
 <span class="hljs-meta">```spl</span><span class="language-spl">
 <span class="hljs-keyword">let</span> recipe1 <span class="hljs-operator">=</span> <span class="hljs-keyword">randomness</span>(<span class="hljs-attr">seed</span><span class="hljs-operator">=</span><span class="hljs-number">13</span>, <span class="hljs-attr">temperature</span><span class="hljs-operator">=</span><span class="hljs-number">0.0</span>, <span class="hljs-attr">top_p</span><span class="hljs-operator">=</span><span class="hljs-number">0.0001</span>) \
-                <span class="hljs-keyword">ask</span>(<span class="hljs-attr">tokens</span><span class="hljs-operator">=</span><span class="hljs-number">1024</span>) <span class="hljs-string">&#x27;a recipe for an apple pie&#x27;</span>;
+                <span class="hljs-keyword">ask</span>(<span class="hljs-attr">tokens</span><span class="hljs-operator">=</span><span class="hljs-number">1024</span>) <span class="hljs-string">&#x27;&lt;most-frequent&gt;give a recipie for an apple pie&lt;/most-frequent&gt;&#x27;</span>;
 
 <span class="hljs-keyword">let</span> recipe2 <span class="hljs-operator">=</span> <span class="hljs-keyword">randomness</span>(<span class="hljs-attr">seed</span><span class="hljs-operator">=</span><span class="hljs-number">13</span>, <span class="hljs-attr">temperature</span><span class="hljs-operator">=</span><span class="hljs-number">0.0</span>, <span class="hljs-attr">top_p</span><span class="hljs-operator">=</span><span class="hljs-number">0.0001</span>) \
-                <span class="hljs-keyword">ask</span>(<span class="hljs-attr">tokens</span><span class="hljs-operator">=</span><span class="hljs-number">1024</span>) <span class="hljs-string">&#x27;a recipe for an apple pie&#x27;</span>;
+                <span class="hljs-keyword">ask</span>(<span class="hljs-attr">tokens</span><span class="hljs-operator">=</span><span class="hljs-number">1024</span>) <span class="hljs-string">&#x27;&lt;most-frequent&gt;give a recipie for an apple pie&lt;/most-frequent&gt;&#x27;</span>;
 <span class="hljs-keyword">eval</span>(<span class="hljs-attr">expected</span><span class="hljs-operator">=</span>recipe1, <span class="hljs-attr">actual</span><span class="hljs-operator">=</span>recipe2, <span class="hljs-attr">cutoff</span><span class="hljs-operator">=</span><span class="hljs-number">0.9</span>)
 
 <span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;The recipes have a TF-IDF cosine similarity of at least 0.9&#x27;</span>

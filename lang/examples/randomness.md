@@ -11,10 +11,10 @@ Sampling is best-effort; evaluation uses local TF-IDF cosine scoring with no add
 
 ```spl
 let recipe1 = randomness(seed=13, temperature=0.0, top_p=0.0001) \
-                ask(tokens=1024) 'a recipe for an apple pie';
+                ask(tokens=1024) '<most-frequent>give a recipie for an apple pie</most-frequent>';
 
 let recipe2 = randomness(seed=13, temperature=0.0, top_p=0.0001) \
-                ask(tokens=1024) 'a recipe for an apple pie';
+                ask(tokens=1024) '<most-frequent>give a recipie for an apple pie</most-frequent>';
 eval(expected=recipe1, actual=recipe2, cutoff=0.9)
 
 success 'The recipes have a TF-IDF cosine similarity of at least 0.9'
