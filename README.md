@@ -1,5 +1,3 @@
-<img src="vscode/icon.png" alt="SPL logo" width="128" height="127">
-
 # SPL: Semantic Prompt Language
 
 Executable Markdown for AI workflows.
