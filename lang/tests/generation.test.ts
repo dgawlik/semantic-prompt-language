@@ -85,7 +85,7 @@ success [score, count[0]]`, backend);
 def budget():
     count[0] += 1
     return 2048
-let answer = randomness(seed=0) ask(tokens=budget(), fmt='integer', repairs=1) 'Prompt'
+let answer = ask(seed=0, tokens=budget(), fmt='integer', repairs=1) 'Prompt'
 success [answer, count[0]]`, backend);
         expect(result).toMatchObject({ status: 'success', value: [42, 1] });
         expect(calls).toHaveLength(2);

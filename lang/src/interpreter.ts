@@ -16,7 +16,6 @@ import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
 import { randomUUID } from 'node:crypto';
 import { setImmediate as yieldExecution } from 'node:timers/promises';
 import { ObservationIdentities, StateObserver } from './state-observer.js';
-import { tfIdfCosineSimilarity } from './evaluation.js';
 import type { ModelInteraction, ScopeKind } from './log-events.js';
 import {
     assertMutable,
@@ -368,9 +367,6 @@ class Interpreter {
                 const msg = s.message ? str(await this.eval(s.message, env)) : 'assertion failed';
                 throw new Failure('assertion_failed', msg);
             }
-            case 'eval':
-                await this.execEvaluation(s.args, env);
-                return;
             case 'fail':
                 throw new Failure('explicit_failure', str(await this.eval(s.reason, env)));
             case 'success':
@@ -541,7 +537,7 @@ class Interpreter {
             case 'ask':
             case 'think':
             case 'agent':
-                return this.evalGeneration(e.t, e.mods, e.prompt, env, e.randomness);
+                return this.evalGeneration(e.t, e.mods, e.prompt, env);
         }
     }
 
@@ -694,26 +690,6 @@ class Interpreter {
     }
 
     // ---- LLM and tools -------------------------------------------------
-
-    private async execEvaluation(args: Record<string, Expr>, env: Env): Promise<void> {
-        const values: Record<string, Value> = {};
-        for (const [name, expr] of Object.entries(args)) setKey(values, name, await this.eval(expr, env));
-        const { expected, actual, cutoff } = values;
-        if (typeof cutoff !== 'number' || !Number.isFinite(cutoff) || cutoff < 0 || cutoff > 1) {
-            throw runtimeError('eval cutoff must be a finite number from 0 to 1');
-        }
-        if (!isToolValue(expected) || !isToolValue(actual)) {
-            throw runtimeError('eval expected and actual must be JSON-compatible values, not functions or non-finite numbers');
-        }
-        const score = tfIdfCosineSimilarity(
-            typeof expected === 'string' ? expected : JSON.stringify(toJson(expected)),
-            typeof actual === 'string' ? actual : JSON.stringify(toJson(actual)),
-        );
-        if (!this.opts.checkpoint?.replaying) {
-            this.opts.logger.info(`eval similarity: ${score} (${(score * 100).toFixed(2)}%), cutoff: ${cutoff}`);
-        }
-        if (score < cutoff) throw new Failure('assertion_failed', `eval similarity ${score} is below cutoff ${cutoff}`);
-    }
 
     private async callLlm(req: LlmRequest, preface: string): Promise<string> {
         return (await this.callLlmResponse(req, undefined, preface)).text.trim();
@@ -956,17 +932,16 @@ class Interpreter {
     }
 
     private async evalGeneration(
-        kind: LlmRequest['kind'], mods: Record<string, Expr>, promptExpr: Expr, env: Env, randomnessMods?: Record<string, Expr>,
+        kind: LlmRequest['kind'], mods: Record<string, Expr>, promptExpr: Expr, env: Env,
     ): Promise<Value> {
         if (kind === 'agent' && (this.opts.backend.mode === 'record' || this.opts.backend.mode === 'replay')) {
             throw new Failure('restriction_violation', 'agents cannot run in record/replay mode; record generation-only workflows');
         }
-        const randomnessValues: Record<string, Value> = {};
-        for (const [name, expr] of Object.entries(randomnessMods ?? {})) setKey(randomnessValues, name, await this.eval(expr, env));
-        const randomness = randomnessMods === undefined ? undefined : validateRandomness(randomnessValues);
         const options: Record<string, Value> = {};
         for (const [name, expr] of Object.entries(mods)) setKey(options, name, await this.eval(expr, env));
-        const { len, reasoning = kind === 'ask' || randomness !== undefined ? undefined : 'medium', hide = false, repairs = 0, model } = options;
+        const sampling = Object.fromEntries(Object.entries(options).filter(([name]) => ['seed', 'temperature', 'top_p'].includes(name)));
+        const randomness = kind === 'ask' && Object.keys(sampling).length ? validateRandomness(sampling) : undefined;
+        const { len, reasoning = kind === 'ask' ? undefined : 'medium', hide = false, repairs = 0, model } = options;
         const tokens = 'tokens' in options ? validateTokens(options.tokens) : undefined;
         const fmt = options.fmt ?? ('schema' in options ? 'json' : 'text');
         if (len !== undefined && len !== 'word' && len !== 'sentence' && len !== 'paragraph' && len !== 'long') throw runtimeError('len must be word, sentence, paragraph, or long');

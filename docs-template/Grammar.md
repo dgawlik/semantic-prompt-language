@@ -56,15 +56,11 @@ block          = ":" , NL , INDENT , statement , { statement } , DEDENT ;
 
 simple_stmt    = declaration | assignment
                | "return" , [ expr ] | "success" , [ expr ]
-               | "assert" , expr , [ expr ] | eval_stmt | "fail" , expr
+               | "assert" , expr , [ expr ] | "fail" , expr
                | "break" | "continue" | "pass" | expr ;
                  (* a compound statement or block-valued expression is not an
                     inline semicolon suite; its body must use block layout *)
 declaration    = "let" , NAME , "=" , expr ;
-eval_stmt      = "eval" , "(" , eval_arg , { "," , eval_arg } , [ "," ] , ")" ;
-eval_arg       = ( "expected" | "actual" | "cutoff" ) , "=" , expr ;
-                 (* each argument is required exactly once, in any order;
-                    eval is an assertion-style statement, not an expression *)
 assignment     = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
 target         = NAME | postfix , "." , NAME | postfix , "[" , expr , "]" ;
 if_stmt        = "if" , expr , block , { "elif" , expr , block } , [ "else" , block ] ;
@@ -88,8 +84,8 @@ not_expr       = "not" , not_expr | comparison ;
 comparison     = sum , { ( "==" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not" , "in" ) , sum } ;
 sum            = term , { ( "+" | "-" ) , term } ;
 term           = unary , { ( "*" | "/" | "//" | "%" ) , unary } ;
-unary          = ( "-" | "+" ) , unary | "ask" , [ modifiers ] , postfix
-               | randomness_expr | human_expr | power ;
+unary          = ( "-" | "+" ) , unary | "ask" , [ ask_modifiers ] , postfix
+               | human_expr | power ;
 power          = postfix , [ "**" , unary ] ;
 postfix        = primary , { call | index | slice | member } ;
 call           = "(" , [ expr , { "," , expr } , [ "," ] ] , ")" ;
@@ -97,21 +93,22 @@ index          = "[" , expr , "]" ;
 slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
 member         = "." , NAME ;
 primary        = NUMBER | string | "True" | "False" | "None" | NAME | special_var
-               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr | human_expr | randomness_expr
+               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr | human_expr
                | ( "think" | "agent" ) , [ modifiers ] , postfix ;
 special_var    = "$env" | "$args" ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
 dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
 modifiers      = "(" , [ modifier , { "," , modifier } , [ "," ] ] , ")" ;
 modifier       = ( "len" | "fmt" | "reasoning" | "hide" | "schema" | "repairs" | "model" | "tokens" ) , "=" , expr ;
-randomness_expr = "randomness" , "(" , [ sampling , { "," , sampling } , [ "," ] ] , ")"
-                , ( "ask" | "think" | "agent" ) , [ modifiers ] , postfix ;
+ask_modifiers  = "(" , [ ask_modifier , { "," , ask_modifier } , [ "," ] ] , ")" ;
+ask_modifier   = modifier | sampling ;
 sampling       = ( "seed" | "temperature" | "top_p" ) , "=" , expr ;
 log_expr       = "log" , "(" , [ "level" , "=" , log_level , [ "," ] ] , ")" , call ;
 log_level      = "error" | "info" | "debug" | expr ;
 human_expr     = "human" , postfix ;
 
-(* Unknown or duplicate modifiers are syntax errors. human takes no modifiers and
+(* Sampling modifiers are accepted only by ask. Unknown or duplicate modifiers are syntax errors.
+   human takes no modifiers and
    requires a checkpoint run. Tools are ordinary functions: read_file, write_file,
    web_fetch, web_search, shell. *)
 
@@ -131,8 +128,8 @@ EOF            = ? end of input ? ;
    Blank/comment-only lines produce no indentation changes and are ignored.
    Indentation tabs, inline suites, empty bodies and inconsistent dedents are errors.
    $env and $args are read-only; other $-names are syntax errors.
-   Reserved words: let if elif else for in while def return try except assert eval fail success
-   enforce forbid restrict randomness ask think agent human break continue pass and or not True False None. *)
+   Reserved words: let if elif else for in while def return try except assert fail success
+   enforce forbid restrict ask think agent human break continue pass and or not True False None. *)
 ```
 
 ## Block expressions

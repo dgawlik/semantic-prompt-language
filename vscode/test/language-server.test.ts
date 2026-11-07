@@ -16,7 +16,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyze, completions, definition, documentSymbols, hover } from '../src/features';
 import { builtins } from '../src/catalog';
 import { makeBuiltins } from '../../lang/src/builtins.js';
-import { EVAL_ARGUMENT_NAMES, MODIFIER_NAMES, RANDOMNESS_MODIFIER_NAMES } from '../../lang/src/parser.js';
+import { ASK_MODIFIER_NAMES, MODIFIER_NAMES } from '../../lang/src/parser.js';
 
 const root = path.resolve(__dirname, '..', '..');
 const uri = 'file:///test.spl';
@@ -134,25 +134,30 @@ test('human input has keyword help and no model modifier completion', () => {
     assert.match(analysis("human(fmt='text') 'question'").diagnostics[0].message, /does not accept modifiers/);
 });
 
-test('randomness has prefix diagnostics, parameter-specific completions and help', () => {
-    const source = "let answer = randomness(seed=42, temperature=0, top_p=0.01) ask(fmt='integer') 'Prompt'";
+test('ask has sampling modifiers, completions and help without changing think or agent', () => {
+    const source = "let answer = ask(seed=42, temperature=0, top_p=0.01, fmt='integer') 'Prompt'";
     const result = analysis(source);
     assert.deepEqual(result.diagnostics, []);
-    assert.match(JSON.stringify(hover(result, at(source, 'randomness'))?.contents), /Prefix ask, think or agent/);
-    for (const name of RANDOMNESS_MODIFIER_NAMES) {
-        assert.match(JSON.stringify(hover(result, at(source, `${name}=`))?.contents), /randomness/);
+    assert.match(JSON.stringify(hover(result, at(source, 'ask'))?.contents), /sampling controls apply only to ask/);
+    for (const name of ['seed', 'temperature', 'top_p']) {
+        assert.match(JSON.stringify(hover(result, at(source, `${name}=`))?.contents), /ask/);
     }
-    for (const prefix of ['randomness(', 'randomness(\n    ', 'randomness(seed=42, te']) {
+    for (const prefix of ['ask(', 'ask(\n    ', 'ask(seed=42, te']) {
         const items = completions(analysis(prefix), document(prefix).positionAt(prefix.length));
-        assert.deepEqual(items.map(item => item.label), [...RANDOMNESS_MODIFIER_NAMES]);
+        assert.deepEqual(items.map(item => item.label), [...ASK_MODIFIER_NAMES]);
         for (const item of items) assert.equal(item.textEdit?.newText, `${item.label}=`);
     }
-    const call = "randomness(seed=42) ask(";
-    assert.deepEqual(completions(analysis(call), document(call).positionAt(call.length)).map(item => item.label), [...MODIFIER_NAMES]);
-    assert.ok(completions(analysis(''), { line: 0, character: 0 }).some(item => item.label === 'randomness'));
-    assert.match(analysis("randomness(seed=1) human 'Prompt'").diagnostics[0].message, /must prefix/);
-    assert.match(analysis("randomness(bad=1) ask 'Prompt'").diagnostics[0].message, /unknown modifier/);
-    assert.match(analysis('let randomness = 1').diagnostics[0].message, /reserved word/);
+    for (const command of ['think', 'agent']) {
+        const call = `${command}(`;
+        assert.deepEqual(completions(analysis(call), document(call).positionAt(call.length)).map(item => item.label), [...MODIFIER_NAMES]);
+        for (const name of ['seed', 'temperature', 'top_p']) {
+            assert.match(analysis(`${command}(${name}=0) 'Prompt'`).diagnostics[0].message, /unknown modifier/);
+        }
+    }
+    assert.ok(!completions(analysis(''), { line: 0, character: 0 }).some(item => item.label === 'randomness'));
+    assert.ok(analysis("randomness(seed=1) ask 'Prompt'").diagnostics.length > 0);
+    assert.match(analysis("ask(bad=1) 'Prompt'").diagnostics[0].message, /unknown modifier/);
+    assert.deepEqual(analysis('let randomness = 1').diagnostics, []);
 });
 
 test('generation token budgets have syntax support, completion and hover help', () => {
@@ -168,31 +173,15 @@ test('generation token budgets have syntax support, completion and hover help', 
     assert.match(analysis("ask(tokens=1, tokens=2) 'Prompt'").diagnostics[0].message, /duplicate modifier/);
 });
 
-test('eval has required-argument diagnostics, completions and semantic evaluation help', () => {
-    const source = "let llm1 = 'Reference'\nlet llm2 = 'Candidate'\neval(expected=llm1, actual=llm2, cutoff=0.9)";
+test('eval is no longer syntax or a keyword completion', () => {
+    assert.ok(analysis("eval(expected='x', actual='x', cutoff=0.9)").diagnostics.length > 0);
+    assert.ok(!completions(analysis(''), { line: 0, character: 0 }).some(item => item.label === 'eval'));
+    assert.equal(hover(analysis('eval'), { line: 0, character: 0 }), undefined);
+    const source = 'def eval(value):\n    return value\nsuccess eval(42)';
     const result = analysis(source);
     assert.deepEqual(result.diagnostics, []);
-    assert.match(JSON.stringify(hover(result, at(source, 'eval'))?.contents), /semantic similarity/);
-    assert.match(JSON.stringify(hover(result, at(source, 'eval'))?.contents), /local TF-IDF cosine/);
-    assert.match(JSON.stringify(hover(result, at(source, 'eval'))?.contents), /no model call/);
-    assert.match(JSON.stringify(hover(result, at(source, 'actual='))?.contents), /local TF-IDF cosine/);
-    for (const name of EVAL_ARGUMENT_NAMES) {
-        assert.ok(hover(result, at(source, `${name}=`)));
-        assert.equal(definition(result, at(source, `${name}=`)), undefined);
-    }
-    assert.equal(definition(result, at(source, 'llm1', 1))?.range.start.line, 0);
-    for (const prefix of ['eval(', 'eval(\n    ', 'eval(expected=llm1, cu']) {
-        const items = completions(analysis(prefix), document(prefix).positionAt(prefix.length));
-        assert.deepEqual(items.map(item => item.label), [...EVAL_ARGUMENT_NAMES]);
-        for (const item of items) assert.equal(item.textEdit?.newText, `${item.label}=`);
-    }
-    const valuePrefix = "let llm1 = 'Reference'\nlet llm2 = 'Candidate'\neval(expected=ll";
-    const values = completions(analysis(valuePrefix), document(valuePrefix).positionAt(valuePrefix.length));
-    for (const name of ['llm1', 'llm2']) assert.ok(values.some(item => item.label === name));
-    assert.ok(!values.some(item => item.textEdit?.newText === 'cutoff='));
-    assert.ok(completions(analysis(''), { line: 0, character: 0 }).some(item => item.label === 'eval'));
-    assert.match(analysis("eval(expected='x', actual='x')").diagnostics[0].message, /cutoff/);
-    assert.match(analysis('let eval = 1').diagnostics[0].message, /reserved word/);
+    assert.equal(definition(result, at(source, 'eval', 1))?.range.start.line, 0);
+    assert.deepEqual(analysis('let eval = 1').diagnostics, []);
 });
 
 test('all snippets expand to valid current SPL syntax', () => {
@@ -248,7 +237,7 @@ test('special variables have diagnostics, completion edits and hover without run
 test('modifier and directive completions replace partial identifiers', () => {
     const source = "let response = ask(rea) 'hello'";
     const items = completions(analysis(source), document(source).positionAt(source.indexOf('rea') + 3));
-    assert.deepEqual(items.map((item) => item.label), [...MODIFIER_NAMES]);
+    assert.deepEqual(items.map((item) => item.label), [...ASK_MODIFIER_NAMES]);
     assert.deepEqual(items.find((item) => item.label === 'reasoning')?.textEdit, {
         range: { start: at(source, 'rea'), end: document(source).positionAt(source.indexOf('rea') + 3) },
         newText: 'reasoning=',
@@ -257,7 +246,8 @@ test('modifier and directive completions replace partial identifiers', () => {
     assert.ok(!items.some(item => item.label === 'show'));
     for (const call of ['ask', 'think', 'agent']) {
         const text = `let x = ${call}(`;
-        assert.deepEqual(completions(analysis(text), document(text).positionAt(text.length)).map((item) => item.label), [...MODIFIER_NAMES]);
+        assert.deepEqual(completions(analysis(text), document(text).positionAt(text.length)).map((item) => item.label),
+            [...(call === 'ask' ? ASK_MODIFIER_NAMES : MODIFIER_NAMES)]);
     }
     assert.deepEqual(completions(analysis('@('), { line: 0, character: 2 }).map((item) => item.label), ['model']);
     const log = 'log(le';
@@ -289,14 +279,14 @@ test('multiline modifiers preserve contexts through nested values and unfinished
 ) 'prompt'`;
     assert.deepEqual(
         completions(analysis(source), document(source).positionAt(source.indexOf('rea') + 3)).map((item) => item.label),
-        [...MODIFIER_NAMES],
+        [...ASK_MODIFIER_NAMES],
     );
     const incomplete = `let result = ask(
     fmt='integer',
     rep`;
     assert.deepEqual(
         completions(analysis(incomplete), document(incomplete).positionAt(incomplete.length)).map((item) => item.label),
-        [...MODIFIER_NAMES],
+        [...ASK_MODIFIER_NAMES],
     );
     for (const source of ["let result = ask(model=choose(", "log(", "object.log("]) {
         const items = completions(analysis(source), document(source).positionAt(source.length));

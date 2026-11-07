@@ -30,11 +30,13 @@ const setup = (body: string) => {
 };
 const fence = (code: string) => '```spl\n' + code + '\n```';
 
-test('Markdown preview highlights randomness prefixes and sampling parameters', () => {
+test('Markdown preview highlights ask sampling parameters, not removed keywords', () => {
     const markdown = extendMarkdownIt({ options: { highlight: (_code: string, _lang: string, _attrs: string) => 'fallback' } });
-    const html = markdown.options.highlight("randomness(seed=42, temperature=0, top_p=0.01) ask(tokens=2048) 'Prompt'", 'spl', '');
-    assert.ok(html.includes('<span class="hljs-keyword">randomness</span>'));
+    const html = markdown.options.highlight("ask(seed=42, temperature=0, top_p=0.01, tokens=2048) 'Prompt'", 'spl', '');
+    assert.ok(html.includes('<span class="hljs-keyword">ask</span>'));
     for (const name of ['seed', 'temperature', 'top_p', 'tokens']) assert.ok(html.includes(`<span class="hljs-attr">${name}</span>`), name);
+    const removed = markdown.options.highlight('randomness eval', 'spl', '');
+    for (const name of ['randomness', 'eval']) assert.ok(!removed.includes(`<span class="hljs-keyword">${name}</span>`));
     assert.equal(markdown.options.highlight('other language', 'text', ''), 'fallback');
 });
 
@@ -340,7 +342,8 @@ for (const id of ['GitHub.copilot-chat', 'GitHub.copilot']) {
         assert.ok(traits.every(trait => trait.importance === 100));
         assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /colon followed by a newline/);
         assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /let name = expression/);
-        assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /randomness\(seed=42, temperature=0, top_p=0\.01\)/);
+        assert.match(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /ask\(seed=42, temperature=0, top_p=0\.01,/);
+        assert.doesNotMatch(traits.find(trait => trait.name === 'SPL syntax')?.value ?? '', /\b(?:randomness|eval)\b/);
         const example = traits.find(trait => trait.name === 'SPL example')?.value;
         assert.ok(example);
         assert.doesNotThrow(() => parse(example));

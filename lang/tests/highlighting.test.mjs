@@ -16,16 +16,16 @@ describe('documentation syntax highlighting', () => {
         expect(html).toContain('<span class="hljs-built_in">log</span>');
     });
 
-    it('highlights randomness as a keyword and sampling parameters inside the prefix', () => {
-        const html = highlight("let answer = randomness(seed=42, temperature=0, top_p=0.01) ask 'Prompt'");
-        expect(html).toContain('<span class="hljs-keyword">randomness</span>');
+    it('highlights ask sampling parameters', () => {
+        const html = highlight("let answer = ask(seed=42, temperature=0, top_p=0.01) 'Prompt'");
+        expect(html).toContain('<span class="hljs-keyword">ask</span>');
         for (const name of ['seed', 'temperature', 'top_p']) expect(html).toContain(`<span class="hljs-attr">${name}</span>`);
     });
 
-    it('highlights semantic evaluation and its named arguments', () => {
-        const html = highlight('eval(expected=llm1, actual=llm2, cutoff=0.9)');
-        expect(html).toContain('<span class="hljs-keyword">eval</span>');
-        for (const name of ['expected', 'actual', 'cutoff']) expect(html).toContain(`<span class="hljs-attr">${name}</span>`);
+    it('does not highlight removed syntax as keywords or modifiers', () => {
+        const html = highlight('randomness eval(expected=llm1, actual=llm2, cutoff=0.9)');
+        for (const name of ['randomness', 'eval']) expect(html).not.toContain(`<span class="hljs-keyword">${name}</span>`);
+        for (const name of ['expected', 'actual', 'cutoff']) expect(html).not.toContain(`<span class="hljs-attr">${name}</span>`);
     });
 
     it('highlights interpolations in every non-raw quote style', () => {

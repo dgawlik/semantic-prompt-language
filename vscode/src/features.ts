@@ -6,7 +6,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
-import { EVAL_ARGUMENT_NAMES, LOG_MODIFIER_NAMES, MODIFIER_NAMES, RANDOMNESS_MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
+import { ASK_MODIFIER_NAMES, LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
 import { builtins, keywords, modifiers, specialVariables, type Help } from './catalog';
 
@@ -244,8 +244,8 @@ function nameAt(analysis: Analysis, position: Position): NamedToken | undefined 
         position.character < token.col - 1 + token.value.length);
 }
 
-function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' | 'log' | 'randomness' | 'eval' | undefined {
-    const stack: { op: string; context?: 'call' | 'directive' | 'log' | 'randomness' | 'eval' }[] = [];
+function modifierContext(analysis: Analysis, at: number): 'ask' | 'call' | 'directive' | 'log' | undefined {
+    const stack: { op: string; context?: 'ask' | 'call' | 'directive' | 'log' }[] = [];
     const tokens = analysis.tokens;
     for (let i = 0; i < tokens.length && offset(analysis.document, tokens[i]) < at; i++) {
         const token = tokens[i];
@@ -260,9 +260,8 @@ function modifierContext(analysis: Analysis, at: number): 'call' | 'directive' |
             const context = token.value !== '(' ? undefined : isOp(previous, '@') ? 'directive' :
                 isOp(beforePrevious, '.') ? undefined :
                 isName(previous) && previous.value === 'log' && logOptions ? 'log' :
-                isName(previous) && previous.value === 'randomness' ? 'randomness' :
-                isName(previous) && previous.value === 'eval' ? 'eval' :
-                isName(previous) && ['ask', 'think', 'agent'].includes(previous.value) ? 'call' : undefined;
+                isName(previous) && previous.value === 'ask' ? 'ask' :
+                isName(previous) && ['think', 'agent'].includes(previous.value) ? 'call' : undefined;
             stack.push({ op: token.value, context });
         } else if (['}', ')', ']'].includes(token.value)) {
             stack.pop();
@@ -276,15 +275,10 @@ export function completions(analysis: Analysis, position: Position): CompletionI
     const at = analysis.document.offsetAt(position);
     const prefix = /\$[A-Za-z0-9_]*$|[A-Za-z_][A-Za-z0-9_]*$/.exec(analysis.document.getText().slice(0, at))?.[0] ?? '';
     const range = { start: analysis.document.positionAt(at - prefix.length), end: position };
-    let context = modifierContext(analysis, at - prefix.length);
-    if (context === 'eval') {
-        const previous = analysis.tokens.findLast(token => token.type !== 'nl' && token.type !== 'eof'
-            && offset(analysis.document, token) < at - prefix.length);
-        if (!isOp(previous, '(') && !isOp(previous, ',')) context = undefined;
-    }
+    const context = modifierContext(analysis, at - prefix.length);
     const modifierItems: CompletionItem[] = context
         ? (context === 'directive' ? ['model'] : context === 'log' ? LOG_MODIFIER_NAMES
-            : context === 'randomness' ? RANDOMNESS_MODIFIER_NAMES : context === 'eval' ? EVAL_ARGUMENT_NAMES : MODIFIER_NAMES).map((name) => ({
+            : context === 'ask' ? ASK_MODIFIER_NAMES : MODIFIER_NAMES).map((name) => ({
             label: name,
             kind: CompletionItemKind.Property,
             detail: modifiers[name].signature,

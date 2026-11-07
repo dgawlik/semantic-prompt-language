@@ -4,7 +4,7 @@ import type { HLJSApi, Language, Mode } from 'highlight.js';
 const KEYWORDS = [
     'def', 'let', 'if', 'elif', 'else', 'for', 'while', 'break', 'continue', 'return', 'pass',
     'try', 'except', 'assert', 'fail', 'success', 'enforce', 'forbid', 'restrict',
-    'randomness', 'ask', 'think', 'agent', 'human', 'and', 'or', 'not', 'in',
+    'ask', 'think', 'agent', 'human', 'and', 'or', 'not', 'in',
 ];
 const LITERALS = ['True', 'False', 'None'];
 const BUILTINS = [

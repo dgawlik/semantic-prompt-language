@@ -31,43 +31,62 @@ const scripted = (...answers: string[]) => ({
     async close() {},
 });
 
-describe('randomness prefix', () => {
-    it.each(['ask', 'think', 'agent'] as const)('parses and executes %s with expression-valued sampling and existing modifiers', async command => {
+describe('ask sampling modifiers', () => {
+    it('runs the shipped example with two sampled asks and no evaluation call', async () => {
+        const source = fs.readFileSync(new URL('../examples/randomness.md', import.meta.url), 'utf8');
+        const backend = scripted('first recipe', 'second recipe');
+        expect(await run(parseMarkdown(source), { backend, logger, cwd })).toMatchObject({
+            status: 'success', value: ['first recipe', 'second recipe'],
+        });
+        expect(backend.call).toHaveBeenCalledTimes(2);
+        for (const [request] of backend.call.mock.calls) {
+            expect(request).toMatchObject({
+                kind: 'ask', tokens: 1024, randomness: { seed: 13, temperature: 0, top_p: 0.0001 },
+            });
+        }
+    });
+
+    it('parses and executes expression-valued sampling with existing modifiers', async () => {
         const backend = scripted('7');
         const source = `let seed = 21
-let value = randomness(
+let value = ask(
     seed=seed * 2,
     temperature=0,
     top_p=0.01,
-) ${command}(fmt='integer', model='chosen') 'Number?'
+    fmt='integer',
+    model='chosen',
+) 'Number?'
 success value`;
         const program = parse(source);
         expect(program.body[1]).toMatchObject({
-            t: 'let', value: { t: command, randomness: {
+            t: 'let', value: { t: 'ask', mods: {
                 seed: { t: 'binary' }, temperature: { t: 'num', v: 0 }, top_p: { t: 'num', v: 0.01 },
-            }, mods: { fmt: { t: 'str' }, model: { t: 'str' } } },
+                fmt: { t: 'str' }, model: { t: 'str' },
+            } },
         });
         expect(await run(program, { backend, logger, cwd })).toMatchObject({ status: 'success', value: 7 });
         expect(backend.call).toHaveBeenCalledOnce();
         expect(backend.call.mock.calls[0][0]).toMatchObject({
-            kind: command, model: 'chosen', randomness: { seed: 42, temperature: 0, top_p: 0.01 },
+            kind: 'ask', model: 'chosen', randomness: { seed: 42, temperature: 0, top_p: 0.01 },
         });
     });
 
-    it.each(['ask', 'think'] as const)('evaluates sampling before modifiers and prompt, once per %s rather than per repair', async command => {
+    it('evaluates modifiers once in source order before the prompt, reusing sampling for repairs', async () => {
         const backend = scripted('bad JSON', '3');
         const source = `let order = []
 def option(name, value):
     order.append(name)
     return value
-let value = randomness(
+let value = ask(
+    fmt=option('fmt', 'integer'),
     seed=option('seed', 42),
+    repairs=option('repairs', 1),
     top_p=option('top_p', 0.1),
     temperature=option('temperature', 0),
-) ${command}(fmt=option('fmt', 'integer'), repairs=option('repairs', 1)) option('prompt', 'Number?')
+) option('prompt', 'Number?')
 success [value, order]`;
         expect(await run(parse(source), { backend, logger, cwd })).toMatchObject({
-            status: 'success', value: [3, ['seed', 'top_p', 'temperature', 'fmt', 'repairs', 'prompt']],
+            status: 'success', value: [3, ['fmt', 'seed', 'repairs', 'top_p', 'temperature', 'prompt']],
         });
         expect(backend.call.mock.calls.map(([req]) => req.randomness)).toEqual([
             { seed: 42, temperature: 0, top_p: 0.1 }, { seed: 42, temperature: 0, top_p: 0.1 },
@@ -76,49 +95,40 @@ success [value, order]`;
         expect(backend.call.mock.calls[1][0].prompt).toContain('Previous response:\nbad JSON');
     });
 
-    it.each(['ask', 'think', 'agent'] as const)('disables implicit reasoning for prefixed %s while preserving explicit overrides', async command => {
-        const backend = scripted('default', 'empty', 'explicit', 'ordinary');
+    it('preserves explicit reasoning and the defaults of ask, think and agent', async () => {
+        const backend = scripted('sampled', 'explicit', 'ordinary', 'empty', 'think', 'agent');
         expect(await run(parse(`success [
-    randomness(temperature=0) ${command} 'Default',
-    randomness() ${command} 'Empty',
-    randomness(temperature=0) ${command}(reasoning='high') 'Explicit',
-    ${command} 'Ordinary',
+    ask(temperature=0) 'Sampled',
+    ask(temperature=0, reasoning='high') 'Explicit',
+    ask 'Ordinary',
+    ask() 'Empty',
+    think 'Think',
+    agent 'Agent',
 ]`), { backend, logger, cwd })).toMatchObject({ status: 'success' });
         expect(backend.call.mock.calls.map(([req]) => req.reasoningEffort)).toEqual([
-            undefined, undefined, 'high', command === 'ask' ? undefined : 'medium',
+            undefined, 'high', undefined, undefined, 'medium', 'medium',
         ]);
         expect(backend.call.mock.calls.map(([req]) => req.prompt.includes('Think carefully'))).toEqual([
-            false, false, true, command !== 'ask',
+            false, true, false, false, true, true,
         ]);
-    });
-
-    it('keeps sampling local to its expression, with provider defaults for omitted controls', async () => {
-        const backend = scripted('first', 'second', 'third', 'fourth');
-        const result = await run(parse(`success [
-    randomness(temperature=0) ask 'First',
-    ask 'Second',
-    randomness() think 'Third',
-    randomness(seed=0) agent 'Fourth',
-]`), { backend, logger, cwd });
-        expect(result).toMatchObject({ status: 'success', value: ['first', 'second', 'third', 'fourth'] });
         expect(backend.call.mock.calls.map(([req]) => req.randomness)).toEqual([
-            { temperature: 0 }, undefined, {}, { seed: 0 },
+            { temperature: 0 }, { temperature: 0 }, undefined, undefined, undefined, undefined,
         ]);
-        expect(backend.call.mock.calls[1][0]).not.toHaveProperty('randomness');
+        for (const [req] of backend.call.mock.calls.slice(2)) expect(req).not.toHaveProperty('randomness');
     });
 
-    it('composes with interpolation, short-circuiting, arithmetic, function arguments and generation prompts', async () => {
+    it('composes with interpolation, short-circuiting, arithmetic, function arguments and prompts', async () => {
         const backend = scripted('2', '3', '4', '5', '6', '7', 'inner', 'outer');
-        const source = `let skipped = False and randomness(seed=42) ask 'Skipped'
+        const source = `let skipped = False and ask(seed=42) 'Skipped'
 def identity(value):
     return value
-let a = '{randomness(temperature=0) ask "Two"}'
-let b = identity(randomness(top_p=0) think 'Three')
-let c = int(randomness(seed=1) agent 'Four') + 1
-let d = 10 + int(randomness() ask 'Five')
-let e = [randomness() think 'Six'][0]
-let f = randomness() agent 'Seven' if True else randomness() ask 'Skipped'
-let g = ask() (randomness(seed=1) think 'Inner')
+let a = '{ask(temperature=0) "Two"}'
+let b = identity(ask(top_p=0) 'Three')
+let c = int(ask(seed=1) 'Four') + 1
+let d = 10 + int(ask() 'Five')
+let e = [ask(temperature=0) 'Six'][0]
+let f = ask(seed=1) 'Seven' if True else ask 'Skipped'
+let g = ask() (ask(seed=1) 'Inner')
 success [skipped, a, b, c, d, e, f, g]`;
         expect(await run(parse(source), { backend, logger, cwd })).toMatchObject({
             status: 'success', value: [false, '2', '3', 5, 15, '6', '7', 'outer'],
@@ -135,9 +145,9 @@ success [skipped, a, b, c, d, e, f, g]`;
         const backend = scripted('unexpected');
         const source = `def prompt():
     fail 'prompt should not run'
-success randomness(${parameters}) ask prompt()`;
+success ask(${parameters}) prompt()`;
         expect(await run(parse(source), { backend, logger, cwd })).toMatchObject({
-            status: 'failure', failure: { status_code: 'runtime_error', reason: expect.stringContaining('randomness requires') },
+            status: 'failure', failure: { status_code: 'runtime_error', reason: expect.stringContaining('sampling requires') },
         });
         expect(backend.call).not.toHaveBeenCalled();
     });
@@ -147,41 +157,32 @@ success randomness(${parameters}) ask prompt()`;
     ])('preserves boundary values %j without replacing zeroes with defaults', async values => {
         const backend = scripted('answer');
         const parameters = Object.entries(values).map(([name, value]) => `${name}=${value}`).join(', ');
-        expect(await run(parse(`success randomness(${parameters}) ask 'Prompt'`), { backend, logger, cwd })).toMatchObject({ status: 'success' });
+        expect(await run(parse(`success ask(${parameters}) 'Prompt'`), { backend, logger, cwd })).toMatchObject({ status: 'success' });
         expect(backend.call.mock.calls[0][0].randomness).toEqual(values);
     });
 
     it.each([
-        ['randomness', /expected '\('/],
-        ["randomness ask 'Prompt'", /expected '\('/],
-        ["randomness(42) ask 'Prompt'", /modifier name/],
-        ["randomness(unknown=1) ask 'Prompt'", /unknown modifier/],
-        ["randomness(model='x') ask 'Prompt'", /unknown modifier/],
-        ["randomness(seed=1, seed=2) ask 'Prompt'", /duplicate modifier/],
-        ["randomness(temperature=0) human 'Prompt'", /must prefix/],
-        ["randomness(temperature=0) randomness(seed=1) ask 'Prompt'", /must prefix/],
-        ["randomness(temperature=0) 'Prompt'", /must prefix/],
-        ['randomness()', /must prefix/],
-        ['randomness(seed=42) ask', /requires a prompt/],
-        ["ask(seed=42) 'Prompt'", /unknown modifier/],
-        ["think(temperature=0) 'Prompt'", /unknown modifier/],
-        ["agent(top_p=0.1) 'Prompt'", /unknown modifier/],
-        ['let randomness = 1', /reserved word/],
-        ['def randomness():\n    pass', /reserved word/],
-    ])('rejects invalid syntax %s', (source, error) => {
-        expect(() => parse(source)).toThrow(error);
-        expect(isReservedName('randomness')).toBe(true);
+        "ask(42) 'Prompt'", "ask(unknown=1) 'Prompt'", "ask(seed=1, seed=2) 'Prompt'",
+        "ask(temperature=0, temperature=1) 'Prompt'", "ask(top_p=0, top_p=1) 'Prompt'",
+        "randomness(seed=42) ask 'Prompt'", "randomness() ask 'Prompt'",
+        ...['think', 'agent'].flatMap(command => ['seed', 'temperature', 'top_p'].map(name => `${command}(${name}=0) 'Prompt'`)),
+    ])('rejects invalid or removed syntax %s', source => {
+        expect(() => parse(source)).toThrow();
+    });
+
+    it('no longer reserves randomness as a keyword', async () => {
+        expect(isReservedName('randomness')).toBe(false);
+        expect(await run(parse('let randomness = 2\nsuccess randomness ** 3'), { backend: new NoLlm(), logger, cwd }))
+            .toMatchObject({ status: 'success', value: 8 });
     });
 });
 
 describe('sampling journal identity', () => {
-    it.each([
-        ['record', 'ask'], ['record', 'think'], ['trace', 'ask'], ['trace', 'think'], ['trace', 'agent'],
-    ] as const)('retains sampling in %s for %s, compares it on replay, and preserves absent fields in old calls', async (mode, command) => {
+    it.each(['record', 'trace'] as const)('retains sampling in %s and compares it on replay', async mode => {
         const file = path.join(cwd, 'recording.jsonl');
         const backend = scripted('answer');
         const recording = mode === 'record' ? new RecordingBackend(backend, file) : new TraceBackend(backend, file);
-        const source = `success randomness(top_p=0.1, seed=42, temperature=0) ${command} 'Prompt'`;
+        const source = "success ask(top_p=0.1, seed=42, temperature=0) 'Prompt'";
         const expected = await run(parse(source), { backend: recording, logger, cwd });
         await recording.close();
         const request = backend.call.mock.calls[0][0];
@@ -194,6 +195,7 @@ describe('sampling journal identity', () => {
         const mismatch = new ReplayBackend(file);
         expect(await run(parse(source.replace('seed=42', 'seed=43')), { backend: mismatch, logger, cwd }))
             .toMatchObject({ status: 'failure', failure: { status_code: 'llm_error', reason: expect.stringContaining('mismatch') } });
+        await expect(mismatch.close()).rejects.toThrow(/unused recorded response/);
         expect(backend.call).toHaveBeenCalledOnce();
         if (mode === 'trace') {
             const [header, entry] = fs.readFileSync(file, 'utf8').trimEnd().split('\n').map(line => JSON.parse(line));
@@ -204,7 +206,7 @@ describe('sampling journal identity', () => {
     });
 
     it('pins and replays sampled expressions without calling the backend', async () => {
-        const source = markdown("success randomness(seed=42, temperature=0, top_p=0) think 'Prompt'");
+        const source = markdown("success ask(seed=42, temperature=0, top_p=0) 'Prompt'");
         const backend = scripted('answer');
         const pin = Pin.capture(source, { cwd, args: [] });
         const expected = await run(parseMarkdown(source), { backend, logger, cwd, pin });
@@ -214,7 +216,7 @@ describe('sampling journal identity', () => {
     });
 
     it('retains requested sampling across checkpoint suspension and offline reconstruction', async () => {
-        const source = "let result = randomness(seed=42, temperature=0) ask 'Prompt'\nlet answer = human 'Approve?'\nsuccess [result, answer]";
+        const source = "let result = ask(seed=42, temperature=0) 'Prompt'\nlet answer = human 'Approve?'\nsuccess [result, answer]";
         const context: CheckpointContext = { source, runtime: 'test', cwd };
         const file = path.join(cwd, 'checkpoint.jsonl');
         const backend = scripted('answer');

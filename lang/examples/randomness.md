@@ -6,16 +6,15 @@ model: 'gpt-6-luna'
 
 # Randomness Controls
 
-This document shows how to limit randomness in LLM prompts and approximate their text similarity.
-Sampling is best-effort; evaluation uses local TF-IDF cosine scoring with no additional model call.
+This document shows how to limit randomness in LLM prompts with `ask` sampling modifiers.
+Sampling is best-effort and does not guarantee identical responses.
 
 ```spl
-let recipe1 = randomness(seed=13, temperature=0.0, top_p=0.0001) \
-                ask(tokens=1024) '<most-frequent>give a recipie for an apple pie</most-frequent>';
+let recipe1 = ask(seed=13, temperature=0.0, top_p=0.0001, tokens=1024) \
+                '<most-frequent>give a recipe for an apple pie</most-frequent>';
 
-let recipe2 = randomness(seed=13, temperature=0.0, top_p=0.0001) \
-                ask(tokens=1024) '<most-frequent>give a recipie for an apple pie</most-frequent>';
-eval(expected=recipe1, actual=recipe2, cutoff=0.9)
+let recipe2 = ask(seed=13, temperature=0.0, top_p=0.0001, tokens=1024) \
+                '<most-frequent>give a recipe for an apple pie</most-frequent>';
 
-success 'The recipes have a TF-IDF cosine similarity of at least 0.9'
+success [recipe1, recipe2]
 ```

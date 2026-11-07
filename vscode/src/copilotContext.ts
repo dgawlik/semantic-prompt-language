@@ -39,7 +39,7 @@ const syntax = [
     'Use True, False, None, and/or/not, # comments, and {name} interpolation inside strings.',
     'Use log(value), not print(value). Use success value to end the workflow successfully.',
     'Do not generate Python imports, f-strings, or @name references in SPL code cells.',
-    ...['randomness', 'eval', 'ask', 'think', 'agent', 'human'].map(name => `${name}: ${keywords[name]}`),
+    ...['ask', 'think', 'agent', 'human'].map(name => `${name}: ${keywords[name]}`),
 ].join('\n');
 
 const example = [

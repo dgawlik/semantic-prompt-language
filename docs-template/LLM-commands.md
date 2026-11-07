@@ -72,8 +72,7 @@ See [Human input](Safety.md#human-in-the-loop).
 
 ## Generation: ask and think
 
-`ask prompt` returns the model's answer as a value. `think` is the same with medium reasoning by default,
-unless prefixed with [`randomness(...)`](#randomness-controls).
+`ask prompt` returns the model's answer as a value. `think` is the same with medium reasoning by default.
 Neither has tools: they cannot read files, browse or run commands.
 
 ```spl
@@ -101,8 +100,7 @@ is always the authoritative return value.
 
 `agent prompt` lets the model act with the runtime tools (`read_file`, `write_file`, `web_fetch`,
 `web_search`, `shell`) and any configured MCP tools. Actions are checked against active restrictions.
-Agents default to medium reasoning unless prefixed with [`randomness(...)`](#randomness-controls),
-and never use repairs, so a failed check never repeats their actions.
+Agents default to medium reasoning and never use repairs, so a failed check never repeats their actions.
 
 ```spl
 let report = ''
@@ -125,6 +123,9 @@ evaluated once and validated before the call. Unknown or duplicate names are syn
 | `hide` | `True` `False` (default) | Suppress reasoning display when `True`; responses remain visible |
 | `model` | model id | Per-call model |
 | `tokens` | Positive safe integer | Maximum generated tokens per model turn, including reasoning |
+| `seed` | Integer `0..2147483647` | `ask` only: request repeatable sampling where supported |
+| `temperature` | Finite number `0..2` | `ask` only: control sampling variability |
+| `top_p` | Finite number `0..1` | `ask` only: control nucleus sampling |
 
 The former `show` modifier is no longer accepted. Omit `show=True` (reasoning is now visible
 by default), and replace `show=False` with `hide=True`.
@@ -155,26 +156,22 @@ model IDs or `provider/model`. See [Models and authentication](CLI.md#models-and
 
 ## Randomness controls
 
-Prefix `ask`, `think` or `agent` with `randomness(...)` to control sampling independently of the
-command's existing modifiers:
+Set sampling modifiers directly in `ask(...)`:
 
 ```spl
-let answer = randomness(seed=42, temperature=0, top_p=0.01) ask 'Answer precisely'
-let plan = randomness(temperature=0) think(reasoning='high') 'Plan the migration'
-let result = randomness(top_p=0.1) agent 'Inspect the project and summarize'
+let answer = ask(seed=42, temperature=0, top_p=0.01) 'Answer precisely'
+let plan = ask(temperature=0, reasoning='high') 'Plan the migration'
 ```
 
-Parameters are optional named expressions, evaluated once, left to right, before command modifiers
-and the prompt. The same values are reused for every repair attempt and agent tool-continuation turn.
+Parameters are optional named expressions, evaluated once in source order alongside other modifiers
+and before the prompt. The same values are reused for every repair attempt.
 Omitted sampling controls use provider/model defaults; no seed, temperature or `top_p` is invented.
-This prefix applies only to its immediately following generation expression,
-not to surrounding code or Markdown blockquotes.
+Sampling controls apply only to that `ask` expression, not to surrounding code or Markdown blockquotes.
+`think` and `agent` do not accept them; their existing modifiers and reasoning defaults are unchanged.
 
-The prefix, including `randomness()`, disables thinking by default where the model supports it.
-It replaces the implicit medium reasoning of `think` and `agent`; an explicit
+`ask` has no implicit reasoning effort. An explicit
 `reasoning='low'`, `'medium'` or `'high'` always takes precedence. Models that cannot disable thinking
-use the SDK's lowest supported thinking setting with a compatibility warning. Calls without the
-prefix retain their existing reasoning behavior.
+use the SDK's lowest supported thinking setting with a compatibility warning.
 
 | Parameter | Accepted values | Meaning |
 | --- | --- | --- |
@@ -182,9 +179,10 @@ prefix retain their existing reasoning behavior.
 | `temperature` | Finite number `0..2` | Lower values reduce variability; `0` requests greedy sampling where supported |
 | `top_p` | Finite number `0..1` | Nucleus sampling; smaller values narrow token choices (`1` does not narrow them) |
 
-Unknown/duplicate names or a prefix not followed by `ask`, `think` or `agent` are syntax errors.
+Unknown/duplicate names, or sampling modifiers on `think` or `agent`, are syntax errors.
 Out-of-range values, booleans, strings and `None` are runtime errors before the model call.
-Sampling values belong in `randomness(...)`, not in `ask(...)`/`think(...)`/`agent(...)`.
+The former `randomness(...)` prefix and `eval(...)` statement are no longer supported.
+Move sampling values into `ask(...)` and use `assert` and schemas for explicit output checks.
 
 Provider limitations are diagnosed with warnings; the runtime keeps supported controls without
 changing the model, and preserves explicitly requested reasoning:
@@ -215,57 +213,15 @@ default numeric value was sent.
 cannot honor that setting; `null` does not mean thinking is disabled.
 Traces, recordings, checkpoints and pinned workflows include requested
 sampling controls in request identity; changing them cannot silently reuse an old response.
-Calls without randomness or `tokens` retain compatibility with existing replay files.
+Calls without sampling controls or `tokens` retain compatibility with existing replay files.
+Recordings retain the same sampling request shape, but recreate pins and checkpoints after
+editing their source documents.
 
 Even extreme settings cannot guarantee identical outputs from hosted models. Use
 [`--pin`](CLI.md#pinned-workflows) for fully deterministic offline replay.
 See the official [OpenAI](https://ai-sdk.dev/providers/ai-sdk-providers/openai),
 [Google](https://ai-sdk.dev/providers/ai-sdk-providers/google) and
 [Anthropic](https://ai-sdk.dev/providers/ai-sdk-providers/anthropic) adapter documentation.
-
-## Semantic evaluation
-
-`eval(expected=llm1, actual=llm2, cutoff=0.9)` compares two outputs locally using TF-IDF
-and cosine similarity. It makes no additional model call.
-It is an assertion-style statement, not a function or expression:
-
-```spl
-let llm1 = ask 'Describe an apple pie'
-let llm2 = ask 'Describe an apple pie'
-eval(expected=llm1, actual=llm2, cutoff=0.9)
-success 'Similar enough'
-```
-
-All three named arguments are required and may appear in any order. Their expressions are
-evaluated once, left to right. `expected` is the reference and `actual` is the candidate; both
-accept strings or other JSON-compatible values, including structured model outputs.
-Functions and non-finite numbers are rejected. `cutoff` must be a finite number from `0` to `1`,
-inclusive; booleans and numeric strings are not accepted.
-
-Strings are compared directly; other values are serialized as JSON text. Text is Unicode-normalized
-(NFKC), lowercased and split into letter/number tokens, retaining combining marks. Punctuation
-and word order are ignored. All words are retained, including negation; there is no stemming or
-synonym expansion. Each comparison uses its two inputs as the corpus, raw term counts as TF,
-and smoothed `IDF = 1 + ln(3 / (1 + document_frequency))`.
-
-Cosine similarity scores the resulting vectors from `0` to `1`. Identical token-frequency
-proportions score `1`; no shared tokens score `0`. If either input has no tokens, the score is
-`1` only when the normalized, trimmed texts are identical, otherwise `0`.
-A score equal to the cutoff passes; a score below it raises `assertion_failed` with
-the score and cutoff in the failure reason. Comparison uses the unrounded score, which is also
-logged at info level.
-
-This is a deterministic **word-overlap approximation**, not a semantic judge or calibrated
-probability. Paraphrases with different words can score low; contradictory texts with shared
-words can score high. Structured values are not compared by schema, types or nesting.
-Recalibrate cutoffs using representative outputs rather than reusing LLM-judge thresholds.
-Use `assert` and schemas when exact content or structure matters.
-
-Evaluation does not use the document model or CLI/embedding model override and does not regenerate
-either output. Traces, recordings, pinned workflows and checkpoints retain only the original
-model/tool effects; evaluation is recomputed locally on replay or resume.
-Recreate recordings, pinned workflows and checkpoints produced by the former LLM-judge evaluator:
-their extra judge entries are no longer consumed.
 
 ## Output formats
 

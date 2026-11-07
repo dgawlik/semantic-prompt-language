@@ -10,20 +10,16 @@ import { loadGrammar, root, vsctm } from './load-grammar.mjs';
 const ASSERT = /^#(\s*)(\^+)\s+(.+?)\s*$/;
 const grammar = await loadGrammar();
 const markdown = await loadGrammar('text.html.markdown');
-const sampled = "let answer = randomness(seed=42, temperature=0, top_p=0.01) ask 'Prompt'";
+const sampled = "let answer = ask(seed=42, temperature=0, top_p=0.01) 'Prompt'";
 const sampledTokens = grammar.tokenizeLine(sampled, vsctm.INITIAL).tokens;
-for (const name of ['randomness', 'seed', 'temperature', 'top_p', 'ask']) {
+for (const name of ['seed', 'temperature', 'top_p', 'ask']) {
     const start = sampled.indexOf(name);
     const token = sampledTokens.find(token => token.startIndex <= start && token.endIndex >= start + name.length);
-    assert.ok(token?.scopes.includes(name === 'randomness' ? 'keyword.other.randomness.spl'
-        : name === 'ask' ? 'keyword.other.ask.spl' : 'variable.parameter.modifier.spl'), name);
+    assert.ok(token?.scopes.includes(name === 'ask' ? 'keyword.other.ask.spl' : 'variable.parameter.modifier.spl'), name);
 }
-const evaluation = 'eval(expected=llm1, actual=llm2, cutoff=0.9)';
-const evaluationTokens = grammar.tokenizeLine(evaluation, vsctm.INITIAL).tokens;
-for (const name of ['eval', 'expected', 'actual', 'cutoff']) {
-    const start = evaluation.indexOf(name);
-    const token = evaluationTokens.find(token => token.startIndex <= start && token.endIndex >= start + name.length);
-    assert.ok(token?.scopes.includes(name === 'eval' ? 'keyword.control.result.spl' : 'variable.parameter.modifier.spl'), name);
+for (const removed of ['randomness', 'eval']) {
+    const tokens = grammar.tokenizeLine(removed, vsctm.INITIAL).tokens;
+    assert.ok(tokens.every(token => !token.scopes.some(scope => scope.startsWith('keyword'))), removed);
 }
 for (const fence of ['```', '~~~~']) {
     let stack = markdown.tokenizeLine(`${fence}spl`, vsctm.INITIAL).ruleStack;

@@ -91,18 +91,17 @@ success rating
 
 * Exact tools `read_file`, `write_file`, `web_fetch`, `web_search` and `shell` never call a model.
 * `ask` and `think` generate values without tools; `agent` can act, within `restrict` scopes.
-* Prefix any generation call with `randomness(seed=42, temperature=0, top_p=0.01)` to control
-  sampling. Each parameter is optional; without the prefix, provider/model defaults are unchanged.
-  The prefix disables thinking where supported unless an explicit `reasoning` modifier overrides it.
+* Use `ask(seed=42, temperature=0, top_p=0.01) 'prompt'` to control sampling.
+  Each parameter is optional; omitted controls use provider/model defaults. Sampling modifiers
+  are exclusive to `ask`; `think` and `agent` retain their existing modifiers and reasoning defaults.
   Unsupported controls warn and are ignored. Sampling is best-effort; use `--pin` for deterministic replay.
 * Blockquotes run as agent commands, not generated SPL. Their tools can call existing functions,
   load/save shared variables, read environment values, request human input, and use
   runtime tools and configured MCP servers. Explicit `agent` expressions keep their existing tool set.
 * `fmt`, `schema`, `repairs` and `assert` check output; `enforce`/`forbid` only guide prompts.
-* `eval(expected=llm1, actual=llm2, cutoff=0.9)` uses local TF-IDF cosine similarity with no
-  additional model call. It logs the `0..1` score and raises `assertion_failed` below the cutoff.
-  This measures word overlap, not paraphrase meaning; recalibrate thresholds previously used
-  with the LLM judge. Recreate old recordings, pins and checkpoints containing judge calls.
+* `randomness(...)` prefixes and the `eval(...)` statement have been removed. Move sampling
+  controls into `ask(...)`; use `assert` and schemas for explicit output checks. Recreate pins
+  and checkpoints after changing their source documents.
 * **Breaking syntax change:** blocks use `:` plus a newline and an indented nonempty body, not
   braces. Use spaces (4 recommended), no inline suites, and `pass` for empty bodies. Dicts and
   interpolation keep their braces; blocks still create lexical child scopes. See the

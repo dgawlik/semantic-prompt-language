@@ -25,7 +25,7 @@ const isNameStart = (c: string) => /[A-Za-z_]/.test(c);
 const isNameChar = (c: string) => /[A-Za-z0-9_]/.test(c);
 const EXPR_PREFIXES = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
-    'success', 'enforce', 'forbid', 'restrict', 'randomness', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass',
+    'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass',
     'and', 'or', 'not',
 ]);
 const canEndExpression = (token: Token | undefined): boolean =>

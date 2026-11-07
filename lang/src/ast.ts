@@ -22,7 +22,7 @@ export type Expr =
     | { t: 'if'; branches: { cond: Expr; body: Stmt[] }[]; orelse?: Stmt[]; line: number }
     | { t: 'log'; level: Expr; args: Expr[] }
     | { t: 'human'; prompt: Expr; line: number }
-    | { t: 'ask' | 'think' | 'agent'; mods: Record<string, Expr>; prompt: Expr; randomness?: Record<string, Expr> };
+    | { t: 'ask' | 'think' | 'agent'; mods: Record<string, Expr>; prompt: Expr };
 
 export interface AskMods {
     len?: 'word' | 'sentence' | 'paragraph' | 'long';
@@ -58,7 +58,6 @@ export type Stmt = Base &
         | { t: 'return'; value?: Expr }
         | { t: 'try'; body: Stmt[]; errName: string; handler: Stmt[] }
         | { t: 'assert'; cond: Expr; message?: Expr }
-        | { t: 'eval'; args: Record<string, Expr> }
         | { t: 'fail'; reason: Expr }
         | { t: 'success'; value?: Expr }
         | { t: 'constraint'; kind: 'enforce' | 'forbid'; text: Expr; body: Stmt[] }

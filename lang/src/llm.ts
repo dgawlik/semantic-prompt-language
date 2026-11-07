@@ -34,7 +34,7 @@ export function isRandomness(value: unknown): value is Randomness {
 
 export function validateRandomness(value: unknown): Randomness {
     if (!isRandomness(value)) {
-        throw new Failure('runtime_error', 'randomness requires seed=integer in 0..2147483647, temperature=number in 0..2, and top_p=number in 0..1; parameters are optional');
+        throw new Failure('runtime_error', 'sampling requires seed=integer in 0..2147483647, temperature=number in 0..2, and top_p=number in 0..1; parameters are optional');
     }
     return {
         ...(value.seed !== undefined ? { seed: value.seed } : {}),

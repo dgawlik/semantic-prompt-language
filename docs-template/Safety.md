@@ -1,7 +1,7 @@
 # Guards & failures
 
 Model output varies, so SPL makes checks explicit: `restrict` limits actions, `assert` and schemas
-check data, `eval` approximates text similarity, failures can be caught, and `human` hands decisions to a person.
+check data, failures can be caught, and `human` hands decisions to a person.
 
 ## Restrictions
 
@@ -49,10 +49,6 @@ success total
 ```
 
 * `assert condition 'message'` raises `assertion_failed` when the condition is false.
-* [`eval(expected=llm1, actual=llm2, cutoff=0.9)`](LLM-commands.md#semantic-evaluation)
-  uses local TF-IDF cosine scoring without an additional model call and raises `assertion_failed`
-  below the similarity cutoff. This deterministic word-overlap approximation can miss paraphrases
-  and contradictions; it is not a substitute for schema validation or exact checks.
 * `fail reason` raises `explicit_failure`.
 * `success value` ends the document immediately, even from inside a function.
   `return` exits a function, or the document at top level.
@@ -75,7 +71,7 @@ Every failure has the same shape. Uncaught failures are printed to stdout and ex
 | --- | --- |
 | `invalid_format` | Answer is not valid JSON of the requested `fmt` |
 | `validation_failed` | Answer does not match the schema |
-| `assertion_failed` | An `assert` was false or `eval` scored below its cutoff |
+| `assertion_failed` | An `assert` was false |
 | `explicit_failure` | `fail` was executed |
 | `restriction_violation` | An action was blocked by `restrict` |
 | `tool_error` | Missing file, HTTP failure or nonzero shell exit |
