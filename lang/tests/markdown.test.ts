@@ -28,8 +28,8 @@ afterEach(() => {
 const backend = (call: (request: LlmRequest) => Promise<LlmResponse>): LlmBackend => ({ call, async close() {} });
 
 describe('Markdown document syntax', () => {
-    it('accepts the supplied example without changing version or syntax', () => {
-        const source = fs.readFileSync(path.resolve(__dirname, '..', '..', 'spl2-examples'), 'utf8');
+    it('accepts the maintained is-friday example without changing version or syntax', () => {
+        const source = fs.readFileSync(path.resolve(__dirname, '..', 'examples', 'is-friday.md'), 'utf8');
         expect(parseMarkdown(source).directives).toEqual({ model: 'gpt-6-luna' });
         expect(parseMarkdown(source).body).toHaveLength(2);
     });
@@ -101,8 +101,169 @@ ${fence('count += 2\nsuccess count')}`);
 });
 
 describe('shared natural-language execution', () => {
+    it('loads complete descriptor schemas and saves the code-review example as hydrated classes', async () => {
+        const example = fs.readFileSync(path.resolve(__dirname, '..', 'examples', 'code-review.md'), 'utf8');
+        const declarations = extractMarkdown(example).blocks.filter(block => block.kind === 'spl')[0].text;
+        const source = document(fence(declarations) +
+            '\n\n> Convert @notes into structured findings @validate[Review] and save to @review.\n\n' +
+            fence('success [isinstance(review, Review), isinstance(review.findings[0], Item), review.findings[0].severity]'));
+        const result = await run(parseMarkdown(source), { logger, backend: backend(async req => {
+            const severity = { type: 'string', enum: ['low', 'medium', 'high'] };
+            const item = {
+                type: 'object', properties: {
+                    severity, title: { type: 'string' }, location: { type: 'string' }, fix: { type: 'string' },
+                }, required: ['severity', 'title', 'location', 'fix'], additionalProperties: false,
+            };
+            expect(await req.invokeAction!(action('load_variable', { name: 'Severity' }))).toEqual(severity);
+            expect(await req.invokeAction!(action('load_variable', { name: 'Item' }))).toEqual(item);
+            expect(await req.invokeAction!(action('load_variable', { name: 'Review' }))).toEqual({
+                type: 'object', properties: { findings: { type: 'array', items: item } },
+                required: ['findings'], additionalProperties: false,
+            });
+            await req.invokeAction!(action('save_variable', {
+                name: 'review', schema: 'Review', value: {
+                    findings: [{ severity: 'high', title: 'Bug', location: 'src/main.ts:1', fix: 'Validate the input' }],
+                },
+            }));
+            return { text: 'Done', effective: {} };
+        }) });
+        expect(result, result.status === 'failure' ? result.failure.reason : undefined)
+            .toMatchObject({ status: 'success', value: [true, true, 'high'] });
+    });
+
+    it('decodes a named struct schema without enforcing advisory field metadata', async () => {
+        const source = document(fence(`struct Data:
+    title: str [min=2]
+    count: int
+let count: int = 0`) + '\n\n> Save @data and @count.\n\n' + fence('success [data.title, data.count, count]'));
+        expect(await run(parseMarkdown(source), { logger, backend: actions(
+            action('save_variable', { name: 'data', value: { title: 'x', count: 15 }, schema: 'Data' }),
+            action('save_variable', { name: 'count', value: 3, schema: 'int' }),
+        ) })).toMatchObject({ status: 'success', value: ['x', 15n, 3n] });
+    });
+
+    it('supports named and inline raw JSON schemas without hydrating dynamic values', async () => {
+        const source = document(fence(`let Schema = object:
+    'type': 'integer'`) + '\n\n> Save @number and @text.\n\n' + fence('success [number, text, type(number)]'));
+        expect(await run(parseMarkdown(source), { logger, backend: actions(
+            action('save_variable', { name: 'number', value: 3, schema: 'Schema' }),
+            action('save_variable', { name: 'text', value: 'ok', schema: { type: 'string' } }),
+        ) })).toMatchObject({ status: 'success', value: [3, 'ok', 'number'] });
+    });
+
+    it.each([
+        { findings: [{ severity: 'urgent', title: 'Bug' }] },
+        { findings: [{ severity: 'high' }] },
+        { findings: [{ severity: 'high', title: 'Bug', extra: true }] },
+    ])('rejects invalid named descriptor schema data before later effects %#', async value => {
+        const cwd = directory();
+        const source = document(fence(`enum Severity = 'low' | 'high'
+hydratable class Item:
+    severity: Severity
+    title: str
+hydratable class Review:
+    findings: list[Item]`) + '\n\n> Save @review.\n\n' + fence("write_file('saved.txt', 'must not execute')"));
+        expect(await run(parseMarkdown(source), { cwd, logger, backend: actions(
+            action('save_variable', { name: 'review', value, schema: 'Review' }),
+        ) })).toMatchObject({ status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringContaining('review.findings[0]') } });
+        expect(fs.existsSync(path.join(cwd, 'saved.txt'))).toBe(false);
+    });
+
+    it.each([
+        ["let Schema = False", 'Schema', 'validation_failed'],
+        ['pass', 'Missing', 'runtime_error'],
+        ['class Ordinary:\n    title: str', 'Ordinary', 'runtime_error'],
+        ['let result: int = 0', 'str', 'type_error'],
+    ])('rejects unusable named schemas and conflicting binding contracts %#', async (declarations, schema, statusCode) => {
+        const source = document(fence(declarations) + '\n\n> Save @result.');
+        expect(await run(parseMarkdown(source), { logger, backend: actions(
+            action('save_variable', { name: 'result', value: 'text', schema }),
+        ) })).toMatchObject({ status: 'failure', failure: { status_code: statusCode } });
+    });
+
+    it('replays named descriptor schema loading and class hydration', async () => {
+        const cwd = directory();
+        const file = path.join(cwd, 'schema-trace.jsonl');
+        const source = document(fence('hydratable class Data:\n    count: int') +
+            '\n\n> Save @data using @validate[Data].\n\n' + fence('success [isinstance(data, Data), data.count]'));
+        const trace = new TraceBackend(actions(
+            action('load_variable', { name: 'Data' }),
+            action('save_variable', { name: 'data', value: { count: 15 }, schema: 'Data' }),
+        ), file);
+        expect(await run(parseMarkdown(source), { cwd, logger, backend: trace }))
+            .toMatchObject({ status: 'success', value: [true, 15n] });
+        await trace.close();
+        const replay = new ReplayBackend(file);
+        expect(await run(parseMarkdown(source), { cwd, logger, backend: replay }))
+            .toMatchObject({ status: 'success', value: [true, 15n] });
+        await replay.close();
+    });
+
+    it('decodes JSON arguments for recursive typed functions and exposes their signatures', async () => {
+        const source = document(fence(`def factorial(n: int) -> int:
+    if n == 0:
+        return 1
+    return n * factorial(n - 1)
+def fib(n: int) -> int:
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)`) +
+            '\n\n> Invoke @factorial with int 15 as argument -> @fact15\n\n' + fence('success fact15'));
+        const result = await run(parseMarkdown(source), { logger, backend: backend(async req => {
+            expect(req.prompt).toContain('def factorial(n: int) -> int');
+            expect(req.prompt).toContain('def fib(n: int) -> int');
+            expect(await req.invokeAction!(action('call_function', { name: 'factorial', args: [15] }))).toBe('1307674368000');
+            expect(await req.invokeAction!(action('call_function', { name: 'fib', args: [10] }))).toBe('55');
+            await req.invokeAction!(action('save_variable', { name: 'fact15', value: 1307674368000 }));
+            return { text: 'Done', effective: {} };
+        }) });
+        expect(result).toMatchObject({ status: 'success', value: 1307674368000 });
+    });
+
+    it('decodes nested typed arguments while leaving unannotated arguments dynamic', async () => {
+        const source = document(fence(`struct Data:
+    values: list[int]
+    ratio: float
+def inspect(data: Data, dynamic, optional: int | None) -> str:
+    return json_stringify([data.values, data.ratio, type(dynamic), optional])`) +
+            '\n\n> Inspect the data.');
+        expect(await run(parseMarkdown(source), { logger, backend: backend(async req => {
+            expect(await req.invokeAction!(action('call_function', {
+                name: 'inspect', args: [{ values: [1, 2], ratio: 1 }, 3, null],
+            }))).toBe('[[1,2],1.0,"number",null]');
+            return { text: 'Done', effective: {} };
+        }) })).toMatchObject({ status: 'success' });
+    });
+
+    it('decodes arguments for guarded callable bindings', async () => {
+        const source = document(fence(`def echo(value):
+    return value
+let callback: fn(int) -> int = echo`) + '\n\n> Invoke @callback.');
+        expect(await run(parseMarkdown(source), { logger, backend: backend(async req => {
+            expect(await req.invokeAction!(action('call_function', { name: 'callback', args: [42] }))).toBe('42');
+            return { text: 'Done', effective: {} };
+        }) })).toMatchObject({ status: 'success' });
+    });
+
+    it('decodes saved JSON against an existing binding contract', async () => {
+        const source = document(fence('let count: int = 0') + '\n\n> Set @count to 15.\n\n' + fence('success count'));
+        expect(await run(parseMarkdown(source), { logger, backend: actions(
+            action('save_variable', { name: 'count', value: 15 }),
+        ) })).toMatchObject({ status: 'success', value: 15n });
+    });
+
+    it.each([1.5, true, '15', Number.MAX_SAFE_INTEGER + 1])('rejects invalid typed tool arguments %s before executing the function', async value => {
+        const cwd = directory();
+        const source = document(fence(`def write(n: int):
+    write_file('called.txt', 'must not execute')`) + '\n\n> Invoke @write.');
+        expect(await run(parseMarkdown(source), { cwd, logger, backend: actions(
+            action('call_function', { name: 'write', args: [value] }),
+        ) })).toMatchObject({ status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringContaining('argument[0]') } });
+        expect(fs.existsSync(path.join(cwd, 'called.txt'))).toBe(false);
+    });
+
     it('describes cyclic collections and nested functions without changing shared values', async () => {
-        const source = document(fence("let cyclic = []\ncyclic.append(cyclic)\ndef double(x):\n    return x * 2\nlet helpers = {'double': double}") +
+        const source = document(fence("let cyclic = []\ncyclic.append(cyclic)\ndef double(x):\n    return x * 2\nlet helpers = object:\n    'double': double") +
             '\n\n> Return the doubled length of @cyclic.');
         let turn = 0;
         const result = await run(parseMarkdown(source), {
@@ -192,7 +353,8 @@ try:
 except error:
     caught = error.status_code == 'restriction_violation'
 assert caught
-let Schema = {'type': 'integer'}
+let Schema = object:
+    'type': 'integer'
 let result = ask(schema=Schema) 'Return {total}'
 write_file('allowed/result.txt', str(result))
 return result`;

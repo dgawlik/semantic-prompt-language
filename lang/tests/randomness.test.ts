@@ -131,7 +131,7 @@ let f = ask(seed=1) 'Seven' if True else ask 'Skipped'
 let g = ask() (ask(seed=1) 'Inner')
 success [skipped, a, b, c, d, e, f, g]`;
         expect(await run(parse(source), { backend, logger, cwd })).toMatchObject({
-            status: 'success', value: [false, '2', '3', 5, 15, '6', '7', 'outer'],
+            status: 'success', value: [false, '2', '3', 5n, 15n, '6', '7', 'outer'],
         });
         expect(backend.call).toHaveBeenCalledTimes(8);
         expect(backend.call.mock.calls[7][0].prompt).toBe('inner');

@@ -3,7 +3,7 @@ import { SplSyntaxError } from './errors.js';
 export type StringPart = { text: string } | { expr: string; line: number; col: number };
 
 export type Token =
-    | { type: 'num'; value: number; line: number; col: number }
+    | { type: 'num'; value: number; raw?: string; line: number; col: number }
     | { type: 'str'; parts: StringPart[]; line: number; col: number }
     | { type: 'name'; value: string; line: number; col: number }
     | { type: 'op'; value: string; line: number; col: number }
@@ -12,8 +12,8 @@ export type Token =
     | { type: 'eof'; line: number; col: number };
 
 const OPS = [
-    '//=', '**', '//', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=',
-    '+', '-', '*', '/', '%', '<', '>', '=', '(', ')', '[', ']', '{', '}', ',', ':', '.', '?', '@', ';',
+    '//=', '**', '//', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=', '%=', '->',
+    '+', '-', '*', '/', '%', '<', '>', '=', '(', ')', '[', ']', '{', '}', ',', ':', '.', '?', '@', ';', '|',
 ];
 
 const ESCAPES: Record<string, string> = {
@@ -26,7 +26,7 @@ const isNameChar = (c: string) => /[A-Za-z0-9_]/.test(c);
 const EXPR_PREFIXES = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
     'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass',
-    'and', 'or', 'not',
+    'and', 'or', 'not', 'enum', 'struct', 'class', 'hydratable',
 ]);
 const canEndExpression = (token: Token | undefined): boolean =>
     token?.type === 'num' || token?.type === 'str' ||
@@ -82,13 +82,18 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
             lineStart = false;
             if (i === src.length) break;
             const blank = src[i] === '#' || src[i] === '\r' || src[i] === '\n';
+            if (!blank && src.slice(start, i).includes('\t')) {
+                err('tabs are not allowed in indentation; use four spaces', line, 1);
+            }
             const active = indents.at(-1)!;
             const significant = pendingSuite || (!opts.inExpr && brackets.length === 0) ||
                 (!active.base && brackets.length === active.depth);
             if (!blank && significant) {
-                if (src.slice(start, i).includes('\t')) err('tabs are not allowed in indentation; use spaces', line, 1);
                 if (pendingSuite) {
                     if (lineIndent <= pendingSuite.width) err('expected an indented block');
+                    if (lineIndent !== pendingSuite.width + 4) {
+                        err('each block level must add exactly four spaces of indentation', line, 1);
+                    }
                     if (indents.at(-1)!.depth !== pendingSuite.depth) {
                         indents.push({ ...pendingSuite, base: true });
                     } else if (indents.at(-1)!.base) {
@@ -103,8 +108,12 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
                         const indent = indents.pop()!;
                         if (!indent.base) tokens.push({ type: 'dedent', line, col });
                         dedented = true;
+                        const current = indents.at(-1)!;
+                        if (current.base && current.depth === brackets.length && (opts.inExpr || brackets.length > 0)) break;
                     }
-                    if (lineIndent !== indents.at(-1)!.width) {
+                    const current = indents.at(-1)!;
+                    const continuation = current.base && current.depth === brackets.length && (opts.inExpr || brackets.length > 0);
+                    if (!continuation && lineIndent !== current.width) {
                         err(dedented ? 'inconsistent dedent' : 'unexpected indentation');
                     }
                 }
@@ -146,7 +155,7 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
             const m = /^\d+(\.\d+)?([eE][+-]?\d+)?/.exec(src.slice(i))!;
             advance(m[0].length);
             if (i < src.length && isNameChar(src[i])) err('invalid number literal', startLine, startCol);
-            tokens.push({ type: 'num', value: Number(m[0]), line: startLine, col: startCol });
+            tokens.push({ type: 'num', value: Number(m[0]), raw: m[0], line: startLine, col: startCol });
             continue;
         }
 
@@ -167,6 +176,8 @@ export function tokenize(src: string, opts: LexOptions = {}): Token[] {
             const member = previous?.type === 'op' && previous.value === '.';
             const prefix = !canEndExpression(previous);
             if (!member && (['def', 'for', 'while', 'try', 'except', 'enforce', 'forbid', 'restrict', 'elif'].includes(value) ||
+                (['class', 'struct'].includes(value) && /^\s+[A-Za-z_]/.test(src.slice(j))) ||
+                (value === 'object' && /^[ \t]*:/.test(src.slice(j))) ||
                 (['if', 'else'].includes(value) && prefix))) {
                 suiteHeaders.set(brackets.length, lineIndent);
             }

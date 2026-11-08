@@ -7,13 +7,19 @@ import { test } from 'node:test';
 import {
     createProtocolConnection, IPCMessageReader, IPCMessageWriter, StreamMessageReader, StreamMessageWriter,
     CompletionRequest, DefinitionRequest, DocumentSymbolRequest, ExitNotification, HoverRequest,
-    InitializeRequest, InitializedNotification, ShutdownRequest,
+    InitializeRequest, InitializedNotification, ShutdownRequest, ReferencesRequest, RenameRequest,
+    PrepareRenameRequest, DocumentHighlightRequest, SignatureHelpRequest, FoldingRangeRequest,
+    SemanticTokensRequest, WorkspaceSymbolRequest, ResponseError,
     DidChangeTextDocumentNotification, DidCloseTextDocumentNotification, DidOpenTextDocumentNotification,
     PublishDiagnosticsNotification, SymbolKind, TextDocumentSyncKind,
     type PublishDiagnosticsParams,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { analyze, completions, definition, documentSymbols, hover } from '../src/features';
+import {
+    documentHighlights, foldingRanges, prepareRename, references, rename,
+    semanticTokenLegend, semanticTokens, signatureHelp, workspaceSymbols,
+} from '../src/languageFeatures';
 import { builtins } from '../src/catalog';
 import { makeBuiltins } from '../../lang/src/builtins.js';
 import { ASK_MODIFIER_NAMES, MODIFIER_NAMES } from '../../lang/src/parser.js';
@@ -55,6 +61,24 @@ test('Markdown validates each fence independently', () => {
     assert.match(result.diagnostics[0].message, /indented block/);
 });
 
+test('type diagnostics retain built-in and declared types after preceding control flow', () => {
+    const source = `let path = 'invoice.txt'
+if $args[0] != None:
+    path = $args[0]
+struct Money:
+    amount: int
+enum Severity = 'low' | 'high'
+while False:
+    pass
+struct Finding:
+    amount: Money
+    severity: Severity`;
+    assert.deepEqual(analysis(source).diagnostics, []);
+    assert.deepEqual(markdownAnalysis(markdownSource(`\`\`\`spl\n${source}\n\`\`\``)).diagnostics, []);
+    const invalid = source + '\nlet bad: int = 1.5';
+    assert.match(analysis(invalid).diagnostics[0].message, /int|float/);
+});
+
 test('Markdown indentation scopes end at their fence, before natural-language references', () => {
     const source = markdownSource('```spl\nlet shared = 1\nif True:\n    let hidden = 2\n```\n\n> Use @shared and @hidden.\n\n```spl\nlog(shared)\n```');
     const result = markdownAnalysis(source);
@@ -72,22 +96,90 @@ test('indentation diagnostics, scope boundaries and editing defaults stay aligne
     assert.match(analysis('if True { pass }').diagnostics[0].message, /brace-delimited blocks/);
     assert.match(analysis('if True:\npass').diagnostics[0].message, /indented block/);
     assert.match(analysis('if True:\n\tpass').diagnostics[0].message, /tabs/);
-    const source = 'let outer = 1\nlet data = {\n    "key": outer,\n}\nif True:\n    let local = data\n    log(local)';
+    const source = 'let outer = 1\nlet data = object:\n    "key": outer\nif True:\n    let local = data\n    log(local)';
     const result = analysis(source);
     assert.deepEqual(result.diagnostics, []);
     assert.equal(result.scopes.length, 2, 'Dictionaries do not introduce lexical scopes');
-    assert.deepEqual(definition(result, at(source, 'outer,'))?.range.start, at(source, 'outer'));
+    assert.deepEqual(definition(result, at(source, 'outer', 1))?.range.start, at(source, 'outer'));
     assert.ok(completions(result, document(source).positionAt(source.length)).some(item => item.label === 'local'));
     const configuration = JSON.parse(readFileSync(path.resolve(root, 'language-configuration.json'), 'utf8'));
     assert.equal(configuration.folding.offSide, true);
     const increase = new RegExp(configuration.indentationRules.increaseIndentPattern);
-    for (const header of ['if True:', 'def f(): # body', 'else:', 'let value = :', 'let data = {']) {
+    for (const header of ['if True:', 'def f(): # body', 'else:', 'let value = :', 'let data = object:', 'struct Data:', 'hydratable class Person:']) {
         assert.ok(increase.test(header), header);
     }
+    assert.ok(!increase.test('let removed = {'));
+    assert.ok(!configuration.autoClosingPairs.some((pair: { open: string }) => pair.open === '{'));
     const manifest = JSON.parse(readFileSync(path.resolve(root, 'package.json'), 'utf8'));
     assert.deepEqual(manifest.contributes.configurationDefaults['[spl]'], {
         'editor.insertSpaces': true, 'editor.tabSize': 4, 'editor.detectIndentation': false,
     });
+    assert.ok(manifest.activationEvents.includes('onLanguage:spl'));
+    assert.deepEqual(manifest.contributes.languages.find((language: { id: string }) => language.id === 'spl').extensions, ['.spl']);
+
+});
+
+test('typed declarations, annotated parameters and object properties retain lexical navigation', () => {
+    const source = `enum Color = 'red' | 'blue'
+struct Data:
+    color: Color
+hydratable class Person:
+    name: str
+
+    def Person(name: str):
+        self.name = name
+
+    def greeting() -> str:
+        return self.name
+let label: str = 'Ada'
+let data = object:
+    'name': label
+    def render(callback: fn(str, int) -> str, count: int) -> str:
+        return callback(label, count)
+success data`;
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    const symbols = documentSymbols(result);
+    for (const [name, kind] of [['Color', SymbolKind.Enum], ['Data', SymbolKind.Struct], ['Person', SymbolKind.Class]] as const) {
+        assert.equal(symbols.find(symbol => symbol.name === name)?.kind, kind);
+    }
+    assert.deepEqual(symbols.find(symbol => symbol.name === 'Person')?.children?.map(symbol => symbol.name),
+        ['name', 'Person', 'greeting']);
+    assert.deepEqual(symbols.find(symbol => symbol.name === 'Data')?.children?.map(symbol => symbol.name), ['color']);
+    assert.deepEqual(definition(result, at(source, 'label', 1))?.range.start, at(source, 'label'));
+    assert.deepEqual(definition(result, at(source, 'count)', 0))?.range.start, at(source, 'count:'));
+    const visible = completions(result, at(source, 'return callback'));
+    assert.ok(visible.some(item => item.label === 'callback'));
+    assert.ok(!visible.some(item => item.label === 'int' && item.detail === 'parameter int'));
+    assert.ok(!completions(result, at(source, 'success')).some(item => item.label === 'render'),
+        'Inline object functions are properties, not lexical bindings');
+    assert.ok(!completions(result, at(source, 'success')).some(item => item.label === 'greeting'));
+    assert.match(JSON.stringify(hover(result, at(source, 'label'))), /let label: str/);
+    assert.match(JSON.stringify(hover(result, at(source, 'render'))), /fn.*str, int.*str/);
+});
+
+test('type aliases have navigation, hover, completion and semantic tokens without changing type()', () => {
+    const source = `type Money = int [minimum=0, desc='Cents']
+let amount: Money = 1250
+type(amount)`;
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    assert.equal(documentSymbols(result).find(symbol => symbol.name === 'Money')?.kind, SymbolKind.TypeParameter);
+    assert.deepEqual(definition(result, at(source, 'Money', 1))?.range.start, at(source, 'Money'));
+    assert.ok(completions(result, at(source, 'type(amount)')).some(item => item.label === 'Money'));
+    assert.match(JSON.stringify(hover(result, at(source, 'Money', 1))), /type Money = int/);
+    assert.match(JSON.stringify(hover(result, at(source, 'type Money'))), /transparent/);
+    assert.match(JSON.stringify(hover(result, at(source, 'type(amount)'))), /type\(value\)/);
+    const tokens = decodedTokens(source, result);
+    assert.deepEqual(tokens.filter(token => token.text === 'Money').map(token => token.type), ['type', 'type']);
+    assert.deepEqual(tokens.filter(token => token.text === 'type').map(token => token.type), ['keyword', 'function']);
+});
+
+test('static typed failures are editor errors without inventing errors for untyped unknown values', () => {
+    assert.match(analysis("let count: int = 1.0").diagnostics[0].message, /int|float/);
+    assert.equal(analysis("let dynamic = missing_name").diagnostics.length, 0);
+    assert.match(analysis("let data = {'name': 'Ada'}").diagnostics[0].message, /object|dictionary|brace/);
+    assert.match(analysis("if True:\n  pass").diagnostics[0].message, /four|4/);
 });
 
 function at(source: string, text: string, occurrence = 0) {
@@ -198,7 +290,8 @@ test('all snippets expand to valid current SPL syntax', () => {
 });
 
 test('builtin completions stay aligned with the runtime', () => {
-    const runtimeNames = [...makeBuiltins({ log() {} }).keys(), 'read_file', 'write_file', 'web_fetch', 'web_search', 'shell'];
+    const runtimeNames = [...makeBuiltins({ log() {} }).keys(), 'char', 'object', 'validate', 'isinstance', 'struct',
+        'read_file', 'write_file', 'web_fetch', 'web_search', 'shell'];
     assert.deepEqual(Object.keys(builtins).sort(), runtimeNames.sort());
     const items = completions(analysis(''), { line: 0, character: 0 });
     for (const name of [...runtimeNames, 'let', 'def', 'ask', 'think', 'agent', 'enforce', 'forbid', 'restrict']) {
@@ -273,7 +366,9 @@ test('hover distinguishes builtin calls, generation modifiers, and user bindings
 
 test('multiline modifiers preserve contexts through nested values and unfinished parentheses', () => {
     const source = `let result = ask(
-    schema={'type': 'integer'},
+    schema=object:
+        'type': 'integer'
+    ,
     model=choose('one', 'two'),
     rea
 ) 'prompt'`;
@@ -383,7 +478,7 @@ test('definitions restore shadowed names and hide loop and handler bindings', ()
     assert.match(JSON.stringify(hover(result, at(source, 'level'))?.contents), /Log severity/);
 });
 
-test('definitions handle nested functions, redeclarations, loop and exception bindings', () => {
+test('definitions handle nested functions, conflicting redeclarations, loop and exception bindings', () => {
     const source = [
         'let name = 1',
         'let name = 2',
@@ -399,7 +494,8 @@ test('definitions handle nested functions, redeclarations, loop and exception bi
         '    log(err.reason)',
     ].join('\n');
     const result = analysis(source);
-    assert.deepEqual(result.diagnostics, []);
+    assert.equal(result.diagnostics.length, 1);
+    assert.match(result.diagnostics[0].message, /conflicting declaration 'name'/);
     assert.deepEqual(definition(result, at(source, 'name', 2))?.range.start, at(source, 'name', 1));
     assert.deepEqual(definition(result, at(source, 'param +'))?.range.start, at(source, 'param'));
     assert.deepEqual(definition(result, at(source, 'inner()', 1))?.range.start, at(source, 'inner'));
@@ -458,6 +554,206 @@ test('the language server never executes source', () => {
     assert.deepEqual(analysis(source).diagnostics, []);
 });
 
+test('references and highlights follow shadowing, writes, parameters and interpolations', () => {
+    const source = `let value = 1
+if True:
+    let value = 2
+    value += 1
+    log('😀 {value} {{value}}')
+log(value)
+def render(value):
+    return value`;
+    const result = analysis(source);
+    assert.deepEqual(references(result, at(source, 'value'), true).map(location => location.range.start),
+        [at(source, 'value'), at(source, 'value)', 0)]);
+    const inner = at(source, 'value = 2');
+    assert.deepEqual(references(result, inner, false).map(location => location.range.start),
+        [at(source, 'value +='), at(source, 'value}', 0)]);
+    assert.deepEqual(documentHighlights(result, inner).map(highlight => highlight.kind), [3, 3, 2]);
+    assert.deepEqual(references(result, at(source, 'return value'), true), []);
+    const param = at(source, 'value):');
+    assert.equal(references(result, param, true).length, 2);
+    assert.deepEqual(references(result, at(source, 'log'), true), []);
+});
+
+test('rename is versioned, scope-aware, and includes only real Markdown and string references', () => {
+    const source = markdownSource(`Comment @count
+
+\`\`\`spl
+let count = 1
+log('😀 {count} {{count}}', r'{count}')
+\`\`\`
+
+> Use @count, not @@count or email@count.
+
+\`\`\`spl
+success count
+\`\`\``);
+    const result = markdownAnalysis(source);
+    const position = at(source, 'count =');
+    assert.deepEqual(prepareRename(result, position), { range: {
+        start: position, end: { ...position, character: position.character + 5 },
+    }, placeholder: 'count' });
+    const change = rename(result, position, 'total').documentChanges?.[0];
+    assert.ok(change && 'textDocument' in change);
+    assert.equal(change.textDocument.version, 1);
+    assert.equal(change.edits.length, 4);
+    const updated = TextDocument.applyEdits(result.document, change.edits);
+    assert.ok(updated.includes('Comment @count'));
+    assert.ok(updated.includes("{{count}}', r'{count}'"));
+    assert.ok(updated.includes('@total, not @@count or email@count'));
+    assert.deepEqual(markdownAnalysis(updated).diagnostics, []);
+});
+
+test('rename rejects invalid names, same-scope conflicts and capture in either direction', () => {
+    const source = 'let value = 1\nlet other = 2\nlog(value, other)';
+    for (const newName of ['other', 'let', 'len', '$value', 'bad-name', '1value', '']) {
+        assert.throws(() => rename(analysis(source), at(source, 'value'), newName), ResponseError, newName);
+    }
+    const shadow = 'let value = 1\nif True:\n    let local = 2\n    log(value)';
+    assert.throws(() => rename(analysis(shadow), at(shadow, 'value'), 'local'), /capture|shadow/);
+    const capture = 'let outer = 1\nif True:\n    let local = 2\n    log(outer)';
+    assert.throws(() => rename(analysis(capture), at(capture, 'local'), 'outer'), /capture|shadow/);
+    const unknown = 'let value = 1\nlog(future)';
+    assert.throws(() => rename(analysis(unknown), at(unknown, 'value'), 'future'), /capture|shadow/);
+    assert.equal(prepareRename(analysis('log(unknown)'), at('log(unknown)', 'unknown')), undefined);
+    assert.throws(() => rename(analysis('log(unknown)'), at('log(unknown)', 'unknown'), 'valid'), /Only declared/);
+});
+
+test('fields and modifiers do not masquerade as lexical references or rename targets', () => {
+    const source = `let name = 'Ada'
+struct Person:
+    name: str
+let fmt = 'json'
+ask(fmt=fmt) 'x'`;
+    const result = analysis(source);
+    assert.equal(prepareRename(result, at(source, 'name:')), undefined);
+    assert.equal(prepareRename(result, at(source, 'fmt=')), undefined);
+    assert.equal(references(result, at(source, 'name ='), true).length, 1);
+    assert.equal(references(result, at(source, 'fmt ='), true).length, 2);
+    assert.equal(documentSymbols(result).find(symbol => symbol.name === 'Person')?.children?.[0].kind, SymbolKind.Field);
+});
+
+test('signature help handles typed functions, nested calls, overloads and modifier arguments', () => {
+    const source = `def render(callback: fn(str, int) -> str, count: int) -> str:
+    return callback('x', count)
+render(len([1, 2]), `;
+    const result = analysis(source);
+    const help = signatureHelp(result, document(source).positionAt(source.length));
+    assert.equal(help?.signatures[0].label, 'def render(callback: fn(str, int) -> str, count: int) -> str');
+    assert.equal(help?.signatures[0].parameters?.length, 2);
+    assert.equal(help?.activeParameter, 1);
+    const nested = at(source, '2])');
+    assert.equal(signatureHelp(result, nested), undefined, 'No call help inside a list literal');
+    const call = 'range(1, ';
+    const range = signatureHelp(analysis(call), document(call).positionAt(call.length));
+    assert.equal(range?.activeSignature, 1);
+    assert.equal(range?.activeParameter, 1);
+    for (const command of ['ask', 'think', 'agent']) {
+        const call = `${command}(model='test', tokens=2048, schema=Shape`;
+        const help = signatureHelp(analysis(call), document(call).positionAt(call.length));
+        assert.ok(help);
+        const parameter = help.signatures[0].parameters?.[help.activeParameter!];
+        assert.ok(parameter && Array.isArray(parameter.label));
+        assert.ok(help.signatures[0].label.slice(...parameter.label).startsWith('schema='));
+        assert.equal(help.signatures[0].label.includes('seed='), command === 'ask');
+    }
+});
+
+test('signature help ignores comments, strings, member calls, declarations and shadowed built-ins', () => {
+    for (const source of ['def f(value', '# len(', "let text = 'len('", 'unknown(', 'obj.len(']) {
+        assert.equal(signatureHelp(analysis(source), document(source).positionAt(source.length)), undefined, source);
+    }
+    const shadow = 'let len = 1\nlen(';
+    assert.equal(signatureHelp(analysis(shadow), document(shadow).positionAt(shadow.length)), undefined);
+    const source = "let text = '{round(1, 2)}'";
+    assert.equal(signatureHelp(analysis(source), at(source, '2)}'))?.activeParameter, 1);
+    const plain = '# ordinary\n\n```spl\nlen(\n```';
+    assert.equal(signatureHelp(markdownAnalysis(plain), at(plain, 'len(')), undefined);
+});
+
+test('folding ranges cover suites, object blocks, groups, strings and Markdown executable blocks', () => {
+    const source = `def render():
+
+    # Keep comments with the suite.
+    let data = object:
+        'items': [
+            1,
+            2
+        ]
+    return data`;
+    assert.deepEqual(foldingRanges(analysis(source)).map(range => [range.startLine, range.endLine]),
+        [[0, 8], [3, 7], [4, 7]]);
+    const text = "let text = '''first\nsecond\nthird'''\nsuccess text";
+    assert.deepEqual(foldingRanges(analysis(text)), [{ startLine: 0, endLine: 2 }]);
+    const markdown = markdownSource('```spl\nif True:\n    pass\n```\n\n> First\n> Second');
+    assert.deepEqual(foldingRanges(markdownAnalysis(markdown)).map(range => [range.startLine, range.endLine]),
+        [[5, 8], [6, 7], [10, 11]]);
+    assert.deepEqual(foldingRanges(markdownAnalysis('# Normal\n\nText')), []);
+});
+
+function decodedTokens(source: string, result = analysis(source)) {
+    const decoded: { text: string; type: string; modifiers: string[]; line: number; character: number }[] = [];
+    const data = semanticTokens(result).data;
+    let line = 0;
+    let character = 0;
+    for (let i = 0; i < data.length; i += 5) {
+        line += data[i];
+        character = data[i] === 0 ? character + data[i + 1] : data[i + 1];
+        const start = result.document.offsetAt({ line, character });
+        decoded.push({
+            text: source.slice(start, start + data[i + 2]), type: semanticTokenLegend.tokenTypes[data[i + 3]],
+            modifiers: semanticTokenLegend.tokenModifiers.filter((_, bit) => data[i + 4] & (1 << bit)), line, character,
+        });
+    }
+    return decoded;
+}
+
+test('semantic tokens classify lexical symbols with UTF-16 positions and declaration flags', () => {
+    const source = `enum Color = 'red' | 'blue'
+struct Data:
+    color: Color
+def render(value: str) -> str:
+    return '😀 {value} {{value}}'
+let data: Data = unknown
+log($args, render('x'))`;
+    const tokens = decodedTokens(source);
+    assert.deepEqual(tokens.find(token => token.text === 'Color')?.modifiers, ['declaration']);
+    assert.equal(tokens.find(token => token.text === 'Color')?.type, 'enum');
+    assert.equal(tokens.find(token => token.text === 'Data')?.type, 'struct');
+    assert.equal(tokens.find(token => token.text === 'color')?.type, 'property');
+    const param = tokens.filter(token => token.text === 'value');
+    assert.deepEqual(param.map(token => token.type), ['parameter', 'parameter']);
+    assert.deepEqual(param.map(token => token.modifiers), [['declaration'], []]);
+    assert.equal(param[1].character, at(source, 'value}', 0).character);
+    assert.deepEqual(tokens.find(token => token.text === '$args')?.modifiers, ['readonly', 'defaultLibrary']);
+    assert.equal(tokens.find(token => token.text === 'log')?.type, 'function');
+    assert.ok(tokens.every(token => token.type !== undefined));
+});
+
+test('Markdown semantic tokens and workspace symbols remain gated and document-local', () => {
+    const source = markdownSource('```spl\nlet total = 1\n```\n\n> Use @total.\n\nProse @total');
+    const result = markdownAnalysis(source);
+    assert.equal(decodedTokens(source, result).filter(token => token.text === 'total').length, 2);
+    const plain = markdownAnalysis('# Plain\n\n```spl\nlet ignored = 1\n```');
+    assert.deepEqual(semanticTokens(plain).data, []);
+    const symbols = workspaceSymbols([result, plain, analysis('def TOTAL(value):\n    return value')], 'ToTaL');
+    assert.deepEqual(symbols.map(symbol => symbol.name), ['total', 'TOTAL']);
+    assert.deepEqual(symbols.map(symbol => symbol.location.uri), ['file:///workflow.md', uri]);
+});
+
+test('CRLF workflows keep navigation, diagnostics, semantic tokens and rename ranges in the document', () => {
+    const source = '\uFEFF' + markdownSource('```spl\nlet value = 1\n```\n\n> Use @value.\n\n```spl\nask(bad=1) \'x\'\n```').replace(/\n/g, '\r\n');
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics[0].range.start, at(source, 'bad'));
+    assert.equal(references(result, at(source, 'value ='), true).length, 2);
+    const tokens = decodedTokens(source, result);
+    assert.equal(tokens.filter(token => token.text === 'value').length, 2);
+    const change = rename(result, at(source, 'value ='), 'total').documentChanges?.[0];
+    assert.ok(change && 'textDocument' in change);
+    assert.ok(TextDocument.applyEdits(result.document, change.edits).includes('> Use @total.'));
+});
+
 for (const transport of ['stdio', 'ipc'] as const) {
     test(`LSP ${transport}: initialize, edits, features, close, and shutdown`, { timeout: 15000 }, async (t) => {
         const server = process.env.SPL_TEST_SERVER ?? path.resolve(__dirname, '..', 'server.cjs');
@@ -483,10 +779,17 @@ for (const transport of ['stdio', 'ipc'] as const) {
             });
         });
         const initialized = await connection.sendRequest(InitializeRequest.type, {
-            processId: process.pid, rootUri: null, capabilities: {},
+            processId: process.pid, rootUri: null,
+            capabilities: { workspace: { workspaceEdit: { documentChanges: transport === 'ipc' } } },
         });
         assert.equal(initialized.capabilities.textDocumentSync, TextDocumentSyncKind.Incremental);
         assert.equal(initialized.capabilities.definitionProvider, true);
+        assert.equal(initialized.capabilities.referencesProvider, true);
+        assert.deepEqual(initialized.capabilities.renameProvider, { prepareProvider: true });
+        assert.equal(initialized.capabilities.foldingRangeProvider, true);
+        assert.equal(initialized.capabilities.workspaceSymbolProvider, true);
+        assert.ok(initialized.capabilities.semanticTokensProvider);
+        assert.ok(initialized.capabilities.signatureHelpProvider);
         assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('$'));
         assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('('));
         await connection.sendNotification(InitializedNotification.type, {});
@@ -511,10 +814,42 @@ for (const transport of ['stdio', 'ipc'] as const) {
         assert.deepEqual(location, { uri, range: { start: { line: 0, character: 4 }, end: { line: 0, character: 9 } } });
         const symbols = await connection.sendRequest(DocumentSymbolRequest.type, { textDocument: { uri } });
         assert.equal(symbols?.[0].name, 'value');
+        const refs = await connection.sendRequest(ReferencesRequest.type, { ...params, context: { includeDeclaration: true } });
+        assert.equal(refs?.length, 2);
+        assert.equal((await connection.sendRequest(DocumentHighlightRequest.type, params))?.length, 2);
+        assert.ok(await connection.sendRequest(PrepareRenameRequest.type, params));
+        const edit = await connection.sendRequest(RenameRequest.type, { ...params, newName: 'total' });
+        if (transport === 'ipc') {
+            const change = edit?.documentChanges?.[0];
+            assert.ok(change && 'textDocument' in change);
+            assert.equal(change.textDocument.version, 2);
+            assert.equal(change.edits.length, 2);
+        } else {
+            assert.equal(edit?.changes?.[uri].length, 2);
+        }
+        await assert.rejects(connection.sendRequest(RenameRequest.type, { ...params, newName: 'let' }), /identifier/);
+        assert.ok((await connection.sendRequest(SemanticTokensRequest.type, { textDocument: { uri } }))?.data.length);
+        assert.equal((await connection.sendRequest(WorkspaceSymbolRequest.type, { query: 'value' }))?.length, 1);
+        assert.deepEqual(await connection.sendRequest(FoldingRangeRequest.type, { textDocument: { uri } }), []);
+        const signatureDiagnostics = nextDiagnostics();
+        await connection.sendNotification(DidChangeTextDocumentNotification.type, {
+            textDocument: { uri, version: 3 },
+            contentChanges: [{ text: 'def render(value):\n    return value\nrender(1)' }],
+        });
+        assert.deepEqual((await signatureDiagnostics).diagnostics, []);
+        const signature = await connection.sendRequest(SignatureHelpRequest.type, {
+            textDocument: { uri }, position: { line: 2, character: 8 },
+        });
+        assert.equal(signature?.signatures[0].label, 'def render(value)');
+        assert.deepEqual(await connection.sendRequest(FoldingRangeRequest.type, { textDocument: { uri } }),
+            [{ startLine: 0, endLine: 1 }]);
         const closedDiagnostics = nextDiagnostics();
         await connection.sendNotification(DidCloseTextDocumentNotification.type, { textDocument: { uri } });
         assert.deepEqual((await closedDiagnostics).diagnostics, []);
         assert.deepEqual(await connection.sendRequest(CompletionRequest.type, params), []);
+        assert.deepEqual(await connection.sendRequest(ReferencesRequest.type, { ...params, context: { includeDeclaration: true } }), []);
+        assert.deepEqual(await connection.sendRequest(SemanticTokensRequest.type, { textDocument: { uri } }), { data: [] });
+        assert.deepEqual(await connection.sendRequest(WorkspaceSymbolRequest.type, { query: 'render' }), []);
         await connection.sendRequest(ShutdownRequest.type);
         const exited = once(child, 'exit');
         await connection.sendNotification(ExitNotification.type);

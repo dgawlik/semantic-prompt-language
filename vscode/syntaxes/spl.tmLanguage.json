@@ -28,7 +28,7 @@
 
     "special-variables": {
       "name": "variable.language.spl",
-      "match": "\\$(?:env|args)\\b"
+      "match": "\\$(?:env|args)\\b|(?<![.\\w])self\\b"
     },
 
     "comment": {
@@ -176,6 +176,21 @@
     "declarations": {
       "patterns": [
         {
+          "match": "\\b(hydratable)\\s+(class)\\s+([A-Za-z_]\\w*)",
+          "captures": {
+            "1": { "name": "storage.modifier.spl" },
+            "2": { "name": "storage.type.spl" },
+            "3": { "name": "entity.name.type.spl" }
+          }
+        },
+        {
+          "match": "\\b(type|enum|struct|class)\\s+([A-Za-z_]\\w*)(?=\\s*[:=])",
+          "captures": {
+            "1": { "name": "storage.type.spl" },
+            "2": { "name": "entity.name.type.spl" }
+          }
+        },
+        {
           "match": "\\b(def)\\s+([A-Za-z_]\\w*)",
           "captures": {
             "1": { "name": "storage.type.function.spl" },
@@ -208,6 +223,9 @@
 
     "keywords": {
       "patterns": [
+        { "name": "storage.type.spl", "match": "\\b(?:enum|struct|class|hydratable|fn)\\b" },
+        { "name": "support.type.spl", "match": "\\b(?:char|object)\\b" },
+        { "name": "support.type.spl", "match": "\\b(?:int|float|str|bool|list)\\b(?!\\s*\\()" },
         { "name": "storage.modifier.restrict-kind.spl", "match": "(?<=,)\\s*\\b(?:fs|net|exec|mcp)\\b(?=\\s+(?:['\"\\[]))" },
         { "name": "keyword.control.exception.spl", "match": "\\b(?:try|except)\\b" },
         { "name": "keyword.control.flow.spl", "match": "\\b(?:if|elif|else|for|while|break|continue|return|pass)\\b" },
@@ -231,7 +249,7 @@
 
     "builtins": {
       "name": "support.function.builtin.spl",
-      "match": "(?<![.\\w])(?:len|str|int|float|bool|type|list|range|abs|round|min|max|sum|sorted|reversed|enumerate|zip|any|all|keys|values|items|json_parse|json_stringify|log)(?=\\s*\\()"
+      "match": "(?<![.\\w])(?:len|str|int|float|bool|type|list|validate|isinstance|range|abs|round|min|max|sum|sorted|reversed|enumerate|zip|any|all|keys|values|items|json_parse|json_stringify|log)(?=\\s*\\()"
     },
 
     "calls": {
@@ -260,6 +278,7 @@
 
     "operators": {
       "patterns": [
+        { "name": "keyword.operator.type.spl", "match": "->|\\|" },
         { "name": "keyword.operator.assignment.compound.spl", "match": "//=|\\+=|-=|\\*=|/=|%=" },
         { "name": "keyword.operator.comparison.spl", "match": "==|!=|<=|>=|<|>" },
         { "name": "keyword.operator.arithmetic.spl", "match": "\\*\\*|//|[-+*/%]" },
@@ -273,12 +292,8 @@
     "group": {
       "patterns": [
         {
-          "name": "meta.dictionary.spl",
-          "begin": "\\{",
-          "end": "\\}",
-          "beginCaptures": { "0": { "name": "punctuation.section.dictionary.begin.spl" } },
-          "endCaptures": { "0": { "name": "punctuation.section.dictionary.end.spl" } },
-          "patterns": [{ "include": "#expression" }]
+          "name": "invalid.illegal.removed-brace.spl",
+          "match": "[{}]"
         },
         {
           "name": "meta.brackets.spl",

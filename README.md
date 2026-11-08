@@ -105,6 +105,11 @@ then `node dist/cli.js examples/hi.md`.
 
 ## Development
 
+This revision requires exactly four spaces per block level and `object:` dictionary expressions
+(`object()` for an empty dictionary). Brace-based SPL source is no longer accepted; JavaScript,
+JSON and interpolation braces are unchanged. See the [manual typing migration guide](docs-template/Migration.md)
+for annotations, numeric conversions, persistent contracts, and class versus struct schemas.
+
 ```sh
 npm --prefix lang install
 npm test                 # offline interpreter tests
@@ -112,6 +117,12 @@ npm --prefix vscode test # extension tests
 ```
 
 Live tests are opt-in: in PowerShell, `$env:SPL_LIVE_TESTS='1'; npm test`.
+
+The [VS Code extension](vscode/README.md#language-server) provides parser/type-checker diagnostics,
+scope-aware definitions/references/rename, signature help, document and open-document workspace
+symbols, folding and semantic highlighting. Workflow Markdown shares declarations across fences
+and `@name` references; `.spl` scratch files and notebook code cells are also supported. Editor
+analysis is offline and never executes workflows.
 
 To change the documentation, edit [docs-template/](docs-template/Introduction.md), then regenerate
 and verify the site. Commit the generated `docs/` files with the sources.

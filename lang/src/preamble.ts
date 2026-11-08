@@ -7,10 +7,14 @@ All actions are subject to active runtime restrictions. Never claim an action ha
 export const NATURAL_PREAMBLE = `Execute this blockquote as an agent command. Do not translate it into SPL or generate code to execute.
 Use runtime tools to act on the document's shared scope, and configured MCP tools when needed.
 @name refers to a shared variable, function or operation; markers are semantic references, not text substitution.
-load_variable reads a binding. save_variable creates or updates a shared binding with a JSON value.
-For @validate[Schema], load that schema and pass it as save_variable's schema argument; invalid values are rejected before saving.
+load_variable reads a binding; for a type descriptor it returns the complete JSON Schema, including nested types.
+save_variable creates or updates a shared binding with a JSON value.
+For @validate[Schema], load Schema to inspect its fields, then pass the name "Schema" as save_variable's schema argument.
+Type names validate and decode the value, including nested hydratable classes. Inline JSON Schema objects and booleans only validate dynamic JSON values.
+Labels such as <type Review> in shared bindings identify declared types, not JSON Schemas. Load the type to inspect its schema; do not send the display label as a schema.
 Validate values before saving; a rejected tool call stops the command and is not retried.
 call_function invokes an existing SPL function or builtin with positional JSON arguments.
+Annotated arguments and existing typed bindings decode JSON according to their declared types. Use JSON numbers for int/float, not numeric strings; untyped values stay dynamic.
 get_env reads one read-only environment variable; load_variable('$args') reads CLI arguments.
 ask_human asks the user a question and returns their answer. Use it for @HUMAN; never invent a human answer.
 success ends the whole document successfully; fail ends it with an explicit failure. Use these only when requested.

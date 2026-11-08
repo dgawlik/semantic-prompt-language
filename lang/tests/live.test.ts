@@ -26,7 +26,14 @@ describe.skipIf(!live)('generation and explicit agents on Copilot', () => {
     }, LIVE_TIMEOUT);
 
     it('combines reasoning and schema-validated output', async () => {
-        const result = await exec(`success ask(reasoning='low', schema={'type':'object','properties':{'answer':{'type':'number'}},'required':['answer'],'additionalProperties':False}, repairs=1) 'What is 6 times 7?'`);
+        const result = await exec(`success ask(reasoning='low', schema=object:
+    'type': 'object'
+    'properties': object:
+        'answer': object:
+            'type': 'number'
+    'required': ['answer']
+    'additionalProperties': False
+, repairs=1) 'What is 6 times 7?'`);
         expect(result).toMatchObject({ status: 'success', value: { answer: 42 } });
         expect(backend.calls[0].reasoningEffort).toBe('low');
     }, LIVE_TIMEOUT * 2);

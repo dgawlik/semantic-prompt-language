@@ -2,7 +2,7 @@
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
   "description": "Executable Markdown with SPL blocks and natural-language workflows",
-  "version": "1.12.1",
+  "version": "1.13.0",
   "publisher": "spl-lang",
    "icon": "icon.png",
   "license": "ISC",
@@ -24,6 +24,7 @@
     "virtualWorkspaces": { "supported": false }
   },
   "activationEvents": [
+    "onLanguage:spl",
     "onLanguage:markdown",
     "onNotebook:spl-workflow"
   ],
@@ -85,6 +86,7 @@
           "SPL",
           "Semantic Prompt Language"
         ],
+        "extensions": [".spl"],
         "configuration": "./language-configuration.json"
       }
     ],

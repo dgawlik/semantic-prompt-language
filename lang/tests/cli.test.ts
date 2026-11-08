@@ -263,13 +263,18 @@ globalThis.fetch = async (url, init) => {
         NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`,
     });
     expect(result).toEqual({
-        code: 0, out: 'The recipes have a TF-IDF cosine similarity of at least 0.9\n', err: '',
+        code: 0,
+        out: JSON.stringify([
+            'Bake apples in a pastry crust with sugar and cinnamon.',
+            'Bake apples in a pastry crust with sugar and cinnamon.',
+        ], null, 2) + '\n',
+        err: '',
     });
     const calls = fs.readFileSync(requests, 'utf8').trim().split('\n').map(line => JSON.parse(line));
     expect(calls).toHaveLength(2);
     for (const { url, body } of calls) {
         expect(url).toContain('/chat/completions');
-        expect(body).toMatchObject({ model: 'gpt-6-luna', seed: 13, temperature: 0, top_p: 1, max_completion_tokens: 1024 });
+        expect(body).toMatchObject({ model: 'gpt-6-luna', seed: 13, temperature: 0, top_p: 0.0001, max_completion_tokens: 1024 });
         expect(body).not.toHaveProperty('tools');
         expect(body).not.toHaveProperty('parallel_tool_calls');
     }
@@ -605,12 +610,13 @@ fail 'unreachable'`, '--silent');
     });
 
     it('prints non-string results as JSON', () => {
-        expect(JSON.parse(spl(`success {'a': [1, None, True]}`).out)).toEqual({ a: [1, null, true] });
+        expect(JSON.parse(spl(`success object:
+    'a': [1, None, True]`).out)).toEqual({ a: [1, null, true] });
     });
 
     it('pretty-prints and colors JSON logs on stderr without changing stdout', () => {
         const file = path.join(dir, 'pretty.md');
-        fs.writeFileSync(file, markdown("let review = {'findings': [{'severity': 'high', 'line': 12}]}\nlog('review:', review)\nsuccess review"));
+        fs.writeFileSync(file, markdown("let review = object:\n    'findings': [object:\n        'severity': 'high'\n        'line': 12\n    ]\nlog('review:', review)\nsuccess review"));
         const plain = run([file], { FORCE_COLOR: undefined, NO_COLOR: undefined });
         const colored = run([file], { FORCE_COLOR: '1', NO_COLOR: undefined });
         expect(plain.code).toBe(0);

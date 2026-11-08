@@ -30,7 +30,10 @@ let notes = read_file('./examples/data/notes.txt')
 > Summarize @notes in one sentence and save it to @today
 
 ```spl
-history.append({'run': runs, 'summary': today})
+history.append(object:
+    'run': runs
+    'summary': today
+)
 if len(history) > 5:
     history = history[1:]
 let trend = ''
@@ -40,5 +43,8 @@ let trend = ''
 > and save it to @trend. Otherwise leave @trend unchanged.
 
 ```spl
-success {'run': runs, 'today': today, 'trend': trend}
+success object:
+    'run': runs
+    'today': today
+    'trend': trend
 ```

@@ -3,6 +3,7 @@ export type StatusCode =
     | 'explicit_failure'
     | 'invalid_format'
     | 'validation_failed'
+    | 'type_error'
     | 'restriction_violation'
     | 'llm_error'
     | 'tool_error'

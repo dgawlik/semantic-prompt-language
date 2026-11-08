@@ -1,0 +1,23 @@
+# SYNTAX TEST "source.spl" "Types and object expressions"
+enum Color = 'red' | 'blue'
+#^^^ storage.type.spl
+#    ^^^^^ entity.name.type.spl
+#                  ^ keyword.operator.type.spl
+struct Data:
+#^^^^^ storage.type.spl
+#      ^^^^ entity.name.type.spl
+hydratable class Person:
+#^^^^^^^^^ storage.modifier.spl
+#          ^^^^^ storage.type.spl
+#                ^^^^^^ entity.name.type.spl
+let values: list[int | str] = []
+#                    ^ keyword.operator.type.spl
+def repeat(text: str, count: int) -> str:
+#                                 ^^ keyword.operator.type.spl
+let data = object:
+#          ^^^^^^ support.type.spl
+    'name': 'Ada'
+let empty = object()
+#           ^^^^^^ support.type.spl
+let old = {}
+#         ^^ invalid.illegal.removed-brace.spl

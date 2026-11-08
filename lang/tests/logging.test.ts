@@ -338,7 +338,7 @@ ${code}
     it('groups blockquote instructions and initial context, leaving the command and completed turns visible', async () => {
         const history: LogEvent[] = [];
         const requests: LlmRequest[] = [];
-        const source = `${markdown("let original = {'value': 1}")}\n\n> Set @answer to 2.`;
+        const source = `${markdown("let original = object:\n    'value': 1")}\n\n> Set @answer to 2.`;
         await run(parseMarkdown(source), {
             logger: new Logger('error', undefined, { eventSink: event => history.push(event) }),
             backend: {
@@ -621,7 +621,8 @@ describe('console formatting', () => {
 
     it('keeps script objects structured for both log expressions and the log builtin', async () => {
         const lines: string[] = [];
-        const result = await run(parse(`let payload = {'findings': [1, True, None]}
+        const result = await run(parse(`let payload = object:
+    'findings': [1, True, None]
 log('review', payload)
 let write_log = log
 write_log('review', payload)

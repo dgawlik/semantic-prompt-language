@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="This is a breaking source revision, including for unannotated programs. Migrate source manually;
+there is no legacy grammar mode or general-purpose automatic converter. Recreate pins and
+checkpoints after editing their source. The full contract is recorded in TYPES.md.">
+<meta name="color-scheme" content="light dark">
+<title>Typing migration - SPL docs</title>
+<link rel="icon" type="image/png" href="assets/icon.png?v=caa8698a7018">
+<link rel="stylesheet" href="assets/style.css?v=caa8698a7018">
+<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
+<script defer src="assets/search-index.js?v=caa8698a7018"></script>
+<script defer src="assets/site.js?v=caa8698a7018"></script>
+</head>
+<body data-page="migration">
+<a class="skip-link" href="#page">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.12.1<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Typing migration</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div></nav></details>
+  <main id="page" tabindex="-1">
+    <div class="page-meta"><span>Guides</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Typing migration</span><span class="reading-time">5 min read</span></div>
+    <header class="page-heading"><h1>Typing migration</h1><div class="lead"><p>This is a breaking source revision, including for unannotated programs. Migrate source manually;
+there is no legacy grammar mode or general-purpose automatic converter. Recreate pins and
+checkpoints after editing their source. The full contract is recorded in <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/TYPES.md">TYPES.md</a>.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blocks-and-dictionaries">Blocks and dictionaries</a></li><li class="toc-level-2"><a href="#opt-into-typed-contracts">Opt into typed contracts</a></li><li class="toc-level-2"><a href="#numeric-representations-and-conversions">Numeric representations and conversions</a></li><li class="toc-level-2"><a href="#class-schemas-versus-structural-data">Class schemas versus structural data</a></li><li class="toc-level-2"><a href="#persistent-mutation-contracts-and-projection">Persistent mutation contracts and projection</a></li></ul></nav></details>
+    <article class="prose"><h2 id="blocks-and-dictionaries">Blocks and dictionaries<a class="heading-anchor" href="#blocks-and-dictionaries" aria-label="Link to Blocks and dictionaries">#</a></h2>
+<p>Old blocks such as <code>if True { log(&#39;ok&#39;) }</code> are rejected. Replace the opening brace with a colon,
+put the body on new lines, and remove the closing brace. Each level adds <strong>exactly four spaces</strong>;
+tabs, inline suites and inconsistent dedents are errors. Align <code>elif</code>, <code>else</code> and <code>except</code> with
+their opening statement. Use <code>pass</code> for an otherwise empty statement body.</p>
+<p>Old dictionaries such as <code>let data = {&#39;name&#39;: &#39;Ada&#39;}</code> are also rejected. Use an <code>object:</code> expression;
+replace <code>{}</code> with <code>object()</code>. Do not change ordinary JavaScript objects, raw JSON wire payloads,
+or interpolation braces inside SPL strings. Expression continuation inside <code>()</code> and <code>[]</code> suspends
+ordinary indentation; explicit <code>object:</code> blocks still delimit their own entries.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
+    <span class="hljs-string">&#x27;name&#x27;</span>: <span class="hljs-string">&#x27;Ada&#x27;</span>
+    <span class="hljs-string">&#x27;address&#x27;</span>: <span class="hljs-built_in">object</span>:
+        <span class="hljs-string">&#x27;city&#x27;</span>: <span class="hljs-string">&#x27;London&#x27;</span>
+<span class="hljs-keyword">let</span> empty <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>()
+<span class="hljs-keyword">if</span> <span class="hljs-literal">True</span>:
+    <span class="hljs-built_in">log</span>(data.name)
+</code></pre></figure>
+<p>Object keys do not introduce a lexical scope. Inline <code>def</code> properties capture ordinary lexical
+variables, receive no implicit <code>self</code>, and should access fields through an explicit argument or
+captured dictionary. Dictionary built-in methods win in member calls: <code>o.pop()</code> calls the built-in,
+whereas <code>(o.pop)()</code> invokes a function stored at the colliding key.</p>
+<h2 id="opt-into-typed-contracts">Opt into typed contracts<a class="heading-anchor" href="#opt-into-typed-contracts" aria-label="Link to Opt into typed contracts">#</a></h2>
+<p>Untyped bindings remain dynamically assignable. Add annotations only where an enforced contract
+is wanted. Known typed violations stop execution before model calls; unknown dynamic values
+are checked at runtime without coercion or repair.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Color</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;red&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;green&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;blue&#x27;</span>
+<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Request</span>:
+    color: Color
+    note: <span class="hljs-built_in">str</span> <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
+    callback: <span class="hljs-keyword">fn</span>(<span class="hljs-built_in">str</span>, <span class="hljs-built_in">int</span>) <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>
+
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">repeat</span>(text: <span class="hljs-built_in">str</span>, count: <span class="hljs-built_in">int</span>) <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
+    <span class="hljs-keyword">return</span> text <span class="hljs-operator">*</span> count
+
+<span class="hljs-keyword">let</span> count: <span class="hljs-built_in">int</span> <span class="hljs-operator">=</span> <span class="hljs-number">2</span>
+<span class="hljs-keyword">let</span> colors: <span class="hljs-built_in">list</span>[Color] <span class="hljs-operator">=</span> [<span class="hljs-string">&#x27;red&#x27;</span>]
+<span class="hljs-keyword">let</span> choice: <span class="hljs-built_in">int</span> <span class="hljs-operator">|</span> <span class="hljs-built_in">str</span> <span class="hljs-operator">=</span> <span class="hljs-number">1</span>
+</code></pre></figure>
+<p>Structs are structural, exact records: every field is required, including nullable fields.
+Missing and extra fields fail. Enums accept matching strings directly. <code>char</code> requires exactly
+one Unicode scalar, not one UTF-16 code unit or grapheme cluster. <code>fn(T1, T2) -&gt; R</code> uses explicit
+arity, contravariant parameters and covariant returns; annotated and guarded callable boundaries
+check arguments and results. <code>validate(value, Type)</code> and <code>isinstance(value, Type)</code> do not convert
+legacy numbers or hydrate dictionaries into nominal instances.</p>
+<p>Field advice such as <code>str [min=2, desc=&#39;Name&#39;]</code> is compile-time JSON-compatible metadata, not a
+constraint: a one-character string still satisfies that type. Raw JSON Schema constraints remain
+strict. Forward declarations, recursive data schemas and inheritance are not supported.</p>
+<h2 id="numeric-representations-and-conversions">Numeric representations and conversions<a class="heading-anchor" href="#numeric-representations-and-conversions" aria-label="Link to Numeric representations and conversions">#</a></h2>
+<p>Typed <code>1</code> is a signed 64-bit <code>int</code>; typed <code>1.0</code> is a distinct finite binary64 <code>float</code>.
+Untyped literals retain legacy number behavior. A legacy value needs explicit <code>int(value)</code> or
+<code>float(value)</code> conversion to enter a new representation; validation never converts it.</p>
+<p><code>int(...)</code> is exact and range-checked: fractions, booleans, nonfinite values, out-of-range inputs,
+and inexact integer strings fail. It no longer truncates fractions or treats booleans as integers.
+The inclusive range is <code>-9223372036854775808</code> to <code>9223372036854775807</code>.
+<code>float(...)</code> constructs the distinct representation and rejects NaN and infinities; converting
+an integer to binary64 may round and lose precision. Mixed <code>int</code>/<code>float</code> arithmetic requires
+explicit conversion. Integer arithmetic checks overflow; integer <code>/</code> produces a float.
+<code>sum</code>, <code>abs</code> and <code>round</code> preserve typed numeric representations. Ordinary <code>len</code> and <code>range</code>
+counts remain legacy numbers: use explicit <code>int(...)</code> when a typed count is required.</p>
+<p>Descriptor-directed JSON decoding preserves integer tokens without first passing through a
+JavaScript number. For <code>int | float</code>, integer tokens select <code>int</code>, decimal/exponent tokens select
+<code>float</code>. SPL emits integers exactly and integral floats as <code>1.0</code> (or exponent spelling).
+External JSON normalization may erase that distinction; only SPL&#39;s typed encoder/decoder
+provides this round-trip guarantee.</p>
+<p><code>JsonFileStore</code> writes typed numeric tokens losslessly, but loading a store remains dynamic:
+files do not carry type descriptors or automatically restore typed contracts. Use an explicitly
+requested descriptor for typed numeric decoding; do not assume a generic JSON loader preserves
+signed-64-bit values or the <code>int</code>/<code>float</code> distinction.</p>
+<h2 id="class-schemas-versus-structural-data">Class schemas versus structural data<a class="heading-anchor" href="#class-schemas-versus-structural-data" aria-label="Link to Class schemas versus structural data">#</a></h2>
+<p>Classes are nominal instances with declared fields, a constructor named after the class, and
+implicitly bound <code>self</code> in constructors and methods. A matching dictionary is not a class instance.
+Normal construction runs the constructor and must initialize every declared field before publishing
+the instance. Only <code>hydratable class</code> permits constructor-free field hydration.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">hydratable</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Person</span>:
+    name: <span class="hljs-built_in">str</span>
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">Person</span>(name: <span class="hljs-built_in">str</span>):
+        self.name <span class="hljs-operator">=</span> name
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">greeting</span>() <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
+        <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;Hello <span class="hljs-subst">{self.name}</span>&#x27;</span>
+
+<span class="hljs-keyword">let</span> person: Person <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Person) <span class="hljs-string">&#x27;Generate a person&#x27;</span>
+<span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span><span class="hljs-keyword">struct</span>(Person)) <span class="hljs-string">&#x27;Generate person data&#x27;</span>
+<span class="hljs-keyword">success</span> <span class="hljs-built_in">object</span>(person)
+</code></pre></figure>
+<p><code>schema=Person</code> returns a hydrated instance only when the class opts in. <code>schema=struct(Person)</code>
+returns validated structural field data, <strong>not</strong> a <code>Person</code>. Consequently the old proposed
+<code>let result: Person = ask(schema=struct(Person)) &#39;Random Person&#39;</code> cannot satisfy the annotation.
+An annotation never secretly selects an ask schema, format or hydration target.</p>
+<p>For an existing instance, <code>struct(Person)(person)</code> explicitly projects a deep structural field
+snapshot. Unlike dynamic <code>object(person)</code> projection, a structural target cannot silently discard
+a required function-valued field to make the data fit its contract.</p>
+<p>Hydration skips the constructor: methods must not assume constructor normalization, side effects
+or semantic invariants occurred. Callable/non-JSON required fields make a schema target unsupported
+before any model call; they are not silently omitted. Distinct ambiguous decoding targets fail
+rather than being selected by union declaration order.</p>
+<p>Typed decoding and complete hydration validation share the ask repair pipeline: zero repairs by
+default, at most five additional attempts, and existing format/repair restrictions. Ordinary
+assignment, call, mutation and validation failures do not trigger model retries.</p>
+<h2 id="persistent-mutation-contracts-and-projection">Persistent mutation contracts and projection<a class="heading-anchor" href="#persistent-mutation-contracts-and-projection" aria-label="Link to Persistent mutation contracts and projection">#</a></h2>
+<p>Typed mutable values retain their contracts for their lifetime, including mutations through
+untyped aliases, member/index writes, captured bindings and built-in mutators. Mutable contracts
+are invariant: <code>list[Color]</code> is not interchangeable with <code>list[str]</code>.</p>
+<p>Successful mutable <code>isinstance</code> tests atomically install compatible contracts, just as validation
+does. Failed tests leave data and contracts unchanged. Incompatible typed aliases fail even when
+an empty collection&#39;s contents happen to satisfy both types. Bulk writes validate everything
+before committing; failures leave no valid prefix written or partial contracts installed.
+Narrowing expires after relevant assignment or potentially mutating calls; use stable local
+snapshots when appropriate.</p>
+<p>Project class instances explicitly before JSON output. <code>object(value)</code> makes a deep dynamic
+snapshot without sharing mutable children or changing its source. Named function properties,
+including methods, are dropped by dynamic projection; root functions, array functions and cycles
+are rejected. Class-to-struct projection likewise snapshots declared data fields without silently
+discarding required non-JSON fields. Ordinary untyped function serialization is unchanged:
+projection rules do not globally make the serializer ignore functions.</p>
+</article>
+    <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Migration.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="examples.html"><span>Previous</span><strong>Examples</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><div></div></nav>
+    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </main>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blocks-and-dictionaries">Blocks and dictionaries</a></li><li class="toc-level-2"><a href="#opt-into-typed-contracts">Opt into typed contracts</a></li><li class="toc-level-2"><a href="#numeric-representations-and-conversions">Numeric representations and conversions</a></li><li class="toc-level-2"><a href="#class-schemas-versus-structural-data">Class schemas versus structural data</a></li><li class="toc-level-2"><a href="#persistent-mutation-contracts-and-projection">Persistent mutation contracts and projection</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+</div>
+<dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
+<p class="visually-hidden" id="announcement" role="status"></p>
+<noscript><p class="noscript-note">Search, code copying, and the theme switch need JavaScript. All documentation and navigation work without it.</p></noscript>
+</body>
+</html>

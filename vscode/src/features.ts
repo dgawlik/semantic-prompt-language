@@ -4,13 +4,14 @@ import {
     type Position, type Range,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { SplSyntaxError } from '../../lang/src/errors.js';
+import { Failure, SplSyntaxError } from '../../lang/src/errors.js';
+import { checkProgram } from '../../lang/src/type-check.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
 import { builtins, keywords, modifiers, specialVariables, type Help } from './catalog';
 
-type NamedToken = Extract<Token, { type: 'name' }>;
+export type NamedToken = Extract<Token, { type: 'name' }>;
 
 interface Scope {
     start: number;
@@ -23,7 +24,7 @@ function contains(scope: Scope, at: number): boolean {
     return scope.start <= at && (at < scope.end || (scope.includesEnd === true && at === scope.end));
 }
 
-interface Binding {
+export interface Binding {
     name: string;
     token: NamedToken;
     scope: Scope;
@@ -31,6 +32,8 @@ interface Binding {
     kind: SymbolKind;
     end: number;
     functionScope?: Scope;
+    property?: boolean;
+    parameters?: NamedToken[];
 }
 
 export interface Analysis {
@@ -43,7 +46,7 @@ export interface Analysis {
     blocks?: MarkdownBlock[];
 }
 
-function tokenRange(token: NamedToken): Range {
+export function tokenRange(token: NamedToken): Range {
     return {
         start: { line: token.line - 1, character: token.col - 1 },
         end: { line: token.line - 1, character: token.col - 1 + token.value.length },
@@ -94,14 +97,17 @@ export function analyze(document: TextDocument): Analysis {
             const extracted = extractMarkdown(source);
             blocks = extracted.blocks;
             source = extracted.code;
-            parseMarkdown(document.getText());
+            checkProgram(parseMarkdown(document.getText()));
         } else {
-            parse(source);
+            checkProgram(parse(source));
         }
     } catch (error) {
-        if (!(error instanceof SplSyntaxError)) throw error;
-        const start = document.positionAt(document.offsetAt({ line: error.line - 1, character: error.col - 1 }));
-        const end = document.positionAt(Math.min(source.length, document.offsetAt(start) + 1));
+        if (!(error instanceof SplSyntaxError) && !(error instanceof Failure)) throw error;
+        const start = document.positionAt(document.offsetAt({
+            line: Math.max(0, error.line - 1),
+            character: error instanceof SplSyntaxError ? error.col - 1 : 0,
+        }));
+        const end = document.positionAt(Math.min(document.getText().length, document.offsetAt(start) + 1));
         diagnostics.push({
             range: { start, end },
             severity: DiagnosticSeverity.Error,
@@ -132,13 +138,23 @@ export function analyze(document: TextDocument): Analysis {
         // Lexically incomplete documents still get parser diagnostics and static completions.
     }
 
-    const root: Scope = { start: 0, end: source.length };
+    const root: Scope = { start: 0, end: document.getText().length, includesEnd: true };
     const scopes: Scope[] = [root];
     const bindings: Binding[] = [];
     const suiteEnds = new Map<number, number>();
+    const objectSuites = new Set<number>();
+    const classSuites = new Set<number>();
     const opens: number[] = [];
     for (let i = 0; i < tokens.length; i++) {
-        if (tokens[i].type === 'indent') opens.push(i);
+        if (tokens[i].type === 'indent') {
+            opens.push(i);
+            let header = i - 1;
+            while (tokens[header]?.type === 'nl') header--;
+            const introducer = tokens[header - 1];
+            if (isOp(tokens[header], ':') && isName(introducer) && introducer.value === 'object') {
+                objectSuites.add(i);
+            }
+        }
         if (tokens[i].type === 'dedent') {
             const open = opens.pop();
             if (open !== undefined) suiteEnds.set(open, i);
@@ -181,14 +197,45 @@ export function analyze(document: TextDocument): Analysis {
 
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
-        if (token.type === 'indent') blockScope(i, currentScope(offset(document, token)));
+        if (token.type === 'indent' && !objectSuites.has(i)) blockScope(i, currentScope(offset(document, token)));
         if (!isName(token) || isOp(tokens[i - 1], '.')) continue;
         const scope = currentScope(offset(document, token));
         const name = tokens[i + 1];
-        if ((token.value === 'let' || token.value === 'except') && isName(name)) {
+        let enclosingSuite: number | undefined;
+        for (const [start, finish] of suiteEnds) {
+            if (start < i && i < finish && (enclosingSuite === undefined || start > enclosingSuite)) enclosingSuite = start;
+        }
+        if (enclosingSuite !== undefined && classSuites.has(enclosingSuite) && isOp(name, ':') &&
+            ['nl', 'indent', 'dedent'].includes(tokens[i - 1]?.type)) {
+            let end = i + 2;
+            while (end < tokens.length && tokens[end].type !== 'nl' && tokens[end].type !== 'eof' && !isOp(tokens[end], '=')) end++;
+            const binding = add(token, scope, document.getText().slice(offset(document, token),
+                offset(document, tokens[end])).trim(), SymbolKind.Field);
+            binding.property = true;
+        } else if ((token.value === 'let' || token.value === 'except') && isName(name)) {
             const open = token.value === 'except' ? bodyOpen(i + 2) : undefined;
+            let end = i + 2;
+            while (end < tokens.length && tokens[end].type !== 'nl' && tokens[end].type !== 'eof' && !isOp(tokens[end], '=')) end++;
             add(name, open === undefined ? scope : blockScope(open, scope),
-                token.value === 'let' ? `let ${name.value}` : `except ${name.value}`);
+                token.value === 'let'
+                    ? document.getText().slice(offset(document, token), offset(document, tokens[end])).trim()
+                    : `except ${name.value}`);
+        } else if (['type', 'enum', 'struct', 'class'].includes(token.value) && isName(name)) {
+            const open = ['type', 'enum'].includes(token.value) ? undefined : bodyOpen(i + 2);
+            const binding = add(name, scope, `${token.value} ${name.value}`,
+                token.value === 'type' ? SymbolKind.TypeParameter :
+                token.value === 'enum' ? SymbolKind.Enum : token.value === 'struct' ? SymbolKind.Struct : SymbolKind.Class);
+            if (token.value === 'type') {
+                let end = i + 2;
+                while (end < tokens.length && tokens[end].type !== 'nl' && tokens[end].type !== 'eof' && !isOp(tokens[end], ';')) end++;
+                binding.signature = document.getText().slice(offset(document, token), offset(document, tokens[end])).trim();
+            }
+            if (open !== undefined) {
+                const close = suiteEnds.get(open);
+                binding.end = close === undefined ? source.length : offset(document, tokens[close]);
+                binding.functionScope = blockScope(open, scope);
+                classSuites.add(open);
+            }
         } else if (token.value === 'for') {
             const open = bodyOpen(i + 1);
             const loopScope = open === undefined ? scope : blockScope(open, scope);
@@ -201,9 +248,18 @@ export function analyze(document: TextDocument): Analysis {
         } else if (token.value === 'def' && isName(name) && isOp(tokens[i + 2], '(')) {
             const params: NamedToken[] = [];
             let j = i + 3;
-            while (j < tokens.length && !isOp(tokens[j], ')')) {
+            let depth = 0;
+            let parameterStart = true;
+            while (j < tokens.length) {
                 const param = tokens[j];
-                if (isName(param)) params.push(param);
+                if (depth === 0 && isOp(param, ')')) break;
+                if (depth === 0 && parameterStart && isName(param)) {
+                    params.push(param);
+                    parameterStart = false;
+                }
+                if (isOp(param, '(') || isOp(param, '[')) depth++;
+                else if (isOp(param, ')') || isOp(param, ']')) depth--;
+                else if (depth === 0 && isOp(param, ',')) parameterStart = true;
                 j++;
             }
             const open = bodyOpen(j + 1);
@@ -211,9 +267,14 @@ export function analyze(document: TextDocument): Analysis {
             const close = suiteEnds.get(open);
             const end = close === undefined ? source.length : offset(document, tokens[close]);
             const functionScope = blockScope(open, scope);
-            const binding = add(name, scope, `def ${name.value}(${params.map((param) => param.value).join(', ')})`, SymbolKind.Function);
+            let signatureEnd = j + 1;
+            while (signatureEnd < tokens.length && !isOp(tokens[signatureEnd], ':') && tokens[signatureEnd].type !== 'nl') signatureEnd++;
+            const binding = add(name, scope,
+                document.getText().slice(offset(document, token), offset(document, tokens[signatureEnd])).trim(), SymbolKind.Function);
+            binding.property = enclosingSuite !== undefined && (objectSuites.has(enclosingSuite) || classSuites.has(enclosingSuite));
             binding.end = end;
             binding.functionScope = functionScope;
+            binding.parameters = params;
             for (const param of params) add(param, functionScope, `parameter ${param.value}`);
         }
     }
@@ -224,24 +285,36 @@ function scopeAt(analysis: Analysis, at: number): Scope {
     return analysis.scopes.findLast((scope) => contains(scope, at)) ?? analysis.scopes[0];
 }
 
-function visibleBindings(analysis: Analysis, at: number): Binding[] {
+function visibleBindings(analysis: Analysis, at: number, renamed?: { binding: Binding; name: string }): Binding[] {
     const result = new Map<string, Binding>();
     for (let scope: Scope | undefined = scopeAt(analysis, at); scope; scope = scope.parent) {
-        const local = analysis.bindings.filter((binding) => binding.scope === scope);
+        const local = analysis.bindings.filter((binding) => binding.scope === scope && !binding.property);
+        const visible = new Map<string, Binding>();
         for (const binding of local) {
-            if (result.has(binding.name)) continue;
-            const candidates = local.filter((candidate) => candidate.name === binding.name);
-            const visible = candidates.findLast((candidate) => offset(analysis.document, candidate.token) <= at);
-            if (visible) result.set(binding.name, visible);
+            if (offset(analysis.document, binding.token) <= at) {
+                visible.set(binding === renamed?.binding ? renamed.name : binding.name, binding);
+            }
         }
+        for (const [name, binding] of visible) if (!result.has(name)) result.set(name, binding);
     }
     return [...result.values()];
 }
 
-function nameAt(analysis: Analysis, position: Position): NamedToken | undefined {
+export function nameAt(analysis: Analysis, position: Position): NamedToken | undefined {
     return analysis.names.find((token) =>
         token.line - 1 === position.line && token.col - 1 <= position.character &&
         position.character < token.col - 1 + token.value.length);
+}
+
+export function resolveBinding(
+    analysis: Analysis, token: NamedToken, renamed?: { binding: Binding; name: string }, name = token.value,
+): Binding | undefined {
+    const at = offset(analysis.document, token);
+    const next = analysis.tokens.find((candidate) => offset(analysis.document, candidate) >= at + token.value.length);
+    if (modifierContext(analysis, at) && isOp(next, '=')) return undefined;
+    return analysis.bindings.find((candidate) => candidate.token === token) ??
+        visibleBindings(analysis, at, renamed).find((candidate) =>
+            (candidate === renamed?.binding ? renamed.name : candidate.name) === name);
 }
 
 function modifierContext(analysis: Analysis, at: number): 'ask' | 'call' | 'directive' | 'log' | undefined {
@@ -322,9 +395,9 @@ export function hover(analysis: Analysis, position: Position): Hover | undefined
     const context = modifierContext(analysis, at);
     const next = analysis.tokens.find((candidate) => offset(analysis.document, candidate) >= at + token.value.length);
     if (context && isOp(next, '=') && Object.hasOwn(modifiers, token.value)) return helpHover(modifiers[token.value], range);
-    const binding = analysis.bindings.find((candidate) => candidate.token === token) ??
-        visibleBindings(analysis, at).find((candidate) => candidate.name === token.value);
+    const binding = resolveBinding(analysis, token);
     if (binding) return helpHover({ signature: binding.signature, description: 'Binding in the current document.' }, range);
+    if (token.value === 'type' && isName(next)) return helpHover({ signature: 'type', description: keywords.type }, range);
     if (Object.hasOwn(builtins, token.value)) return helpHover(builtins[token.value], range);
     if (Object.hasOwn(keywords, token.value)) return helpHover({ signature: token.value, description: keywords[token.value] }, range);
     return undefined;
@@ -333,11 +406,7 @@ export function hover(analysis: Analysis, position: Position): Hover | undefined
 export function definition(analysis: Analysis, position: Position): Location | undefined {
     const token = nameAt(analysis, position);
     if (!token) return undefined;
-    const at = offset(analysis.document, token);
-    const next = analysis.tokens.find((candidate) => offset(analysis.document, candidate) >= at + token.value.length);
-    if (modifierContext(analysis, at) && isOp(next, '=')) return undefined;
-    const binding = analysis.bindings.find((candidate) => candidate.token === token) ??
-        visibleBindings(analysis, at).find((candidate) => candidate.name === token.value);
+    const binding = resolveBinding(analysis, token);
     return binding ? { uri: analysis.document.uri, range: tokenRange(binding.token) } : undefined;
 }
 

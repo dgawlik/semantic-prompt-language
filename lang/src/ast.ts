@@ -1,14 +1,31 @@
 export type StrPart = string | Expr;
 
+export type TypeExpr =
+    | { t: 'type-name'; name: string; line: number }
+    | { t: 'type-list'; element: TypeExpr; line: number }
+    | { t: 'type-union'; members: TypeExpr[]; line: number }
+    | { t: 'type-fn'; params: TypeExpr[]; result: TypeExpr; line: number };
+
+export interface FieldDecl {
+    name: string;
+    type: TypeExpr;
+    advice: Record<string, unknown>;
+    line: number;
+}
+
+export type DefStmt = Extract<Stmt, { t: 'def' }>;
+
 export type Expr =
-    | { t: 'num'; v: number }
+    | { t: 'num'; v: number; raw?: string }
     | { t: 'str'; parts: StrPart[] }
     | { t: 'bool'; v: boolean }
     | { t: 'none' }
     | { t: 'name'; name: string; line: number }
     | { t: 'special'; name: 'env' | 'args' }
     | { t: 'list'; items: Expr[] }
-    | { t: 'dict'; entries: [Expr, Expr][] }
+    | { t: 'dict'; entries: ([Expr, Expr] | DefStmt)[] }
+    | { t: 'type'; type: TypeExpr }
+    | { t: 'group'; e: Expr }
     | { t: 'unary'; op: 'not' | '-' | '+'; e: Expr }
     | { t: 'binary'; op: string; l: Expr; r: Expr }
     | { t: 'logic'; op: 'and' | 'or'; l: Expr; r: Expr }
@@ -43,7 +60,7 @@ interface Base {
 
 export type Stmt = Base &
     (
-        | { t: 'let'; name: string; value: Expr }
+        | { t: 'let'; name: string; annotation?: TypeExpr; value: Expr }
         | { t: 'assign'; target: AssignTarget; op: '=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%='; value: Expr }
         | { t: 'block'; body: Stmt[] }
         | { t: 'expr'; e: Expr }
@@ -54,7 +71,11 @@ export type Stmt = Base &
         | { t: 'continue' }
         | { t: 'pass' }
         | { t: 'natural'; text: string }
-        | { t: 'def'; name: string; params: string[]; body: Stmt[] }
+        | { t: 'def'; name: string; params: string[]; paramTypes?: (TypeExpr | undefined)[]; returnType?: TypeExpr; body: Stmt[] }
+        | { t: 'enum'; name: string; values: string[] }
+        | { t: 'type-alias'; name: string; type: TypeExpr; advice: Record<string, unknown> }
+        | { t: 'struct'; name: string; fields: FieldDecl[] }
+        | { t: 'class'; name: string; fields: FieldDecl[]; methods: DefStmt[]; hydratable: boolean }
         | { t: 'return'; value?: Expr }
         | { t: 'try'; body: Stmt[]; errName: string; handler: Stmt[] }
         | { t: 'assert'; cond: Expr; message?: Expr }

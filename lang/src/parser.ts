@@ -1,11 +1,14 @@
 import type {
     AssignTarget,
+    DefStmt,
     Directives,
     Expr,
+    FieldDecl,
     Program,
     RestrictKind,
     Stmt,
     StrPart,
+    TypeExpr,
 } from './ast.js';
 import { SplSyntaxError } from './errors.js';
 import { tokenize, type StringPart, type Token } from './lexer.js';
@@ -13,7 +16,7 @@ import { tokenize, type StringPart, type Token } from './lexer.js';
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
     'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass', 'and', 'or', 'not',
-    'True', 'False', 'None',
+    'True', 'False', 'None', 'enum', 'struct', 'class', 'hydratable', 'fn',
 ]);
 
 export function isReservedName(name: string): boolean {
@@ -224,12 +227,7 @@ class Parser {
     }
 
     private parseBlock(): Stmt[] {
-        if (this.isOp('{')) this.fail("brace-delimited blocks have been removed; use ':' and an indented body");
-        this.expectOp(':');
-        if (!this.isType('nl')) this.fail("expected a newline after ':'; put the block body on indented lines");
-        this.skipNl();
-        if (!this.isType('indent')) this.fail('expected an indented block (use pass for an empty body)');
-        this.next();
+        this.beginSuite();
         const body: Stmt[] = [];
         this.skipSeparators();
         while (this.tok.type !== 'dedent') {
@@ -241,6 +239,15 @@ class Parser {
         if (!body.length) this.fail('expected a statement in the indented block (use pass for an empty body)');
         this.next();
         return body;
+    }
+
+    private beginSuite(): void {
+        if (this.isOp('{')) this.fail("brace-delimited blocks have been removed; use ':' and an indented body");
+        this.expectOp(':');
+        if (!this.isType('nl')) this.fail("expected a newline after ':'; put the block body on indented lines");
+        this.skipNl();
+        if (!this.isType('indent')) this.fail('expected an indented block (use pass for an empty body)');
+        this.next();
     }
 
     private parseStatement(): Stmt {
@@ -273,6 +280,18 @@ class Parser {
                     return { t: t.value, line };
                 case 'pass': this.next(); return { t: 'pass', line };
                 case 'def': return this.parseDef();
+                case 'enum': return this.parseEnum();
+                case 'type':
+                    if (this.peekAt(1).type === 'name') return this.parseTypeAlias();
+                    break;
+                case 'struct':
+                    if (!this.isOp('(', this.peekAt(1))) return this.parseRecord(false);
+                    break;
+                case 'class': return this.parseRecord(true);
+                case 'hydratable':
+                    this.next();
+                    this.expectKeyword('class');
+                    return this.parseRecord(true, true, line, true);
                 case 'return': {
                     this.next();
                     return { t: 'return', line, value: this.atStatementEnd() ? undefined : this.parseExpr() };
@@ -325,8 +344,9 @@ class Parser {
         const line = this.tok.line;
         this.next();
         const name = this.expectIdent('a variable name');
+        const annotation = this.isOp(':') ? (this.next(), this.parseTypeExpr()) : undefined;
         this.expectOp('=');
-        return { t: 'let', line, name, value: this.parseExpr() };
+        return { t: 'let', line, name, ...(annotation ? { annotation } : {}), value: this.parseExpr() };
     }
 
     private parseIf(): Extract<Expr, { t: 'if' }> {
@@ -354,26 +374,198 @@ class Parser {
         return { t: 'if', line, branches, orelse };
     }
 
-    private parseDef(): Stmt {
+    private parseDef(): DefStmt {
         const line = this.tok.line;
         this.next();
         const name = this.expectIdent('a function name');
         this.expectOp('(');
         const params: string[] = [];
+        const paramTypes: (TypeExpr | undefined)[] = [];
         while (!this.isOp(')')) {
             const nameTok = this.tok;
             const p = this.expectIdent('a parameter name');
             if (params.includes(p)) this.fail(`duplicate parameter '${p}'`, nameTok);
             params.push(p);
+            paramTypes.push(this.isOp(':') ? (this.next(), this.parseTypeExpr()) : undefined);
             if (this.isOp(',')) this.next();
             else if (!this.isOp(')')) this.fail("expected ',' or ')' in parameter list");
         }
         this.next();
+        const returnType = this.isOp('->') ? (this.next(), this.parseTypeExpr()) : undefined;
         const savedLoop = this.loopDepth;
         this.loopDepth = 0;
         const body = this.parseBlock();
         this.loopDepth = savedLoop;
-        return { t: 'def', line, name, params, body };
+        return { t: 'def', line, name, params, body,
+            ...(paramTypes.some(Boolean) ? { paramTypes } : {}),
+            ...(returnType ? { returnType } : {}),
+        };
+    }
+
+    private parseTypeAlias(): Extract<Stmt, { t: 'type-alias' }> {
+        const line = this.next().line;
+        const name = this.expectIdent('a type alias name');
+        this.expectOp('=');
+        const type = this.parseTypeExpr();
+        const advice = this.isOp('[') ? this.parseAdvice() : {};
+        return { t: 'type-alias', line, name, type, advice };
+    }
+
+    private parseEnum(): Extract<Stmt, { t: 'enum' }> {
+        const line = this.next().line;
+        const name = this.expectIdent('an enum name');
+        this.expectOp('=');
+        const values = [this.parseLiteralString('enum member')];
+        while (this.isOp('|')) {
+            this.next();
+            const at = this.tok;
+            const value = this.parseLiteralString('enum member');
+            if (values.includes(value)) this.fail(`duplicate enum member '${value}'`, at);
+            values.push(value);
+        }
+        return { t: 'enum', line, name, values };
+    }
+
+    private parseRecord(isClass: boolean, hydratable = false, line = this.tok.line, consumed = false): Stmt {
+        if (!consumed) this.next();
+        const name = this.expectIdent(isClass ? 'a class name' : 'a struct name');
+        this.beginSuite();
+        const fields: FieldDecl[] = [];
+        const methods: DefStmt[] = [];
+        const names = new Set<string>();
+        this.skipNl();
+        while (!this.isType('dedent')) {
+            if (this.isType('eof')) this.fail('expected the end of a declaration');
+            const at = this.tok;
+            if (this.isName('pass')) {
+                this.next();
+            } else if (this.isName('def')) {
+                if (!isClass) this.fail('structs contain fields, not methods; use class for instance methods');
+                const method = this.parseDef();
+                if (method.params.includes('self')) this.fail("'self' is implicit in constructors and methods; omit it from parameters", at);
+                if (names.has(method.name)) this.fail(`duplicate class member '${method.name}'`, at);
+                names.add(method.name);
+                methods.push(method);
+            } else {
+                const fieldName = this.expectIdent('a field name');
+                if (names.has(fieldName)) this.fail(`duplicate field or member '${fieldName}'`, at);
+                names.add(fieldName);
+                this.expectOp(':');
+                const type = this.parseTypeExpr();
+                const advice = this.isOp('[') ? this.parseAdvice() : {};
+                fields.push({ name: fieldName, type, advice, line: at.line });
+            }
+            this.endOfStatement();
+            this.skipNl();
+        }
+        this.next();
+        return isClass ? { t: 'class', line, name, fields, methods, hydratable }
+            : { t: 'struct', line, name, fields };
+    }
+
+    private parseAdvice(): Record<string, unknown> {
+        this.expectOp('[');
+        const advice: Record<string, unknown> = {};
+        while (!this.isOp(']')) {
+            const at = this.tok;
+            if (at.type !== 'name' || at.value.startsWith('$')) this.fail('expected a named field metadata key');
+            const key = (this.next() as Token & { type: 'name' }).value;
+            if (Object.hasOwn(advice, key)) this.fail(`duplicate field metadata '${key}'`, at);
+            this.expectOp('=');
+            const value = this.metadataValue(this.parseExpr(), at);
+            if (key === 'desc' && typeof value !== 'string') this.fail("field metadata 'desc' must be a string", at);
+            if ((key === 'min' || key === 'max') && typeof value !== 'number') {
+                this.fail(`field metadata '${key}' must be a number`, at);
+            }
+            Object.defineProperty(advice, key, { value, enumerable: true, writable: true, configurable: true });
+            if (this.isOp(',')) this.next();
+            else if (!this.isOp(']')) this.fail("expected ',' or ']' in field metadata");
+        }
+        this.next();
+        return advice;
+    }
+
+    private metadataValue(expr: Expr, at: Token): unknown {
+        switch (expr.t) {
+            case 'num':
+                if (!Number.isFinite(expr.v)) this.fail('field metadata numbers must be finite JSON-compatible literals', at);
+                return expr.v;
+            case 'str':
+                if (expr.parts.some(part => typeof part !== 'string')) break;
+                return expr.parts.join('');
+            case 'bool': return expr.v;
+            case 'none': return null;
+            case 'unary':
+                if ((expr.op === '-' || expr.op === '+') && expr.e.t === 'num') {
+                    const value = this.metadataValue(expr.e, at) as number;
+                    return expr.op === '-' ? -value : value;
+                }
+                break;
+            case 'list': return expr.items.map(item => this.metadataValue(item, at));
+            case 'dict': {
+                const result: Record<string, unknown> = {};
+                for (const entry of expr.entries) {
+                    if (!Array.isArray(entry)) {
+                        this.fail('field metadata requires compile-time JSON-compatible literals, not expressions or function calls', at);
+                    }
+                    const [key, value] = entry;
+                    if (key.t !== 'str' || key.parts.some(part => typeof part !== 'string')) {
+                        this.fail('field metadata object keys must be literal strings', at);
+                    }
+                    const name = key.parts.join('');
+                    if (Object.hasOwn(result, name)) this.fail(`duplicate field metadata object key '${name}'`, at);
+                    Object.defineProperty(result, name, {
+                        value: this.metadataValue(value, at), enumerable: true, writable: true, configurable: true,
+                    });
+                }
+                return result;
+            }
+        }
+        return this.fail('field metadata requires compile-time JSON-compatible literals, not expressions or function calls', at);
+    }
+
+    private parseTypeExpr(): TypeExpr {
+        const first = this.parseTypePrimary();
+        const members = [first];
+        while (this.isOp('|')) {
+            this.next();
+            members.push(this.parseTypePrimary());
+        }
+        return members.length === 1 ? first : { t: 'type-union', members, line: first.line };
+    }
+
+    private parseTypePrimary(): TypeExpr {
+        const at = this.tok;
+        if (this.isOp('(')) {
+            this.next();
+            const type = this.parseTypeExpr();
+            this.expectOp(')');
+            return type;
+        }
+        if (at.type !== 'name' || at.value.startsWith('$') ||
+            (KEYWORDS.has(at.value) && at.value !== 'None' && at.value !== 'fn')) {
+            this.fail(`expected a type name but found ${this.describe(at)}`);
+        }
+        const name = (this.next() as Token & { type: 'name' }).value;
+        if (name === 'list') {
+            this.expectOp('[');
+            const element = this.parseTypeExpr();
+            this.expectOp(']');
+            return { t: 'type-list', element, line: at.line };
+        }
+        if (name === 'fn') {
+            this.expectOp('(');
+            const params: TypeExpr[] = [];
+            while (!this.isOp(')')) {
+                params.push(this.parseTypeExpr());
+                if (this.isOp(',')) this.next();
+                else if (!this.isOp(')')) this.fail("expected ',' or ')' in callable signature");
+            }
+            this.next();
+            this.expectOp('->');
+            return { t: 'type-fn', params, result: this.parseTypeExpr(), line: at.line };
+        }
+        return { t: 'type-name', name, line: at.line };
     }
 
     private parseLoopBody(): Stmt[] {
@@ -416,6 +608,7 @@ class Parser {
     }
 
     private toTarget(e: Expr, at: Token): AssignTarget {
+        if (e.t === 'group') return this.toTarget(e.e, at);
         if (e.t === 'name') return { t: 'name', name: e.name };
         if (e.t === 'member') return { t: 'member', obj: e.obj, name: e.name };
         if (e.t === 'index') return { t: 'index', obj: e.obj, index: e.index };
@@ -425,8 +618,17 @@ class Parser {
     // ---- expressions ---------------------------------------------------
 
     private parseExpr(): Expr {
-        const e = this.parseOr();
+        let e = this.parseOr();
         if (this.atSuiteEnd()) return e;
+        if (this.isOp('|')) {
+            const first = this.expressionType(e);
+            const members = first.t === 'type-union' ? [...first.members] : [first];
+            while (this.isOp('|')) {
+                this.next();
+                members.push(this.parseTypePrimary());
+            }
+            e = { t: 'type', type: { t: 'type-union', members, line: first.line } };
+        }
         if (this.isName('if')) {
             this.next();
             const cond = this.parseOr();
@@ -434,6 +636,14 @@ class Parser {
             return { t: 'ternary', cond, then: e, else: this.parseExpr() };
         }
         return e;
+    }
+
+    private expressionType(expr: Expr): TypeExpr {
+        if (expr.t === 'type') return expr.type;
+        if (expr.t === 'name') return { t: 'type-name', name: expr.name, line: expr.line };
+        if (expr.t === 'none') return { t: 'type-name', name: 'None', line: this.tok.line };
+        if (expr.t === 'group') return this.expressionType(expr.e);
+        return this.fail("'|' joins type descriptors; expected a type name or descriptor");
     }
 
     private parseOr(): Expr {
@@ -538,7 +748,8 @@ class Parser {
         for (;;) {
             if (this.atSuiteEnd()) return e;
             if (this.isOp('(')) {
-                e = { t: 'call', callee: e, args: this.parseArgs() };
+                const descriptorArg = e.t === 'name' && ['validate', 'isinstance'].includes(e.name) ? 1 : undefined;
+                e = { t: 'call', callee: e, args: this.parseArgs(descriptorArg) };
             } else if (this.isOp('[')) {
                 this.next();
                 e = this.parseSubscript(e);
@@ -554,16 +765,27 @@ class Parser {
         }
     }
 
-    private parseArgs(): Expr[] {
+    private parseArgs(descriptorArg?: number): Expr[] {
         this.expectOp('(');
         const args: Expr[] = [];
         while (!this.isOp(')')) {
-            args.push(this.parseExpr());
+            const line = this.tok.line;
+            const value = this.parseExpr();
+            args.push(args.length === descriptorArg ? this.descriptorValue(value, line) : value);
             if (this.isOp(',')) this.next();
             else if (!this.isOp(')')) this.fail("expected ',' or ')' in call");
         }
         this.next();
         return args;
+    }
+
+    private descriptorValue(value: Expr, line: number): Expr {
+        if (value.t === 'none') return { t: 'type', type: { t: 'type-name', name: 'None', line } };
+        if (value.t === 'group') return { t: 'group', e: this.descriptorValue(value.e, line) };
+        if (value.t === 'ternary') return {
+            ...value, then: this.descriptorValue(value.then, line), else: this.descriptorValue(value.else, line),
+        };
+        return value;
     }
 
     private parseSubscript(obj: Expr): Expr {
@@ -583,7 +805,7 @@ class Parser {
         switch (t.type) {
             case 'num':
                 this.next();
-                return { t: 'num', v: t.value };
+                return { t: 'num', v: t.value, raw: t.raw };
             case 'str':
                 this.next();
                 return { t: 'str', parts: this.convertParts(t.parts) };
@@ -604,7 +826,7 @@ class Parser {
             this.next();
             const e = this.parseExpr();
             this.expectOp(')');
-            return e;
+            return { t: 'group', e };
         }
         if (t.value === '[') {
             this.next();
@@ -618,24 +840,7 @@ class Parser {
             return { t: 'list', items };
         }
         if (t.value === '{') {
-            this.next();
-            if (this.isOp('}')) {
-                this.next();
-                return { t: 'dict', entries: [] };
-            }
-            const entries: [Expr, Expr][] = [];
-            while (!this.isOp('}')) {
-                const k = this.parseExpr();
-                this.expectOp(':');
-                entries.push([k, this.parseExpr()]);
-                if (this.isOp(',')) {
-                    this.next();
-                } else if (!this.isOp('}')) {
-                    this.fail("expected ',' or '}' in dict");
-                }
-            }
-            this.next();
-            return { t: 'dict', entries };
+            return this.fail("brace dictionary literals have been removed; use 'object:' and indented entries, or object() for an empty dictionary");
         }
         if (t.value === '?') {
             return this.fail("'?' generation syntax has been removed; use ask(...) 'prompt'");
@@ -653,6 +858,22 @@ class Parser {
             case 'True': this.next(); return { t: 'bool', v: true };
             case 'False': this.next(); return { t: 'bool', v: false };
             case 'None': this.next(); return { t: 'none' };
+            case 'object':
+                if (this.isOp(':', this.peekAt(1))) {
+                    this.next();
+                    return this.parseObject();
+                }
+                this.next();
+                return { t: 'name', name: t.value, line: t.line };
+            case 'list':
+                if (this.isOp('[', this.peekAt(1))) return { t: 'type', type: this.parseTypePrimary() };
+                this.next();
+                return { t: 'name', name: t.value, line: t.line };
+            case 'fn': return { t: 'type', type: this.parseTypePrimary() };
+            case 'struct':
+                if (!this.isOp('(', this.peekAt(1))) this.fail("use 'struct Name:' for a declaration or struct(Class) for a descriptor");
+                this.next();
+                return { t: 'name', name: t.value, line: t.line };
             case 'human': return this.parseHuman();
             case 'if': return this.parseIf();
             case 'log':
@@ -680,6 +901,26 @@ class Parser {
                 this.next();
                 return { t: 'name', name: t.value, line: t.line };
         }
+    }
+
+    private parseObject(): Extract<Expr, { t: 'dict' }> {
+        this.beginSuite();
+        const entries: Extract<Expr, { t: 'dict' }>['entries'] = [];
+        this.skipNl();
+        while (!this.isType('dedent')) {
+            if (this.isType('eof')) this.fail('expected the end of an object expression');
+            if (this.isName('def')) {
+                entries.push(this.parseDef());
+            } else {
+                const key = this.parseExpr();
+                this.expectOp(':');
+                entries.push([key, this.parseExpr()]);
+            }
+            this.endOfStatement();
+            this.skipNl();
+        }
+        this.next();
+        return { t: 'dict', entries };
     }
 
     private parseHuman(): Expr {
@@ -716,6 +957,7 @@ class Parser {
             if (name in out) this.fail(`duplicate modifier '${name}'`, nameTok);
             this.expectOp('=');
             out[name] = this.parseExpr();
+            if (name === 'schema') out[name] = this.descriptorValue(out[name], nameTok.line);
             const value = out[name];
             if (cmd === 'log' && value.t === 'name' && ['error', 'info', 'debug'].includes(value.name)) {
                 out[name] = { t: 'str', parts: [value.name] };

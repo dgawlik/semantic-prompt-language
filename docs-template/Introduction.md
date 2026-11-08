@@ -9,31 +9,38 @@ Turn Markdown into runnable AI workflows—natural-language steps alongside dete
 extension: 'semantic-prompt-language'
 version: 1
 model: 'gpt-6-luna'
+preamble: 'Be concise.'
 ---
 
-# Repository Agentic Operations
+# Hello, SPL
 
-This example highlights some SPL features helpful in automation of day to day workflow
-
-> read the repository you are in and list security vulnerabilities grouped 
-> in categories high, medium, low. each category should be an array of issues 
-> with each issue json object with name, cwe-id, link to file and describtion. 
-> save to @vulnerabilities
+Prose like this is commentary. Only `spl` fences and blockquotes run, top to bottom, in one shared scope.
 
 ```spl
-log(vulnerabilities)
+let topics = ['recursion', 'closures', 'regular expressions']
+let Card = object:
+    'type': 'object'
+    'properties': object:
+        'term': object:
+            'type': 'string'
+        'definition': object:
+            'type': 'string'
+    'required': ['term', 'definition']
+    'additionalProperties': False
+let cards = object()
+for topic in topics:
+    cards[topic] = ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}'
 ```
 
+> Pick the key of @cards whose card a beginner would find hardest. Save that exact key to @hardest
+
 ```spl
-if len(vulnerabilities['high']) > 0:
-    fail 'High vulnerabilities found. Fix this one first {vulnerabilities["high"][0]}'
-elif len(vulnerabilities['medium']) > 0:
-    for vuln in vulnerabilities['medium']:
-        log('Medium vulnerability found: {vuln}')
-elif len(vulnerabilities['low']) > 0:
-    for vuln in vulnerabilities['low']:
-        log('Low vulnerability found: {vuln}')
-success 'Analyzed'
+assert hardest in topics "unexpected topic '{hardest}'"
+restrict './out':
+    write_file('./out/cards.json', json_stringify(cards, 2))
+success object:
+    'cards': len(cards)
+    'hardest': hardest
 ```
 ````
 
@@ -90,7 +97,7 @@ success [recipe1, recipe2]
 
 ## Non-goals
 
-* Full Python, classes or a static type system.
+* Full Python, inheritance, recursive schemas or general-purpose automatic source conversion.
 * Reproducible model output, transactional actions or an OS sandbox.
 
 ## Where next
@@ -101,3 +108,4 @@ success [recipe1, recipe2]
 * [Guards & failures](Safety.md): restrictions, assertions, failures and human input.
 * [CLI & runtime](CLI.md): options, traces, stores, MCP and embedding.
 * [Examples](Examples.md): real-world workflows.
+* [Typing migration](Migration.md): breaking syntax, contracts, numeric representations and class schemas.

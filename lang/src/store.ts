@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { fromJson, isFunction, toJson, type Value } from './values.js';
+import { encodeJson, fromJson, isFunction, newDict, type Value } from './values.js';
 
 /** Pluggable persistence for top-level variables. */
 export interface VariableStore {
@@ -35,11 +35,10 @@ export class JsonFileStore implements VariableStore {
     }
 
     save(vars: Record<string, Value>): void {
-        const data: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(vars)) if (!isFunction(v)) data[k] = toJson(v);
+        const data = newDict(Object.entries(vars).filter(([, value]) => !isFunction(value)));
         fs.mkdirSync(path.dirname(path.resolve(this.file)), { recursive: true });
         const tmp = `${this.file}.${process.pid}.tmp`;
-        fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+        fs.writeFileSync(tmp, encodeJson(data, 2), 'utf8');
         fs.renameSync(tmp, this.file);
     }
 }

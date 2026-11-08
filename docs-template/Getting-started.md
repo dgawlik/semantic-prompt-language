@@ -77,8 +77,9 @@ spl greet.md --arg Ada
 * **Everything else** (headings, prose, other code fences) is commentary.
 
 Fences and blockquotes run in document order in one shared scope. Indented SPL blocks create
-lexical child scopes. Blocks use `:` plus a newline and spaces (4 recommended), with `pass` for
-an empty body; old block braces and inline suites are no longer accepted. See
+lexical child scopes. Blocks use `:` plus a newline and exactly four spaces per level, with `pass` for
+an empty body. Use `object:` for dictionaries (`object()` when empty); old braces and inline suites
+are no longer accepted. See the [typing migration guide](Migration.md) and
 [block syntax and migration](Language.md#block-syntax-and-migration).
 `success`, `fail` and a top-level `return`
 end the whole document.
@@ -98,9 +99,25 @@ trace. Explicit tool calls still run during replay; see [traces and replay](CLI.
 
 Install from Marketplace: [spl](https://marketplace.visualstudio.com/items?itemName=spl-lang.spl-lang-vscode)
 
-The extension in `vscode/` adds parser-backed diagnostics, completions, hover, go to definition,
-document symbols, highlighting for `spl` fences and `@name` markers, and Markdown preview
-highlighting. Type `splworkflow` for a new document.
+The extension in `vscode/` adds parser/type-checker diagnostics, completions, hover, go to
+definition (F12), references (Shift+F12), safe rename (F2), signature help, document symbols,
+open-document workspace symbol search, folding and semantic highlighting. It supports workflow
+Markdown, standalone `.spl` editor files and SPL notebook cells; ordinary Markdown keeps its
+normal language behavior. Type `splworkflow` for a new workflow document. SPL fences and `@name`
+markers are highlighted in the editor, and SPL fences also receive Markdown preview highlighting.
+
+In the Markdown text editor, navigation and rename share top-level declarations across SPL
+fences and blockquote references, while respecting inner lexical scopes. Raw strings, escaped
+interpolations and commentary are not rewritten. Rename rejects identifier conflicts and
+reference capture. The language server only analyzes source and never calls models or tools.
+
+Static analysis does not infer names introduced by natural-language actions or dynamic member
+types. References and rename stay inside the current document; workspace symbols cover open
+documents only. Notebook analysis is per cell, independent of shared runtime execution state.
+Use the Markdown text editor for static navigation across fences. The CLI still runs Markdown
+workflows, not standalone `.spl` scratch files.
+See the [extension guide](../vscode/README.md#language-server) for features, shortcuts,
+analysis boundaries and development instructions.
 
 Or install from repository:
 

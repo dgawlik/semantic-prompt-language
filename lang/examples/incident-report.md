@@ -15,8 +15,11 @@ only writes the narrative, from the extracted facts rather than the raw log.
 let path = './examples/data/app.log'
 if $args[0] != None:
     path = $args[0]
-let counts = {'INFO': 0, 'WARN': 0, 'ERROR': 0}
-let groups = {}
+let counts = object:
+    'INFO': 0
+    'WARN': 0
+    'ERROR': 0
+let groups = object()
 let first = None
 let last = None
 for line in read_file(path).splitlines():
@@ -30,7 +33,9 @@ for line in read_file(path).splitlines():
     let message = ' '.join(parts[3:]).split(' (')[0]
     let key = "{parts[2]}: {message}"
     if key not in groups:
-        groups[key] = {'count': 0, 'first': parts[0]}
+        groups[key] = object:
+            'count': 0
+            'first': parts[0]
     groups[key].count += 1
     if first == None:
         first = parts[0]
@@ -54,5 +59,8 @@ for section in ['Summary', 'Timeline', 'Impact', 'Likely root cause', 'Follow-up
 let day = first.split('T')[0]
 restrict './reports':
     write_file('./reports/incident-{day}.md', report)
-success {'errors': counts.ERROR, 'groups': len(errors), 'report': './reports/incident-{day}.md'}
+success object:
+    'errors': counts.ERROR
+    'groups': len(errors)
+    'report': './reports/incident-{day}.md'
 ```

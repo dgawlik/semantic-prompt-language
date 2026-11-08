@@ -184,7 +184,7 @@ describe('examples with offline backends', () => {
                 const result = await run(parseMarkdown(load('journal.md')), {
                     cwd, logger: new Logger('silent'), store: new JsonFileStore(file), backend,
                 });
-                expect(result).toMatchObject({
+                expect(result, result.status === 'failure' ? JSON.stringify(result.failure) : undefined).toMatchObject({
                     status: 'success', value: { run: i, today: `Summary ${i}`, trend: i === 1 ? '' : 'Steady progress.' },
                 });
                 expect(counts).toEqual({ commands: 2, actions: i === 1 ? 1 : 2 });
@@ -253,23 +253,38 @@ describe('examples with offline backends', () => {
     const invoice = {
         vendor: 'ACME Industrial Supplies GmbH', number: 'INV-2026-0042', date: '2026-03-14', currency: 'EUR',
         lines: [
-            { description: 'Hex bolt M8 (box of 100)', quantity: 3, unit_price: 12.5 },
-            { description: 'Safety gloves, size L', quantity: 2, unit_price: 8.9 },
-            { description: 'Cordless drill', quantity: 1, unit_price: 119 },
+            { description: 'Hex bolt M8 (box of 100)', quantity: 3, unit_price: 1250 },
+            { description: 'Safety gloves, size L', quantity: 2, unit_price: 890 },
+            { description: 'Cordless drill', quantity: 1, unit_price: 11900 },
         ],
-        subtotal: 174.3, tax: 33.12, total: 207.42,
+        subtotal: 17430, tax: 3312, total: 20742,
     };
 
     it('checks invoice structure and arithmetic offline', async () => {
         const output = 'out/invoices/INV-2026-0042.json';
-        const { result, files } = await runScripted('extract-invoice.md', [save('invoice', invoice)], [], [output]);
-        expect(result).toMatchObject({ status: 'success', value: invoice });
+        const { result, files } = await runScripted('extract-invoice.md', [
+            { name: 'save_variable', arguments: { name: 'invoice', value: invoice, schema: 'Invoice' } },
+        ], [], [output]);
+        expect(result).toMatchObject({ status: 'success', value: {
+            ...invoice,
+            lines: invoice.lines.map(line => ({ ...line, quantity: BigInt(line.quantity), unit_price: BigInt(line.unit_price) })),
+            subtotal: 17430n, tax: 3312n, total: 20742n,
+        } });
         expect(JSON.parse(files[output])).toEqual(invoice);
     });
 
     it('rejects an invoice whose line items do not add up', async () => {
-        const wrong = { ...invoice, subtotal: 180, total: 213.12 };
-        const { result } = await runScripted('extract-invoice.md', [save('invoice', wrong)]);
+        const wrong = { ...invoice, subtotal: 17431, total: 20743 };
+        const { result } = await runScripted('extract-invoice.md', [
+            { name: 'save_variable', arguments: { name: 'invoice', value: wrong, schema: 'Invoice' } },
+        ]);
+        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
+    });
+
+    it('rejects an invoice whose tax and subtotal miss the total by one cent', async () => {
+        const { result } = await runScripted('extract-invoice.md', [
+            { name: 'save_variable', arguments: { name: 'invoice', value: { ...invoice, total: 20743 }, schema: 'Invoice' } },
+        ]);
         expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
     });
 
@@ -309,7 +324,7 @@ describe.skipIf(!live)('examples on Copilot', () => {
             try {
                 const result = await run(parseMarkdown(load('extract-invoice.md')), { backend, logger: new Logger('silent'), cwd });
                 expect(result).toMatchObject({
-                    status: 'success', value: { number: 'INV-2026-0042', currency: 'EUR', total: 207.42 },
+                    status: 'success', value: { number: 'INV-2026-0042', currency: 'EUR', total: 20742n },
                 });
             } finally {
                 await backend.close();

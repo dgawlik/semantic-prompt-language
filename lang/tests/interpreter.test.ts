@@ -65,14 +65,16 @@ success [read(), args[1], args[2], args[3], args[99], args[-1], args[-4],
 
     it.each([
         `$args['0']`, `$args[0.5]`, `$args[None]`, `$env[0]`,
-        `[][0]`, `[1][1]`, `'x'[1]`, `{}.missing`, `{}['missing']`,
+        `[][0]`, `[1][1]`, `'x'[1]`, `object().missing`, `object()['missing']`,
     ])('preserves index type validation and ordinary collection errors: %s', async (expr) => {
         expect(failure((await exec(`success ${expr}`)).result).status_code).toBe('runtime_error');
     });
 
     it.each([
         `$env.KEY = 'changed'`, `$env['KEY'] = 'changed'`, `$env.KEY += 'changed'`,
-        `$env.pop('KEY')`, `$env.update({'KEY': 'changed'})`, `$env.clear()`,
+        `$env.pop('KEY')`, `$env.update(object:
+    'KEY': 'changed'
+)`, `$env.clear()`,
         `$args[0] = 'changed'`, `$args[0] += 'changed'`, `$args.append('changed')`,
         `$args.extend(['changed'])`, `$args.insert(0, 'changed')`, `$args.pop()`,
         `$args.remove('first')`, `$args.reverse()`, `$args.sort()`, `$args.clear()`,
@@ -81,7 +83,9 @@ success [read(), args[1], args[2], args[3], args[99], args[-1], args[-4],
         `def change(a):
     a.clear()
 change($args)`,
-        `let nested = {'env': $env}\nnested.env.update({})`,
+        `let nested = object:
+    'env': $env
+nested.env.update(object())`,
     ])('rejects mutation of runtime inputs through all aliases: %s', async (source) => {
         const { result } = await exec(source, { args: ['first'] });
         expect(failure(result)).toMatchObject({ status_code: 'runtime_error', reason: 'cannot modify a read-only value' });
@@ -147,14 +151,17 @@ success [caught, args, sliced, env.SPL_TEST_INPUT, $env.get('SPL_TEST_INPUT'),
     });
 
     it('supports comparison chains, boolean operators and membership', async () => {
-        const { result } = await exec(`success [1 < 2 < 3, 1 < 3 < 2, 0 or 'x', 1 and 2, not None, 'a' in 'cat', 3 not in [1,2], 'k' in {'k': 1}, [1,[2]] == [1,[2]]]`);
+        const { result } = await exec(`success [1 < 2 < 3, 1 < 3 < 2, 0 or 'x', 1 and 2, not None, 'a' in 'cat', 3 not in [1,2], 'k' in (object:
+    'k': 1
+), [1,[2]] == [1,[2]]]`);
         expect(value(result)).toEqual([true, false, 'x', 2, true, true, true, true, true]);
     });
 
     it('interpolates variables as is in plain strings', async () => {
         const { result } = await exec(`
 let name = 'World'
-let d = {'a': [1, 2]}
+let d = object:
+    'a': [1, 2]
 success 'Hello {name}! {1 + 2} {d} {True} {None} {{braces}} \\{x\\}'
 `);
         expect(value(result)).toBe('Hello World! 3 {"a":[1,2]} True None {braces} {x}');
@@ -199,7 +206,11 @@ for i in range(10):
 let n = 0
 while n < 3:
     n += 1
-success {'fact': fact(5), 'counter': counter(), 'acc': acc, 'n': n}
+success object:
+    'fact': fact(5)
+    'counter': counter()
+    'acc': acc
+    'n': n
 `);
         expect(value(result)).toEqual({ fact: 120, counter: 3, acc: [1, 3, 5, 7], n: 3 });
     });
@@ -207,7 +218,9 @@ success {'fact': fact(5), 'counter': counter(), 'acc': acc, 'n': n}
     it('supports indexing, slicing, member access and mutation', async () => {
         const { result } = await exec(`
 let l = [10, 20, 30]
-let d = {'a': {'b': 1}}
+let d = object:
+    'a': object:
+        'b': 1
 l[0] = 11
 l[-1] += 1
 d.a.b += 5
@@ -221,19 +234,26 @@ success [l, d, l[1:], 'hello'[1:3], 'hello'[-1], d.a.b, len(d)]
         const { result } = await exec(`
 success [
     len('héllo'), int('42'), float('1.5'), str(3), sorted([3, 1, 2]), sum([1, 2, 3]), max(1, 5, 2), min([4, 2]),
-    'a,b'.split(','), '-'.join(['x', 'y']), ' hi '.strip().upper(), 'abc'.replace('b', 'X'), keys({'k': 1}),
-    {'a': 1}.get('zz', 9), json_parse(r'{"a": [1]}'), json_stringify({'a': [1]}), round(2.5), round(3.14159, 2),
+    'a,b'.split(','), '-'.join(['x', 'y']), ' hi '.strip().upper(), 'abc'.replace('b', 'X'), keys(object:
+        'k': 1
+    ),
+    (object:
+        'a': 1
+    ).get('zz', 9), json_parse(r'{"a": [1]}'), json_stringify(object:
+        'a': [1]
+    ), round(2.5), round(3.14159, 2),
     list(enumerate(['a'])), type([]), type(None),
 ]
 `);
-        expect(value(result)).toEqual([5, 42, 1.5, '3', [1, 2, 3], 6, 5, 2, ['a', 'b'], 'x-y', 'HI', 'aXc', ['k'], 9, { a: [1] }, '{"a":[1]}', 2, 3.14, [[0, 'a']], 'list', 'None']);
+        expect(value(result)).toEqual([5, 42n, { __float: 1.5 }, '3', [1, 2, 3], 6, 5, 2, ['a', 'b'], 'x-y', 'HI', 'aXc', ['k'], 9, { a: [1] }, '{"a":[1]}', 2, 3.14, [[0, 'a']], 'list', 'None']);
     });
 
     it('keeps __proto__ keys harmless', async () => {
         const { result } = await exec(`
-let d = {}
-d['__proto__'] = {'polluted': True}
-let e = {}
+let d = object()
+d['__proto__'] = object:
+    'polluted': True
+let e = object()
 success [e.get('polluted', 'clean'), len(d)]
 `);
         expect(value(result)).toEqual(['clean', 1]);
@@ -426,16 +446,18 @@ success [
     ),
     if True:
         let x = 2
-        {'value': x}
+        object:
+            'value': x
     else:
-        {}
+        object()
     ,
-    {},
-    {'if': if False:
-        1
-    else:
-        2
-    },
+    object(),
+    object:
+        'if': if False:
+            1
+        else:
+            2
+    ,
 ]
 `);
         expect(value(result)).toEqual([2, { value: 2 }, {}, { if: 2 }]);
@@ -517,7 +539,7 @@ fail 'unreachable'`);
 
     it('accepts assignment to declared locals and collection members', () => {
         expect(() => parse(`let x = 1\nx = 2\nx += 2`)).not.toThrow();
-        expect(() => parse(`let d = {}\nd.k = 2\nd['k'] = 3`)).not.toThrow();
+        expect(() => parse(`let d = object()\nd.k = 2\nd['k'] = 3`)).not.toThrow();
     });
 
     it('turns runtime errors into catchable failures', async () => {
@@ -710,7 +732,8 @@ describe('variable store', () => {
     it('persists top-level variables to a JSON file and reloads them', async () => {
         const file = path.join(dir, 'store.json');
         await exec(`let counter = 1
-let data = {'a': [1, 2]}
+let data = object:
+    'a': [1, 2]
 def f():
     return 1`, { store: new JsonFileStore(file) });
         expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ counter: 1, data: { a: [1, 2] } });

@@ -54,8 +54,10 @@ success True`;
         expect(highlight(text)).toContain('<span class="hljs-keyword">success</span>');
     });
 
-    it('handles nested dicts and quoted keys within interpolation', () => {
-        const text = `fail 'Fix {vulnerabilities["high"][0]} and {len({"high": [1]})}'`;
+    it('handles object expressions and quoted keys within interpolation', () => {
+        const text = `fail '''Fix {vulnerabilities["high"][0]} and {len(object:
+    "high": [1]
+)}'''`;
         const html = highlight(text);
         expect(html.match(/hljs-subst/g)).toHaveLength(2);
         expect(html).toContain('<span class="hljs-string">&quot;high&quot;</span>');
@@ -64,14 +66,26 @@ success True`;
     });
 
     it('does not inherit Python-only syntax', () => {
-        const source = 'class import lambda\n# ask {ignored}\ndef run(value):\n    return 1e-3 // 2';
+        const source = 'import lambda\n# ask {ignored}\ndef run(value):\n    return 1e-3 // 2';
         const html = highlight(source);
-        for (const keyword of ['class', 'import', 'lambda']) expect(html).not.toContain(`>${keyword}</span>`);
+        for (const keyword of ['import', 'lambda']) expect(html).not.toContain(`>${keyword}</span>`);
         expect(html).toContain('<span class="hljs-title function_">run</span>');
         expect(html).toContain('<span class="hljs-number">1e-3</span>');
         expect(html).toContain('<span class="hljs-operator">//</span>');
         expect(html).not.toContain('hljs-subst');
         expect(decode(html)).toBe(source);
+    });
+
+    it('highlights declaration names, descriptors, unions and typed arrows', () => {
+        const text = "type Money = int [minimum=0]\nenum Color = 'red' | 'blue'\nstruct Data:\n    color: Color\nhydratable class Person:\n    name: str\nlet callback: fn(str, int) -> str = repeat\nlet values: list[int | str] = []\nlet data = object()\nvalidate(data, Data)\ntype(1)";
+        const html = highlight(text);
+        for (const keyword of ['type', 'enum', 'struct', 'class', 'hydratable', 'fn']) expect(html).toContain(`<span class="hljs-keyword">${keyword}</span>`);
+        for (const name of ['Money', 'Color', 'Data', 'Person']) expect(html).toContain(`<span class="hljs-title class_">${name}</span>`);
+        expect(html).toContain('<span class="hljs-built_in">type</span>');
+        for (const name of ['object', 'validate']) expect(html).toContain(`<span class="hljs-built_in">${name}</span>`);
+        expect(html).toContain('<span class="hljs-operator">-&gt;</span>');
+        expect(html).toContain('<span class="hljs-operator">|</span>');
+        expect(decode(html)).toBe(text);
     });
 
     it('highlights references and agent markers only in blockquotes', () => {

@@ -23,6 +23,7 @@ const pages = [
     ['CLI', 'cli', 'CLI & runtime', 'Reference', 'terminal'],
     ['Grammar', 'grammar', 'Grammar', 'Reference', 'braces'],
     ['Examples', 'examples', 'Examples', 'Guides', 'layers'],
+    ['Migration', 'migration', 'Typing migration', 'Guides', 'arrow'],
 ].map(([file, slug, label, group, icon]) => ({ file, slug, label, group, icon }));
 const fingerprint = createHash('sha256');
 for (const file of [

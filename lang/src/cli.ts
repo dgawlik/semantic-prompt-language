@@ -14,7 +14,7 @@ import { Logger, type LogLevel } from './logger.js';
 import { parseMarkdown } from './markdown.js';
 import { run, type RunResult } from './interpreter.js';
 import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
-import { runtimeError, toJson } from './values.js';
+import { encodeJson, fromJson, newDict, runtimeError, toJson } from './values.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
 import { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
 import { Checkpoint, CheckpointError, checkpointFingerprint } from './checkpoint.js';
@@ -153,10 +153,10 @@ async function checkpointCommand(
         }
         checkpoint.finish(result.status);
         const envelope = result.status === 'success'
-            ? { status: result.status, run_id: checkpoint.runId, has_value: result.hasValue, value: toJson(result.value) }
-            : { status: result.status, run_id: checkpoint.runId, failure: result.failure };
+            ? newDict([['status', result.status], ['run_id', checkpoint.runId], ['has_value', result.hasValue], ['value', result.value]])
+            : newDict([['status', result.status], ['run_id', checkpoint.runId], ['failure', fromJson(result.failure)]]);
         checkpoint.close();
-        process.stdout.write(JSON.stringify(envelope) + '\n');
+        process.stdout.write(encodeJson(envelope) + '\n');
         return result.status === 'success' ? 0 : 1;
     } catch (error) {
         if (!(error instanceof CheckpointError) || error.kind !== 'usage') throw error;
@@ -486,7 +486,7 @@ async function main(): Promise<number> {
     }
     if (result.hasValue) {
         const v = result.value;
-        process.stdout.write((typeof v === 'string' ? v : JSON.stringify(toJson(v), null, 2)) + '\n');
+        process.stdout.write((typeof v === 'string' ? v : encodeJson(v, 2)) + '\n');
     }
     return 0;
 }

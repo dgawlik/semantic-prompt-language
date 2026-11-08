@@ -29,7 +29,7 @@ for url in urls[:3]:
     assert url.startswith('https://') "refusing non-HTTPS source {url}"
     assert url in results "{url} was not in the search results"
     hosts.append(url.split('/')[2])
-let pages = {}
+let pages = object()
 restrict net hosts:
     for url in urls[:3]:
         try:

@@ -210,7 +210,7 @@ test('isolated worker executes out of order, pretty prints results and survives 
     }, () => {});
     assert.equal((await execute('let count = 2\ndef double():\n    return count * 2', 'cell:definitions')).kind, 'result');
     await execute('count += 1');
-    const result = await execute("{'count': count, 'double': double()}");
+    const result = await execute("object:\n    'count': count\n    'double': double()");
     assert.equal(result.kind, 'result');
     if (result.kind === 'result') assert.equal(result.text, '{\n  "count": 3,\n  "double": 6\n}');
     assert.equal((await execute('count', 'cell:other', other)).kind, 'error');

@@ -10,17 +10,18 @@ EBNF repetition braces are notation, not SPL block delimiters.
 
 **Breaking change:** blocks start with `:` on the header's line, followed by a newline and an
 indented, nonempty body. Replace old block braces with this layout; expand inline suites onto
-separate lines and use `pass` for empty bodies. Dictionaries `{...}` and interpolation `{expr}`
-are unchanged. Anonymous value-producing blocks use the same bare-colon syntax.
+separate lines and use `pass` for empty bodies. Dictionary braces are also removed: use `object:`
+and `object()`. Interpolation `{expr}` and JSON wire syntax are unchanged.
+Anonymous value-producing blocks use the same bare-colon syntax.
 
-Indentation uses spaces only (4 recommended). The lexer emits `INDENT` when a block's indentation
+Indentation adds exactly four spaces per block level. The lexer emits `INDENT` when a block's indentation
 increases and `DEDENT` when it decreases, including at end of input. Tabs in indentation,
 unexpected indentation, missing bodies and dedents not matching a prior indentation level are
 syntax errors. Blank and comment-only lines are ignored and cannot satisfy a block's body.
 `elif`, `else` and `except` align with their opening statement.
 
-`NL` is a significant logical newline. Newlines inside `()`, `[]` and dictionaries are
-insignificant and do not produce indentation tokens; a trailing `\` explicitly continues a line.
+`NL` is a significant logical newline. Newlines inside `()` and `[]` suspend ordinary indentation,
+but explicit object suites still produce indentation tokens; a trailing `\` explicitly continues a line.
 `#` starts a comment outside strings. Semicolons separate simple statements only, not compound
 statements or block headers. A completed block ends at its dedent; a statement whose value ends
 with a block can end there without another physical newline.
@@ -50,23 +51,37 @@ statement      = simple_line | compound_stmt ;
 simple_line    = simple_stmt , { ";" , simple_stmt } , [ ";" ] , simple_end ;
 simple_end     = NL | ? end of input, without consuming EOF ?
                | ? boundary immediately after a block-valued expression's DEDENT ? ;
-compound_stmt  = if_stmt | for_stmt | while_stmt | def_stmt | try_stmt
+compound_stmt  = if_stmt | for_stmt | while_stmt | def_stmt | try_stmt | struct_stmt | class_stmt
                | guidance_stmt | restrict_stmt | block ;
 block          = ":" , NL , INDENT , statement , { statement } , DEDENT ;
 
-simple_stmt    = declaration | assignment
+simple_stmt    = declaration | assignment | enum_stmt | type_alias
                | "return" , [ expr ] | "success" , [ expr ]
                | "assert" , expr , [ expr ] | "fail" , expr
                | "break" | "continue" | "pass" | expr ;
                  (* a compound statement or block-valued expression is not an
                     inline semicolon suite; its body must use block layout *)
-declaration    = "let" , NAME , "=" , expr ;
+declaration    = "let" , NAME , [ ":" , type_expr ] , "=" , expr ;
 assignment     = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
 target         = NAME | postfix , "." , NAME | postfix , "[" , expr , "]" ;
 if_stmt        = "if" , expr , block , { "elif" , expr , block } , [ "else" , block ] ;
 for_stmt       = "for" , NAME , { "," , NAME } , "in" , expr , block ;
 while_stmt     = "while" , expr , block ;
-def_stmt       = "def" , NAME , "(" , [ NAME , { "," , NAME } , [ "," ] ] , ")" , block ;
+def_stmt       = "def" , NAME , "(" , [ parameter , { "," , parameter } , [ "," ] ] , ")"
+               , [ "->" , type_expr ] , block ;
+parameter      = NAME , [ ":" , type_expr ] ;
+enum_stmt      = "enum" , NAME , "=" , plain_string , { "|" , plain_string } ;
+type_alias     = "type" , NAME , "=" , type_expr , [ metadata ] ;
+struct_stmt    = "struct" , NAME , ":" , NL , INDENT , field , { field } , DEDENT ;
+class_stmt     = [ "hydratable" ] , "class" , NAME , ":" , NL , INDENT
+               , ( field | def_stmt ) , { field | def_stmt } , DEDENT ;
+field          = NAME , ":" , type_expr , [ metadata ] , NL ;
+metadata       = "[" , [ NAME , "=" , advice_literal , { "," , NAME , "=" , advice_literal } , [ "," ] ] , "]" ;
+advice_literal = ? compile-time JSON-compatible literal, never an executed expression ? ;
+type_expr      = type_atom , { "|" , type_atom } ;
+type_atom      = NAME | "None" | "(" , type_expr , ")"
+               | "list" , "[" , type_expr , "]"
+               | "fn" , "(" , [ type_expr , { "," , type_expr } ] , ")" , "->" , type_expr ;
 try_stmt       = "try" , block , "except" , NAME , block ;
 guidance_stmt  = ( "enforce" | "forbid" ) , expr , block ;
 restrict_stmt  = "restrict" , restrict_clause , { "," , restrict_clause } , block ;
@@ -74,7 +89,8 @@ restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;
 
 (* Every block is a lexical child scope; let declares locally, assignment updates the
    nearest declaration. Blocks and if yield their final expression, otherwise None.
-   {} is an empty dict; a bare-colon block containing pass yields None.
+   object() is an empty dictionary; object entries do not create a lexical scope.
+   A bare-colon block containing pass yields None.
    All bodies are nonempty. Functions need an explicit return. *)
 
 expr           = or_expr , [ "if" , or_expr , "else" , expr ] ;
@@ -93,11 +109,14 @@ index          = "[" , expr , "]" ;
 slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
 member         = "." , NAME ;
 primary        = NUMBER | string | "True" | "False" | "None" | NAME | special_var
-               | "(" , expr , ")" | list | dict | block | if_stmt | log_expr | human_expr
+               | "(" , expr , ")" | list | object_expr | type_expr | block | if_stmt | log_expr | human_expr
                | ( "think" | "agent" ) , [ modifiers ] , postfix ;
 special_var    = "$env" | "$args" ;
 list           = "[" , [ expr , { "," , expr } , [ "," ] ] , "]" ;
-dict           = "{" , [ expr , ":" , expr , { "," , expr , ":" , expr } , [ "," ] ] , "}" ;
+object_expr    = "object" , ":" , NL , INDENT , object_entry , { object_entry } , DEDENT ;
+object_entry   = expr , ":" , expr , simple_end | def_stmt ;
+                 (* object() is the ordinary empty-dictionary builtin call;
+                    entries are newline-separated, without trailing commas *)
 modifiers      = "(" , [ modifier , { "," , modifier } , [ "," ] ] , ")" ;
 modifier       = ( "len" | "fmt" | "reasoning" | "hide" | "schema" | "repairs" | "model" | "tokens" ) , "=" , expr ;
 ask_modifiers  = "(" , [ ask_modifier , { "," , ask_modifier } , [ "," ] ] , ")" ;
@@ -120,7 +139,7 @@ interpolation  = "{" , expr , "}" ;
 NUMBER         = digit+ , [ "." , digit+ ] , [ ( "e" | "E" ) , [ "+" | "-" ] , digit+ ] ;
 NAME           = ( letter | "_" ) , { letter | digit | "_" } ;
 NL             = ? logical newline outside delimiters and explicit continuations ? ;
-INDENT         = ? increase in leading spaces after a block header ? ;
+INDENT         = ? increase of exactly four leading spaces after a block header ? ;
 DEDENT         = ? return to a previous indentation level, including at EOF ? ;
 EOF            = ? end of input ? ;
 
@@ -129,7 +148,8 @@ EOF            = ? end of input ? ;
    Indentation tabs, inline suites, empty bodies and inconsistent dedents are errors.
    $env and $args are read-only; other $-names are syntax errors.
    Reserved words: let if elif else for in while def return try except assert fail success
-   enforce forbid restrict ask think agent human break continue pass and or not True False None. *)
+   enum struct class hydratable fn object enforce forbid restrict ask think agent human
+   break continue pass and or not True False None. *)
 ```
 
 ## Block expressions

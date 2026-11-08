@@ -43,10 +43,10 @@ describe('parser: accepted syntax', () => {
         const program = parse(`let score = ${command}(
     fmt = 'integer',
     repairs = 1,
-    schema = {
-        'type': 'integer',
-        'minimum': min([1, 2]),
-    },
+    schema = object:
+        'type': 'integer'
+        'minimum': min([1, 2])
+    ,
     model = choose('one', 'two'),
 ) 'Rate this issue'`);
         expect(program.body[0]).toMatchObject({ value: {
@@ -96,7 +96,8 @@ log()`);
     it('composes generation options and explicit agents', () => {
         parse(`
 @(model='test-model')
-let Contract = {'type': 'object'}
+let Contract = object:
+    'type': 'object'
 let response = ask(schema=Contract, reasoning='high', repairs=2, model='other') 'Extract'
 let diagnosis = think(fmt='json', hide=True) 'Diagnose'
 enforce 'Answer in English':
@@ -132,11 +133,10 @@ let t = x if x else None
 x += 1
 d['k'] = 2
 d.k = 3
-let multi = {
-    'a': 1,
+let multi = object:
+    'a': 1
     'b': [1, 2,
-    3],
-    }`);
+    3]`);
         expect(program.body.filter(s => s.t === 'assign')).toHaveLength(3);
     });
 
@@ -187,7 +187,8 @@ else:
 let y =:
     let n = 2
     n + 1
-let d = {'key': x}`);
+let d = object:
+    'key': x`);
         expect(program.body[0]).toMatchObject({ value: { t: 'if' } });
         expect(program.body[1]).toMatchObject({ value: { t: 'block' } });
         expect(program.body[2]).toMatchObject({ value: { t: 'dict' } });
@@ -216,7 +217,7 @@ describe('parser: strict syntax errors', () => {
     it('requires colon-delimited headers and multiline indented bodies', () => {
         bad('if True { pass }', /brace-delimited blocks have been removed/);
         bad('def f() { return 1 }', /brace-delimited blocks have been removed/);
-        bad('let x = { let n = 1; n }', /unexpected keyword/);
+        bad('let x = { let n = 1; n }', /brace dictionary literals have been removed/);
         bad('if True\n    pass', /expected ':'|unexpected indentation/);
         bad('if True: pass', /expected a newline/);
         bad('if True:\npass', /expected an indented block/);
@@ -251,10 +252,13 @@ describe('parser: strict syntax errors', () => {
             expect(tokens.find(token => token.type === 'indent')).toMatchObject({ line: 2, col: 5 });
         });
 
-        it('ignores blank and comment-only indentation, and accepts any consistent space width', () => {
-            const program = parse('if True:\n# a comment\n\n  pass\n       # still a comment\n  if False:\n     pass\n  pass\npass');
+        it('ignores blank and comment-only indentation, and requires four-space levels', () => {
+            const program = parse('if True:\n# a comment\n\n    pass\n       # still a comment\n    if False:\n        pass\n    pass\npass');
             expect(program.body).toHaveLength(2);
             expect(program.body[0]).toMatchObject({ t: 'if', branches: [{ body: [{ t: 'pass' }, { t: 'if' }, { t: 'pass' }] }] });
+            bad('if True:\n  pass', /exactly four spaces/);
+            bad('if True:\n        pass', /exactly four spaces/);
+            bad('if True:\n    if False:\n          pass', /exactly four spaces/);
         });
 
         it('suppresses continuation indentation and handles CRLF and explicit continuations', () => {
@@ -262,46 +266,41 @@ describe('parser: strict syntax errors', () => {
      True and
         False
     ):
-        let data = {
-      'key':
-            [1,
-     2],
-        }
-        let slice = data['key'][1:
+    let data = object:
+        'key': [1,
      2]
-        let total = 1 + \\
+    let slice = data['key'][1:
+     2]
+    let total = 1 + \\
     2
-        pass`.replace(/\n/g, '\r\n'));
+    pass`.replace(/\n/g, '\r\n'));
         });
 
         it('uses the header indentation, not the closing parenthesis indentation', () => {
             parse(`if (
         True
         ):
-        pass
+    pass
 def f(
         x,
         ):
-        return x
+    return x
 enforce (
         'English'
         ):
-        pass`);
+    pass`);
         });
 
         it('does not confuse dictionary member keys or slices with suite headers', () => {
-            parse(`let data = {
-        obj.enforce:
-            1,
-        obj.def:
-            2,
-}
+            parse(`let data = object:
+    obj.enforce: 1
+    obj.def: 2
 let sliced = [1, 2][:
         1]
 success [not if True:
-        False
+    False
 else:
-        True
+    True
 ]`);
         });
 
@@ -314,11 +313,13 @@ else:
 
         it('leaves multiline strings and interpolation untouched', () => {
             parse(`if True:
-        let text = '''first
-    unindented { {'x': 1}['x'] }
+    let text = '''first
+    unindented { (object:
+        'x': 1
+    )['x'] }
         last'''
-        let literal = r'{not code}'
-        pass`);
+    let literal = r'{not code}'
+    pass`);
         });
 
         it('does not parse a following if statement as a ternary or leak a suite into it', () => {

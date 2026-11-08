@@ -1,9 +1,12 @@
-import type { AssignTarget, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
-import { callMethod, isMutatingMethod, iterate, makeBuiltins } from './builtins.js';
+import type { AssignTarget, DefStmt, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
+import { callMethod, hasBuiltinMethod, isMutatingMethod, iterate, makeBuiltins } from './builtins.js';
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
 import { LlmError, buildPromptParts, parseJsonResponse, validateRandomness, validateTokens, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import { AGENT_TOOLS, actionArguments } from './agent.js';
 import { compileSchema } from './schema.js';
+import { checkProgram } from './type-check.js';
+import { aliasType, assertComplete, checkedInt, contractOf, contractRead, convertFloat, convertInt, descriptor, equivalent, mutateContract, primitives, project, resolveFields, resolveType, signatureOf, testValue, typedFloat, validateValue, type TypeDescriptor } from './types.js';
+import { decodeJsonValue, decodeTypedJson, schemaForType } from './typed-json.js';
 import type { Logger, LogLevel } from './logger.js';
 import { Restrictions, makeRestriction, type Restriction } from './restrict.js';
 import { MemoryStore, type VariableStore } from './store.js';
@@ -25,8 +28,12 @@ import {
     hasKey,
     isDict,
     isFunction,
+    isDescriptor,
+    isFloat,
+    isInstance,
     isList,
     newDict,
+    registerInstance,
     runtimeError,
     setKey,
     str,
@@ -34,6 +41,8 @@ import {
     truthy,
     typeName,
     type Env,
+    type FunctionValue,
+    type InstanceValue,
     type UserFunction,
     type Value,
 } from './values.js';
@@ -114,7 +123,7 @@ export class ExecutionSession {
 class Interpreter {
     private readonly globals: Env;
     private readonly observer: StateObserver;
-    private readonly builtins;
+    private readonly builtins: Map<string, Value>;
     private readonly store: VariableStore;
     private readonly cwd: string;
     private readonly model?: string;
@@ -129,6 +138,7 @@ class Interpreter {
     private sourceUri?: string;
     private sourceVersion?: number;
     private steps = 0;
+    private returnType?: TypeDescriptor;
 
     constructor(
         private readonly program: Program,
@@ -155,6 +165,17 @@ class Interpreter {
         this.builtins = makeBuiltins({ log: sessionState
             ? Interpreter.sessionLog(sessionState)
             : values => this.logValues('info', values) });
+        for (const [name, type] of primitives) this.builtins.set(name, type);
+        for (const name of ['validate', 'isinstance']) {
+            this.builtins.set(name, { __fn: 'builtin', name, call: args => {
+                if (args.length !== 2 || !isDescriptor(args[1])) throw runtimeError(`${name}() requires a value and a type descriptor`);
+                return name === 'validate' ? validateValue(args[0], args[1]) : testValue(args[0], args[1]);
+            } });
+        }
+        this.builtins.set('struct', { __fn: 'builtin', name: 'struct', call: args => {
+            if (args.length !== 1 || !isDescriptor(args[0]) || args[0].kind !== 'class') throw runtimeError('struct() requires a class descriptor');
+            return descriptor('struct', `struct(${args[0].name})`, { fields: args[0].fields });
+        } });
         for (const tool of Object.keys(TOOL_SPECS) as ToolName[]) {
             this.builtins.set(tool, {
                 __fn: 'builtin', name: tool,
@@ -179,7 +200,9 @@ class Interpreter {
 
     async run(): Promise<RunResult> {
         const { logger } = this.opts;
+        let executing = false;
         try {
+            checkProgram(this.program, this.globals);
             if (this.opts.checkpoint && (this.opts.store || this.opts.backend.mode)) {
                 throw new CheckpointError('checkpoint runs cannot use stores or recording/replay backends');
             }
@@ -195,6 +218,7 @@ class Interpreter {
                     (value): value is Record<string, Value> => isDict(value) && Object.values(value).every(isToolValue))
                 : this.store.load();
             for (const [k, v] of Object.entries(variables)) this.globals.vars.set(k, v);
+            executing = true;
             const signal = await this.execBlock(this.program.body, this.globals);
             this.opts.checkpoint?.assertConsumed();
             if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
@@ -208,6 +232,8 @@ class Interpreter {
                 return { status: 'success', value: e.value as Value, hasValue: true };
             }
             if (e instanceof Failure) {
+                e.source ??= this.sourceUri;
+                e.sourceVersion ??= this.sourceVersion;
                 this.opts.checkpoint?.assertConsumed();
                 logger.error(`${e.statusCode}: ${e.reason} (line ${e.line})`);
                 return { status: 'failure', failure: e.payload() };
@@ -215,9 +241,9 @@ class Interpreter {
             throw e;
         } finally {
             try {
-                if (!this.sessionState && !this.opts.checkpoint && !this.opts.pin?.replaying && this.opts.backend.mode !== 'replay') {
+                if (executing && !this.sessionState && !this.opts.checkpoint && !this.opts.pin?.replaying && this.opts.backend.mode !== 'replay') {
                     const snapshot: Record<string, Value> = {};
-                    for (const [k, v] of this.globals.vars) if (!isFunction(v)) snapshot[k] = v;
+                    for (const [k, v] of this.globals.vars) if (!isFunction(v) && !isDescriptor(v) && !isInstance(v)) snapshot[k] = v;
                     this.store.save(snapshot);
                 }
             } catch (e) {
@@ -256,7 +282,24 @@ class Interpreter {
     }
 
     private commit(env: Env, name: string, value: Value): void {
+        assertComplete(value);
+        const contract = env.contracts?.get(name);
+        if (contract) value = validateValue(value, contract, name);
+        if (env.readonlyNames?.has(name)) throw runtimeError(`type declaration '${name}' is immutable`);
         this.observer.commit(env, name, value, !this.opts.checkpoint?.replaying);
+    }
+
+    private type(expr: import('./ast.js').TypeExpr, env: Env): TypeDescriptor {
+        return resolveType(expr, name => this.lookup(name, env));
+    }
+
+    private makeFunction(s: DefStmt, env: Env): UserFunction {
+        return {
+            __fn: 'user', name: s.name, params: s.params, body: s.body, closure: env,
+            paramTypes: s.paramTypes?.map(type => type ? this.type(type, env) : undefined),
+            returnType: s.returnType ? this.type(s.returnType, env) : undefined,
+            source: { lines: this.sourceLines, uri: this.sourceUri, version: this.sourceVersion },
+        };
     }
 
     // ---- statements ----------------------------------------------------
@@ -291,9 +334,39 @@ class Interpreter {
 
     private async execStmtInner(s: Stmt, env: Env): Promise<Completion> {
         switch (s.t) {
-            case 'let':
-                this.commit(env, s.name, await this.eval(s.value, env));
+            case 'let': {
+                const type = s.annotation ? this.type(s.annotation, env) : undefined;
+                const existing = env.contracts?.get(s.name);
+                if (existing && type && !equivalent(existing, type)) throw new Failure('type_error', `cannot replace binding contract ${existing.name} with ${type.name}`);
+                let value = await this.eval(s.value, env, type);
+                assertComplete(value);
+                if (type) value = validateValue(value, type, s.name);
+                if (type) (env.contracts ??= new Map()).set(s.name, type);
+                this.commit(env, s.name, value);
                 return;
+            }
+            case 'enum':
+                this.commit(env, s.name, descriptor('enum', s.name, { values: Object.freeze([...s.values]) }));
+                (env.readonlyNames ??= new Set()).add(s.name);
+                return;
+            case 'type-alias':
+                this.commit(env, s.name, aliasType(this.type(s.type, env), s.advice));
+                (env.readonlyNames ??= new Set()).add(s.name);
+                return;
+            case 'struct':
+                this.commit(env, s.name, descriptor('struct', s.name, { fields: resolveFields(s.fields, name => this.lookup(name, env)) }));
+                (env.readonlyNames ??= new Set()).add(s.name);
+                return;
+            case 'class': {
+                const fields = resolveFields(s.fields, name => this.lookup(name, env));
+                const methods: Record<string, UserFunction> = {};
+                const type = descriptor('class', s.name, { fields, methods, hydratable: s.hydratable });
+                this.commit(env, s.name, type);
+                (env.readonlyNames ??= new Set()).add(s.name);
+                for (const method of s.methods) Object.defineProperty(methods, method.name, { value: this.makeFunction(method, env), enumerable: true });
+                Object.freeze(methods);
+                return;
+            }
             case 'assign':
                 await this.execAssign(s.target, s.op, s.value, env);
                 return;
@@ -310,7 +383,7 @@ class Interpreter {
             case 'continue':
                 return { k: 'continue' };
             case 'return':
-                return { k: 'return', v: s.value ? await this.eval(s.value, env) : null, hasValue: s.value !== undefined };
+                return { k: 'return', v: s.value ? await this.eval(s.value, env, this.returnType) : null, hasValue: s.value !== undefined };
             case 'if': {
                 for (const b of s.branches) {
                     if (truthy(await this.eval(b.cond, env))) return this.execBlock(b.body, this.childScope(env, 'branch'));
@@ -337,10 +410,7 @@ class Interpreter {
                 return;
             }
             case 'def': {
-                const fn: UserFunction = {
-                    __fn: 'user', name: s.name, params: s.params, body: s.body, closure: env,
-                    source: { lines: this.sourceLines, uri: this.sourceUri, version: this.sourceVersion },
-                };
+                const fn = this.makeFunction(s, env);
                 this.commit(env, s.name, fn);
                 return;
             }
@@ -370,7 +440,9 @@ class Interpreter {
             case 'fail':
                 throw new Failure('explicit_failure', str(await this.eval(s.reason, env)));
             case 'success':
-                throw new SuccessSignal(s.value ? await this.eval(s.value, env) : null);
+                const value = s.value ? await this.eval(s.value, env) : null;
+                assertComplete(value);
+                throw new SuccessSignal(value);
             case 'constraint': {
                 const text = str(await this.eval(s.text, env));
                 const saved = this.constraints;
@@ -410,33 +482,46 @@ class Interpreter {
     }
 
     private async execAssign(target: AssignTarget, op: string, valueExpr: Expr, env: Env): Promise<void> {
-        const compute = async (current: () => Value): Promise<Value> => {
-            const rhs = await this.eval(valueExpr, env);
+        const compute = async (current: () => Value, expected?: TypeDescriptor): Promise<Value> => {
+            const rhs = await this.eval(valueExpr, env, expected);
             return op === '=' ? rhs : this.binary(op.slice(0, -1), current(), rhs);
         };
         if (target.t === 'name') {
             const scope = this.bindingScope(target.name, env);
             if (!scope) throw runtimeError(`cannot assign '${target.name}': declare a local with let first`);
-            this.commit(scope, target.name, await compute(() => this.lookup(target.name, env)));
+            this.commit(scope, target.name, await compute(() => this.lookup(target.name, env), scope.contracts?.get(target.name)));
             return;
         }
         const obj = await this.eval(target.obj, env);
         assertMutable(obj);
+        if (isInstance(obj)) {
+            const key = target.t === 'member' ? target.name : await this.eval(target.index, env);
+            if (typeof key !== 'string' || !Object.hasOwn(obj.descriptor.fields!, key)) throw runtimeError(`unknown declared field '${String(key)}'`);
+            const field = obj.descriptor.fields![key];
+            const value = await compute(() => this.getKey(obj.fields, key), field.type);
+            assertComplete(value);
+            const checked = validateValue(value, field.type, `${obj.descriptor.name}.${key}`);
+            this.observer.mutate(obj.fields, env, key, !this.opts.checkpoint?.replaying, () => setKey(obj.fields, key, checked));
+            return;
+        }
         if (target.t === 'member') {
             if (!isDict(obj)) throw runtimeError(`cannot set member '${target.name}' on ${typeName(obj)}`);
-            const value = await compute(() => this.getKey(obj, target.name));
-            this.observer.mutate(obj, env, target.name, !this.opts.checkpoint?.replaying, () => setKey(obj, target.name, value));
+            const value = await compute(() => this.getKey(obj, target.name), contractOf(obj)?.fields?.[target.name]?.type);
+            assertComplete(value);
+            this.observer.mutate(obj, env, target.name, !this.opts.checkpoint?.replaying, () => mutateContract(obj, draft => { setKey(draft as Record<string, Value>, target.name, value); return null; }));
             return;
         }
         const index = await this.eval(target.index, env);
         if (isList(obj)) {
             const i = this.listIndex(obj, index);
-            const value = await compute(() => obj[i]);
-            this.observer.mutate(obj, env, String(i), !this.opts.checkpoint?.replaying, () => { obj[i] = value; });
+            const value = await compute(() => obj[i], contractOf(obj)?.element);
+            assertComplete(value);
+            this.observer.mutate(obj, env, String(i), !this.opts.checkpoint?.replaying, () => mutateContract(obj, draft => { (draft as Value[])[i] = value; return null; }));
         } else if (isDict(obj)) {
             if (typeof index !== 'string') throw runtimeError(`dict keys must be strings, got ${typeName(index)}`);
-            const value = await compute(() => this.getKey(obj, index));
-            this.observer.mutate(obj, env, index, !this.opts.checkpoint?.replaying, () => setKey(obj, index, value));
+            const value = await compute(() => this.getKey(obj, index), contractOf(obj)?.fields?.[index]?.type);
+            assertComplete(value);
+            this.observer.mutate(obj, env, index, !this.opts.checkpoint?.replaying, () => mutateContract(obj, draft => { setKey(draft as Record<string, Value>, index, value); return null; }));
         } else {
             throw runtimeError(`${typeName(obj)} does not support item assignment`);
         }
@@ -450,9 +535,16 @@ class Interpreter {
         return out;
     }
 
-    private async eval(e: Expr, env: Env): Promise<Value> {
+    private async eval(e: Expr, env: Env, expected?: TypeDescriptor): Promise<Value> {
         switch (e.t) {
-            case 'num': return e.v;
+            case 'num':
+                if (expected?.kind === 'int' || expected?.kind === 'float' || expected?.kind === 'union' && expected.members!.some(type => type.kind === 'int' || type.kind === 'float')) {
+                    const token = e.raw ?? String(e.v);
+                    return /[.eE]/.test(token) ? typedFloat(Number(token)) : checkedInt(BigInt(token));
+                }
+                return e.v;
+            case 'group': return this.eval(e.e, env, expected);
+            case 'type': return this.type(e.type, env);
             case 'str': return this.text(e.parts, env);
             case 'bool': return e.v;
             case 'none': return null;
@@ -485,26 +577,49 @@ class Interpreter {
             }
             case 'list': {
                 const out: Value[] = [];
-                for (const it of e.items) out.push(await this.eval(it, env));
+                const elements = expected?.kind === 'union' ? expected.members!.filter(type => type.kind === 'list').map(type => type.element!)
+                    : expected?.kind === 'list' ? [expected.element!] : [];
+                const element = this.unionContext(elements);
+                for (const it of e.items) out.push(await this.eval(it, env, element));
+                assertComplete(out);
                 return out;
             }
             case 'dict': {
                 const d = newDict();
-                for (const [k, v] of e.entries) {
+                for (const entry of e.entries) {
+                    if (!Array.isArray(entry)) {
+                        setKey(d, entry.name, this.makeFunction(entry, env));
+                        continue;
+                    }
+                    const [k, v] = entry;
                     const key = await this.eval(k, env);
                     if (typeof key !== 'string') throw runtimeError(`dict keys must be strings, got ${typeName(key)}`);
-                    setKey(d, key, await this.eval(v, env));
+                    const fields = expected?.kind === 'union' ? expected.members!.flatMap(type => type.fields?.[key] ? [type.fields[key].type] : [])
+                        : expected?.fields?.[key] ? [expected.fields[key].type] : [];
+                    setKey(d, key, await this.eval(v, env, this.unionContext(fields)));
                 }
+                assertComplete(d);
                 return d;
             }
             case 'unary': {
+                if (this.isNumericLiteral(e) && expected && (expected.kind === 'int' || expected.kind === 'float' || expected.kind === 'union' && expected.members!.some(type => type.kind === 'int' || type.kind === 'float'))) {
+                    const literal = this.signedLiteral(e);
+                    if (!/[.eE]/.test(literal.token)) return checkedInt(BigInt(literal.sign) * BigInt(literal.token));
+                    return typedFloat(literal.sign * Number(literal.token));
+                }
                 const v = await this.eval(e.e, env);
                 if (e.op === 'not') return !truthy(v);
+                if (typeof v === 'bigint') return checkedInt(e.op === '-' ? -v : v);
+                if (isFloat(v)) return typedFloat(e.op === '-' ? -v.__float : v.__float);
                 if (typeof v !== 'number') throw runtimeError(`bad operand for unary ${e.op}: ${typeName(v)}`);
                 return e.op === '-' ? -v : v;
             }
-            case 'binary':
-                return this.binary(e.op, await this.eval(e.l, env), await this.eval(e.r, env));
+            case 'binary': {
+                let left = await this.eval(e.l, env, expected);
+                let right = await this.eval(e.r, env, expected ?? this.numericType(left));
+                if (this.numericType(right) && this.isNumericLiteral(e.l) && !this.numericType(left)) left = await this.eval(e.l, env, this.numericType(right));
+                return this.binary(e.op, left, right);
+            }
             case 'logic': {
                 const l = await this.eval(e.l, env);
                 if (e.op === 'and') return truthy(l) ? this.eval(e.r, env) : l;
@@ -513,17 +628,25 @@ class Interpreter {
             case 'compare': {
                 let left = await this.eval(e.operands[0], env);
                 for (let i = 0; i < e.ops.length; i++) {
-                    const right = await this.eval(e.operands[i + 1], env);
+                    let right = await this.eval(e.operands[i + 1], env);
+                    if (this.isNumericLiteral(e.operands[i + 1]) && this.numericType(left)) right = await this.eval(e.operands[i + 1], env, this.numericType(left));
+                    if (i === 0 && this.isNumericLiteral(e.operands[0]) && this.numericType(right)) left = await this.eval(e.operands[0], env, this.numericType(right));
                     if (!this.compare(e.ops[i], left, right)) return false;
                     left = right;
                 }
                 return true;
             }
             case 'ternary':
-                return truthy(await this.eval(e.cond, env)) ? this.eval(e.then, env) : this.eval(e.else, env);
+                return truthy(await this.eval(e.cond, env)) ? this.eval(e.then, env, expected) : this.eval(e.else, env, expected);
             case 'call': return this.evalCall(e.callee, e.args, env);
             case 'member': {
                 const obj = await this.eval(e.obj, env);
+                if (isInstance(obj)) {
+                    if (hasKey(obj.fields, e.name)) return this.getKey(obj.fields, e.name);
+                    const method = obj.descriptor.methods?.[e.name];
+                    if (method && e.name !== obj.descriptor.name) return { ...method, self: obj };
+                    throw runtimeError(`member '${e.name}' is not initialized or declared`);
+                }
                 if (!isDict(obj)) throw runtimeError(`${typeName(obj)} has no member '${e.name}'`);
                 return this.getKey(obj, e.name);
             }
@@ -546,27 +669,101 @@ class Interpreter {
             if (d === this.runtimeEnv) return null;
             throw runtimeError(`key '${k}' not found`);
         }
-        return d[k];
+        const type = contractOf(d)?.fields?.[k]?.type;
+        return type?.kind === 'fn' ? validateValue(d[k], type, k) : d[k];
     }
 
     private async evalCall(callee: Expr, argExprs: Expr[], env: Env): Promise<Value> {
         if (callee.t === 'member') {
             const obj = await this.eval(callee.obj, env);
-            const args = await this.evalArgs(argExprs, env);
+            if (isInstance(obj)) {
+                const method = obj.descriptor.methods?.[callee.name];
+                if (!method || callee.name === obj.descriptor.name) throw runtimeError(`unknown instance method '${callee.name}'`);
+                return this.callValue({ ...method, self: obj }, await this.evalArgs(argExprs, env, method.paramTypes));
+            }
+            if (isDict(obj) && !hasBuiltinMethod(obj, callee.name)) {
+                const fn = this.getKey(obj, callee.name);
+                return this.callValue(fn, await this.evalArgs(argExprs, env, this.callParams(fn)));
+            }
+            const type = contractOf(obj);
+            const expected: (TypeDescriptor | undefined)[] = callee.name === 'append' ? [type?.element]
+                : callee.name === 'insert' ? [undefined, type?.element]
+                : callee.name === 'extend' || callee.name === 'update' ? [type] : [];
+            const args = await this.evalArgs(argExprs, env, expected);
+            args.forEach(value => assertComplete(value));
             return typeof obj === 'object' && obj !== null && isMutatingMethod(obj, callee.name)
                 ? this.observer.mutate(obj, env, callee.name, !this.opts.checkpoint?.replaying, () => callMethod(obj, callee.name, args))
                 : callMethod(obj, callee.name, args);
         }
+        if (callee.t === 'name' && (callee.name === 'validate' || callee.name === 'isinstance')) {
+            if (argExprs.length !== 2) throw runtimeError(`${callee.name}() takes 2 arguments`);
+            const value = await this.eval(argExprs[0], env);
+            const type = await this.eval(argExprs[1], env);
+            if (!isDescriptor(type)) throw runtimeError(`${callee.name}() requires a type descriptor`);
+            return callee.name === 'validate' ? validateValue(value, type) : testValue(value, type);
+        }
+        if (callee.t === 'name' && callee.name === 'struct') {
+            if (argExprs.length !== 1) throw runtimeError('struct() takes one class descriptor');
+            const type = await this.eval(argExprs[0], env);
+            if (!isDescriptor(type) || type.kind !== 'class') throw runtimeError('struct() requires a class descriptor');
+            return descriptor('struct', `struct(${type.name})`, { fields: type.fields });
+        }
         const fn = await this.eval(callee, env);
-        const args = await this.evalArgs(argExprs, env);
-        if (!isFunction(fn)) throw runtimeError(`${typeName(fn)} is not callable`);
-        if (fn.__fn === 'builtin') return fn.call(args);
-        return this.callUser(fn, args);
+        const args = await this.evalArgs(argExprs, env, this.callParams(fn));
+        return this.callValue(fn, args);
     }
 
-    private async evalArgs(exprs: Expr[], env: Env): Promise<Value[]> {
+    private callParams(fn: Value): readonly (TypeDescriptor | undefined)[] | undefined {
+        if (isDescriptor(fn) && fn.kind === 'class') return fn.methods?.[fn.name]?.paramTypes;
+        if (!isFunction(fn)) return undefined;
+        return signatureOf(fn)?.params ?? (fn.__fn === 'user' ? fn.paramTypes : undefined) ?? contractOf(fn)?.params;
+    }
+
+    private async callValue(fn: Value, args: Value[]): Promise<Value> {
+        args.forEach(value => assertComplete(value));
+        if (isDescriptor(fn)) {
+            switch (fn.kind) {
+                case 'int': if (args.length === 1) return convertInt(args[0]); break;
+                case 'float': if (args.length === 1) return convertFloat(args[0]); break;
+                case 'str': if (args.length === 1) return str(args[0]); break;
+                case 'bool': if (args.length === 1) return truthy(args[0]); break;
+                case 'char': if (args.length === 1) return validateValue(args[0], fn); break;
+                case 'object': if (!args.length) return newDict(); if (args.length === 1) return project(args[0]); break;
+                case 'class': return this.construct(fn, args);
+                case 'struct':
+                    if (args.length === 1) {
+                        schemaForType(fn);
+                        const data = project(args[0], false);
+                        return validateValue(data, fn);
+                    }
+                    break;
+            }
+            throw runtimeError(`${fn.name}() received unsupported arguments`);
+        }
+        if (!isFunction(fn)) throw runtimeError(`${typeName(fn)} is not callable`);
+        const guard = fn.__fn === 'builtin' ? fn.signature : contractOf(fn);
+        if (guard) {
+            if (args.length !== guard.params!.length) throw runtimeError(`${fn.name}() takes ${guard.params!.length} arguments`);
+            args = args.map((value, i) => validateValue(value, guard.params![i], `argument[${i}]`));
+        }
+        const result = fn.__fn === 'builtin' ? fn.target ? await this.callValue(fn.target, args) : await fn.call(args) : await this.callUser(fn, args);
+        assertComplete(result);
+        return guard ? validateValue(result, guard.result!, 'return') : result;
+    }
+
+    private async construct(type: TypeDescriptor, args: Value[]): Promise<InstanceValue> {
+        const instance = registerInstance({ __instance: true, descriptor: type, fields: newDict(), complete: false });
+        const constructor = type.methods?.[type.name];
+        if (constructor) await this.callUser({ ...constructor, self: instance }, args);
+        else if (args.length || Object.keys(type.fields!).length) throw runtimeError(`${type.name} requires an explicit constructor initializing all fields`);
+        validateValue(instance.fields, descriptor('struct', `fields(${type.name})`, { fields: type.fields }), type.name);
+        instance.complete = true;
+        return instance;
+    }
+
+    private async evalArgs(exprs: Expr[], env: Env, expected?: readonly (TypeDescriptor | undefined)[]): Promise<Value[]> {
         const out: Value[] = [];
-        for (const a of exprs) out.push(await this.eval(a, env));
+        for (const [i, a] of exprs.entries()) out.push(await this.eval(a, env, expected?.[i]));
         return out;
     }
 
@@ -576,10 +773,18 @@ class Interpreter {
         }
         if (this.depth >= this.maxDepth) throw runtimeError(`maximum call depth (${this.maxDepth}) exceeded`);
         const local = this.childScope(fn.closure, 'function', `${fn.name}()`);
-        fn.params.forEach((name, index) => this.commit(local, name, args[index]));
+        fn.params.forEach((name, index) => {
+            const type = fn.paramTypes?.[index];
+            const value = type ? validateValue(args[index], type, `argument.${name}`) : args[index];
+            if (type) (local.contracts ??= new Map()).set(name, type);
+            this.commit(local, name, value);
+        });
+        if (fn.self) local.vars.set('self', fn.self);
         const savedLines = this.sourceLines;
         const savedUri = this.sourceUri;
         const savedVersion = this.sourceVersion;
+        const savedReturn = this.returnType;
+        this.returnType = fn.returnType;
         this.sourceLines = fn.source?.lines ?? savedLines;
         this.sourceUri = fn.source?.uri ?? savedUri;
         this.sourceVersion = fn.source?.version ?? savedVersion;
@@ -587,18 +792,88 @@ class Interpreter {
         try {
             const sig = await this.execBlock(fn.body, local);
             if (sig && sig.k !== 'return' && sig.k !== 'value') throw runtimeError(`'${sig.k}' outside of a loop`);
-            return sig?.k === 'return' ? sig.v : null;
+            const value = sig?.k === 'return' ? sig.v : null;
+            assertComplete(value);
+            return fn.returnType ? validateValue(value, fn.returnType, `${fn.name}.return`) : value;
         } finally {
             this.depth--;
             this.sourceLines = savedLines;
             this.sourceUri = savedUri;
             this.sourceVersion = savedVersion;
+            this.returnType = savedReturn;
         }
     }
 
     // ---- operators -----------------------------------------------------
 
+    private numericType(value: Value): TypeDescriptor | undefined {
+        return typeof value === 'bigint' ? primitives.get('int') : isFloat(value) ? primitives.get('float') : undefined;
+    }
+
+    private unionContext(types: TypeDescriptor[]): TypeDescriptor | undefined {
+        if (!types.length) return undefined;
+        return types.length === 1 ? types[0] : descriptor('union', types.map(type => type.name).join(' | '), { members: types });
+    }
+
+    private isNumericLiteral(expr: Expr): boolean {
+        return expr.t === 'num' || expr.t === 'unary' && expr.op !== 'not' && this.isNumericLiteral(expr.e)
+            || expr.t === 'group' && this.isNumericLiteral(expr.e);
+    }
+
+    private signedLiteral(expr: Expr): { token: string; sign: number } {
+        if (expr.t === 'num') return { token: expr.raw ?? String(expr.v), sign: 1 };
+        if (expr.t === 'group') return this.signedLiteral(expr.e);
+        if (expr.t === 'unary' && expr.op !== 'not') {
+            const literal = this.signedLiteral(expr.e);
+            return { token: literal.token, sign: expr.op === '-' ? -literal.sign : literal.sign };
+        }
+        throw runtimeError('expected a numeric literal');
+    }
     private binary(op: string, l: Value, r: Value): Value {
+        if (typeof l === 'bigint' && typeof r === 'bigint') {
+            if ((op === '/' || op === '//' || op === '%') && r === 0n) throw runtimeError('division by zero');
+            switch (op) {
+                case '+': return checkedInt(l + r);
+                case '-': return checkedInt(l - r);
+                case '*': return checkedInt(l * r);
+                case '/': return typedFloat(Number(l) / Number(r));
+                case '//': {
+                    const quotient = l / r;
+                    return checkedInt(l % r !== 0n && (l < 0n) !== (r < 0n) ? quotient - 1n : quotient);
+                }
+                case '%': return checkedInt(((l % r) + r) % r);
+                case '**':
+                    if (r < 0n) throw runtimeError('integer exponent must be nonnegative; convert explicitly to float');
+                    if (l === 0n) return r === 0n ? 1n : 0n;
+                    if (l === 1n) return 1n;
+                    if (l === -1n) return r % 2n ? -1n : 1n;
+                    if (r > 63n && l !== 0n && l !== 1n && l !== -1n) throw runtimeError('int overflow');
+                    return checkedInt(l ** r);
+            }
+        }
+        if (isFloat(l) && isFloat(r)) {
+            const x = l.__float, y = r.__float;
+            if ((op === '/' || op === '//' || op === '%') && y === 0) throw runtimeError('division by zero');
+            switch (op) {
+                case '+': return typedFloat(x + y);
+                case '-': return typedFloat(x - y);
+                case '*': return typedFloat(x * y);
+                case '/': return typedFloat(x / y);
+                case '//': return typedFloat(Math.floor(x / y));
+                case '%': return typedFloat(((x % y) + y) % y);
+                case '**': return typedFloat(x ** y);
+            }
+        }
+        if (op === '*' && (typeof l === 'bigint' || typeof r === 'bigint')) {
+            const count = typeof l === 'bigint' ? l : r;
+            const sequence = typeof l === 'bigint' ? r : l;
+            if (typeof count === 'bigint' && (typeof sequence === 'string' || isList(sequence))) {
+                if (count > BigInt(Number.MAX_SAFE_INTEGER)) throw runtimeError('repetition count exceeds the supported sequence size');
+                const n = Number(count < 0n ? 0n : count);
+                return typeof sequence === 'string' ? sequence.repeat(n) : Array.from({ length: n }, () => sequence).flat();
+            }
+        }
+        if (this.numericType(l) || this.numericType(r)) throw new Failure('type_error', `mixed numeric arithmetic requires explicit conversion (${typeName(l)}, ${typeName(r)})`);
         if (op === '+') {
             if (typeof l === 'number' && typeof r === 'number') return l + r;
             if (typeof l === 'string' && typeof r === 'string') return l + r;
@@ -634,6 +909,12 @@ class Interpreter {
     }
 
     private compare(op: string, l: Value, r: Value): boolean {
+        if ((op === '==' || op === '!=') && (this.numericType(l) || this.numericType(r))
+            && (typeof l === 'bigint' || typeof l === 'number' || isFloat(l))
+            && (typeof r === 'bigint' || typeof r === 'number' || isFloat(r))) {
+            const same = compareValues(l, r) === 0;
+            return op === '==' ? same : !same;
+        }
         switch (op) {
             case '==': return equals(l, r);
             case '!=': return !equals(l, r);
@@ -658,6 +939,10 @@ class Interpreter {
     }
 
     private listIndex(list: Value[] | string, index: Value): number {
+        if (typeof index === 'bigint') {
+            if (index < BigInt(Number.MIN_SAFE_INTEGER) || index > BigInt(Number.MAX_SAFE_INTEGER)) throw runtimeError(`index ${index} out of range`);
+            index = Number(index);
+        }
         if (typeof index !== 'number' || !Number.isInteger(index)) throw runtimeError(`indices must be integers, got ${typeName(index)}`);
         const i = index < 0 ? list.length + index : index;
         if ((i < 0 || i >= list.length) && list !== this.runtimeArgs) throw runtimeError(`index ${index} out of range`);
@@ -665,7 +950,7 @@ class Interpreter {
     }
 
     private index(obj: Value, index: Value): Value {
-        if (isList(obj)) return obj[this.listIndex(obj, index)] ?? null;
+        if (isList(obj)) return contractRead(obj, this.listIndex(obj, index)) ?? null;
         if (typeof obj === 'string') {
             const chars = Array.from(obj);
             return chars[this.listIndex(chars, index)];
@@ -682,6 +967,7 @@ class Interpreter {
         const items = typeof obj === 'string' ? Array.from(obj) : obj;
         const bound = (v: Value | undefined, dflt: number): number => {
             if (v === undefined) return dflt;
+            if (typeof v === 'bigint') v = Number(v);
             if (typeof v !== 'number' || !Number.isInteger(v)) throw runtimeError('slice indices must be integers');
             return Math.min(Math.max(v < 0 ? items.length + v : v, 0), items.length);
         };
@@ -848,22 +1134,34 @@ class Interpreter {
     private async execNaturalAction(action: RuntimeAction, line: number, env: Env): Promise<Value> {
         const args = actionArguments(action);
         switch (action.name) {
-            case 'load_variable':
-                return args.name === '$args' ? this.runtimeArgs : this.lookup(String(args.name), env);
+            case 'load_variable': {
+                const value = args.name === '$args' ? this.runtimeArgs : this.lookup(String(args.name), env);
+                return isDescriptor(value) ? schemaForType(value) : value;
+            }
             case 'save_variable': {
                 const name = String(args.name);
-                if ('schema' in args) compileSchema(args.schema)(args.value);
-                if (isFunction(this.bindingScope(name, env)?.vars.get(name)) || this.builtins.has(name)) {
+                const schema = typeof args.schema === 'string' ? this.lookup(args.schema, env) : args.schema;
+                const target = isDescriptor(schema) ? schema : undefined;
+                if ('schema' in args && !target) compileSchema(schema)(args.value);
+                const scope = this.bindingScope(name, env) ?? env;
+                if (isFunction(scope.vars.get(name)) || this.builtins.has(name)) {
                     throw runtimeError(`cannot replace function '${name}' with a variable`);
                 }
-                this.commit(this.bindingScope(name, env) ?? env, name, args.value);
-                return args.value;
+                const type = target ?? scope.contracts?.get(name);
+                const value = type ? decodeJsonValue(args.value, type, name) : args.value;
+                this.commit(scope, name, value);
+                return value;
             }
             case 'call_function': {
                 const fn = this.lookup(String(args.name), env);
                 if (!isFunction(fn)) throw runtimeError(`'${args.name}' is not callable`);
                 if (!isList(args.args)) throw runtimeError('function arguments must be a list');
-                return fn.__fn === 'user' ? this.callUser(fn, args.args) : fn.call(args.args);
+                const params = this.callParams(fn);
+                const values = args.args.map((value, index) => {
+                    const type = params?.[index];
+                    return type ? decodeJsonValue(value, type, `argument[${index}]`) : value;
+                });
+                return this.callValue(fn, values);
             }
             case 'get_env':
                 this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
@@ -954,7 +1252,9 @@ class Interpreter {
         if (typeof repairs !== 'number' || !Number.isInteger(repairs) || repairs < 0 || repairs > 5) throw runtimeError('repairs must be an integer from 0 to 5');
         if (kind === 'agent' && repairs !== 0) throw runtimeError('agents cannot use repairs: external actions must not be retried automatically');
         if (fmt === 'text' && ('schema' in options || repairs !== 0)) throw runtimeError('schema and repairs require JSON output');
-        const validate = 'schema' in options ? compileSchema(options.schema) : undefined;
+        const target = isDescriptor(options.schema) ? options.schema : undefined;
+        const schema = target ? schemaForType(target) : options.schema;
+        const validate = 'schema' in options && !target ? compileSchema(schema) : undefined;
         const built = buildPromptParts({
             prompt: str(await this.eval(promptExpr, env)),
             mods: { len, fmt },
@@ -964,7 +1264,7 @@ class Interpreter {
         });
         let prompt = built.prompt;
         if (fmt === 'json') prompt += '\n\nReturn ONLY valid JSON, without prose or code fences.';
-        if (validate) prompt += `\n\nThe result must satisfy this JSON Schema:\n${JSON.stringify(toJson(options.schema))}`;
+        if ('schema' in options) prompt += `\n\nThe result must satisfy this JSON Schema:\n${JSON.stringify(toJson(schema))}`;
         const basePrompt = prompt;
         for (let attempt = 0; ; attempt++) {
             const text = await this.callLlm({
@@ -978,11 +1278,11 @@ class Interpreter {
                 tools: new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay'),
             }, built.preface);
             try {
-                const value = fmt === 'text' ? text : parseJsonResponse(text, fmt);
+                const value = target ? decodeTypedJson(text, target, fmt === 'text' ? undefined : fmt) : fmt === 'text' ? text : parseJsonResponse(text, fmt);
                 validate?.(value);
                 return value;
             } catch (e) {
-                if (!(e instanceof Failure) || (e.statusCode !== 'invalid_format' && e.statusCode !== 'validation_failed') || attempt >= repairs) throw e;
+                if (!(e instanceof Failure) || (e.statusCode !== 'invalid_format' && e.statusCode !== 'validation_failed' && !(target && e.statusCode === 'type_error')) || attempt >= repairs) throw e;
                 if (!this.opts.checkpoint?.replaying) this.opts.logger.info(`repair ${attempt + 1}/${repairs}: ${e.reason}`);
                 prompt = `${basePrompt}\n\nPrevious response:\n${text}\n\nValidation failed: ${e.reason}\nReturn a corrected JSON value.`;
             }

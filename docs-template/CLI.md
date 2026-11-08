@@ -211,6 +211,9 @@ performs all requested actions; locked replay does not repeat those actions or r
 
 `--store state.json` loads top-level variables at start and saves them at exit, even after a failure.
 Functions and `$env`/`$args` are not saved. See [journal.md](../lang/examples/journal.md).
+The built-in `JsonFileStore` writes typed numeric tokens losslessly, but its loader remains
+dynamic and stores do not contain descriptors. Explicit typed decoding is needed to recover
+new numeric representations and contracts; ordinary JSON loading is not a typed round trip.
 
 `--store-module ./store.mjs` uses a module exporting `createStore()`, which returns synchronous
 `load()` and `save(vars)` methods:
@@ -219,12 +222,13 @@ Functions and `$env`/`$args` are not saved. See [journal.md](../lang/examples/jo
 
 ```js
 import fs from 'node:fs';
+import { encodeJson } from 'spl-lang';
 
 export function createStore() {
   const file = './state.json';
   return {
     load: () => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}),
-    save: (vars) => fs.writeFileSync(file, JSON.stringify(vars)),
+    save: (vars) => fs.writeFileSync(file, encodeJson(vars)),
   };
 }
 ```

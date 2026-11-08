@@ -1,10 +1,12 @@
 import {
     assertMutable,
     compareValues,
+    encodeJson,
     equals,
     fromJson,
     hasKey,
     isDict,
+    isFloat,
     isList,
     newDict,
     runtimeError,
@@ -16,6 +18,7 @@ import {
     type BuiltinFunction,
     type Value,
 } from './values.js';
+import { checkedInt, contractOf, contractRead, convertFloat, convertInt, mutateContract, typedFloat, validateValue } from './types.js';
 
 export interface BuiltinContext {
     log: (values: Value[]) => void;
@@ -29,6 +32,8 @@ function arity(name: string, args: Value[], min: number, max = min): void {
 }
 
 function needNumber(name: string, v: Value): number {
+    if (typeof v === 'bigint' && v >= BigInt(Number.MIN_SAFE_INTEGER) && v <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(v);
+    if (isFloat(v)) return v.__float;
     if (typeof v !== 'number') throw runtimeError(`${name}() expects a number, got ${typeName(v)}`);
     return v;
 }
@@ -51,7 +56,7 @@ function needList(name: string, v: Value): Value[] {
 
 /** Values that can be iterated by `for`, `list()`, `sorted()` etc. */
 export function iterate(v: Value): Value[] {
-    if (isList(v)) return v;
+    if (isList(v)) return contractOf(v)?.element?.kind === 'fn' ? v.map((_, i) => contractRead(v, i)) : v;
     if (typeof v === 'string') return Array.from(v);
     if (isDict(v)) return Object.keys(v);
     throw runtimeError(`${typeName(v)} is not iterable`);
@@ -75,19 +80,11 @@ export function makeBuiltins(ctx: BuiltinContext): Map<string, BuiltinFunction> 
     });
     def('int', (a) => {
         arity('int', a, 1);
-        const v = a[0];
-        if (typeof v === 'number') return Math.trunc(v);
-        if (typeof v === 'boolean') return v ? 1 : 0;
-        if (typeof v === 'string' && /^\s*[+-]?\d+\s*$/.test(v)) return Number.parseInt(v, 10);
-        throw runtimeError(`int() cannot convert ${typeof v === 'string' ? JSON.stringify(v) : typeName(v)}`);
+        return convertInt(a[0]);
     });
     def('float', (a) => {
         arity('float', a, 1);
-        const v = a[0];
-        if (typeof v === 'number') return v;
-        if (typeof v === 'boolean') return v ? 1 : 0;
-        if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
-        throw runtimeError(`float() cannot convert ${typeof v === 'string' ? JSON.stringify(v) : typeName(v)}`);
+        return convertFloat(a[0]);
     });
     def('bool', (a) => {
         arity('bool', a, 1);
@@ -115,18 +112,33 @@ export function makeBuiltins(ctx: BuiltinContext): Map<string, BuiltinFunction> 
     });
     def('abs', (a) => {
         arity('abs', a, 1);
+        if (typeof a[0] === 'bigint') return checkedInt(a[0] < 0n ? -a[0] : a[0]);
+        if (isFloat(a[0])) return typedFloat(Math.abs(a[0].__float));
         return Math.abs(needNumber('abs', a[0]));
     });
     def('round', (a) => {
         arity('round', a, 1, 2);
+        if (typeof a[0] === 'bigint') {
+            const digits = a.length === 1 ? 0 : needInt('round', a[1]);
+            if (digits >= 0) return a[0];
+            if (digits < -19) return 0n;
+            const factor = 10n ** BigInt(-digits);
+            const magnitude = a[0] < 0n ? -a[0] : a[0];
+            let quotient = magnitude / factor;
+            const remainder = magnitude % factor;
+            if (remainder * 2n > factor || remainder * 2n === factor && quotient % 2n !== 0n) quotient++;
+            return checkedInt((a[0] < 0n ? -quotient : quotient) * factor);
+        }
         const n = needNumber('round', a[0]);
         if (a.length === 1) {
             const r = Math.round(Math.abs(n));
             const even = Math.abs(n) % 1 === 0.5 && r % 2 === 1 ? r - 1 : r;
-            return n < 0 ? -even : even;
+            const result = n < 0 ? -even : even;
+            return isFloat(a[0]) ? typedFloat(result) : typeof a[0] === 'bigint' ? a[0] : result;
         }
         const f = 10 ** needInt('round', a[1]);
-        return Math.round(n * f) / f;
+        const result = Math.round(n * f) / f;
+        return isFloat(a[0]) ? typedFloat(result) : typeof a[0] === 'bigint' ? checkedInt(BigInt(result)) : result;
     });
     const extremum = (name: string, pick: (c: number) => boolean) =>
         def(name, (a) => {
@@ -138,7 +150,30 @@ export function makeBuiltins(ctx: BuiltinContext): Map<string, BuiltinFunction> 
     extremum('max', (c) => c > 0);
     def('sum', (a) => {
         arity('sum', a, 1);
-        return iterate(a[0]).reduce<number>((acc, x) => acc + needNumber('sum', x), 0);
+        const items = iterate(a[0]);
+        if (!items.length) {
+            const element = contractOf(a[0])?.element;
+            return element?.kind === 'int' ? 0n : element?.kind === 'float' ? typedFloat(0) : 0;
+        }
+        if (typeof items[0] === 'bigint') {
+            return items.reduce<bigint>((sum, value) => {
+                if (typeof value !== 'bigint') throw runtimeError('sum() mixed numeric types require explicit conversion');
+                return checkedInt(sum + value);
+            }, 0n);
+        }
+        if (isFloat(items[0])) {
+            const total = items.reduce<number>((sum, value) => {
+                if (!isFloat(value)) throw runtimeError('sum() mixed numeric types require explicit conversion');
+                const next = sum + value.__float;
+                if (!Number.isFinite(next)) throw runtimeError('sum() float must be finite');
+                return next;
+            }, 0);
+            return typedFloat(total);
+        }
+        return items.reduce<number>((sum, value) => {
+            if (typeof value !== 'number') throw runtimeError(`sum() expects legacy numbers, got ${typeName(value)}; use explicit conversion`);
+            return sum + value;
+        }, 0);
     });
     def('sorted', (a) => {
         arity('sorted', a, 1, 2);
@@ -175,12 +210,12 @@ export function makeBuiltins(ctx: BuiltinContext): Map<string, BuiltinFunction> 
     def('values', (a) => {
         arity('values', a, 1);
         if (!isDict(a[0])) throw runtimeError(`values() expects a dict, got ${typeName(a[0])}`);
-        return Object.values(a[0]);
+        return Object.keys(a[0]).map(key => contractRead(a[0] as Record<string, Value>, key));
     });
     def('items', (a) => {
         arity('items', a, 1);
         if (!isDict(a[0])) throw runtimeError(`items() expects a dict, got ${typeName(a[0])}`);
-        return Object.entries(a[0]);
+        return Object.keys(a[0]).map(key => [key, contractRead(a[0] as Record<string, Value>, key)]);
     });
     def('json_parse', (a) => {
         arity('json_parse', a, 1);
@@ -194,7 +229,7 @@ export function makeBuiltins(ctx: BuiltinContext): Map<string, BuiltinFunction> 
     def('json_stringify', (a) => {
         arity('json_stringify', a, 1, 2);
         const indent = a[1] === undefined ? undefined : needInt('json_stringify', a[1]);
-        return JSON.stringify(toJson(a[0]), null, indent);
+        return encodeJson(a[0], indent);
     });
     def('log', (a) => {
         ctx.log(a);
@@ -303,7 +338,7 @@ const listMethods: Record<string, Method> = {
         if (a.length && truthy(a[0])) l.reverse();
         return null;
     },
-    copy: (l: Value[]) => [...l],
+    copy: (l: Value[]) => [...iterate(l)],
     clear: (l: Value[]) => {
         l.length = 0;
         return null;
@@ -312,12 +347,12 @@ const listMethods: Record<string, Method> = {
 
 const dictMethods: Record<string, Method> = {
     keys: (d) => Object.keys(d),
-    values: (d) => Object.values(d),
-    items: (d) => Object.entries(d),
+    values: (d: Record<string, Value>) => Object.keys(d).map(key => contractRead(d, key)),
+    items: (d: Record<string, Value>) => Object.keys(d).map(key => [key, contractRead(d, key)]),
     get: (d, a) => {
         arity('get', a, 1, 2);
         const k = needString('get', a[0]);
-        return hasKey(d, k) ? d[k] : (a[1] ?? null);
+        return hasKey(d, k) ? contractRead(d, k) : (a[1] ?? null);
     },
     pop: (d, a) => {
         arity('pop', a, 1, 2);
@@ -336,7 +371,7 @@ const dictMethods: Record<string, Method> = {
         for (const [k, v] of Object.entries(a[0])) setKey(d, k, v);
         return null;
     },
-    copy: (d) => newDict(Object.entries(d)),
+    copy: (d: Record<string, Value>) => newDict(Object.keys(d).map(key => [key, contractRead(d, key)])),
     clear: (d) => {
         for (const k of Object.keys(d)) delete d[k];
         return null;
@@ -355,6 +390,18 @@ export function callMethod(self: Value, name: string, args: Value[]): Value {
     if (!table || !Object.prototype.hasOwnProperty.call(table, name)) {
         throw runtimeError(`${typeName(self)} has no method '${name}'`);
     }
-    if (isMutatingMethod(self, name)) assertMutable(self);
+    if (isMutatingMethod(self, name)) {
+        assertMutable(self);
+        if (isList(self) || isDict(self)) {
+            const result = mutateContract(self, draft => table[name](draft, args));
+            const element = contractOf(self)?.element;
+            return name === 'pop' && element?.kind === 'fn' ? validateValue(result, element) : result;
+        }
+    }
     return table[name](self, args);
+}
+
+export function hasBuiltinMethod(self: Value, name: string): boolean {
+    const table = typeof self === 'string' ? stringMethods : isList(self) ? listMethods : isDict(self) ? dictMethods : undefined;
+    return table !== undefined && Object.hasOwn(table, name);
 }

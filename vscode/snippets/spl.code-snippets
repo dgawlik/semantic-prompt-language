@@ -39,6 +39,41 @@
     "body": ["let ${1:name} = ${0:value}"],
     "description": "Variable declaration"
   },
+  "Typed variable": {
+    "prefix": "lettyped",
+    "body": ["let ${1:name}: ${2:str} = ${0:value}"],
+    "description": "Declare an enforced typed binding"
+  },
+  "Typed function": {
+    "prefix": "deftyped",
+    "body": ["def ${1:name}(${2:value}: ${3:str}) -> ${4:str}:", "    return ${0:value}"],
+    "description": "Function with guarded parameter and return contracts"
+  },
+  "Dictionary": {
+    "prefix": "object",
+    "body": ["let ${1:data} = object:", "    '${2:key}': ${0:value}"],
+    "description": "Indentation-only dictionary expression; object() creates an empty dictionary"
+  },
+  "Enum": {
+    "prefix": "enum",
+    "body": ["enum ${1:Color} = '${2:red}' | '${0:blue}'"],
+    "description": "Named union of string literals"
+  },
+  "Struct": {
+    "prefix": "struct",
+    "body": ["struct ${1:Data}:", "    ${2:name}: ${0:str}"],
+    "description": "Exact structural record contract"
+  },
+  "Class": {
+    "prefix": "class",
+    "body": ["class ${1:Person}:", "    ${2:name}: str", "", "    def ${1:Person}(${2:name}: str):", "        self.${2:name} = ${2:name}"],
+    "description": "Nominal class with explicit constructor"
+  },
+  "Hydratable class": {
+    "prefix": "hydratable",
+    "body": ["hydratable class ${1:Person}:", "    ${2:name}: str", "", "    def ${1:Person}(${2:name}: str):", "        self.${2:name} = ${2:name}", "", "let ${3:person}: ${1:Person} = ask(schema=${1:Person}) '${0:prompt}'"],
+    "description": "Opt into constructor-free schema hydration; project with object(value) before JSON output"
+  },
   "LLM call": {
     "prefix": "ask",
     "body": ["let ${1:answer} = ask(len='${2|word,sentence,paragraph,long|}') '${0:prompt}'"],

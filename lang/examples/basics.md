@@ -10,14 +10,14 @@ SPL fences run exact code. Blockquotes run agent commands with tools, not genera
 Both share one scope; agents load and save variables and can invoke existing functions.
 
 ```spl
-def fib(n):
+def fib(n: int) -> int:
     if n < 2:
         return n
     return fib(n - 1) + fib(n - 2)
 ```
 
 ```spl
-def factorial(n):
+def factorial(n: int) -> int:
     if n == 0:
         return 1
     else:
@@ -47,5 +47,9 @@ assert fib10 == modelFib10 'Oops, the model got it wrong'
 > Paragraph of funny story about a pet animal -> @animal
 
 ```spl
-success {'fib': fib10, 'modelFib': modelFib10, 'joke': joke, 'animal': animal}
+success object:
+    'fib': fib10
+    'modelFib': modelFib10
+    'joke': joke
+    'animal': animal
 ```

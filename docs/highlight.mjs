@@ -8,9 +8,9 @@ import markdown from 'highlight.js/lib/languages/markdown';
 
 hljs.registerLanguage('spl', (engine) => {
     const keywords = {
-        keyword: 'let def if elif else for in while return try except assert fail success enforce forbid restrict ask think agent human break continue pass and or not',
+        keyword: 'let def enum struct class hydratable fn if elif else for in while return try except assert fail success enforce forbid restrict ask think agent human break continue pass and or not',
         literal: 'True False None',
-        built_in: 'len str int float bool type list range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log read_file write_file web_fetch web_search shell',
+        built_in: 'len str char int float bool object type list isinstance validate range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log read_file write_file web_fetch web_search shell',
     };
     const substitution = { scope: 'subst', begin: /\{/, end: /\}/, keywords, contains: [] };
     const string = {
@@ -44,9 +44,13 @@ hljs.registerLanguage('spl', (engine) => {
             match: [/\bdef\b/, /\s+/, /[A-Za-z_]\w*/],
             scope: { 1: 'keyword', 3: 'title.function' },
         },
+        {
+            match: [/\b(?:type|enum|struct|class)\b/, /\s+/, /[A-Za-z_]\w*(?=\s*[:=])/],
+            scope: { 1: 'keyword', 3: 'title.class' },
+        },
         { scope: 'attr', match: /\b(?:len|fmt|reasoning|hide|schema|repairs|model|tokens|level|seed|temperature|top_p)\b(?=\s*=(?!=))/ },
         { scope: 'number', match: /\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/ },
-        { scope: 'operator', match: /\/\/=|\*\*|\/\/|==|!=|<=|>=|[-+*/%<>=]=?/ },
+        { scope: 'operator', match: /->|\||\/\/=|\*\*|\/\/|==|!=|<=|>=|[-+*/%<>=]=?/ },
     ];
     const braces = { begin: /\{/, end: /\}/, keywords, contains: [...expression, 'self'] };
     substitution.contains = [...expression, braces];

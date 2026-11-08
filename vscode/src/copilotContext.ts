@@ -35,7 +35,10 @@ const syntax = [
     'Declare variables with let name = expression. Reassign existing variables with name = expression.',
     'Functions use def name(args):. Branches use if condition:, elif condition:, and else: with indented bodies.',
     'Loops use for item in items: or while condition:. Catch failures with try: and except err:. Use pass for empty bodies.',
-    'Use four spaces per indentation level, not tabs. Braces are only for dictionaries and string interpolation. Anonymous blocks use a bare colon and an indented body.',
+    'Use exactly four spaces per indentation level, not tabs. Dictionaries use object: with indented key: value entries; object() is empty. Braces are only for string interpolation and JSON wire text. Anonymous blocks use a bare colon and an indented body.',
+    "Optional contracts: let count: int = 1; def repeat(text: str, count: int) -> str:. Types include char, list[T], T | U, fn(T) -> R, enum, struct, class and hydratable class.",
+    "Declare transparent aliases with type Money = int [minimum=0, desc='Amount in cents']. Metadata is model advice; typed arithmetic requires explicit numeric conversions.",
+    'Class constructors use def ClassName(args): and implicitly bound self. Only hydratable classes permit schema=Class hydration; schema=struct(Class) returns structural data. Project instances with object(value) before JSON output.',
     'Use True, False, None, and/or/not, # comments, and {name} interpolation inside strings.',
     'Use log(value), not print(value). Use success value to end the workflow successfully.',
     'Do not generate Python imports, f-strings, or @name references in SPL code cells.',
@@ -53,6 +56,10 @@ const example = [
     '    return value * 2',
     'for item in range(3):',
     '    log(double(item))',
+    '',
+    'let data = object:',
+    "    'name': 'Ada'",
+    'let empty = object()',
 ].join('\n');
 
 export async function registerCopilotContext(

@@ -71,7 +71,7 @@ function isTraceRequest(value: unknown): value is TraceRequest {
 
 export function isTraceError(value: unknown): value is Extract<Outcome, { error: unknown }>['error'] {
     const codes: readonly StatusCode[] = [
-        'assertion_failed', 'explicit_failure', 'invalid_format', 'validation_failed',
+        'assertion_failed', 'explicit_failure', 'invalid_format', 'validation_failed', 'type_error',
         'restriction_violation', 'llm_error', 'tool_error', 'runtime_error',
     ];
     return isRecord(value) && typeof value.reason === 'string'

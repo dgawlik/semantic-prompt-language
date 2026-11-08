@@ -7,20 +7,20 @@
     {
       "description": "Hex bolt M8 (box of 100)",
       "quantity": 3,
-      "unit_price": 12.5
+      "unit_price": 1250
     },
     {
       "description": "Safety gloves, size L",
       "quantity": 2,
-      "unit_price": 8.9
+      "unit_price": 890
     },
     {
       "description": "Cordless drill",
       "quantity": 1,
-      "unit_price": 119
+      "unit_price": 11900
     }
   ],
-  "subtotal": 174.3,
-  "tax": 33.12,
-  "total": 207.42
+  "subtotal": 17430,
+  "tax": 3312,
+  "total": 20742
 }

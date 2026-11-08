@@ -14,49 +14,44 @@ model: 'gpt-6-luna'
 
 
 ```spl
-let Review = {
-    'type': 'object',
-    'properties': {
-        'findings': {
-            'type': 'array',
-            'items': {
-                'type': 'object',
-                'properties': {
-                    'severity': {'type': 'string', 'enum': ['low', 'medium', 'high']},
-                    'title': {'type': 'string'}, 'location': {'type': 'string'}, 'fix': {'type': 'string'},
-                },
-                'required': ['severity', 'title', 'location', 'fix'],
-                'additionalProperties': False,
-            },
-        },
-    },
-    'required': ['findings'],
-    'additionalProperties': False,
-}
+enum Severity = 'low' | 'medium' | 'high'
+
+hydratable class Item:
+    severity: Severity
+    title: str
+    location: str 
+    fix: str 
+
+hydratable class Review:
+    findings: list[Item]
 ```
 
-> Convert @notes review into structured finding @validate[Review] save to @review
+> Convert @notes into structured finding @validate[Review] save to @review
 
 ```spl
-let lines = ["# Review of repository", '']
-let high = 0
+
+let groups = object() 
+groups.high = []
+groups.medium = []
+groups.low = []
+
 for f in review.findings:
-    assert f.severity in ['low', 'medium', 'high'] \
-    "bad severity '{f.severity}'"
     if f.severity == 'high':
-        high += 1
-    lines.append("- **{f.severity.upper()}** {f.title} ({f.location})")
-    lines.append("  - Fix: {f.fix}")
-lines.append('')
-lines.append("{len(review.findings)} finding(s), {high} high severity")
+        groups.high.append(f)
+    elif f.severity == 'medium':
+        groups.medium.append(f)
+    else:
+        groups.low.append(f)
 ```
 
 > @RESTRICT fs['./reports']
 >
-> Write joined @lines to './reports/review.md'
+> Write convert @groups to markdown report 
+> and write to './reports/review.md'
 
 ```spl
-if high > 0:
-    fail '{high} high severity finding(s), see ./reports/review.md'
+if len(groups.high) > 0:
+    fail '{len(groups.high)} high severity finding(s), see ./reports/review.md'
+
 success '\n'.join(lines)
 ```

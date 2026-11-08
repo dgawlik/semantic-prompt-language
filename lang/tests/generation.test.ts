@@ -28,7 +28,14 @@ function scripted(...responses: (string | Error)[]) {
 }
 
 const exec = (source: string, backend: LlmBackend) => run(parse(source), { backend, cwd: dir, logger: new Logger('silent') });
-const schema = `{'type': 'object', 'properties': {'total': {'type': 'number'}}, 'required': ['total'], 'additionalProperties': False}`;
+const schema = `(object:
+    'type': 'object'
+    'properties': object:
+        'total': object:
+            'type': 'number'
+    'required': ['total']
+    'additionalProperties': False
+)`;
 
 describe('generation contracts', () => {
     it('executes the requested multiline rating syntax with bounded repair', async () => {
@@ -60,7 +67,11 @@ let score = ${command}(
     model = 'per-call',
     tokens = option(2048),
     hide = option(True),
-    schema = {'type': 'integer', 'minimum': 1, 'maximum': 5},
+    schema = object:
+        'type': 'integer'
+        'minimum': 1
+        'maximum': 5
+    ,
     ) 'Rate this issue'
 success [score, count[0]]`, backend);
         expect(result).toMatchObject({ status: 'success', value: [5, 4] });
@@ -232,7 +243,10 @@ success [result, count[0]]
 
     it('validates schemas after checking the explicit format', async () => {
         const { backend, calls } = scripted('"55"', '55', '89');
-        expect(await exec(`success ask(fmt='integer', schema={'type':'integer', 'minimum':80}, repairs=2) 'Fibonacci'`, backend)).toMatchObject({
+        expect(await exec(`success ask(fmt='integer', schema=object:
+    'type': 'integer'
+    'minimum': 80
+, repairs=2) 'Fibonacci'`, backend)).toMatchObject({
             status: 'success', value: 89,
         });
         expect(calls[1].prompt).toContain(`fmt='integer'`);
@@ -241,7 +255,18 @@ success [result, count[0]]
 
     it('reports nested field paths and missing required fields', async () => {
         const { backend } = scripted('{"lines":[{"quantity":"many"}]}', '{}');
-        const result = await exec(`success ask(schema={'type':'object','properties':{'lines':{'type':'array','items':{'type':'object','properties':{'quantity':{'type':'number'}},'required':['quantity']}}}}) 'Extract'`, backend);
+        const result = await exec(`success ask(schema=object:
+    'type': 'object'
+    'properties': object:
+        'lines': object:
+            'type': 'array'
+            'items': object:
+                'type': 'object'
+                'properties': object:
+                    'quantity': object:
+                        'type': 'number'
+                'required': ['quantity']
+) 'Extract'`, backend);
         expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringContaining('lines[0].quantity') } });
         expect(await exec(`success ask(schema=${schema}) 'Extract'`, backend)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('total:') } });
     });
@@ -300,8 +325,15 @@ success [result, count[0]]
     });
 
     it.each([
-        `ask(schema={'type':'imaginary'}) 'x'`, `ask(schema={'typo':True}) 'x'`,
-        `ask(schema={'$async':True, 'type':'number'}) 'x'`,
+        `ask(schema=object:
+    'type': 'imaginary'
+) 'x'`, `ask(schema=object:
+    'typo': True
+) 'x'`,
+        `ask(schema=object:
+    '$async': True
+    'type': 'number'
+) 'x'`,
         `ask(repairs=6, fmt='json') 'x'`, `ask(repairs=-1, fmt='json') 'x'`,
         `ask(hide='yes') 'x'`, `ask(hide=None) 'x'`, `ask(hide=1) 'x'`, `ask(reasoning='extreme') 'x'`,
         `ask(fmt='unsupported') 'x'`, `ask(fmt=42) 'x'`, `ask(fmt=True) 'x'`,

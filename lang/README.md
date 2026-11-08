@@ -80,7 +80,12 @@ help/version and `--check` do not start a renderer.
 ## Language in brief
 
 ```spl
-let Rating = {'type': 'object', 'properties': {'score': {'type': 'integer'}}, 'required': ['score']}
+let Rating = object:
+    'type': 'object'
+    'properties': object:
+        'score': object:
+            'type': 'integer'
+    'required': ['score']
 let review = read_file('review.txt')
 let rating = ask(schema=Rating, repairs=2) 'Rate this review from 1 to 5: {review}'
 assert 1 <= rating.score and rating.score <= 5 'score out of range'
@@ -102,10 +107,12 @@ success rating
 * `randomness(...)` prefixes and the `eval(...)` statement have been removed. Move sampling
   controls into `ask(...)`; use `assert` and schemas for explicit output checks. Recreate pins
   and checkpoints after changing their source documents.
-* **Breaking syntax change:** blocks use `:` plus a newline and an indented nonempty body, not
-  braces. Use spaces (4 recommended), no inline suites, and `pass` for empty bodies. Dicts and
-  interpolation keep their braces; blocks still create lexical child scopes. See the
-  [migration rules](../docs-template/Language.md#block-syntax-and-migration).
+* **Breaking syntax change:** blocks use `:` plus a newline and a nonempty body with exactly
+  four spaces per level. Use `object:` for dictionaries and `object()` for an empty dictionary,
+  not braces. Interpolation and JSON wire braces are unchanged. Annotations opt into enforced
+  contracts; untyped bindings remain dynamic. See the
+  [manual typing migration guide](../docs-template/Migration.md), including explicit numeric
+  conversions, persistent mutable contracts, and class versus struct schemas.
 
 See [Language](../docs-template/Language.md), [Natural language & models](../docs-template/LLM-commands.md)
 and [Guards & failures](../docs-template/Safety.md).
@@ -128,6 +135,10 @@ try {
 Also exported: `parse` (raw SPL), `TraceBackend`, `ReplayBackend`, `RecordingBackend`, variable stores,
 `Checkpoint`, authentication helpers and types. See [Embedding](../docs-template/CLI.md#embedding).
 `CopilotBackend` remains an alias of `AiBackend` for existing embedding imports.
+Typed embedding also exports `encodeJson(value)`, `decodeTypedJson(text, descriptor)` and
+`schemaForType(descriptor)`. Use the typed encoder for exact integer tokens and distinct float
+spelling; ordinary `JSON.stringify` is not a replacement. Typed decoding requires an explicit
+descriptor, and dynamic store loading does not restore descriptors or contracts.
 Embedded callers provide a `human(question, line)` handler returning a string or `Promise<string>`
 to answer directly; the interpreter never reads stdin itself. A checkpoint still takes precedence
 and suspends for externally supplied answers.

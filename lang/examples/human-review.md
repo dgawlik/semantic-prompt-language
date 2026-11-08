@@ -35,5 +35,8 @@ let final = draft
 ```spl
 restrict './out':
     write_file('./out/announcement.txt', final)
-success {'draft': draft, 'feedback': feedback, 'final': final}
+success object:
+    'draft': draft
+    'feedback': feedback
+    'final': final
 ```

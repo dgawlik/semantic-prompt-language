@@ -10,19 +10,23 @@ SPL is a small Python-like language with colon-and-indentation blocks. This page
 own indented lines, and remove the closing brace. Align `elif`, `else` and `except` with their
 opening statement. Replace empty bodies with `pass`; inline suites are not supported.
 
-Use spaces for indentation (4 per level recommended). Tabs in indentation are prohibited.
+Use exactly four spaces per indentation level. Tabs in indentation are prohibited.
 Unexpected indentation, a missing indented body, and a dedent that does not match a prior level
 are syntax errors. Blank and comment-only lines are ignored: they neither open nor close a block
 and do not count as a body. Semicolons can separate simple statements only, never block headers
 or compound statements.
 
-Dictionaries `{...}` and string interpolation `{expr}` are unchanged. Newlines inside `()`, `[]`
-and dictionaries are insignificant; explicit backslash continuation remains supported.
-Only the layout changes: every block is still a lexical child scope, not Python assignment semantics.
+Dictionary literals `{...}` are removed: use `object:` with indented `key: value` entries,
+and `object()` for an empty dictionary. String interpolation `{expr}` and JSON wire syntax
+are unchanged. Newlines inside `()` and `[]` suspend ordinary indentation; explicit object
+suites still delimit their entries. Explicit backslash continuation remains supported.
+Statement blocks retain lexical child scopes, not Python assignment semantics; dictionary keys
+do not form a lexical scope. See the [manual typing migration guide](Migration.md).
 
 ## Values and strings
 
-Values are `None`, `True`/`False`, numbers, strings, lists, dicts with string keys, and functions.
+Values include `None`, `True`/`False`, numbers, strings, lists, dictionaries with string keys,
+functions, immutable type descriptors and nominal class instances.
 Simple statements end at a newline or `;`. `#` starts a comment, and a trailing `\` continues a line.
 
 ```spl
@@ -64,7 +68,7 @@ Declare a result before a block when the block should set it:
 but keep SPL's lexical scopes.
 `for k, v in items(d)` unpacks pairs. Blocks and `if` are expressions that yield their last
 expression, or `None`. Anonymous value-producing blocks begin with a bare `:`, as in `result`
-above. `{}` is an empty dict; a block containing only `pass` yields `None`.
+above. `object()` is an empty dictionary; a block containing only `pass` yields `None`.
 
 ```spl
 let score = 6
@@ -74,7 +78,10 @@ elif score > 3:
     'medium'
 else:
     'low'
-for key, value in items({'a': 1, 'b': 2}):
+let data = object:
+    'a': 1
+    'b': 2
+for key, value in items(data):
     log(key, value)
 if score < 0:
     pass
@@ -91,6 +98,52 @@ def fib(n):
         return n
     return fib(n - 1) + fib(n - 2)
 ```
+
+## Gradual typing
+
+Annotations are optional enforced contracts, not advisory lint hints. Untyped bindings remain
+dynamic. Known typed violations block execution before model calls; unknown values are validated
+at typed boundaries without coercion, defaults or field removal.
+
+Built-in types and existing type declarations remain available after `if`, loops, and
+`try`/`except` blocks. An untyped alias used as an annotation must still identify the same
+type on every possible control-flow path.
+
+Declare read-only, transparent aliases with optional semantic advice:
+
+```spl
+type Money = int [minimum=0, desc='Amount in cents']
+let subtotal: Money = 1250
+let computed: Money = 0
+computed += subtotal
+```
+
+Aliases accept the same values and operations as their underlying types, without implicit
+conversion. Advice is included in generated schemas' descriptions, including when an alias
+is used as a field or list element; it does not enforce extra constraints. Aliasing an alias
+inherits its advice, with newly supplied keys overriding inherited keys. Field advice is
+appended separately. `type(value)` remains the type-name builtin.
+
+```spl
+enum Color = 'red' | 'green' | 'blue'
+struct Entry:
+    color: Color
+    note: str | None
+    callback: fn(str, int) -> str
+def repeat(text: str, count: int) -> str:
+    return text * count
+let names: list[str] = ['Ada']
+let count: int = 2
+let ratio: float = 1.0
+```
+
+Struct fields are exact and required; nullable does not mean absent. Metadata such as
+`str [min=2, desc='Name']` is model advice, not a validity constraint. `int` is signed 64-bit,
+`float` is distinct finite binary64, and untyped numbers require explicit conversion to enter
+either representation. Mutable contracts persist through untyped aliases and bulk mutators.
+`validate(value, Type)` validates; `isinstance(value, Type)` tests without converting and supports
+temporary branch narrowing. See [Typing migration](Migration.md) for numeric rules, callables,
+classes, hydration and deep projections.
 
 ## Runtime inputs: $env and $args
 
@@ -118,6 +171,9 @@ redirected logs are plain text by default. See [console formatting](CLI.md#outpu
 | --- | --- |
 | `len(x)` `type(x)` | Length; type name |
 | `str(x)` `int(x)` `float(x)` `bool(x)` `list(x)` | Conversions |
+| `object()` `object(x)` | Empty dictionary; deep dynamic-data snapshot |
+| `validate(x, T)` `isinstance(x, T)` | Non-converting validation and type testing |
+| `struct(Class)` | Structural descriptor for declared class fields, not nominal hydration |
 | `range(stop)` `range(start, stop[, step])` | List of integers |
 | `abs(x)` `round(x[, digits])` `min(...)` `max(...)` `sum(list)` | Numbers |
 | `sorted(list[, reverse])` `reversed(list)` `enumerate(list)` `zip(a, b, ...)` | Sequences |

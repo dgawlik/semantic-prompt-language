@@ -8,7 +8,6 @@
     ["(", ")"]
   ],
   "autoClosingPairs": [
-    { "open": "{", "close": "}" },
     { "open": "[", "close": "]" },
     { "open": "(", "close": ")" },
     { "open": "'''", "close": "'''", "notIn": ["string", "comment"] },
@@ -17,7 +16,6 @@
     { "open": "\"", "close": "\"", "notIn": ["string", "comment"] }
   ],
   "surroundingPairs": [
-    ["{", "}"],
     ["[", "]"],
     ["(", ")"],
     ["'", "'"],
@@ -31,7 +29,7 @@
     }
   },
   "indentationRules": {
-    "increaseIndentPattern": "(?::|[\\{\\[\\(])\\s*(#.*)?$",
-    "decreaseIndentPattern": "^\\s*(?:[\\}\\]\\)]|(?:elif\\b.*|else|except\\s+[A-Za-z_]\\w*)\\s*:)"
+    "increaseIndentPattern": "(?::|[\\[\\(])\\s*(#.*)?$",
+    "decreaseIndentPattern": "^\\s*(?:[\\]\\)]|(?:elif\\b.*|else|except\\s+[A-Za-z_]\\w*)\\s*:)"
   }
 }

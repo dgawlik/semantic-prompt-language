@@ -110,7 +110,8 @@ describe('logical container mutation observation', () => {
     it('reports aliases and nested owners together once with immutable historical snapshots', async () => {
         const { result, states } = await observe(`let items = [1]
 let alias = items
-let parent = {'child': items}
+let parent = object:
+    'child': items
 alias[0] = 2
 parent.child.append(3)
 parent.child = [4]
@@ -133,9 +134,12 @@ success items`);
         expect(states.filter(event => event.change.operation === 'mutation')).toHaveLength(method === 'sort()' ? 0 : 1);
     });
 
-    it.each([["pop('a')", {}], ["update({'b':2})", { a: 1, b: 2 }], ['clear()', {}]])(
+    it.each([["pop('a')", {}], ["update(object:\n    'b': 2\n)", { a: 1, b: 2 }], ['clear()', {}]])(
         'observes dictionary %s once', async (method, expected) => {
-            const { result, states } = await observe(`let item = {'a':1}\nitem.${method}\nsuccess item`);
+            const { result, states } = await observe(`let item = object:
+    'a': 1
+item.${method}
+success item`);
             expect(result).toMatchObject({ status: 'success', value: expected });
             expect(states.filter(event => event.change.operation === 'mutation')).toHaveLength(1);
         },
@@ -147,8 +151,8 @@ items.clear()
 items.extend([])
 items.reverse()
 items.sort()
-let d = {}
-d.update({})
+let d = object()
+d.update(object())
 d.clear()
 let n = 0
 n = 1
@@ -182,7 +186,8 @@ success items`);
     it('handles cyclic/shared graphs without closure dumps or rewriting old values', async () => {
         const { result, states } = await observe(`let items = []
 items.append(items)
-let root = {'child': items}
+let root = object:
+    'child': items
 items.append(1)
 success 1`);
         expect(result).toMatchObject({ status: 'success' });
@@ -194,7 +199,7 @@ success 1`);
     it('keeps nested RHS/argument commits before outer writes and preserves them on target failure', async () => {
         const { states, result } = await observe(`let n = 0
 let items = []
-let d = {}
+let d = object()
 def step():
     n += 1
     return n

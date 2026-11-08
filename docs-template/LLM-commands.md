@@ -23,8 +23,8 @@ Blockquotes have these tools in addition to configured MCP tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `load_variable(name)` | Read a shared variable or read-only `$args` |
-| `save_variable(name, value, schema?)` | Create or update a shared JSON value; optionally validate a JSON Schema before saving |
+| `load_variable(name)` | Read a shared variable or read-only `$args`; declared types return their complete JSON Schema |
+| `save_variable(name, value, schema?)` | Create or update a shared value; optionally use a declared type/schema name or inline JSON Schema |
 | `call_function(name, args)` | Invoke an existing SPL function or builtin with positional JSON arguments |
 | `get_env(name)` | Read one read-only environment value; missing values return `null` |
 | `ask_human(question)` | Ask for human input and return the answer directly |
@@ -36,6 +36,25 @@ Blockquotes have these tools in addition to configured MCP tools:
 These shared-scope tools are specific to blockquotes. Explicit `agent` expressions retain their
 existing runtime/MCP tool set; `ask` and `think` still have no tools.
 
+`call_function` decodes JSON arguments against parameter annotations, including nested lists
+and records. For example, JSON `15` becomes an SPL `int` for a parameter declared `n: int`;
+unannotated parameters keep ordinary dynamic values. `save_variable` also decodes against
+an existing binding's type annotation. This does not relax validation of ordinary SPL values:
+numeric strings, fractional integers, invalid shapes, and ambiguous decoding targets still fail.
+Tool arguments are already parsed JSON, so integer values outside JavaScript's safe integer
+range are rejected when decoding to `int`, rather than risking a rounded value. Numeric unions
+interpret integral parsed numbers as `int` and fractional numbers or negative zero as `float`;
+the original decimal/exponent spelling is no longer available at this boundary.
+
+For `@validate[Review]`, the agent can inspect `Review` with `load_variable("Review")`.
+The returned schema includes nested fields, lists, and enums; `<type Review>` in the shared
+bindings overview is only a display label. The agent then saves with
+`save_variable(name="review", value=..., schema="Review")`. The runtime resolves the declared
+type, validates and decodes the JSON, and hydrates any opted-in classes, including nested ones.
+Structs and typed containers retain their contracts; constructor-only classes are rejected.
+An inline JSON Schema object or boolean, or the name of a binding holding one, keeps the
+existing validation-only behavior without class hydration. Invalid values fail before saving.
+
 `@name` marks a binding or operation (`@notes`, `@success`, `@read_file`), not text substitution.
 Plain language works too. Common conventions guide the agent's tool choices:
 
@@ -43,7 +62,7 @@ Plain language works too. Common conventions guide the agent's tool choices:
 | --- | --- |
 | `@ENFORCE text` / `@FORBID text` | Follow prompt guidance; use `set_guidance` for nested model calls |
 | `@RESTRICT fs['./src'] exec['git']` | Narrow the command's restrictions with `restrict` |
-| `@validate[Schema]` | Load `Schema` and validate the value before saving; invalid values stop the command |
+| `@validate[Schema]` | Inspect `Schema`, then pass its name to `save_variable` for validation and typed decoding; invalid values stop the command |
 | `@HUMAN question` | Call `ask_human`; the shell prompts or consumes the next `--human` answer |
 | `@SUCCESS`, `@fail` | End the document |
 
@@ -244,15 +263,16 @@ coerced. A malformed or wrong-typed answer raises `invalid_format`.
 extra fields. A mismatch raises `validation_failed` with field paths.
 
 ```spl
-let Triage = {
-    'type': 'object',
-    'properties': {
-        'label': {'type': 'string', 'enum': ['bug', 'feature', 'question']},
-        'reason': {'type': 'string'},
-    },
-    'required': ['label', 'reason'],
-    'additionalProperties': False,
-}
+let Triage = object:
+    'type': 'object'
+    'properties': object:
+        'label': object:
+            'type': 'string'
+            'enum': ['bug', 'feature', 'question']
+        'reason': object:
+            'type': 'string'
+    'required': ['label', 'reason']
+    'additionalProperties': False
 let triage = ask(schema=Triage, repairs=2) 'Classify: {issue}'
 assert triage.label != 'bug' or len(triage.reason) > 0 'bugs need a reason'
 ```
@@ -260,6 +280,15 @@ assert triage.label != 'bug' or len(triage.reason) > 0 'bugs need a reason'
 `repairs=n` allows up to `n` more attempts, each with the previous answer and the validation errors.
 Only `invalid_format` and `validation_failed` are repaired; transport and tool errors are not.
 The prompt is not re-evaluated. Put business rules in `assert`, after the call.
+
+`schema=` also accepts declared type descriptors. Struct targets decode validated structural data;
+`schema=Person` hydrates a nominal instance only for a `hydratable class Person`.
+`schema=struct(Person)` instead returns structural field data, never a `Person` instance.
+A binding annotation checks the result and does not secretly configure the ask target.
+Typed JSON decoding preserves signed-64-bit tokens exactly; typed decoding or complete hydration
+failures use the same repair budget (zero by default, at most five extra attempts). Unsupported
+non-JSON schemas and ambiguous distinct targets fail before provider calls.
+See [class schemas and migration](Migration.md#class-schemas-versus-structural-data).
 
 ## Guidance: enforce and forbid
 
