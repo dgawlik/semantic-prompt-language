@@ -62,16 +62,18 @@ const numeric = (type: TypeDescriptor): boolean => type.kind === 'int' || type.k
 const mutable = (type: TypeDescriptor): boolean => ['list', 'struct', 'class'].includes(type.kind);
 
 /** Checks only statically known contracts; dynamic values are left to runtime validation. */
-export function checkProgram(program: Program, globals?: Env): void {
-    new Checker(program).check(globals);
+export function checkProgram(program: Program, globals?: Env, onMember?: MemberObserver): void {
+    new Checker(program, onMember).check(globals);
 }
+
+export type MemberObserver = (expr: Extract<Expr | AssignTarget, { t: 'member' }>, receiver: TypeDescriptor | undefined) => void;
 
 class Checker {
     private nextId = 1;
     private line = 1;
     private function?: FunctionContext;
 
-    constructor(private readonly program: Program) {}
+    constructor(private readonly program: Program, private readonly onMember?: MemberObserver) {}
 
     private error(reason: string, line = this.line): never {
         throw new Failure('type_error', reason).locate(line, this.program.lines[line - 1]?.trim() ?? '');
@@ -575,7 +577,7 @@ class Checker {
                 this.join(scope, [yes, no]);
                 return this.merge(values);
             }
-            case 'member': return this.member(this.expr(expr.obj, scope), expr.name);
+            case 'member': return this.member(this.memberReceiver(expr, scope), expr.name);
             case 'index': {
                 const object = this.expr(expr.obj, scope);
                 const index = this.expr(expr.index, scope);
@@ -725,6 +727,12 @@ class Checker {
         return { type: this.union(result), typed: true };
     }
 
+    private memberReceiver(expr: Extract<Expr | AssignTarget, { t: 'member' }>, scope: Scope): Info {
+        const value = this.expr(expr.obj, scope);
+        this.onMember?.(expr, this.effective(value).type);
+        return value;
+    }
+
     private member(value: Info, name: string, writing = false): Info {
         const info = this.effective(value);
         if (info.type?.kind === 'union') {
@@ -856,7 +864,7 @@ class Checker {
             return value?.legacy ? { legacy: true } : unknown();
         }
         if (expr.callee.t === 'member') {
-            const object = this.expr(expr.callee.obj, scope);
+            const object = this.memberReceiver(expr.callee, scope);
             const method = this.builtinMethod(object, expr.callee.name, expr.args, scope);
             if (method) return method;
             return this.invoke(this.member(object, expr.callee.name), expr.args, scope, expr.callee.name);
@@ -1109,7 +1117,7 @@ class Checker {
             }
             return;
         }
-        const object = this.expr(target.obj, scope);
+        const object = target.t === 'member' ? this.memberReceiver(target, scope) : this.expr(target.obj, scope);
         const index = target.t === 'index' ? this.expr(target.index, scope) : undefined;
         const current = target.t === 'member' ? this.member(object, target.name, true) : this.index(object, index!, true);
         const contract = this.effective(object).typed ? current.type : undefined;

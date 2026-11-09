@@ -25,6 +25,26 @@ async function rejectsBeforeModel(source: string, reason?: string) {
 }
 
 describe('static typed preflight', () => {
+    it('observes member receiver types using the same narrowing and list inference as preflight', () => {
+        const program = parse(`struct Item:
+    quantity: int
+struct Invoice:
+    lines: list[Item]
+let invoice = unknown()
+if isinstance(invoice, Invoice):
+    for item in invoice.lines:
+        item.quantity`);
+        const members: [string, string | undefined, number | undefined, number | undefined][] = [];
+        checkProgram(program, undefined, (expr, receiver) => {
+            members.push([expr.name, receiver?.name, expr.line, expr.col]);
+        });
+        expect(members).toEqual([
+            ['lines', 'Invoice', 7, 24],
+            ['quantity', 'Item', 8, 13],
+        ]);
+        expect(() => checkProgram(program)).not.toThrow();
+    });
+
     it.each([
         'type Money = Missing',
         'type Money = Money',

@@ -55,8 +55,17 @@ In a workflow text editor, all SPL fences share top-level declarations in docume
 For example, in `lang/examples/extract-invoice.md`, **Go to Definition** on `@document` reaches
 `let document = read_file(path)` in the preceding fence. Renaming `document` updates that
 declaration and its blockquote reference, without changing prose or dictionary string keys.
+Explicit blockquote outputs such as `save to @invoice`, `save it to @summary`, and `-> @result`
+are available in completion after the blockquote. `@validate[Invoice] save to @invoice` gives
+`invoice` the editor type `Invoice` when that type is already declared; otherwise new outputs
+have type `unknown`. Hover, navigation, references, rename and the outline share these bindings.
 Inner `let` declarations shadow outer ones only inside their indentation suite; a fence closes
 its inner scopes before the next instruction or fence.
+Typing `.` offers fields and methods of statically known structs and classes.
+`if isinstance(invoice, Invoice):` narrows `invoice` inside the branch, so `invoice.` offers
+the invoice fields and `line.` inside `for line in invoice.lines:` offers line-item fields.
+Completion uses the type checker's branch, reassignment, and shadowing rules rather than
+converting values or executing code. Typed blockquote outputs also support member completion.
 
 | Action | Default VS Code shortcut |
 | --- | --- |
@@ -80,8 +89,11 @@ rewritten. Ranges use UTF-16 positions and preserve CRLF documents.
 * Editing does not execute source, read runtime variable values, inspect environment contents,
   invoke tools, or contact model providers. Diagnostics report the first parser/type-checker
   failure; unknown untyped values do not acquire speculative runtime errors.
-* Natural-language steps can create or mutate values at runtime. Names introduced only by those
-  steps (such as `@invoice` in the invoice example) are not inferred as static declarations.
+* Blockquote output inference recognizes explicit save/arrow conventions, not arbitrary prose or
+  model behavior, and does not guarantee that the agent will create the value. Validation hints
+  infer only visible declared type names or primitive types, not dynamic JSON Schema values.
+  Saving to an existing binding keeps its original declaration and editor signature.
+  Other natural-language steps can create or mutate values at runtime without static inference.
   Member access, dynamic dictionary keys and callable values do not have inferred navigation or
   signatures; fields and methods still appear in the outline.
 * References and rename are document-local. Workspace symbol search indexes open documents only;

@@ -6,6 +6,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Failure, SplSyntaxError } from '../../lang/src/errors.js';
 import { checkProgram } from '../../lang/src/type-check.js';
+import { primitives, type TypeDescriptor } from '../../lang/src/types.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
@@ -34,6 +35,7 @@ export interface Binding {
     functionScope?: Scope;
     property?: boolean;
     parameters?: NamedToken[];
+    availableFrom?: number;
 }
 
 export interface Analysis {
@@ -82,6 +84,29 @@ function interpolationNames(tokens: Token[], lines: string[]): NamedToken[] {
     return names;
 }
 
+// Include interpolation expressions without treating raw/escaped string text as code.
+export function expressionTokens(analysis: Analysis, tokens = analysis.tokens): Token[] {
+    const result: Token[] = [];
+    const lines = analysis.document.getText().replace(/^\uFEFF/, '').split(/\r?\n/);
+    for (const token of tokens) {
+        result.push(token);
+        if (token.type !== 'str') continue;
+        for (const part of token.parts) {
+            if (!('expr' in part)) continue;
+            const indent = /^[ \t]*/.exec(lines[part.line - 1] ?? '')![0].length;
+            try {
+                result.push(...expressionTokens(analysis, tokenize(part.expr, {
+                    inExpr: true, line: part.line, col: part.col, indent, allowUnclosedBrackets: true,
+                })));
+            } catch (error) {
+                if (!(error instanceof SplSyntaxError)) throw error;
+                // Parser diagnostics already describe an incomplete interpolation.
+            }
+        }
+    }
+    return result.sort((a, b) => offset(analysis.document, a) - offset(analysis.document, b));
+}
+
 export function analyze(document: TextDocument): Analysis {
     let source = document.getText();
     let blocks: MarkdownBlock[] | undefined;
@@ -118,24 +143,48 @@ export function analyze(document: TextDocument): Analysis {
 
     let tokens: Token[] = [];
     let names: NamedToken[] = [];
+    const naturalOutputs: { token: NamedToken; schema?: NamedToken; availableFrom: number }[] = [];
     try {
         tokens = blocks
             ? blocks.filter(block => block.kind === 'spl').flatMap(block =>
                 tokenize('\n'.repeat(block.line - 1) + block.text, { allowUnclosedBrackets: true }))
             : tokenize(source, { allowUnclosedBrackets: true });
         names = interpolationNames(tokens, source.split(/\r?\n/));
-        for (const block of blocks ?? []) {
-            if (block.kind !== 'natural') continue;
-            const lines = document.getText().split(/\r?\n/);
-            for (let line = block.line; line <= block.endLine; line++) {
-                for (const match of lines[line - 1].matchAll(/(?<![\w@])@([A-Za-z_]\w*)/g)) {
-                    names.push({ type: 'name', value: match[1], line, col: match.index + 2 });
-                }
-            }
-        }
     } catch (error) {
         if (!(error instanceof SplSyntaxError)) throw error;
         // Lexically incomplete documents still get parser diagnostics and static completions.
+    }
+    for (const block of blocks ?? []) {
+        if (block.kind !== 'natural') continue;
+        const start = { line: block.line - 1, character: 0 };
+        const end = { line: block.endLine, character: 0 };
+        const from = document.offsetAt(start);
+        const text = document.getText({ start, end })
+            .replace(/^ {0,3}(?:>[ \t]?)+/gm, prefix => ' '.repeat(prefix.length));
+        const name = (value: string, at: number): NamedToken => {
+            const position = document.positionAt(from + at);
+            return { type: 'name', value, line: position.line + 1, col: position.character + 1 };
+        };
+        const references = [...text.matchAll(/(?<![\w@])@([A-Za-z_]\w*)/g)]
+            .map(match => ({ token: name(match[1], match.index + 1), at: match.index }));
+        const schemas: { token: NamedToken; at: number }[] = [];
+        for (const reference of references) {
+            names.push(reference.token);
+            const schema = /^@validate[ \t]*\[[ \t]*([A-Za-z_]\w*)[ \t]*\]/.exec(text.slice(reference.at));
+            if (schema) {
+                const token = name(schema[1], reference.at + schema[0].lastIndexOf(schema[1]));
+                names.push(token);
+                schemas.push({ token, at: reference.at });
+            }
+        }
+        for (const reference of references) {
+            if (!/(?:\bsave\b[^.!?;@]*\bto|->)\s*$/i.test(text.slice(0, reference.at))) continue;
+            const schema = schemas.findLast(candidate => candidate.at < reference.at) ??
+                (schemas.length === 1 ? schemas[0] : undefined);
+            naturalOutputs.push({
+                token: reference.token, schema: schema?.token, availableFrom: document.offsetAt(end),
+            });
+        }
     }
 
     const root: Scope = { start: 0, end: document.getText().length, includesEnd: true };
@@ -278,7 +327,19 @@ export function analyze(document: TextDocument): Analysis {
             for (const param of params) add(param, functionScope, `parameter ${param.value}`);
         }
     }
-    return { document, diagnostics, tokens, names, scopes, bindings, blocks };
+    const result: Analysis = { document, diagnostics, tokens, names, scopes, bindings, blocks };
+    for (const output of naturalOutputs) {
+        if (visibleBindings(result, output.availableFrom).some(binding => binding.name === output.token.value)) continue;
+        const schema = output.schema && resolveBinding(result, output.schema);
+        const type = output.schema && (schema
+            ? [SymbolKind.TypeParameter, SymbolKind.Enum, SymbolKind.Struct, SymbolKind.Class].some(kind => kind === schema.kind)
+            : primitives.has(output.schema.value)) ? output.schema.value : 'unknown';
+        const binding = add(output.token, root, `let ${output.token.value}: ${type}`);
+        binding.availableFrom = output.availableFrom;
+    }
+    bindings.sort((a, b) => offset(document, a.token) - offset(document, b.token));
+    names.sort((a, b) => offset(document, a) - offset(document, b));
+    return result;
 }
 
 function scopeAt(analysis: Analysis, at: number): Scope {
@@ -291,8 +352,12 @@ function visibleBindings(analysis: Analysis, at: number, renamed?: { binding: Bi
         const local = analysis.bindings.filter((binding) => binding.scope === scope && !binding.property);
         const visible = new Map<string, Binding>();
         for (const binding of local) {
-            if (offset(analysis.document, binding.token) <= at) {
-                visible.set(binding === renamed?.binding ? renamed.name : binding.name, binding);
+            if ((binding.availableFrom ?? offset(analysis.document, binding.token)) <= at) {
+                const name = binding === renamed?.binding ? renamed.name : binding.name;
+                const previous = visible.get(name);
+                if (!previous || offset(analysis.document, previous.token) < offset(analysis.document, binding.token)) {
+                    visible.set(name, binding);
+                }
             }
         }
         for (const [name, binding] of visible) if (!result.has(name)) result.set(name, binding);
@@ -343,11 +408,80 @@ function modifierContext(analysis: Analysis, at: number): 'ask' | 'call' | 'dire
     return stack.at(-1)?.context;
 }
 
+function memberItems(type: TypeDescriptor | undefined): CompletionItem[] {
+    if (type?.kind === 'union') {
+        const branches = type.members!.map(memberItems);
+        return (branches[0] ?? []).filter(item => branches.every(branch => branch.some(other => other.label === item.label)))
+            .map(item => ({ ...item, detail: [...new Set(branches.map(branch =>
+                branch.find(other => other.label === item.label)!.detail))].join(' | ') }));
+    }
+    if (type?.kind !== 'struct' && type?.kind !== 'class') return [];
+    return [
+        ...Object.entries(type.fields ?? {}).map(([name, field]) => ({
+            label: name, kind: CompletionItemKind.Field, detail: `${name}: ${field.type.name}`,
+        })),
+        ...Object.entries(type.methods ?? {}).map(([name, method]) => ({
+            label: name, kind: CompletionItemKind.Method,
+            detail: `def ${name}(${method.params.map((param, i) =>
+                `${param}${method.paramTypes?.[i] ? `: ${method.paramTypes[i]!.name}` : ''}`).join(', ')})` +
+                (method.returnType ? ` -> ${method.returnType.name}` : ''),
+        })),
+    ];
+}
+
+function memberCompletions(analysis: Analysis, range: Range): CompletionItem[] | undefined {
+    const start = analysis.document.offsetAt(range.start);
+    const dot = expressionTokens(analysis).findLast(token => offset(analysis.document, token) < start);
+    if (!isOp(dot, '.') || !dot) return undefined;
+    const source = analysis.document.getText();
+    if (!/^\s*$/.test(source.slice(offset(analysis.document, dot) + 1, start))) return undefined;
+    const at = analysis.document.offsetAt(range.end);
+    const suffix = /^[A-Za-z0-9_]*/.exec(source.slice(at))![0];
+    const block = analysis.blocks?.find(candidate => candidate.kind === 'spl' &&
+        dot.line >= candidate.line && dot.line <= candidate.endLine);
+    const brackets: string[] = [];
+    for (const token of analysis.tokens) {
+        if (block && (token.line < block.line || token.line > block.endLine)) continue;
+        if (token.type !== 'op') continue;
+        if (['(', '[', '{'].includes(token.value)) brackets.push(token.value);
+        else if ([')', ']', '}'].includes(token.value)) brackets.pop();
+    }
+    const closing = brackets.reverse().map(op => op === '(' ? ')' : op === '[' ? ']' : '}').join('');
+    const end = block
+        ? analysis.document.offsetAt({ line: block.endLine - 1, character: source.split(/\r?\n/)[block.endLine - 1].length })
+        : source.length;
+    // Complete just the member token and open groups; keep the surrounding control flow intact.
+    const patched = source.slice(0, start) + '_' + source.slice(at + suffix.length, end) + closing + source.slice(end);
+    let receiver: TypeDescriptor | undefined;
+    try {
+        const program = analysis.blocks ? parseMarkdown(patched) : parse(patched);
+        // Natural-language outputs are editor bindings, not runtime declarations.
+        program.body = program.body.flatMap(stmt => {
+            if (stmt.t !== 'natural') return [stmt];
+            const instruction = analysis.blocks?.find(candidate => candidate.kind === 'natural' && candidate.line === stmt.line);
+            const outputs = analysis.bindings.filter(binding => binding.availableFrom !== undefined &&
+                instruction && binding.token.line >= instruction.line && binding.token.line <= instruction.endLine);
+            return [stmt, ...outputs.flatMap(binding =>
+                parse(`${binding.signature.replace(/: unknown$/, '')} = ${binding.name}`).body)];
+        });
+        checkProgram(program, undefined, (expr, type) => {
+            if (expr.line === dot.line && expr.col === dot.col) receiver = type;
+        });
+    } catch (error) {
+        if (!(error instanceof SplSyntaxError) && !(error instanceof Failure)) throw error;
+        // The original analysis reports diagnostics; a partial member can still have a known receiver.
+    }
+    const editRange = { start: range.start, end: analysis.document.positionAt(at + suffix.length) };
+    return memberItems(receiver).map(item => ({ ...item, textEdit: { range: editRange, newText: item.label } }));
+}
+
 export function completions(analysis: Analysis, position: Position): CompletionItem[] {
     if (analysis.blocks && !analysis.blocks.some((block) => position.line >= block.line - 1 && position.line < block.endLine)) return [];
     const at = analysis.document.offsetAt(position);
     const prefix = /\$[A-Za-z0-9_]*$|[A-Za-z_][A-Za-z0-9_]*$/.exec(analysis.document.getText().slice(0, at))?.[0] ?? '';
     const range = { start: analysis.document.positionAt(at - prefix.length), end: position };
+    const members = memberCompletions(analysis, range);
+    if (members) return members;
     const context = modifierContext(analysis, at - prefix.length);
     const modifierItems: CompletionItem[] = context
         ? (context === 'directive' ? ['model'] : context === 'log' ? LOG_MODIFIER_NAMES

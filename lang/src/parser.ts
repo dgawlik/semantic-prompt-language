@@ -610,7 +610,7 @@ class Parser {
     private toTarget(e: Expr, at: Token): AssignTarget {
         if (e.t === 'group') return this.toTarget(e.e, at);
         if (e.t === 'name') return { t: 'name', name: e.name };
-        if (e.t === 'member') return { t: 'member', obj: e.obj, name: e.name };
+        if (e.t === 'member') return e;
         if (e.t === 'index') return { t: 'index', obj: e.obj, index: e.index };
         return this.fail('invalid assignment target', at);
     }
@@ -754,11 +754,11 @@ class Parser {
                 this.next();
                 e = this.parseSubscript(e);
             } else if (this.isOp('.')) {
-                this.next();
+                const dot = this.next();
                 const t = this.tok;
                 if (t.type !== 'name' || t.value.startsWith('$')) this.fail("expected a member name after '.'");
                 this.next();
-                e = { t: 'member', obj: e, name: (t as { value: string }).value };
+                e = { t: 'member', obj: e, name: (t as { value: string }).value, line: dot.line, col: dot.col };
             } else {
                 return e;
             }

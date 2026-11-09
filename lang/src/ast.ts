@@ -32,7 +32,7 @@ export type Expr =
     | { t: 'compare'; ops: string[]; operands: Expr[] }
     | { t: 'ternary'; cond: Expr; then: Expr; else: Expr }
     | { t: 'call'; callee: Expr; args: Expr[] }
-    | { t: 'member'; obj: Expr; name: string }
+    | { t: 'member'; obj: Expr; name: string; line?: number; col?: number }
     | { t: 'index'; obj: Expr; index: Expr }
     | { t: 'slice'; obj: Expr; lo?: Expr; hi?: Expr }
     | { t: 'block'; body: Stmt[]; line: number }
@@ -51,7 +51,7 @@ export type RestrictKind = 'fs' | 'net' | 'exec' | 'mcp';
 
 export type AssignTarget =
     | { t: 'name'; name: string }
-    | { t: 'member'; obj: Expr; name: string }
+    | { t: 'member'; obj: Expr; name: string; line?: number; col?: number }
     | { t: 'index'; obj: Expr; index: Expr };
 
 interface Base {

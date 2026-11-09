@@ -11,7 +11,7 @@ import {
     PrepareRenameRequest, DocumentHighlightRequest, SignatureHelpRequest, FoldingRangeRequest,
     SemanticTokensRequest, WorkspaceSymbolRequest, ResponseError,
     DidChangeTextDocumentNotification, DidCloseTextDocumentNotification, DidOpenTextDocumentNotification,
-    PublishDiagnosticsNotification, SymbolKind, TextDocumentSyncKind,
+    PublishDiagnosticsNotification, CompletionItemKind, SymbolKind, TextDocumentSyncKind,
     type PublishDiagnosticsParams,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -30,6 +30,11 @@ const document = (source: string) => TextDocument.create(uri, 'spl', 1, source);
 const analysis = (source: string) => analyze(document(source));
 const markdownSource = (body: string) => `---\nextension: semantic-prompt-language\nversion: 1\n---\n\n${body}`;
 const markdownAnalysis = (source: string) => analyze(TextDocument.create('file:///workflow.md', 'markdown', 1, source));
+const after = (source: string, text: string, occurrence = 0) => {
+    const position = at(source, text, occurrence);
+    position.character += text.length;
+    return position;
+};
 
 test('Markdown keeps ordinary documents quiet and gates features on frontmatter', () => {
     const plain = markdownAnalysis('# Ordinary Markdown\n\n> @success\n\n```spl\ninvalid !\n```');
@@ -59,6 +64,314 @@ test('Markdown preserves positions and shared symbols across code and natural la
 test('Markdown validates each fence independently', () => {
     const result = markdownAnalysis(markdownSource('```spl\nif True:\n```\n\n```spl\n    pass\n```'));
     assert.match(result.diagnostics[0].message, /indented block/);
+});
+
+test('invoice blockquote results have typed completion and shared language features', () => {
+    const source = readFileSync(path.resolve(root, '..', 'lang', 'examples', 'extract-invoice.md'), 'utf8');
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    const declaration = at(source, 'invoice', 0);
+    const target = at(source, '@invoice');
+    target.character++;
+    const use = at(source, 'invoice, Invoice');
+    assert.equal(completions(result, use).find(item => item.label === 'invoice')?.detail, 'let invoice: Invoice');
+    assert.deepEqual(definition(result, use)?.range.start, target);
+    assert.match(JSON.stringify(hover(result, use)), /let invoice: Invoice/);
+    assert.deepEqual(documentSymbols(result).find(symbol => symbol.name === 'invoice')?.selectionRange.start, target);
+    assert.deepEqual(workspaceSymbols([result], 'invoice').find(symbol => symbol.name === 'invoice')?.location.range.start, target);
+    assert.ok(references(result, use, true).some(location => location.range.start.line === target.line));
+    assert.ok(!references(result, use, false).some(location => location.range.start.line === target.line));
+    assert.equal(documentHighlights(result, use).find(highlight => highlight.range.start.line === target.line)?.kind, 3);
+    const token = decodedTokens(source, result).find(token => token.line === target.line && token.character === target.character);
+    assert.equal(token?.type, 'variable');
+    assert.deepEqual(token?.modifiers, ['declaration']);
+
+    const change = rename(result, use, 'bill').documentChanges?.[0];
+    assert.ok(change && 'textDocument' in change);
+    const updated = TextDocument.applyEdits(result.document, change.edits);
+    assert.ok(updated.includes('save to @bill'));
+    assert.ok(updated.includes('isinstance(bill, Invoice)'));
+    assert.deepEqual(markdownAnalysis(updated).diagnostics, []);
+
+    const typeChange = rename(result, at(source, 'Invoice:'), 'Receipt').documentChanges?.[0];
+    assert.ok(typeChange && 'textDocument' in typeChange);
+    const renamedType = TextDocument.applyEdits(result.document, typeChange.edits);
+    assert.ok(renamedType.includes('@validate[Receipt]'));
+    assert.equal(completions(markdownAnalysis(renamedType), use).find(item => item.label === 'invoice')?.detail,
+        'let invoice: Receipt');
+    assert.equal(definition(result, declaration), undefined, 'Ordinary prose is not a declaration');
+});
+
+test('invoice members and line-item members complete with and without validation hints', () => {
+    const example = readFileSync(path.resolve(root, '..', 'lang', 'examples', 'extract-invoice.md'), 'utf8');
+    for (const source of [example, example.replace('@validate[Invoice] ', '')]) {
+        const result = markdownAnalysis(source);
+        const fields = completions(result, after(source, 'for line in invoice.'));
+        assert.deepEqual(fields.map(item => item.label), ['vendor', 'number', 'date', 'currency', 'lines', 'subtotal', 'tax', 'total']);
+        assert.equal(fields.find(item => item.label === 'lines')?.detail, 'lines: list[LineItem]');
+        assert.ok(fields.every(item => item.kind === CompletionItemKind.Field));
+        const lineFields = completions(result, after(source, 'line.'));
+        assert.deepEqual(lineFields.map(item => item.label), ['description', 'quantity', 'unit_price']);
+        assert.equal(lineFields.find(item => item.label === 'quantity')?.detail, 'quantity: int');
+        const interpolation = completions(result, after(source, 'the subtotal is {invoice.'));
+        assert.ok(interpolation.some(item => item.label === 'subtotal'));
+        const renamed = rename(result, at(source, 'invoice, Invoice'), 'bill').documentChanges?.[0];
+        assert.ok(renamed && 'textDocument' in renamed);
+        const updated = TextDocument.applyEdits(result.document, renamed.edits);
+        assert.deepEqual(completions(markdownAnalysis(updated), after(updated, 'for line in bill.')).map(item => item.label),
+            fields.map(item => item.label));
+    }
+});
+
+test('member completion recovers partial names and unclosed groups without replacing the receiver', () => {
+    const declaration = `struct Data:
+    total: int
+let value = ask 'Generate'
+if isinstance(value, Data):
+    `;
+    for (const tail of ['value.', 'value.to', 'log(value.', 'log(value.to', 'log(\n        value.']) {
+        const source = declaration + tail;
+        const result = analysis(source);
+        assert.equal(result.diagnostics.length, 1, 'Completion must not hide the original diagnostics');
+        const end = result.document.positionAt(source.length);
+        const items = completions(result, end);
+        assert.deepEqual(items.map(item => item.label), ['total'], tail);
+        assert.equal(items[0].detail, 'total: int');
+        assert.ok(items[0].textEdit && 'range' in items[0].textEdit);
+        assert.deepEqual(items[0].textEdit.range.end, end);
+        const updated = TextDocument.applyEdits(result.document, [items[0].textEdit]);
+        assert.ok(updated.endsWith('value.total'));
+    }
+    const source = declaration + "log('😀 {value.to}')";
+    const items = completions(analysis(source), after(source, 'value.to'));
+    assert.deepEqual(items.map(item => item.label), ['total']);
+    assert.ok(items[0].textEdit && 'range' in items[0].textEdit);
+    assert.ok(TextDocument.applyEdits(document(source), [items[0].textEdit]).endsWith("log('😀 {value.total}')"));
+});
+
+test('member completion follows checker narrowing, shadowing, and reassignment rules', () => {
+    const declarations = `struct Left:
+    shared: int
+    left: str
+struct Right:
+    shared: int
+    right: str
+`;
+    for (const [body, expected] of [
+        ['let value = ask \'Generate\'\nif isinstance(value, Left):\n    value.', ['shared', 'left']],
+        ['def inspect(value: Left | Right):\n    if not isinstance(value, Left):\n        value.', ['shared', 'right']],
+        ['def inspect(value: Left | Right):\n    if isinstance(value, Left):\n        pass\n    else:\n        value.', ['shared', 'right']],
+        ['def inspect(value: Left | Right):\n    isinstance(value, Left) and value.', ['shared', 'left']],
+        ['def inspect(value: Left | Right):\n    isinstance(value, Left) or value.', ['shared', 'right']],
+        ['def inspect(value: Left | Right):\n    value.', ['shared']],
+        ['let value = ask \'Generate\'\nif isinstance(value, Left):\n    pass\nvalue.', []],
+        ['let value = ask \'Generate\'\nif isinstance(value, Left):\n    value = object()\n    value.', []],
+        ['let value = ask \'Generate\'\nif isinstance(value, Left):\n    let value = object()\n    value.', []],
+        ['def isinstance(value, target):\n    return True\nlet value = object()\nif isinstance(value, Left):\n    value.', []],
+    ] as const) {
+        const source = declarations + body;
+        const items = completions(analysis(source), document(source).positionAt(source.length));
+        assert.deepEqual(items.map(item => item.label), expected, body);
+    }
+});
+
+test('typed declarations, nested records, indexed lists, and class methods share member completion', () => {
+    const declarations = `struct Item:
+    quantity: int
+struct Data:
+    item: Item
+    items: list[Item]
+type Alias = Data
+class Person:
+    name: str
+    def label(prefix: str) -> str:
+        return prefix + self.name
+`;
+    for (const [tail, expected] of [
+        ['let value: Alias = unknown()\nvalue.', ['item', 'items']],
+        ['let value: Data = unknown()\nvalue.item.', ['quantity']],
+        ['let value: Data = unknown()\nvalue.items[0].', ['quantity']],
+        ['let value = unknown()\nif isinstance(value, Person):\n    value.', ['name', 'label']],
+        ['let value: Data = unknown()\nvalue.item.qu', ['quantity']],
+        ['let value: Item = unknown()\nvalue.quantity = 1', ['quantity']],
+        ['let value: Person = unknown()\nvalue.label(\'x\')', ['name', 'label']],
+    ] as const) {
+        const source = declarations + tail;
+        const result = analysis(source);
+        const position = tail.includes('quantity =') ? after(source, 'value.') :
+            tail.includes("label('x')") ? after(source, 'value.la') : result.document.positionAt(source.length);
+        const items = completions(result, position);
+        assert.deepEqual(items.map(item => item.label), expected, tail);
+        if (tail.includes('Person')) {
+            assert.equal(items.find(item => item.label === 'label')?.kind, CompletionItemKind.Method);
+            assert.equal(items.find(item => item.label === 'label')?.detail, 'def label(prefix: str) -> str');
+        }
+        if (tail.includes("label('x')")) {
+            const edit = items.find(item => item.label === 'label')?.textEdit;
+            assert.ok(edit && 'range' in edit);
+            assert.equal(TextDocument.applyEdits(result.document, [edit]), source, 'Replace the whole existing member name');
+        }
+    }
+});
+
+test('Markdown member edits preserve fence boundaries, CRLF, and typed output visibility', () => {
+    const source = markdownSource(`\`\`\`spl
+struct Data:
+    total: int
+\`\`\`
+
+> 😀 @validate[Data] save to @output
+
+\`\`\`spl
+log(output.to
+\`\`\`
+`).replace(/\n/g, '\r\n');
+    const result = markdownAnalysis(source);
+    const position = after(source, 'output.to');
+    const items = completions(result, position);
+    assert.deepEqual(items.map(item => item.label), ['total']);
+    assert.ok(items[0].textEdit && 'range' in items[0].textEdit);
+    assert.deepEqual(items[0].textEdit.range, { start: after(source, 'output.'), end: position });
+    const updated = TextDocument.applyEdits(result.document, [items[0].textEdit]);
+    assert.ok(updated.includes('log(output.total\r\n```'));
+    assert.deepEqual(completions(markdownAnalysis(source.replace('@validate[Data] ', '')), position), []);
+});
+
+test('explicit blockquote outputs become visible only after the instruction', () => {
+    const source = markdownSource(`\`\`\`spl
+log(invoice)
+\`\`\`
+
+> Read @document and @invoice, then @validate[str] save it to
+> @invoice
+
+\`\`\`spl
+log(invoice)
+if True:
+    let invoice = 1
+    log(invoice)
+log(invoice)
+\`\`\`
+
+> Use @invoice.
+`);
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    const target = at(source, '@invoice', 1);
+    target.character++;
+    assert.equal(definition(result, at(source, 'invoice)', 0)), undefined);
+    const input = at(source, '@invoice');
+    input.character++;
+    assert.equal(definition(result, input), undefined);
+    assert.ok(!completions(result, input).some(item => item.label === 'invoice'));
+    assert.ok(!completions(result, input).some(item => item.label === 'document'));
+    assert.deepEqual(definition(result, at(source, 'invoice)', 1))?.range.start, target);
+    assert.deepEqual(definition(result, at(source, 'invoice)', 2))?.range.start, at(source, 'invoice ='));
+    assert.deepEqual(definition(result, at(source, 'invoice)', 3))?.range.start, target);
+    const later = at(source, '@invoice', 2);
+    later.character++;
+    const completion = completions(result, later).find(item => item.label === 'invoice');
+    assert.equal(completion?.detail, 'let invoice: str');
+    assert.equal(completion?.textEdit?.newText, 'invoice');
+    assert.ok(completion?.textEdit && 'range' in completion.textEdit);
+    assert.deepEqual(completion.textEdit.range.start, later);
+    assert.deepEqual(definition(result, later)?.range.start, target);
+});
+
+test('blockquote save and arrow conventions infer declared types but not dynamic schemas', () => {
+    for (const instruction of ['Save to @output', 'save it to @output', 'Save the answer to @output',
+        'Save a dict mapping keys to values to @output', 'Produce a value -> @output']) {
+        const source = markdownSource(`> ${instruction}\n\n\`\`\`spl\nlog(output)\n\`\`\``);
+        const result = markdownAnalysis(source);
+        assert.deepEqual(result.diagnostics, []);
+        assert.equal(completions(result, at(source, 'log(output)')).find(item => item.label === 'output')?.detail,
+            'let output: unknown', instruction);
+    }
+    for (const [declaration, type] of [
+        ['type Money = int', 'Money'],
+        ["enum Color = 'red' | 'blue'", 'Color'],
+        ['struct Data:\n    value: str', 'Data'],
+        ['hydratable class Person:\n    name: str', 'Person'],
+        ['let Schema = object()', 'unknown'],
+        ['if True:\n    struct Schema:\n        value: str', 'unknown'],
+        ['', 'unknown'],
+    ]) {
+        const schema = type === 'unknown' ? 'Schema' : type;
+        const source = markdownSource(`\`\`\`spl\n${declaration || 'pass'}\n\`\`\`\n\n> @validate[${schema}] save to @output\n\n\`\`\`spl\nlog(output)\n\`\`\``);
+        const result = markdownAnalysis(source);
+        assert.deepEqual(result.diagnostics, []);
+        assert.equal(completions(result, at(source, 'log(output)')).find(item => item.label === 'output')?.detail,
+            `let output: ${type}`, declaration);
+    }
+});
+
+test('validation hints are local to their blockquote and associated with each output', () => {
+    const source = markdownSource(`> @validate[int] Save to @first. @validate[str] Save to @second.
+
+> Save to @third
+
+> Save to @fourth @validate[bool]
+
+\`\`\`spl
+log(first, second, third, fourth)
+\`\`\``);
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    const items = completions(result, at(source, 'log(first'));
+    for (const [name, type] of [['first', 'int'], ['second', 'str'], ['third', 'unknown'], ['fourth', 'bool']]) {
+        assert.equal(items.find(item => item.label === name)?.detail, `let ${name}: ${type}`);
+    }
+});
+
+test('blockquote saves preserve existing declarations and ignore escaped or ordinary prose targets', () => {
+    const source = markdownSource(`\`\`\`spl
+let existing: str = 'before'
+\`\`\`
+
+Save to @prose
+
+> Save to @existing. Save to @new. Save it to @new.
+> Use @input. Save to @@escaped. Save to email@address.
+
+> @validate[str] Save to @new
+
+\`\`\`spl
+log(existing, new)
+\`\`\``);
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    const items = completions(result, at(source, 'log(existing'));
+    assert.equal(items.find(item => item.label === 'existing')?.detail, 'let existing: str');
+    assert.equal(items.find(item => item.label === 'new')?.detail, 'let new: unknown');
+    for (const name of ['prose', 'input', 'escaped', 'address']) {
+        assert.ok(!items.some(item => item.label === name), name);
+    }
+    assert.equal(documentSymbols(result).filter(symbol => symbol.name === 'new').length, 1);
+    assert.deepEqual(definition(result, at(source, 'existing, new'))?.range.start, at(source, 'existing:'));
+});
+
+test('blockquote output and validation positions preserve CRLF and UTF-16 offsets', () => {
+    const source = markdownSource(`\`\`\`spl
+struct Data:
+    value: str
+\`\`\`
+
+> 😀 @validate[Data] save to @output
+
+\`\`\`spl
+log(output)
+\`\`\``).replace(/\n/g, '\r\n');
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    const target = at(source, '@output');
+    target.character++;
+    assert.deepEqual(definition(result, at(source, 'output)'))?.range.start, target);
+    assert.deepEqual(definition(result, at(source, 'Data]'))?.range.start, at(source, 'Data:'));
+    assert.equal(completions(result, at(source, 'output)')).find(item => item.label === 'output')?.detail,
+        'let output: Data');
+    const change = rename(result, target, 'result').documentChanges?.[0];
+    assert.ok(change && 'textDocument' in change);
+    assert.ok(TextDocument.applyEdits(result.document, change.edits).includes('save to @result\r\n'));
 });
 
 test('type diagnostics retain built-in and declared types after preceding control flow', () => {
@@ -792,6 +1105,7 @@ for (const transport of ['stdio', 'ipc'] as const) {
         assert.ok(initialized.capabilities.signatureHelpProvider);
         assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('$'));
         assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('('));
+        assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('.'));
         await connection.sendNotification(InitializedNotification.type, {});
         const initialDiagnostics = nextDiagnostics();
         await connection.sendNotification(DidOpenTextDocumentNotification.type, {
@@ -843,6 +1157,18 @@ for (const transport of ['stdio', 'ipc'] as const) {
         assert.equal(signature?.signatures[0].label, 'def render(value)');
         assert.deepEqual(await connection.sendRequest(FoldingRangeRequest.type, { textDocument: { uri } }),
             [{ startLine: 0, endLine: 1 }]);
+        const memberDiagnostics = nextDiagnostics();
+        const memberSource = 'struct Data:\n    total: int\nlet value = unknown()\nif isinstance(value, Data):\n    value.';
+        await connection.sendNotification(DidChangeTextDocumentNotification.type, {
+            textDocument: { uri, version: 4 },
+            contentChanges: [{ text: memberSource }],
+        });
+        assert.equal((await memberDiagnostics).diagnostics.length, 1);
+        const members = await connection.sendRequest(CompletionRequest.type, {
+            textDocument: { uri }, position: after(memberSource, 'value.'),
+        });
+        assert.ok(Array.isArray(members));
+        assert.deepEqual(members.map(item => item.label), ['total']);
         const closedDiagnostics = nextDiagnostics();
         await connection.sendNotification(DidCloseTextDocumentNotification.type, { textDocument: { uri } });
         assert.deepEqual((await closedDiagnostics).diagnostics, []);

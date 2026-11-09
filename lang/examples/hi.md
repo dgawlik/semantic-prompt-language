@@ -11,15 +11,11 @@ Prose like this is commentary. Only `spl` fences and blockquotes run, top to bot
 
 ```spl
 let topics = ['recursion', 'closures', 'regular expressions']
-let Card = object:
-    'type': 'object'
-    'properties': object:
-        'term': object:
-            'type': 'string'
-        'definition': object:
-            'type': 'string'
-    'required': ['term', 'definition']
-    'additionalProperties': False
+
+hydratable class Card:
+    term: str 
+    definition: str
+
 let cards = object()
 for topic in topics:
     cards[topic] = ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}'
@@ -30,7 +26,7 @@ for topic in topics:
 ```spl
 assert hardest in topics "unexpected topic '{hardest}'"
 restrict './out':
-    write_file('./out/cards.json', json_stringify(cards, 2))
+    write_file('./out/cards.json', json_stringify(object(cards), 2))
 success object:
     'cards': len(cards)
     'hardest': hardest

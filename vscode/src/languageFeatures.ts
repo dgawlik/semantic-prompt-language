@@ -4,11 +4,10 @@ import {
     type DocumentHighlight, type FoldingRange, type Location, type Position, type Range,
     type SemanticTokens, type SignatureHelp, type SymbolInformation, type WorkspaceEdit,
 } from 'vscode-languageserver/node';
-import { tokenize, type Token } from '../../lang/src/lexer.js';
-import { SplSyntaxError } from '../../lang/src/errors.js';
+import type { Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, MODIFIER_NAMES } from '../../lang/src/parser.js';
 import { builtins, keywords, modifiers, specialVariables } from './catalog';
-import { nameAt, resolveBinding, tokenRange, type Analysis, type Binding, type NamedToken } from './features';
+import { expressionTokens, nameAt, resolveBinding, tokenRange, type Analysis, type Binding, type NamedToken } from './features';
 
 export const semanticTokenLegend = {
     tokenTypes: ['variable', 'parameter', 'function', 'class', 'struct', 'enum', 'type', 'keyword', 'property'],
@@ -80,29 +79,6 @@ export function rename(analysis: Analysis, position: Position, newName: string):
 
 function tokenOffset(analysis: Analysis, token: Token): number {
     return analysis.document.offsetAt({ line: token.line - 1, character: token.col - 1 });
-}
-
-// Include interpolation expressions without treating raw/escaped string text as code.
-function expressionTokens(analysis: Analysis, tokens = analysis.tokens): Token[] {
-    const result: Token[] = [];
-    const lines = analysis.document.getText().replace(/^\uFEFF/, '').split(/\r?\n/);
-    for (const token of tokens) {
-        result.push(token);
-        if (token.type !== 'str') continue;
-        for (const part of token.parts) {
-            if (!('expr' in part)) continue;
-            const indent = /^[ \t]*/.exec(lines[part.line - 1] ?? '')![0].length;
-            try {
-                result.push(...expressionTokens(analysis, tokenize(part.expr, {
-                    inExpr: true, line: part.line, col: part.col, indent, allowUnclosedBrackets: true,
-                })));
-            } catch (error) {
-                if (!(error instanceof SplSyntaxError)) throw error;
-                // Parser diagnostics already describe an incomplete interpolation.
-            }
-        }
-    }
-    return result.sort((a, b) => tokenOffset(analysis, a) - tokenOffset(analysis, b));
 }
 
 interface Call {
