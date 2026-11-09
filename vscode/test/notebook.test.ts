@@ -232,6 +232,35 @@ test('isolated worker executes out of order, pretty prints results and survives 
     if (cyclic.kind === 'result') assert.match(cyclic.text ?? '', /circular reference/);
 });
 
+test('packaged worker converts structural data to ordinary classes across notebook cells', async t => {
+    const kernel = new NotebookKernel(path.resolve(__dirname, '..', 'notebookWorker.cjs'), process.cwd(), process.execPath, () => {});
+    t.after(() => kernel.dispose());
+    let id = 0;
+    const execute = (value: string) => kernel.execute({
+        id: ++id, value, source: `cell:conversion-${id}`, frontmatter: DEFAULT_FRONTMATTER, language: 'spl',
+    }, () => {});
+    const definition = await execute(`class Person:
+    name: str
+    age: int
+    def Person(name: str, age: int):
+        fail 'constructor must not run'
+    def toString() -> str:
+        return '{self.name} at age {self.age}'`);
+    assert.equal(definition.kind, 'result');
+    const data = await execute(`let PersonData = struct(Person)
+let data: PersonData = object:
+    'name': 'Ada'
+    'age': 37`);
+    assert.equal(data.kind, 'result');
+    const result = await execute(`let person: Person = validate(data, Person)
+[isinstance(data, Person), isinstance(person, Person), person.toString()]`);
+    assert.equal(result.kind, 'result', result.kind === 'error' ? result.message : undefined);
+    if (result.kind === 'result') {
+        assert.ok(result.text);
+        assert.deepEqual(JSON.parse(result.text), [false, true, 'Ada at age 37']);
+    }
+});
+
 test('cancelling a running worker stops unbounded code and rejects queued work', async t => {
     const kernel = new NotebookKernel(path.resolve(__dirname, '..', 'notebookWorker.cjs'), process.cwd(), process.execPath, () => {});
     t.after(() => kernel.dispose());

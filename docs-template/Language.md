@@ -178,10 +178,14 @@ not mean absent, so `note` above must be present even when it is `None`.
 Metadata such as `str [min=2, desc='Name']` is model advice, not a validity constraint.
 Use `assert` for business rules, or explicit JSON Schema for strict data constraints.
 Function parameters, results and callable fields are checked at their typed boundaries.
+A union value can be assigned or passed to another union, including a list element contract,
+when every source alternative is accepted by the destination. Member order does not matter;
+an alternative missing from the destination must be narrowed first.
 
 ### Validation, narrowing and mutation
 
-`validate(value, Type)` checks without converting and returns a typed view, or fails.
+`validate(value, Type)` checks values and returns a typed view, or fails. For a class
+target it explicitly converts structural field data into a nominal instance.
 `isinstance(value, Type)` tests without converting and narrows within a branch:
 
 ```spl
@@ -197,7 +201,13 @@ struct Selection:
 let selection = validate(data, Selection)
 ```
 
-Neither operation hydrates dictionaries into classes or converts untyped numbers.
+Neither operation converts untyped numbers. `isinstance` never converts structural data
+into a class. `validate(data, Class)` checks all declared fields and creates a complete
+instance without running the constructor, including for ordinary classes. Missing or extra
+fields fail; no defaults or numeric conversions are inserted. Class conversion also applies
+to nested fields, lists and union members; distinct ambiguous conversions fail.
+Converted field dictionaries and containers are copied rather than rewriting the source.
+
 Successful tests and validation install persistent contracts on mutable values.
 These survive untyped aliases, index/member writes and bulk mutators. For example, an
 untyped alias cannot append an integer to a `list[str]`. Mutable contracts are invariant:
@@ -227,6 +237,22 @@ success snapshot
 ```
 
 `struct(Person)` describes structural field data, not a `Person` instance.
+To explicitly turn that data into an instance, use `validate(data, Person)`:
+
+```spl
+class GeneratedPerson:
+    name: str
+    age: int
+    def label() -> str:
+        return '{self.name} at age {self.age}'
+let data = ask(schema=struct(GeneratedPerson)) 'Generate person data'
+let person: GeneratedPerson = validate(data, GeneratedPerson)
+log(person.label())
+```
+
+This conversion bypasses constructor normalization and side effects. Direct
+`schema=GeneratedPerson` still requires a `hydratable class` declaration.
+
 `object(person)` makes a deep snapshot and drops named function properties.
 Validate that snapshot against `struct(Person)` when a checked field view is needed;
 validation rejects missing required fields, including callable fields dropped by projection.
@@ -262,7 +288,7 @@ redirected logs are plain text by default. See [console formatting](CLI.md#outpu
 | `len(x)` `type(x)` | Length; type name |
 | `str(x)` `int(x)` `float(x)` `bool(x)` `list(x)` | Conversions |
 | `object()` `object(x)` | Empty dictionary; deep dynamic-data snapshot |
-| `validate(x, T)` `isinstance(x, T)` | Non-converting validation and type testing |
+| `validate(x, T)` `isinstance(x, T)` | Validation with explicit struct-to-class conversion; non-converting type testing |
 | `struct(Class)` | Structural descriptor for declared class fields, not nominal hydration |
 | `range(stop)` `range(start, stop[, step])` | List of integers |
 | `abs(x)` `round(x[, digits])` `min(...)` `max(...)` `sum(list)` | Numbers |

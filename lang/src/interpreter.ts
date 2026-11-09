@@ -5,7 +5,7 @@ import { LlmError, buildPromptParts, parseJsonResponse, validateRandomness, vali
 import { AGENT_TOOLS, actionArguments } from './agent.js';
 import { compileSchema } from './schema.js';
 import { checkProgram } from './type-check.js';
-import { aliasType, assertComplete, checkedInt, contractOf, contractRead, convertFloat, convertInt, descriptor, equivalent, mutateContract, primitives, project, resolveFields, resolveType, signatureOf, testValue, typedFloat, validateValue, type TypeDescriptor } from './types.js';
+import { aliasType, assertComplete, checkedInt, contractOf, contractRead, convertFloat, convertInt, descriptor, equivalent, mutateContract, primitives, project, resolveFields, resolveType, signatureOf, testValue, typedFloat, validateType, validateValue, type TypeDescriptor } from './types.js';
 import { decodeJsonValue, decodeTypedJson, schemaForType } from './typed-json.js';
 import type { Logger, LogLevel } from './logger.js';
 import { Restrictions, makeRestriction, type Restriction } from './restrict.js';
@@ -169,7 +169,7 @@ class Interpreter {
         for (const name of ['validate', 'isinstance']) {
             this.builtins.set(name, { __fn: 'builtin', name, call: args => {
                 if (args.length !== 2 || !isDescriptor(args[1])) throw runtimeError(`${name}() requires a value and a type descriptor`);
-                return name === 'validate' ? validateValue(args[0], args[1]) : testValue(args[0], args[1]);
+                return name === 'validate' ? validateType(args[0], args[1]) : testValue(args[0], args[1]);
             } });
         }
         this.builtins.set('struct', { __fn: 'builtin', name: 'struct', call: args => {
@@ -643,7 +643,8 @@ class Interpreter {
                 const obj = await this.eval(e.obj, env);
                 if (isInstance(obj)) {
                     if (hasKey(obj.fields, e.name)) return this.getKey(obj.fields, e.name);
-                    const method = obj.descriptor.methods?.[e.name];
+                    const methods = obj.descriptor.methods;
+                    const method = methods && Object.hasOwn(methods, e.name) ? methods[e.name] : undefined;
                     if (method && e.name !== obj.descriptor.name) return { ...method, self: obj };
                     throw runtimeError(`member '${e.name}' is not initialized or declared`);
                 }
@@ -677,7 +678,8 @@ class Interpreter {
         if (callee.t === 'member') {
             const obj = await this.eval(callee.obj, env);
             if (isInstance(obj)) {
-                const method = obj.descriptor.methods?.[callee.name];
+                const methods = obj.descriptor.methods;
+                const method = methods && Object.hasOwn(methods, callee.name) ? methods[callee.name] : undefined;
                 if (!method || callee.name === obj.descriptor.name) throw runtimeError(`unknown instance method '${callee.name}'`);
                 return this.callValue({ ...method, self: obj }, await this.evalArgs(argExprs, env, method.paramTypes));
             }
@@ -700,7 +702,7 @@ class Interpreter {
             const value = await this.eval(argExprs[0], env);
             const type = await this.eval(argExprs[1], env);
             if (!isDescriptor(type)) throw runtimeError(`${callee.name}() requires a type descriptor`);
-            return callee.name === 'validate' ? validateValue(value, type) : testValue(value, type);
+            return callee.name === 'validate' ? validateType(value, type) : testValue(value, type);
         }
         if (callee.t === 'name' && callee.name === 'struct') {
             if (argExprs.length !== 1) throw runtimeError('struct() takes one class descriptor');

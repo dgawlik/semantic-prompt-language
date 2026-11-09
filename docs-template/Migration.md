@@ -56,8 +56,9 @@ Structs are structural, exact records: every field is required, including nullab
 Missing and extra fields fail. Enums accept matching strings directly. `char` requires exactly
 one Unicode scalar, not one UTF-16 code unit or grapheme cluster. `fn(T1, T2) -> R` uses explicit
 arity, contravariant parameters and covariant returns; annotated and guarded callable boundaries
-check arguments and results. `validate(value, Type)` and `isinstance(value, Type)` do not convert
-legacy numbers or hydrate dictionaries into nominal instances.
+check arguments and results. Neither `validate(value, Type)` nor `isinstance(value, Type)`
+converts legacy numbers. Explicit `validate(data, Class)` can turn structural field data
+into a nominal instance; `isinstance` remains a non-converting test.
 
 Field advice such as `str [min=2, desc='Name']` is compile-time JSON-compatible metadata, not a
 constraint: a one-character string still satisfies that type. Raw JSON Schema constraints remain
@@ -121,7 +122,9 @@ signed-64-bit values or the `int`/`float` distinction.
 Classes are nominal instances with declared fields, a constructor named after the class, and
 implicitly bound `self` in constructors and methods. A matching dictionary is not a class instance.
 Normal construction runs the constructor and must initialize every declared field before publishing
-the instance. Only `hydratable class` permits constructor-free field hydration.
+the instance. Direct schema hydration requires `hydratable class`; explicit
+`validate(data, Class)` can populate an ordinary class from validated fields without
+running the constructor.
 
 ```spl
 hydratable class Person:
@@ -142,6 +145,10 @@ success object(person)
 returns validated structural field data, **not** a `Person`. Consequently the old proposed
 `let result: Person = ask(schema=struct(Person)) 'Random Person'` cannot satisfy the annotation.
 An annotation never secretly selects an ask schema, format or hydration target.
+To convert the structural result explicitly, use `let person: Person = validate(data, Person)`.
+This validates exact declared fields, recursively converts nested class data and bypasses
+constructors. It does not convert legacy numbers; use typed schemas or explicit numeric
+conversions before validation.
 
 For an existing instance, `validate(object(person), struct(Person))` creates a deep field
 snapshot and checks its structural contract. Dynamic `object(person)` projection drops named

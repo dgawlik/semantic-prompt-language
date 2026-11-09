@@ -25,6 +25,33 @@ async function rejectsBeforeModel(source: string, reason?: string) {
 }
 
 describe('static typed preflight', () => {
+    it('accepts explicit struct-to-class validation and observes nominal member types', () => {
+        const program = parse(`class Person:
+    age: int
+    def toString() -> str:
+        return 'Age {self.age}'
+struct Data:
+    age: int
+let data: Data = object:
+    'age': 37
+let person: Person = validate(data, Person)
+success person.toString()`);
+        const receivers: (string | undefined)[] = [];
+        checkProgram(program, undefined, (_expr, receiver) => receivers.push(receiver?.name));
+        expect(receivers).toContain('Person');
+    });
+
+    it.each([
+        ["let data = object:\n    'age': 'wrong'\nvalidate(data, Person)", 'validate.age'],
+        ["let data = object:\n    'extra': 1\nvalidate(data, Person)", 'extra field'],
+        ['let data = object()\nvalidate(data, Person)', 'missing required field'],
+        ["struct Data:\n    age: int\nlet data: Data = object:\n    'age': 37\nlet person: Person = data", 'incompatible established contract'],
+        ["class Other:\n    age: int\nlet other: Other = validate(unknown(), Other)\nvalidate(other, Person)", 'expected Person'],
+        ["class Other:\n    age: int\nstruct Data:\n    age: int\nlet data: Data = object:\n    'age': 37\nvalidate(data, Person | Other)", 'ambiguous union conversions'],
+    ])('rejects invalid conversion or implicit class assignment before models: %s', async (source, reason) => {
+        await rejectsBeforeModel(`class Person:\n    age: int\n${source}`, reason);
+    });
+
     it('observes member receiver types using the same narrowing and list inference as preflight', () => {
         const program = parse(`struct Item:
     quantity: int
@@ -338,6 +365,46 @@ let same: Person = person.same(person)`))).not.toThrow();
     if isinstance(value, str):
         return 0
     return value + 1`))).not.toThrow();
+    });
+
+    it.each(['int | str', 'str | int', 'int | str | bool'])(
+        'accepts union values at compatible assignment, call, field and list boundaries: %s',
+        async target => {
+            const { result, call } = await exec(`type Target = ${target}
+let source: int | str = 1
+let assigned: Target = source
+def identity(value: Target) -> Target:
+    return value
+let values: list[Target] = []
+values.append(source)
+values.extend([source])
+values.insert(0, identity(source))
+struct Data:
+    value: Target
+let data: Data = object:
+    'value': source
+data.value = identity(source)
+success [assigned, values, data]`);
+            expect(call).not.toHaveBeenCalled();
+            expect(result).toMatchObject({ status: 'success', value: [1n, [1n, 1n, 1n], { value: 1n }] });
+        },
+    );
+
+    it.each([
+        `let source: int | str = 1
+let target: int = source`,
+        `let source: int | str = 1
+let values: list[int | float] = []
+values.append(source)`,
+        `let source: int | str = 1
+def consume(value: int | bool):
+    pass
+consume(source)`,
+        `enum Color = 'red' | 'blue'
+let colors: list[Color | int] = []
+let strings: list[str | int] = colors`,
+    ])('rejects unions with unsupported alternatives and invariant mutable contracts: %s', async source => {
+        await rejectsBeforeModel(source);
     });
 
     it('checks typed built-in methods while keeping inferred containers dynamically mutable', async () => {

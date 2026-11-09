@@ -16,5 +16,5 @@ export type { LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, 
 export type { Program } from './ast.js';
 export { checkProgram } from './type-check.js';
 export { decodeTypedJson, schemaForType } from './typed-json.js';
-export { validateValue, testValue, project, primitives, type TypeDescriptor } from './types.js';
+export { validateType, validateValue, testValue, project, primitives, type TypeDescriptor } from './types.js';
 export { encodeJson, type Value } from './values.js';

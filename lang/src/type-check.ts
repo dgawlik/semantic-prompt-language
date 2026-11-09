@@ -219,13 +219,13 @@ class Checker {
 
     private matches(value: Info, target: TypeDescriptor): boolean | undefined {
         const info = this.effective(value);
-        if (target.kind === 'union') {
-            const matches = target.members!.map(member => this.matches(info, member));
-            return matches.includes(true) ? true : matches.every(match => match === false) ? false : undefined;
-        }
         if (info.type?.kind === 'union') {
             const matches = info.type.members!.map(member => this.matches(concrete(member, !!info.typed), target));
             return matches.includes(false) ? false : matches.every(match => match === true) ? true : undefined;
+        }
+        if (target.kind === 'union') {
+            const matches = target.members!.map(member => this.matches(info, member));
+            return matches.includes(true) ? true : matches.every(match => match === false) ? false : undefined;
         }
         if (info.identity?.contract && mutable(target) && !equivalent(info.identity.contract, target)) return false;
         if (target.kind === 'char' && typeof info.literal === 'string') {
@@ -293,6 +293,70 @@ class Checker {
         this.install(value, target);
         return { ...value, type: target, typed: true, descriptor: target.kind === 'fn' ? undefined : value.descriptor, callable: target.kind === 'fn'
             ? { params: [...target.params!], result: target.result } : value.callable };
+    }
+
+    private validationCopy(value: Info, seen = new Map<Identity, Identity>()): Info {
+        if (!value.identity) return { ...value };
+        let identity = seen.get(value.identity);
+        if (!identity) {
+            identity = { ...value.identity };
+            seen.set(value.identity, identity);
+            identity.items = identity.items?.map(item => this.validationCopy(item, seen));
+            identity.fields = identity.fields && new Map([...identity.fields].map(([key, item]) => [key, this.validationCopy(item, seen)]));
+        }
+        return { ...value, identity };
+    }
+
+    private containsClass(type: TypeDescriptor): boolean {
+        return type.kind === 'class' || type.kind === 'list' && this.containsClass(type.element!)
+            || type.kind === 'union' && type.members!.some(member => this.containsClass(member))
+            || type.kind === 'struct' && Object.values(type.fields!).some(field => this.containsClass(field.type));
+    }
+
+    private validation(value: Info, target: TypeDescriptor, path: string): Info {
+        if (!this.containsClass(target)) return this.require(value, target, path);
+        const info = this.effective(value);
+        if (info.type?.kind === 'union') {
+            for (const member of info.type.members!) this.validation(concrete(member, !!info.typed), target, path);
+            return concrete(target);
+        }
+        if (target.kind === 'union') {
+            const matches: TypeDescriptor[] = [];
+            for (const member of target.members!) {
+                try { this.validation(this.validationCopy(value), member, path); matches.push(member); }
+                catch (error) { if (!(error instanceof Failure) || error.statusCode !== 'type_error') throw error; }
+            }
+            if (!matches.length) return this.require(value, target, path);
+            const proven = matches.filter(member => this.matches(value, member) === true
+                || member.kind === 'class' && info.type?.kind !== 'class'
+                && this.matches(value, descriptor('struct', `struct(${member.name})`, { fields: member.fields })) === true);
+            if (proven.length > 1 && proven.some(member => this.matches(value, member) === false)
+                && proven.some(member => !equivalent(member, proven[0]))) this.error(`${path}: ambiguous union conversions for ${target.name}`);
+            return concrete(target);
+        }
+        if (target.kind !== 'class' && this.matches(value, target) !== false) return this.require(value, target, path);
+        if (target.kind === 'class' && info.type?.kind === 'class') return this.require(value, target, path);
+        if (target.kind === 'list' && (info.type?.kind === 'list' || info.identity?.kind === 'list')) {
+            if (info.identity?.items) {
+                for (const [index, item] of info.identity.items.entries()) this.validation(item, target.element!, `${path}[${index}]`);
+                if (!info.identity.items.length) return this.require(value, target, path);
+            } else if (info.type?.element) this.validation(concrete(info.type.element), target.element!, `${path}[]`);
+            return concrete(target);
+        }
+        if ((target.kind === 'class' || target.kind === 'struct') && info.type?.kind !== 'class'
+            && (info.identity?.kind === 'object' || info.type?.kind === 'struct' || info.type?.kind === 'object')) {
+            const fields = info.identity?.fields ?? (info.type?.fields
+                && new Map(Object.entries(info.type.fields).map(([key, field]) => [key, concrete(field.type)])));
+            if (fields) {
+                for (const key of fields.keys()) if (!Object.hasOwn(target.fields!, key)) this.error(`${path}.${key}: extra field`);
+                if (!info.identity?.open) for (const key of Object.keys(target.fields!)) {
+                    if (!fields.has(key)) this.error(`${path}.${key}: missing required field`);
+                }
+                for (const [key, field] of fields) this.validation(field, target.fields![key].type, `${path}.${key}`);
+            }
+            return concrete(target);
+        }
+        return this.require(value, target, path);
     }
 
     private install(value: Info, target: TypeDescriptor): void {
@@ -739,9 +803,10 @@ class Checker {
             return this.merge(info.type.members!.map(type => this.member(concrete(type, !!info.typed), name, writing)));
         }
         if (info.type?.kind === 'struct' || info.type?.kind === 'class') {
-            const field = info.type.fields![name];
+            const field = Object.hasOwn(info.type.fields!, name) ? info.type.fields![name] : undefined;
             if (field) return { ...info.identity?.fields?.get(name), type: field.type, typed: true, ...(field.type.kind === 'fn' ? { callable: { params: [...field.type.params!], result: field.type.result } } : {}) };
-            const method = info.type.methods?.[name];
+            const methods = info.type.methods;
+            const method = methods && Object.hasOwn(methods, name) ? methods[name] : undefined;
             if (method && !writing) return { typed: true, callable: { params: method.paramTypes ?? method.params.map(() => undefined), result: method.returnType } };
             this.error(`${info.type.name}.${name}: ${writing ? 'extra field' : 'unknown member'}`);
         }
@@ -786,12 +851,13 @@ class Checker {
         const name = expr.callee.t === 'name' ? expr.callee.name : undefined;
         const binding = name ? this.find(scope, name) : undefined;
         const builtin = name && (!binding || binding.value.builtin === name || binding.value.descriptor?.kind === name);
-        if (builtin && ['isinstance', 'validate'].includes(name!)) {
+        const validation = binding?.value.builtin ?? (builtin ? name : undefined);
+        if (validation && ['isinstance', 'validate'].includes(validation)) {
             const value = expr.args[0] ? this.expr(expr.args[0], scope) : unknown();
             const target = expr.args[1] ? this.descriptorExpr(expr.args[1], scope) : undefined;
             for (const arg of expr.args.slice(1)) this.expr(arg, scope);
-            if (target && name === 'validate') return this.require(value, target, 'validate');
-            return name === 'isinstance' ? concrete(primitive('bool'), false) : unknown();
+            if (target && validation === 'validate') return this.validation(value, target, 'validate');
+            return validation === 'isinstance' ? concrete(primitive('bool'), false) : unknown();
         }
         if (builtin && name === 'struct') {
             expr.args.forEach(arg => this.expr(arg, scope));

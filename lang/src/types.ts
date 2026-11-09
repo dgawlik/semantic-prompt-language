@@ -2,7 +2,7 @@ import type { FieldDecl, TypeExpr } from './ast.js';
 import { Failure } from './errors.js';
 import { types as nodeTypes } from 'node:util';
 import {
-    hasKey, isDescriptor, isDict, isFloat, isFunction, isInstance, isList, newDict, registerDescriptor, registerFloat, runtimeError,
+    hasKey, isDescriptor, isDict, isFloat, isFunction, isInstance, isList, newDict, registerDescriptor, registerFloat, registerInstance, runtimeError,
     typeName, type FloatValue, type FunctionValue, type InstanceValue, type UserFunction, type Value,
 } from './values.js';
 
@@ -168,18 +168,27 @@ function addContract(value: object, type: TypeDescriptor, plan: ContractPlan, pa
     plan.set(value, existing ?? type);
 }
 
-function check(value: Value, type: TypeDescriptor, path: string, plan: ContractPlan, test: boolean, visiting = new Set<object>()): void {
+function check(value: Value, type: TypeDescriptor, path: string, plan: ContractPlan, test: boolean, visiting = new Set<object>(), convertClasses = false): Value {
     switch (type.kind) {
-        case 'int': if (typeof value === 'bigint' && value >= INT_MIN && value <= INT_MAX) return; break;
-        case 'float': if (isFloat(value) && Number.isFinite(value.__float)) return; break;
-        case 'str': if (typeof value === 'string') return; break;
-        case 'char': if (typeof value === 'string' && Array.from(value).length === 1 && !/[\uD800-\uDFFF]/u.test(value)) return; break;
-        case 'bool': if (typeof value === 'boolean') return; break;
-        case 'None': if (value === null) return; break;
-        case 'enum': if (typeof value === 'string' && type.values!.includes(value)) return; break;
-        case 'object': if (isDict(value)) return; break;
+        case 'int': if (typeof value === 'bigint' && value >= INT_MIN && value <= INT_MAX) return value; break;
+        case 'float': if (isFloat(value) && Number.isFinite(value.__float)) return value; break;
+        case 'str': if (typeof value === 'string') return value; break;
+        case 'char': if (typeof value === 'string' && Array.from(value).length === 1 && !/[\uD800-\uDFFF]/u.test(value)) return value; break;
+        case 'bool': if (typeof value === 'boolean') return value; break;
+        case 'None': if (value === null) return value; break;
+        case 'enum': if (typeof value === 'string' && type.values!.includes(value)) return value; break;
+        case 'object': if (isDict(value)) return value; break;
         case 'class':
-            if (isInstance(value) && value.complete && equivalent(value.descriptor, type)) return;
+            if (isInstance(value) && value.complete && equivalent(value.descriptor, type)) return value;
+            if (convertClasses && isDict(value)) {
+                if (visiting.has(value)) throw new Failure('type_error', `${path}: cyclic typed data is not supported`);
+                visiting.add(value);
+                const shape = descriptor('struct', `struct(${type.name})`, { fields: type.fields });
+                const fields = check(newDict(Object.entries(value)), shape, path, plan, test, visiting, true);
+                visiting.delete(value);
+                if (!isDict(fields)) throw runtimeError('class validation requires structural fields');
+                return registerInstance({ __instance: true, descriptor: type, fields, complete: true });
+            }
             break;
         case 'fn': {
             const callableDescriptor = isDescriptor(value) && ['class', 'int', 'float', 'str', 'bool', 'char', 'object', 'struct'].includes(value.kind);
@@ -190,50 +199,68 @@ function check(value: Value, type: TypeDescriptor, path: string, plan: ContractP
             const arity = isFunction(value) && value.__fn === 'user' ? value.params.length : signature?.params?.length;
             if (arity !== undefined && arity !== type.params!.length) break;
             if (!signature) addContract(value, type, plan, path);
-            return;
+            return value;
         }
         case 'list':
         case 'struct': {
             if (type.kind === 'list' ? !isList(value) : !isDict(value)) break;
             const container = value as Value[] | Record<string, Value>;
-            addContract(container, type, plan, path);
+            if (!convertClasses) addContract(container, type, plan, path);
             if (visiting.has(container)) throw new Failure('type_error', `${path}: cyclic typed data is not supported`);
             visiting.add(container);
-            if (type.kind === 'list') {
-                (container as Value[]).forEach((child, i) => check(child, type.element!, `${path}[${i}]`, plan, test, visiting));
+            let result: Value[] | Record<string, Value> = container;
+            if (isList(container)) {
+                const children = container.map((child, i) => check(child, type.element!, `${path}[${i}]`, plan, test, visiting, convertClasses));
+                if (children.some((child, i) => child !== container[i])) result = children;
             } else {
-                const record = container as Record<string, Value>;
+                const record = container;
+                const children = newDict();
                 for (const key of Object.keys(record)) if (!Object.hasOwn(type.fields!, key)) typeFailure(`${path}.${key}`, type, record[key], 'extra field');
                 for (const [key, field] of Object.entries(type.fields!)) {
                     if (!hasKey(record, key)) throw new Failure('type_error', `${path}.${key}: missing required field`);
-                    check(record[key], field.type, `${path}.${key}`, plan, test, visiting);
+                    Object.defineProperty(children, key, { value: check(record[key], field.type, `${path}.${key}`, plan, test, visiting, convertClasses), enumerable: true, configurable: true, writable: true });
                 }
+                if (Object.keys(children).some(key => children[key] !== record[key])) result = children;
             }
             visiting.delete(container);
-            return;
+            if (convertClasses) addContract(result, type, plan, path);
+            return result;
         }
         case 'union': {
-            const matches: ContractPlan[] = [];
+            const matches: { plan: ContractPlan; value: Value; type: TypeDescriptor }[] = [];
             for (const member of type.members!) {
                 const candidate = new Map(plan);
-                try { check(value, member, path, candidate, test, new Set(visiting)); matches.push(candidate); }
+                try { matches.push({ plan: candidate, value: check(value, member, path, candidate, test, new Set(visiting), convertClasses), type: member }); }
                 catch (error) { if (!(error instanceof Failure) || error.statusCode !== 'type_error') throw error; }
             }
             if (!matches.length) break;
             const first = matches[0];
-            if (matches.some(match => match.size !== first.size || [...first].some(([object, contract]) => !match.has(object) || !equivalent(contract, match.get(object)!)))) {
+            if (matches.some(match => (match.value === value) !== (first.value === value)
+                || first.value !== value && !equivalent(first.type, match.type))) {
+                throw new Failure('type_error', `${path}: ambiguous union conversions for ${type.name}`);
+            }
+            if (first.value === value && matches.some(match => match.plan.size !== first.plan.size
+                || [...first.plan].some(([object, contract]) => !match.plan.has(object) || !equivalent(contract, match.plan.get(object)!)))) {
                 throw new Failure('type_error', `${path}: ambiguous union contracts for ${type.name}`);
             }
-            for (const [object, contract] of first) plan.set(object, contract);
-            return;
+            for (const [object, contract] of first.plan) plan.set(object, contract);
+            return first.value;
         }
     }
     typeFailure(path, type, value);
 }
 
 export function validateValue(value: Value, type: TypeDescriptor, path = '$'): Value {
+    return validatedValue(value, type, path, false);
+}
+
+export function validateType(value: Value, type: TypeDescriptor, path = '$'): Value {
+    return validatedValue(value, type, path, true);
+}
+
+function validatedValue(value: Value, type: TypeDescriptor, path: string, convertClasses: boolean): Value {
     const plan: ContractPlan = new Map();
-    check(value, type, path, plan, false);
+    value = check(value, type, path, plan, false, new Set(), convertClasses);
     for (const [object, contract] of plan) contracts.set(object, contract);
     if (type.kind === 'fn' && (isFunction(value) || isDescriptor(value))) {
         if (isFunction(value) && value.__fn === 'builtin' && value.target && value.signature && equivalent(value.signature, type)) return value;

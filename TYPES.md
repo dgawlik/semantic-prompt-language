@@ -18,12 +18,14 @@ generated content is factually correct or satisfies its intended meaning.
 
 - Known violations of typed contracts block execution before any model calls.
 - Unknown values from dynamic code may enter typed code through runtime
-  validation, but validation does not coerce or repair them.
+  validation, without numeric coercion or repair. Explicit class-target validation
+  can convert structural field data into a nominal instance.
 - Untyped expressions may be analyzed to inform typed checks. Untyped bindings
   remain dynamically assignable; purely untyped code does not become subject to
   blanket static type checking.
 - Annotations are enforced contracts, not advisory lint warnings.
 - Validation does not insert defaults, remove fields, or silently convert values.
+  `validate(data, Class)` explicitly requests structural-to-class conversion.
 
 ```spl
 let count: int = 1
@@ -254,8 +256,16 @@ def describe(value: int | str) -> str:
     return 'An integer'
 ```
 
-Neither operation converts a legacy number into a new numeric representation
-or hydrates a dictionary into a nominal class.
+Neither operation converts a legacy number into a new numeric representation.
+`isinstance` never converts structural data into a nominal class. Explicit
+`validate(data, Class)` validates all declared fields and returns a complete instance,
+including for ordinary classes, without running the constructor. Missing and extra
+fields fail. This applies recursively through class fields, structs, lists and unions;
+distinct ambiguous conversions fail rather than selecting a class arbitrarily.
+Converted field dictionaries and containers are copied; input values are not rewritten.
+Unchanged mutable children retain compatible contracts. Failed validation installs no
+contracts and publishes no partially converted result. Existing instances of the
+requested class keep their identity; instances of other classes are not reclassified.
 
 A successful test of a mutable shape atomically installs compatible invariant
 contracts, just as validation does. This does not change the data or identity,
@@ -347,7 +357,9 @@ No inheritance is included in this revision.
 ### Explicit opt-in to schema hydration
 
 `hydratable class` declares that constructor-free field hydration is allowed.
-Ordinary `class` declarations remain constructor-only.
+Ordinary `class` declarations require constructors for normal construction and cannot
+be direct schema hydration targets. Explicit `validate(data, Class)` is a separate,
+caller-requested field conversion and may populate ordinary classes without constructors.
 
 ```spl
 hydratable class Person:

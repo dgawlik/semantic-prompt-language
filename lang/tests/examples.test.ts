@@ -20,6 +20,26 @@ describe('examples', () => {
             expect(() => parseMarkdown(load(file))).not.toThrow();
         });
     }
+
+    it.each([37n, 9223372036854775807n])('runs the types example with exact int age %s', async age => {
+        const answers = ['1', '1.5', '2', '2.5', `{"firstName":"Ada","lastName":"Lovelace","age":${age}}`];
+        const backend = {
+            call: async (_request: LlmRequest) => {
+                const text = answers.shift();
+                if (text === undefined) throw new Error('unexpected model call');
+                return { text, effective: {} };
+            },
+            close: async () => {},
+        };
+        const result = await run(parse(`${exampleCode('types.md')}\nsuccess [person, type(person.age)]`), {
+            backend, logger: new Logger('silent'),
+        });
+        expect(result).toMatchObject({
+            status: 'success',
+            value: [{ __instance: true, complete: true, fields: { firstName: 'Ada', lastName: 'Lovelace', age } }, 'int'],
+        });
+        expect(answers).toEqual([]);
+    });
 });
 
 describe('documentation snippets', () => {
