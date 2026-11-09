@@ -21,24 +21,16 @@ restrict exec 'gh':
 if len(issues) == 0:
     success 'No unlabeled issues'
 let LABELS = ['bug', 'enhancement', 'question', 'documentation']
-let Plan = object:
-    'type': 'array'
-    'items': object:
-        'type': 'object'
-        'properties': object:
-            'number': object:
-                'type': 'integer'
-            'label': object:
-                'type': 'string'
-                'enum': LABELS
-            'priority': object:
-                'type': 'string'
-                'enum': ['low', 'medium', 'high']
-            'reason': object:
-                'type': 'string'
-                'minLength': 1
-        'required': ['number', 'label', 'priority', 'reason']
-        'additionalProperties': False
+
+enum Labels = 'bug' | 'enhancement' | 'question' | 'documentation'
+
+enum Priority = 'low' | 'medium' | 'high'
+
+hydratable class Plan:
+    number: int
+    label: Labels
+    priority: Priority
+    reason: str [minLength = 1]
 ```
 
 > @FORBID judging an issue by its title alone when the body says otherwise
