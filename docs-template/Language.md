@@ -109,13 +109,42 @@ Built-in types and existing type declarations remain available after `if`, loops
 `try`/`except` blocks. An untyped alias used as an annotation must still identify the same
 type on every possible control-flow path.
 
+### Types at a glance
+
+| Type | Accepted values |
+| --- | --- |
+| `int` | Signed 64-bit integers; checked arithmetic, no overflow wrapping |
+| `float` | Finite binary64 numbers, distinct from `int` |
+| `str` | Strings |
+| `char` | Strings containing exactly one Unicode scalar value |
+| `bool` | `True` or `False`, not integers |
+| `None` | The null value, not an absent field |
+| `object` | Dynamic string-keyed dictionaries, not nominal class instances |
+| `list[T]` | Lists whose elements satisfy `T` |
+| `A \| B` | Values satisfying either member; narrow before member-specific operations |
+| `fn(T1, T2) -> R` | Callables with the declared parameter and return contracts |
+
+Typed literals select the representation: `let count: int = 2`, but
+`let ratio: float = 2.0`. Neither `let count: int = 2.0` nor
+`let ratio: float = 2` is valid. Untyped numbers keep their existing representation;
+use `int(value)` or `float(value)` explicitly to enter typed numeric code.
+`int(...)` rejects fractions, booleans and out-of-range values; conversion to `float`
+can lose integer precision. Mixed `int`/`float` arithmetic requires explicit conversion.
+Integer `/` produces a float. Counts from `len` and `range` remain untyped numbers.
+
+### Transparent type aliases
+
 Declare read-only, transparent aliases with optional semantic advice:
 
 ```spl
 type Money = int [minimum=0, desc='Amount in cents']
+type Prices = list[Money]
+type MaybeMoney = Money | None
 let subtotal: Money = 1250
 let computed: Money = 0
 computed += subtotal
+let prices: Prices = [subtotal, computed]
+let discount: MaybeMoney = None
 ```
 
 Aliases accept the same values and operations as their underlying types, without implicit
@@ -123,6 +152,8 @@ conversion. Advice is included in generated schemas' descriptions, including whe
 is used as a field or list element; it does not enforce extra constraints. Aliasing an alias
 inherits its advice, with newly supplied keys overriding inherited keys. Field advice is
 appended separately. `type(value)` remains the type-name builtin.
+
+### Enums, structs and functions
 
 ```spl
 enum Color = 'red' | 'green' | 'blue'
@@ -135,15 +166,74 @@ def repeat(text: str, count: int) -> str:
 let names: list[str] = ['Ada']
 let count: int = 2
 let ratio: float = 1.0
+let entry: Entry = object:
+    'color': 'blue'
+    'note': None
+    'callback': repeat
 ```
 
-Struct fields are exact and required; nullable does not mean absent. Metadata such as
-`str [min=2, desc='Name']` is model advice, not a validity constraint. `int` is signed 64-bit,
-`float` is distinct finite binary64, and untyped numbers require explicit conversion to enter
-either representation. Mutable contracts persist through untyped aliases and bulk mutators.
-`validate(value, Type)` validates; `isinstance(value, Type)` tests without converting and supports
-temporary branch narrowing. See [Typing migration](Migration.md) for numeric rules, callables,
-classes, hydration and deep projections.
+Enums accept matching strings directly and are subtypes of `str`. Structs are structural:
+equivalent field contracts are interchangeable. Fields are exact and required; nullable does
+not mean absent, so `note` above must be present even when it is `None`.
+Metadata such as `str [min=2, desc='Name']` is model advice, not a validity constraint.
+Use `assert` for business rules, or explicit JSON Schema for strict data constraints.
+Function parameters, results and callable fields are checked at their typed boundaries.
+
+### Validation, narrowing and mutation
+
+`validate(value, Type)` checks without converting and returns a typed view, or fails.
+`isinstance(value, Type)` tests without converting and narrows within a branch:
+
+```spl
+def describe(value: int | str) -> str:
+    if isinstance(value, str):
+        return value.upper()
+    return 'Integer: {value}'
+
+let data = json_parse(r'{"color":"blue","note":null}')
+struct Selection:
+    color: Color
+    note: str | None
+let selection = validate(data, Selection)
+```
+
+Neither operation hydrates dictionaries into classes or converts untyped numbers.
+Successful tests and validation install persistent contracts on mutable values.
+These survive untyped aliases, index/member writes and bulk mutators. For example, an
+untyped alias cannot append an integer to a `list[str]`. Mutable contracts are invariant:
+`list[Color]` cannot be used as `list[str]`. Failed bulk mutations leave the whole value
+unchanged. Narrowing expires after relevant assignment or potentially mutating calls.
+
+### Classes and structural projections
+
+Classes have nominal identity, declared fields, and implicitly bound `self` in methods.
+Normal construction calls the constructor named after the class and must initialize every field.
+Use `hydratable class` only when constructor-free JSON hydration is safe:
+
+```spl
+hydratable class Person:
+    name: str
+
+    def Person(name: str):
+        self.name = name
+
+    def greeting() -> str:
+        return 'Hello {self.name}'
+
+let person: Person = Person('Ada')
+let fields = validate(object(person), struct(Person))
+let snapshot = object(person)
+success snapshot
+```
+
+`struct(Person)` describes structural field data, not a `Person` instance.
+`object(person)` makes a deep snapshot and drops named function properties.
+Validate that snapshot against `struct(Person)` when a checked field view is needed;
+validation rejects missing required fields, including callable fields dropped by projection.
+Use explicit projection before serializing class instances.
+See [Schemas and repairs](LLM-commands.md#schemas-and-repairs) for typed model output,
+[typed-data.md](../lang/examples/typed-data.md) for an offline workflow, and
+[Typing migration](Migration.md) for the full migration rules.
 
 ## Runtime inputs: $env and $args
 

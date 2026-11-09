@@ -71,6 +71,7 @@ Every failure has the same shape. Uncaught failures are printed to stdout and ex
 | --- | --- |
 | `invalid_format` | Answer is not valid JSON of the requested `fmt` |
 | `validation_failed` | Answer does not match the schema |
+| `type_error` | Known typed violation before execution, or a runtime contract violation |
 | `assertion_failed` | An `assert` was false |
 | `explicit_failure` | `fail` was executed |
 | `restriction_violation` | An action was blocked by `restrict` |
@@ -89,8 +90,10 @@ except err:
 success data
 ```
 
-The handler gets the failure payload as a dict. Failures do not roll back earlier writes, and syntax
-errors are reported before anything runs, so they cannot be caught.
+The handler gets the failure payload as a dict. Failures do not roll back earlier writes.
+Syntax errors and statically known typed violations are reported before anything runs,
+so they cannot be caught. Runtime contract violations can be caught; failed typed bulk
+mutations leave the affected value unchanged.
 
 ## Human in the loop
 

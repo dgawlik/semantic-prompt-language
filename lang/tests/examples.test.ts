@@ -71,6 +71,14 @@ describe('documentation snippets', () => {
         });
     }
     const root = path.resolve(docs, '..');
+    it('keeps the README presentation example current and runnable', () => {
+        const presentation = fs.readFileSync(path.join(root, 'generate-presentation.md'), 'utf8');
+        const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+        const embedded = /^````markdown\r?\n([\s\S]*?)^````[ \t]*\r?$/m.exec(readme);
+        expect(embedded).not.toBeNull();
+        expect(normalize(embedded![1])).toBe(normalize(presentation));
+        expect(() => parseMarkdown(presentation)).not.toThrow();
+    });
     const markdownDocs = path.join(root, 'docs-template');
     const markdownFiles = fs.readdirSync(markdownDocs).filter((file) => file.endsWith('.md'));
     const withoutFences = (markdown: string) => normalize(markdown).replace(/^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```[ \t]*$/gm, '');
@@ -169,6 +177,30 @@ describe('examples with offline backends', () => {
             },
         };
     }
+
+    it('decodes an issue batch through the triage example named list alias', async () => {
+        const declarations = parseMarkdown(load('triage-issues.md')).body
+            .filter(statement => statement.t === 'enum' || statement.t === 'class' || statement.t === 'type-alias');
+        const program = parseMarkdown([
+            '---', 'extension: semantic-prompt-language', 'version: 1', '---', '',
+            '> @validate[TriagePlan] save to @plan', '',
+            '```spl', 'success object(plan)', '```',
+        ].join('\n'));
+        program.body.unshift(...declarations);
+        const { backend, counts } = scriptedBackend([[
+            { name: 'load_variable', arguments: { name: 'TriagePlan' } },
+            { name: 'save_variable', arguments: {
+                name: 'plan', schema: 'TriagePlan',
+                value: [{ number: 42, label: 'bug', priority: 'high', reason: 'Crashes on startup.' }],
+            } },
+        ]]);
+        const result = await run(program, { logger: new Logger('silent'), backend });
+        expect(result).toMatchObject({
+            status: 'success',
+            value: [{ number: 42n, label: 'bug', priority: 'high', reason: 'Crashes on startup.' }],
+        });
+        expect(counts).toEqual({ commands: 1, actions: 2 });
+    });
 
     it('preserves journal state and bounds its history across runs with block scopes', async () => {
         const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-journal-'));

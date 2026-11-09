@@ -7,7 +7,7 @@ folder, for example `spl examples/hi.md`. Each example's header shows its argume
 
 | Example | Shows |
 | --- | --- |
-| [hi.md](../lang/examples/hi.md) | Code and natural language sharing variables, a schema, an assertion and a restricted write |
+| [hi.md](../lang/examples/hi.md) | Hydrated class schemas, shared variables, an assertion and a restricted JSON projection |
 | [basics.md](../lang/examples/basics.md) | Checking a model's answer against exact code; guidance with `@ENFORCE` and `@FORBID` |
 | [is-friday.md](../lang/examples/is-friday.md) | Branching on a JSON answer |
 | [env.md](../lang/examples/env.md) | Reading `$env` and `--arg` values |
@@ -19,14 +19,14 @@ folder, for example `spl examples/hi.md`. Each example's header shows its argume
 | --- | --- |
 | [code-review.md](../lang/examples/code-review.md) | A review that fails CI on high-severity findings |
 | [release-notes.md](../lang/examples/release-notes.md) | User-facing notes from `git log` prepended to `CHANGELOG.md` |
-| [triage-issues.md](../lang/examples/triage-issues.md) | Labeling GitHub issues with `gh` after human approval |
+| [triage-issues.md](../lang/examples/triage-issues.md) | Enums and a named typed-list schema; labeling GitHub issues with `gh` after human approval |
 
 ## Data and documents
 
 | Example | Shows |
 | --- | --- |
-| [extract-invoice.md](../lang/examples/extract-invoice.md) | Structured extraction checked by arithmetic |
-| [typed-data.md](../lang/examples/typed-data.md) | Enums, exact structs, nominal classes, callable fields and explicit deep projection without a model |
+| [extract-invoice.md](../lang/examples/extract-invoice.md) | Struct schemas and a `Money` alias with integer-cent arithmetic |
+| [typed-data.md](../lang/examples/typed-data.md) | Primitives, aliases, unions, validation, guarded lists, structs, classes, callable fields and deep projection without a model |
 | [translate-docs.md](../lang/examples/translate-docs.md) | Translations verified to keep links, code and headings |
 | [incident-report.md](../lang/examples/incident-report.md) | Exact log statistics, model-written narrative |
 | [web-digest.md](../lang/examples/web-digest.md) | Web research with restricted fetches and checked citations |
@@ -41,7 +41,9 @@ folder, for example `spl examples/hi.md`. Each example's header shows its argume
 
 ## Extract an invoice
 
-The schema checks the shape of the answer; plain arithmetic checks that the numbers add up.
+The struct schema checks the shape of the answer; a reusable `Money` alias keeps arithmetic
+in signed-64-bit integer cents. Metadata such as `minimum=0` is model advice, not a constraint;
+plain arithmetic checks that the numbers add up.
 
 `extract-invoice.md`
 
@@ -126,6 +128,8 @@ model: 'gpt-6-luna'
 
 Classifies open issues without labels and applies the labels only after a human approves
 the plan. Needs an authenticated `gh` CLI. Pass `--arg owner/repo` to target another repository.
+Enums constrain labels and priorities; a named list alias lets the agent save the
+whole batch with typed decoding. Field metadata is advice, so code checks nonempty reasons.
 
     spl examples/triage-issues.md --arg owner/repo
 
@@ -139,31 +143,25 @@ restrict exec 'gh':
 if len(issues) == 0:
     success 'No unlabeled issues'
 let LABELS = ['bug', 'enhancement', 'question', 'documentation']
-let Plan = object:
-    'type': 'array'
-    'items': object:
-        'type': 'object'
-        'properties': object:
-            'number': object:
-                'type': 'integer'
-            'label': object:
-                'type': 'string'
-                'enum': LABELS
-            'priority': object:
-                'type': 'string'
-                'enum': ['low', 'medium', 'high']
-            'reason': object:
-                'type': 'string'
-                'minLength': 1
-        'required': ['number', 'label', 'priority', 'reason']
-        'additionalProperties': False
+
+enum Labels = 'bug' | 'enhancement' | 'question' | 'documentation'
+
+enum Priority = 'low' | 'medium' | 'high'
+
+hydratable class Plan:
+    number: int
+    label: Labels
+    priority: Priority
+    reason: str [minLength = 1]
+
+type TriagePlan = list[Plan]
 ```
 
 > @FORBID judging an issue by its title alone when the body says otherwise
 >
 > Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.
 > Crashes, data loss and security problems are high priority.
-> @validate[Plan] save to @plan
+> @validate[TriagePlan] save to @plan
 
 ```spl
 let numbers = []
@@ -175,6 +173,7 @@ for p in plan:
 assert len(plan) == len(issues) "expected {len(issues)} decisions, got {len(plan)}"
 let table = []
 for p in plan:
+    assert len(p.reason.strip()) > 0 "issue #{p.number} needs a reason"
     assert p.number in numbers "issue #{p.number} is not part of this batch"
     assert planned.count(p.number) == 1 "issue #{p.number} was classified twice"
     table.append("#{p.number} -> {p.label} ({p.priority}): {p.reason}")

@@ -7,11 +7,11 @@
 check data, failures can be caught, and human hands decisions to a person.">
 <meta name="color-scheme" content="light dark">
 <title>Guards &amp; failures - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=caa8698a7018">
-<link rel="stylesheet" href="assets/style.css?v=caa8698a7018">
+<link rel="icon" type="image/png" href="assets/icon.png?v=f17e5d22502d">
+<link rel="stylesheet" href="assets/style.css?v=f17e5d22502d">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=caa8698a7018"></script>
-<script defer src="assets/site.js?v=caa8698a7018"></script>
+<script defer src="assets/search-index.js?v=f17e5d22502d"></script>
+<script defer src="assets/site.js?v=f17e5d22502d"></script>
 </head>
 <body data-page="safety">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -116,6 +116,10 @@ MCP servers themselves are trusted and not sandboxed.</li>
 <td>Answer does not match the schema</td>
 </tr>
 <tr>
+<td><code>type_error</code></td>
+<td>Known typed violation before execution, or a runtime contract violation</td>
+</tr>
+<tr>
 <td><code>assertion_failed</code></td>
 <td>An <code>assert</code> was false</td>
 </tr>
@@ -149,8 +153,10 @@ MCP servers themselves are trusted and not sandboxed.</li>
     <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;<span class="hljs-subst">{err.status_code}</span> on line <span class="hljs-subst">{err.line}</span>: <span class="hljs-subst">{err.reason}</span>&quot;</span>)
 <span class="hljs-keyword">success</span> data
 </code></pre></figure>
-<p>The handler gets the failure payload as a dict. Failures do not roll back earlier writes, and syntax
-errors are reported before anything runs, so they cannot be caught.</p>
+<p>The handler gets the failure payload as a dict. Failures do not roll back earlier writes.
+Syntax errors and statically known typed violations are reported before anything runs,
+so they cannot be caught. Runtime contract violations can be caught; failed typed bulk
+mutations leave the affected value unchanged.</p>
 <h2 id="human-in-the-loop">Human in the loop<a class="heading-anchor" href="#human-in-the-loop" aria-label="Link to Human in the loop">#</a></h2>
 <p><code>human &#39;question&#39;</code> asks a person and returns their answer as a string. In normal CLI runs, the shell
 prints the question on stderr and reads one line from stdin, preserving whitespace except the line

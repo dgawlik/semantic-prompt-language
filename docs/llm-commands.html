@@ -7,11 +7,11 @@
 This page covers both, and how to check what comes back.">
 <meta name="color-scheme" content="light dark">
 <title>Natural language &amp; models - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=caa8698a7018">
-<link rel="stylesheet" href="assets/style.css?v=caa8698a7018">
+<link rel="icon" type="image/png" href="assets/icon.png?v=f17e5d22502d">
+<link rel="stylesheet" href="assets/style.css?v=f17e5d22502d">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=caa8698a7018"></script>
-<script defer src="assets/site.js?v=caa8698a7018"></script>
+<script defer src="assets/search-index.js?v=f17e5d22502d"></script>
+<script defer src="assets/site.js?v=f17e5d22502d"></script>
 </head>
 <body data-page="llm-commands">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -135,6 +135,9 @@ Plain language works too. Common conventions guide the agent&#39;s tool choices:
 </tr>
 </tbody></table>
 </div>
+<p>For a list or union schema, declare a named alias first, such as
+<code>type Reviews = list[Review]</code>, and use <code>@validate[Reviews]</code>. The tool resolves binding
+names, not type-expression strings such as <code>&quot;list[Review]&quot;</code>.</p>
 <p>Each runtime tool call executes immediately in the interpreter and returns its real result to the
 same agent session. Tools run sequentially, not through a deferred action queue. Saving a variable takes effect immediately;
 prose replies do not create bindings. Functions retain their normal lexical scope and runtime guards.
@@ -390,25 +393,37 @@ See the official <a href="https://ai-sdk.dev/providers/ai-sdk-providers/openai">
 <p>Parsing is strict: prose around JSON and Markdown code fences are rejected, and values are never
 coerced. A malformed or wrong-typed answer raises <code>invalid_format</code>.</p>
 <h2 id="schemas-and-repairs">Schemas and repairs<a class="heading-anchor" href="#schemas-and-repairs" aria-label="Link to Schemas and repairs">#</a></h2>
-<p><code>schema</code> validates the parsed answer with Ajv in strict mode: no coercion, no defaults, no removal of
-extra fields. A mismatch raises <code>validation_failed</code> with field paths.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">let</span> Triage <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>
-    <span class="hljs-string">&#x27;properties&#x27;</span>: <span class="hljs-built_in">object</span>:
-        <span class="hljs-string">&#x27;label&#x27;</span>: <span class="hljs-built_in">object</span>:
-            <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>
-            <span class="hljs-string">&#x27;enum&#x27;</span>: [<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;feature&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>]
-        <span class="hljs-string">&#x27;reason&#x27;</span>: <span class="hljs-built_in">object</span>:
-            <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>
-    <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;label&#x27;</span>, <span class="hljs-string">&#x27;reason&#x27;</span>]
-    <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>
-<span class="hljs-keyword">let</span> triage <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Triage, <span class="hljs-attr">repairs</span><span class="hljs-operator">=</span><span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Classify: <span class="hljs-subst">{issue}</span>&#x27;</span>
+<p><code>schema</code> accepts SPL type descriptors or raw JSON Schema. Both reject invalid output without
+coercion, defaults or removal of extra fields. A mismatch raises <code>validation_failed</code> with field paths.</p>
+<p>Use enums, structs and aliases to describe typed output directly:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Label</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;bug&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;feature&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;question&#x27;</span>
+<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Triage</span>:
+    label: Label
+    reason: <span class="hljs-built_in">str</span> [desc<span class="hljs-operator">=</span><span class="hljs-string">&#x27;One-sentence explanation&#x27;</span>]
+<span class="hljs-keyword">let</span> triage: Triage <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Triage, <span class="hljs-attr">repairs</span><span class="hljs-operator">=</span><span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Classify: <span class="hljs-subst">{issue}</span>&#x27;</span>
 <span class="hljs-keyword">assert</span> triage.label <span class="hljs-operator">!=</span> <span class="hljs-string">&#x27;bug&#x27;</span> <span class="hljs-keyword">or</span> <span class="hljs-built_in">len</span>(triage.reason) <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span> <span class="hljs-string">&#x27;bugs need a reason&#x27;</span>
+
+<span class="hljs-keyword">type</span> <span class="hljs-title class_">Batch</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>[Triage]
+<span class="hljs-keyword">let</span> batch: Batch <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Batch) <span class="hljs-string">&#x27;Classify each issue: <span class="hljs-subst">{issues}</span>&#x27;</span>
 </code></pre></figure>
+<p>Struct fields are exact and required, including nullable fields. Metadata in brackets
+is model advice only, not a data constraint. Raw JSON Schema still uses strict Ajv
+validation when constraints such as <code>minimum</code> or <code>minLength</code> must be enforced:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-9"><span class="hljs-keyword">let</span> Rating <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
+    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;integer&#x27;</span>
+    <span class="hljs-string">&#x27;minimum&#x27;</span>: <span class="hljs-number">1</span>
+    <span class="hljs-string">&#x27;maximum&#x27;</span>: <span class="hljs-number">5</span>
+<span class="hljs-keyword">let</span> rating <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Rating) <span class="hljs-string">&#x27;Rate this issue from 1 to 5: <span class="hljs-subst">{issue}</span>&#x27;</span>
+</code></pre></figure>
+<p>Raw schemas validate dynamic JSON values; they do not install SPL type contracts or
+hydrate classes. Descriptor targets decode typed representations, including exact
+signed-64-bit integer tokens and distinct finite floats. Legacy <code>fmt=&#39;integer&#39;</code> and
+<code>fmt=&#39;float&#39;</code> alone still return dynamic numbers; use <code>schema=int</code> or <code>schema=float</code>
+when a typed numeric result is required.</p>
 <p><code>repairs=n</code> allows up to <code>n</code> more attempts, each with the previous answer and the validation errors.
 Only <code>invalid_format</code> and <code>validation_failed</code> are repaired; transport and tool errors are not.
 The prompt is not re-evaluated. Put business rules in <code>assert</code>, after the call.</p>
-<p><code>schema=</code> also accepts declared type descriptors. Struct targets decode validated structural data;
+<p>Struct targets decode validated structural data;
 <code>schema=Person</code> hydrates a nominal instance only for a <code>hydratable class Person</code>.
 <code>schema=struct(Person)</code> instead returns structural field data, never a <code>Person</code> instance.
 A binding annotation checks the result and does not secretly configure the ask target.
@@ -420,7 +435,7 @@ See <a href="migration.html#class-schemas-versus-structural-data">class schemas 
 <p><code>enforce text:</code> and <code>forbid text:</code> introduce indented blocks and add instructions to every model
 call inside, including calls in functions they invoke. Nested guidance combines. Guidance shapes prompts;
 it does not check the answer.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-9"><span class="hljs-keyword">let</span> answer <span class="hljs-operator">=</span> <span class="hljs-literal">None</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-10"><span class="hljs-keyword">let</span> answer <span class="hljs-operator">=</span> <span class="hljs-literal">None</span>
 <span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Answer in English&#x27;</span>:
     <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;jokes&#x27;</span>:
         answer <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">len</span><span class="hljs-operator">=</span><span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Explain recursion&#x27;</span>

@@ -7,11 +7,11 @@
 spl fences: values, bindings, control flow, functions, built-ins and exact tools.">
 <meta name="color-scheme" content="light dark">
 <title>Language - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=caa8698a7018">
-<link rel="stylesheet" href="assets/style.css?v=caa8698a7018">
+<link rel="icon" type="image/png" href="assets/icon.png?v=f17e5d22502d">
+<link rel="stylesheet" href="assets/style.css?v=f17e5d22502d">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=caa8698a7018"></script>
-<script defer src="assets/site.js?v=caa8698a7018"></script>
+<script defer src="assets/search-index.js?v=f17e5d22502d"></script>
+<script defer src="assets/site.js?v=f17e5d22502d"></script>
 </head>
 <body data-page="language">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -26,10 +26,10 @@ spl fences: values, bindings, control flow, functions, built-ins and exact tools
   <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.13.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
   <details class="mobile-nav"><summary>Browse documentation <span>Language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Language</span><span class="reading-time">7 min read</span></div>
+    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Language</span><span class="reading-time">9 min read</span></div>
     <header class="page-heading"><h1>Language</h1><div class="lead"><p>SPL is a small Python-like language with colon-and-indentation blocks. This page covers the code inside
 <code>spl</code> fences: values, bindings, control flow, functions, built-ins and exact tools.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#block-syntax-and-migration">Block syntax and migration</a></li><li class="toc-level-2"><a href="#values-and-strings">Values and strings</a></li><li class="toc-level-2"><a href="#bindings-and-scopes">Bindings and scopes</a></li><li class="toc-level-2"><a href="#control-flow-and-expressions">Control flow and expressions</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#gradual-typing">Gradual typing</a></li><li class="toc-level-2"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#built-in-functions">Built-in functions</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li></ul></nav></details>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#block-syntax-and-migration">Block syntax and migration</a></li><li class="toc-level-2"><a href="#values-and-strings">Values and strings</a></li><li class="toc-level-2"><a href="#bindings-and-scopes">Bindings and scopes</a></li><li class="toc-level-2"><a href="#control-flow-and-expressions">Control flow and expressions</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#gradual-typing">Gradual typing</a></li><li class="toc-level-3"><a href="#types-at-a-glance">Types at a glance</a></li><li class="toc-level-3"><a href="#transparent-type-aliases">Transparent type aliases</a></li><li class="toc-level-3"><a href="#enums-structs-and-functions">Enums, structs and functions</a></li><li class="toc-level-3"><a href="#validation-narrowing-and-mutation">Validation, narrowing and mutation</a></li><li class="toc-level-3"><a href="#classes-and-structural-projections">Classes and structural projections</a></li><li class="toc-level-2"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#built-in-functions">Built-in functions</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li></ul></nav></details>
     <article class="prose"><h2 id="block-syntax-and-migration">Block syntax and migration<a class="heading-anchor" href="#block-syntax-and-migration" aria-label="Link to Block syntax and migration">#</a></h2>
 <p><strong>Breaking change:</strong> blocks use <code>:</code> followed by a newline and an indented, nonempty body, not
 <code>{ ... }</code>. To migrate, replace each opening block brace with <code>:</code>, move any inline body onto its
@@ -111,17 +111,80 @@ at typed boundaries without coercion, defaults or field removal.</p>
 <p>Built-in types and existing type declarations remain available after <code>if</code>, loops, and
 <code>try</code>/<code>except</code> blocks. An untyped alias used as an annotation must still identify the same
 type on every possible control-flow path.</p>
+<h3 id="types-at-a-glance">Types at a glance<a class="heading-anchor" href="#types-at-a-glance" aria-label="Link to Types at a glance">#</a></h3>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Types at a glance reference table"><table>
+<thead>
+<tr>
+<th scope="col">Type</th>
+<th scope="col">Accepted values</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>int</code></td>
+<td>Signed 64-bit integers; checked arithmetic, no overflow wrapping</td>
+</tr>
+<tr>
+<td><code>float</code></td>
+<td>Finite binary64 numbers, distinct from <code>int</code></td>
+</tr>
+<tr>
+<td><code>str</code></td>
+<td>Strings</td>
+</tr>
+<tr>
+<td><code>char</code></td>
+<td>Strings containing exactly one Unicode scalar value</td>
+</tr>
+<tr>
+<td><code>bool</code></td>
+<td><code>True</code> or <code>False</code>, not integers</td>
+</tr>
+<tr>
+<td><code>None</code></td>
+<td>The null value, not an absent field</td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td>Dynamic string-keyed dictionaries, not nominal class instances</td>
+</tr>
+<tr>
+<td><code>list[T]</code></td>
+<td>Lists whose elements satisfy <code>T</code></td>
+</tr>
+<tr>
+<td><code>A | B</code></td>
+<td>Values satisfying either member; narrow before member-specific operations</td>
+</tr>
+<tr>
+<td><code>fn(T1, T2) -&gt; R</code></td>
+<td>Callables with the declared parameter and return contracts</td>
+</tr>
+</tbody></table>
+</div>
+<p>Typed literals select the representation: <code>let count: int = 2</code>, but
+<code>let ratio: float = 2.0</code>. Neither <code>let count: int = 2.0</code> nor
+<code>let ratio: float = 2</code> is valid. Untyped numbers keep their existing representation;
+use <code>int(value)</code> or <code>float(value)</code> explicitly to enter typed numeric code.
+<code>int(...)</code> rejects fractions, booleans and out-of-range values; conversion to <code>float</code>
+can lose integer precision. Mixed <code>int</code>/<code>float</code> arithmetic requires explicit conversion.
+Integer <code>/</code> produces a float. Counts from <code>len</code> and <code>range</code> remain untyped numbers.</p>
+<h3 id="transparent-type-aliases">Transparent type aliases<a class="heading-anchor" href="#transparent-type-aliases" aria-label="Link to Transparent type aliases">#</a></h3>
 <p>Declare read-only, transparent aliases with optional semantic advice:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">type</span> <span class="hljs-title class_">Money</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">int</span> [minimum<span class="hljs-operator">=</span><span class="hljs-number">0</span>, desc<span class="hljs-operator">=</span><span class="hljs-string">&#x27;Amount in cents&#x27;</span>]
+<span class="hljs-keyword">type</span> <span class="hljs-title class_">Prices</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>[Money]
+<span class="hljs-keyword">type</span> <span class="hljs-title class_">MaybeMoney</span> <span class="hljs-operator">=</span> Money <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
 <span class="hljs-keyword">let</span> subtotal: Money <span class="hljs-operator">=</span> <span class="hljs-number">1250</span>
 <span class="hljs-keyword">let</span> computed: Money <span class="hljs-operator">=</span> <span class="hljs-number">0</span>
 computed <span class="hljs-operator">+=</span> subtotal
+<span class="hljs-keyword">let</span> prices: Prices <span class="hljs-operator">=</span> [subtotal, computed]
+<span class="hljs-keyword">let</span> discount: MaybeMoney <span class="hljs-operator">=</span> <span class="hljs-literal">None</span>
 </code></pre></figure>
 <p>Aliases accept the same values and operations as their underlying types, without implicit
 conversion. Advice is included in generated schemas&#39; descriptions, including when an alias
 is used as a field or list element; it does not enforce extra constraints. Aliasing an alias
 inherits its advice, with newly supplied keys overriding inherited keys. Field advice is
 appended separately. <code>type(value)</code> remains the type-name builtin.</p>
+<h3 id="enums-structs-and-functions">Enums, structs and functions<a class="heading-anchor" href="#enums-structs-and-functions" aria-label="Link to Enums, structs and functions">#</a></h3>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Color</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;red&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;green&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;blue&#x27;</span>
 <span class="hljs-keyword">struct</span> <span class="hljs-title class_">Entry</span>:
     color: Color
@@ -132,19 +195,68 @@ appended separately. <code>type(value)</code> remains the type-name builtin.</p>
 <span class="hljs-keyword">let</span> names: <span class="hljs-built_in">list</span>[<span class="hljs-built_in">str</span>] <span class="hljs-operator">=</span> [<span class="hljs-string">&#x27;Ada&#x27;</span>]
 <span class="hljs-keyword">let</span> count: <span class="hljs-built_in">int</span> <span class="hljs-operator">=</span> <span class="hljs-number">2</span>
 <span class="hljs-keyword">let</span> ratio: <span class="hljs-built_in">float</span> <span class="hljs-operator">=</span> <span class="hljs-number">1.0</span>
+<span class="hljs-keyword">let</span> entry: Entry <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
+    <span class="hljs-string">&#x27;color&#x27;</span>: <span class="hljs-string">&#x27;blue&#x27;</span>
+    <span class="hljs-string">&#x27;note&#x27;</span>: <span class="hljs-literal">None</span>
+    <span class="hljs-string">&#x27;callback&#x27;</span>: repeat
 </code></pre></figure>
-<p>Struct fields are exact and required; nullable does not mean absent. Metadata such as
-<code>str [min=2, desc=&#39;Name&#39;]</code> is model advice, not a validity constraint. <code>int</code> is signed 64-bit,
-<code>float</code> is distinct finite binary64, and untyped numbers require explicit conversion to enter
-either representation. Mutable contracts persist through untyped aliases and bulk mutators.
-<code>validate(value, Type)</code> validates; <code>isinstance(value, Type)</code> tests without converting and supports
-temporary branch narrowing. See <a href="migration.html">Typing migration</a> for numeric rules, callables,
-classes, hydration and deep projections.</p>
+<p>Enums accept matching strings directly and are subtypes of <code>str</code>. Structs are structural:
+equivalent field contracts are interchangeable. Fields are exact and required; nullable does
+not mean absent, so <code>note</code> above must be present even when it is <code>None</code>.
+Metadata such as <code>str [min=2, desc=&#39;Name&#39;]</code> is model advice, not a validity constraint.
+Use <code>assert</code> for business rules, or explicit JSON Schema for strict data constraints.
+Function parameters, results and callable fields are checked at their typed boundaries.</p>
+<h3 id="validation-narrowing-and-mutation">Validation, narrowing and mutation<a class="heading-anchor" href="#validation-narrowing-and-mutation" aria-label="Link to Validation, narrowing and mutation">#</a></h3>
+<p><code>validate(value, Type)</code> checks without converting and returns a typed view, or fails.
+<code>isinstance(value, Type)</code> tests without converting and narrows within a branch:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">def</span> <span class="hljs-title function_">describe</span>(value: <span class="hljs-built_in">int</span> <span class="hljs-operator">|</span> <span class="hljs-built_in">str</span>) <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
+    <span class="hljs-keyword">if</span> <span class="hljs-built_in">isinstance</span>(value, <span class="hljs-built_in">str</span>):
+        <span class="hljs-keyword">return</span> value.upper()
+    <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;Integer: <span class="hljs-subst">{value}</span>&#x27;</span>
+
+<span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-built_in">json_parse</span>(<span class="hljs-string">r&#x27;{&quot;color&quot;:&quot;blue&quot;,&quot;note&quot;:null}&#x27;</span>)
+<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Selection</span>:
+    color: Color
+    note: <span class="hljs-built_in">str</span> <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
+<span class="hljs-keyword">let</span> selection <span class="hljs-operator">=</span> <span class="hljs-built_in">validate</span>(data, Selection)
+</code></pre></figure>
+<p>Neither operation hydrates dictionaries into classes or converts untyped numbers.
+Successful tests and validation install persistent contracts on mutable values.
+These survive untyped aliases, index/member writes and bulk mutators. For example, an
+untyped alias cannot append an integer to a <code>list[str]</code>. Mutable contracts are invariant:
+<code>list[Color]</code> cannot be used as <code>list[str]</code>. Failed bulk mutations leave the whole value
+unchanged. Narrowing expires after relevant assignment or potentially mutating calls.</p>
+<h3 id="classes-and-structural-projections">Classes and structural projections<a class="heading-anchor" href="#classes-and-structural-projections" aria-label="Link to Classes and structural projections">#</a></h3>
+<p>Classes have nominal identity, declared fields, and implicitly bound <code>self</code> in methods.
+Normal construction calls the constructor named after the class and must initialize every field.
+Use <code>hydratable class</code> only when constructor-free JSON hydration is safe:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">hydratable</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Person</span>:
+    name: <span class="hljs-built_in">str</span>
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">Person</span>(name: <span class="hljs-built_in">str</span>):
+        self.name <span class="hljs-operator">=</span> name
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">greeting</span>() <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
+        <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;Hello <span class="hljs-subst">{self.name}</span>&#x27;</span>
+
+<span class="hljs-keyword">let</span> person: Person <span class="hljs-operator">=</span> Person(<span class="hljs-string">&#x27;Ada&#x27;</span>)
+<span class="hljs-keyword">let</span> fields <span class="hljs-operator">=</span> <span class="hljs-built_in">validate</span>(<span class="hljs-built_in">object</span>(person), <span class="hljs-keyword">struct</span>(Person))
+<span class="hljs-keyword">let</span> snapshot <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>(person)
+<span class="hljs-keyword">success</span> snapshot
+</code></pre></figure>
+<p><code>struct(Person)</code> describes structural field data, not a <code>Person</code> instance.
+<code>object(person)</code> makes a deep snapshot and drops named function properties.
+Validate that snapshot against <code>struct(Person)</code> when a checked field view is needed;
+validation rejects missing required fields, including callable fields dropped by projection.
+Use explicit projection before serializing class instances.
+See <a href="llm-commands.html#schemas-and-repairs">Schemas and repairs</a> for typed model output,
+<a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/typed-data.md">typed-data.md</a> for an offline workflow, and
+<a href="migration.html">Typing migration</a> for the full migration rules.</p>
 <h2 id="runtime-inputs-env-and-args">Runtime inputs: $env and $args<a class="heading-anchor" href="#runtime-inputs-env-and-args" aria-label="Link to Runtime inputs: $env and $args">#</a></h2>
 <p><code>$env.NAME</code> or <code>$env[&#39;NAME&#39;]</code> reads a process environment variable as a string.
 <code>$args[0]</code>, <code>$args[1]</code>, … read the CLI&#39;s repeated <code>--arg</code> values. Missing variables and
 out-of-range indexes return <code>None</code>. Both are read-only snapshots and are never persisted by stores.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">let</span> target <span class="hljs-operator">=</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-9"><span class="hljs-keyword">let</span> target <span class="hljs-operator">=</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
 <span class="hljs-keyword">if</span> target <span class="hljs-operator">==</span> <span class="hljs-literal">None</span>:
     target <span class="hljs-operator">=</span> <span class="hljs-variable">$env</span>.USER
 </code></pre></figure>
@@ -266,7 +378,7 @@ call is checked against active <a href="safety.html#restrictions">restrictions</
 </tr>
 </tbody></table>
 </div>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">let</span> diff <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-10"><span class="hljs-keyword">let</span> diff <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
 <span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;git&#x27;</span>:
     diff <span class="hljs-operator">=</span> <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git diff --cached&#x27;</span>)
 </code></pre></figure>
@@ -277,7 +389,7 @@ External state can still change between runs; &quot;exact&quot; means no model i
     <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="getting-started.html"><span>Previous</span><strong>Getting started</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="llm-commands.html"><span>Next</span><strong>Natural language & models</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#block-syntax-and-migration">Block syntax and migration</a></li><li class="toc-level-2"><a href="#values-and-strings">Values and strings</a></li><li class="toc-level-2"><a href="#bindings-and-scopes">Bindings and scopes</a></li><li class="toc-level-2"><a href="#control-flow-and-expressions">Control flow and expressions</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#gradual-typing">Gradual typing</a></li><li class="toc-level-2"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#built-in-functions">Built-in functions</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#block-syntax-and-migration">Block syntax and migration</a></li><li class="toc-level-2"><a href="#values-and-strings">Values and strings</a></li><li class="toc-level-2"><a href="#bindings-and-scopes">Bindings and scopes</a></li><li class="toc-level-2"><a href="#control-flow-and-expressions">Control flow and expressions</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#gradual-typing">Gradual typing</a></li><li class="toc-level-3"><a href="#types-at-a-glance">Types at a glance</a></li><li class="toc-level-3"><a href="#transparent-type-aliases">Transparent type aliases</a></li><li class="toc-level-3"><a href="#enums-structs-and-functions">Enums, structs and functions</a></li><li class="toc-level-3"><a href="#validation-narrowing-and-mutation">Validation, narrowing and mutation</a></li><li class="toc-level-3"><a href="#classes-and-structural-projections">Classes and structural projections</a></li><li class="toc-level-2"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#built-in-functions">Built-in functions</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

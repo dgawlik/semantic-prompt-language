@@ -63,6 +63,33 @@ Field advice such as `str [min=2, desc='Name']` is compile-time JSON-compatible 
 constraint: a one-character string still satisfies that type. Raw JSON Schema constraints remain
 strict. Forward declarations, recursive data schemas and inheritance are not supported.
 
+## Reusable type aliases
+
+Use `type Name = T` for a read-only, transparent alias. Aliases work in annotations,
+fields, unions, lists and `schema=` targets, preserving the underlying representation
+and class identity:
+
+```spl
+type Money = int [minimum=0, desc='Amount in cents']
+type Prices = list[Money]
+type MaybeMoney = Money | None
+let prices: Prices = [1250, 890]
+let total: Money = 0
+for price in prices:
+    total += price
+let discount: MaybeMoney = None
+```
+
+Advice is descriptive, not a constraint: `minimum=0` does not reject negative integers.
+Assert business rules explicitly. Alias chains inherit advice; newly declared keys
+override inherited keys, while field advice is appended separately.
+`type(value)` still returns the runtime type name.
+
+For blockquotes, give composite schemas a binding name, for example
+`type Batch = list[Request]`, then request `@validate[Batch]`.
+The agent passes `schema="Batch"` to `save_variable`; a string such as
+`"list[Request]"` is not a declared binding name.
+
 ## Numeric representations and conversions
 
 Typed `1` is a signed 64-bit `int`; typed `1.0` is a distinct finite binary64 `float`.
@@ -116,9 +143,10 @@ returns validated structural field data, **not** a `Person`. Consequently the ol
 `let result: Person = ask(schema=struct(Person)) 'Random Person'` cannot satisfy the annotation.
 An annotation never secretly selects an ask schema, format or hydration target.
 
-For an existing instance, `struct(Person)(person)` explicitly projects a deep structural field
-snapshot. Unlike dynamic `object(person)` projection, a structural target cannot silently discard
-a required function-valued field to make the data fit its contract.
+For an existing instance, `validate(object(person), struct(Person))` creates a deep field
+snapshot and checks its structural contract. Dynamic `object(person)` projection drops named
+function properties; validation then rejects any missing required callable field rather than
+silently accepting an incomplete record.
 
 Hydration skips the constructor: methods must not assume constructor normalization, side effects
 or semantic invariants occurred. Callable/non-JSON required fields make a schema target unsupported

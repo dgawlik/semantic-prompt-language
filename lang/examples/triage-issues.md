@@ -8,6 +8,8 @@ model: 'gpt-6-luna'
 
 Classifies open issues without labels and applies the labels only after a human approves
 the plan. Needs an authenticated `gh` CLI. Pass `--arg owner/repo` to target another repository.
+Enums constrain labels and priorities; a named list alias lets the agent save the
+whole batch with typed decoding. Field metadata is advice, so code checks nonempty reasons.
 
     spl examples/triage-issues.md --arg owner/repo
 
@@ -31,13 +33,15 @@ hydratable class Plan:
     label: Labels
     priority: Priority
     reason: str [minLength = 1]
+
+type TriagePlan = list[Plan]
 ```
 
 > @FORBID judging an issue by its title alone when the body says otherwise
 >
 > Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.
 > Crashes, data loss and security problems are high priority.
-> @validate[list[Plan]] save to @plan
+> @validate[TriagePlan] save to @plan
 
 ```spl
 let numbers = []
@@ -49,6 +53,7 @@ for p in plan:
 assert len(plan) == len(issues) "expected {len(issues)} decisions, got {len(plan)}"
 let table = []
 for p in plan:
+    assert len(p.reason.strip()) > 0 "issue #{p.number} needs a reason"
     assert p.number in numbers "issue #{p.number} is not part of this batch"
     assert planned.count(p.number) == 1 "issue #{p.number} was classified twice"
     table.append("#{p.number} -> {p.label} ({p.priority}): {p.reason}")

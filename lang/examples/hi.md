@@ -13,7 +13,7 @@ Prose like this is commentary. Only `spl` fences and blockquotes run, top to bot
 let topics = ['recursion', 'closures', 'regular expressions']
 
 hydratable class Card:
-    term: str 
+    term: str
     definition: str
 
 let cards = object()

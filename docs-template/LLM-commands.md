@@ -66,6 +66,10 @@ Plain language works too. Common conventions guide the agent's tool choices:
 | `@HUMAN question` | Call `ask_human`; the shell prompts or consumes the next `--human` answer |
 | `@SUCCESS`, `@fail` | End the document |
 
+For a list or union schema, declare a named alias first, such as
+`type Reviews = list[Review]`, and use `@validate[Reviews]`. The tool resolves binding
+names, not type-expression strings such as `"list[Review]"`.
+
 Each runtime tool call executes immediately in the interpreter and returns its real result to the
 same agent session. Tools run sequentially, not through a deferred action queue. Saving a variable takes effect immediately;
 prose replies do not create bindings. Functions retain their normal lexical scope and runtime guards.
@@ -259,29 +263,46 @@ coerced. A malformed or wrong-typed answer raises `invalid_format`.
 
 ## Schemas and repairs
 
-`schema` validates the parsed answer with Ajv in strict mode: no coercion, no defaults, no removal of
-extra fields. A mismatch raises `validation_failed` with field paths.
+`schema` accepts SPL type descriptors or raw JSON Schema. Both reject invalid output without
+coercion, defaults or removal of extra fields. A mismatch raises `validation_failed` with field paths.
+
+Use enums, structs and aliases to describe typed output directly:
 
 ```spl
-let Triage = object:
-    'type': 'object'
-    'properties': object:
-        'label': object:
-            'type': 'string'
-            'enum': ['bug', 'feature', 'question']
-        'reason': object:
-            'type': 'string'
-    'required': ['label', 'reason']
-    'additionalProperties': False
-let triage = ask(schema=Triage, repairs=2) 'Classify: {issue}'
+enum Label = 'bug' | 'feature' | 'question'
+struct Triage:
+    label: Label
+    reason: str [desc='One-sentence explanation']
+let triage: Triage = ask(schema=Triage, repairs=2) 'Classify: {issue}'
 assert triage.label != 'bug' or len(triage.reason) > 0 'bugs need a reason'
+
+type Batch = list[Triage]
+let batch: Batch = ask(schema=Batch) 'Classify each issue: {issues}'
 ```
+
+Struct fields are exact and required, including nullable fields. Metadata in brackets
+is model advice only, not a data constraint. Raw JSON Schema still uses strict Ajv
+validation when constraints such as `minimum` or `minLength` must be enforced:
+
+```spl
+let Rating = object:
+    'type': 'integer'
+    'minimum': 1
+    'maximum': 5
+let rating = ask(schema=Rating) 'Rate this issue from 1 to 5: {issue}'
+```
+
+Raw schemas validate dynamic JSON values; they do not install SPL type contracts or
+hydrate classes. Descriptor targets decode typed representations, including exact
+signed-64-bit integer tokens and distinct finite floats. Legacy `fmt='integer'` and
+`fmt='float'` alone still return dynamic numbers; use `schema=int` or `schema=float`
+when a typed numeric result is required.
 
 `repairs=n` allows up to `n` more attempts, each with the previous answer and the validation errors.
 Only `invalid_format` and `validation_failed` are repaired; transport and tool errors are not.
 The prompt is not re-evaluated. Put business rules in `assert`, after the call.
 
-`schema=` also accepts declared type descriptors. Struct targets decode validated structural data;
+Struct targets decode validated structural data;
 `schema=Person` hydrates a nominal instance only for a `hydratable class Person`.
 `schema=struct(Person)` instead returns structural field data, never a `Person` instance.
 A binding annotation checks the result and does not secretly configure the ask target.

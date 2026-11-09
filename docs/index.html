@@ -6,11 +6,11 @@
 <meta name="description" content="Turn Markdown into runnable AI workflows—natural-language steps alongside deterministic code, validation, and human approval.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=caa8698a7018">
-<link rel="stylesheet" href="assets/style.css?v=caa8698a7018">
+<link rel="icon" type="image/png" href="assets/icon.png?v=f17e5d22502d">
+<link rel="stylesheet" href="assets/style.css?v=f17e5d22502d">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=caa8698a7018"></script>
-<script defer src="assets/site.js?v=caa8698a7018"></script>
+<script defer src="assets/search-index.js?v=f17e5d22502d"></script>
+<script defer src="assets/site.js?v=f17e5d22502d"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -41,15 +41,11 @@ Prose like this is commentary. Only <span class="hljs-code">`spl`</span> fences 
 
 <span class="hljs-meta">```spl</span><span class="language-spl">
 <span class="hljs-keyword">let</span> topics <span class="hljs-operator">=</span> [<span class="hljs-string">&#x27;recursion&#x27;</span>, <span class="hljs-string">&#x27;closures&#x27;</span>, <span class="hljs-string">&#x27;regular expressions&#x27;</span>]
-<span class="hljs-keyword">let</span> Card <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;object&#x27;</span>
-    <span class="hljs-string">&#x27;properties&#x27;</span>: <span class="hljs-built_in">object</span>:
-        <span class="hljs-string">&#x27;term&#x27;</span>: <span class="hljs-built_in">object</span>:
-            <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>
-        <span class="hljs-string">&#x27;definition&#x27;</span>: <span class="hljs-built_in">object</span>:
-            <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;string&#x27;</span>
-    <span class="hljs-string">&#x27;required&#x27;</span>: [<span class="hljs-string">&#x27;term&#x27;</span>, <span class="hljs-string">&#x27;definition&#x27;</span>]
-    <span class="hljs-string">&#x27;additionalProperties&#x27;</span>: <span class="hljs-literal">False</span>
+
+<span class="hljs-keyword">hydratable</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Card</span>:
+    term: <span class="hljs-built_in">str</span>
+    definition: <span class="hljs-built_in">str</span>
+
 <span class="hljs-keyword">let</span> cards <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>()
 <span class="hljs-keyword">for</span> topic <span class="hljs-keyword">in</span> topics:
     cards[topic] <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Card, <span class="hljs-attr">repairs</span><span class="hljs-operator">=</span><span class="hljs-number">1</span>) <span class="hljs-string">&#x27;A one-sentence flashcard about <span class="hljs-subst">{topic}</span>&#x27;</span>
@@ -60,12 +56,18 @@ Prose like this is commentary. Only <span class="hljs-code">`spl`</span> fences 
 <span class="hljs-meta">```spl</span><span class="language-spl">
 <span class="hljs-keyword">assert</span> hardest <span class="hljs-keyword">in</span> topics <span class="hljs-string">&quot;unexpected topic &#x27;<span class="hljs-subst">{hardest}</span>&#x27;&quot;</span>
 <span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./out&#x27;</span>:
-    <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./out/cards.json&#x27;</span>, <span class="hljs-built_in">json_stringify</span>(cards, <span class="hljs-number">2</span>))
+    <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./out/cards.json&#x27;</span>, <span class="hljs-built_in">json_stringify</span>(<span class="hljs-built_in">object</span>(cards), <span class="hljs-number">2</span>))
 <span class="hljs-keyword">success</span> <span class="hljs-built_in">object</span>:
     <span class="hljs-string">&#x27;cards&#x27;</span>: <span class="hljs-built_in">len</span>(cards)
     <span class="hljs-string">&#x27;hardest&#x27;</span>: hardest
 </span><span class="hljs-meta">```</span>
 </code></pre></figure>
+<p><code>schema=Card</code> decodes each answer into a nominal instance because <code>Card</code> explicitly
+opts into constructor-free hydration. Use a <code>struct</code> for plain structural data, or
+<code>schema=struct(Card)</code> for the class&#39;s field shape without instance identity.
+<code>object(cards)</code> makes a deep JSON-ready snapshot before writing.
+See <a href="language.html#gradual-typing">Gradual typing</a> and the offline
+<a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/typed-data.md">typed-data example</a>.</p>
 <h2 id="control-randomness">Control Randomness<a class="heading-anchor" href="#control-randomness" aria-label="Link to Control Randomness">#</a></h2>
 <p>The language has built in constructs that limit LLM drift and let you concisely
 define what you are expecting.
@@ -102,6 +104,9 @@ trace/replay reruns your code and guards against recorded model answers.</li>
 <li><strong>Guards you can see.</strong> <code>fmt</code>, <code>schema</code> and <code>assert</code> check data; <code>restrict</code> checks actions.
 Prompt guidance (<code>enforce</code>, <code>forbid</code>, <code>len</code>) is kept separate from validation.</li>
 <li><strong>Readable.</strong> Inputs, prompts, checks and outputs sit in one document, top to bottom.</li>
+<li><strong>Optional typed contracts.</strong> Enums, structs, classes and reusable aliases describe model
+output. Annotations, typed functions and persistent mutable contracts enforce consistency;
+assertions still check whether the content makes sense.</li>
 </ol>
 <h2 id="how-a-run-works">How a run works<a class="heading-anchor" href="#how-a-run-works" aria-label="Link to How a run works">#</a></h2>
 <ol>

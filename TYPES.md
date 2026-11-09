@@ -1,9 +1,10 @@
 # Types in SPL
 
-This document records the agreed design for a breaking language revision with
-opt-in gradual typing and schema-directed decoding. It is a specification, not a
-claim that these features are already implemented. Examples use the proposed
-syntax.
+This document records the contract for SPL's breaking language
+revision with opt-in gradual typing and schema-directed decoding. For a practical
+introduction, see [Language](docs-template/Language.md#gradual-typing), the
+[migration guide](docs-template/Migration.md), and the runnable
+[typed-data example](lang/examples/typed-data.md).
 
 ## Scope and guarantees
 

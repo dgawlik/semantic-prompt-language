@@ -18,15 +18,11 @@ Prose like this is commentary. Only `spl` fences and blockquotes run, top to bot
 
 ```spl
 let topics = ['recursion', 'closures', 'regular expressions']
-let Card = object:
-    'type': 'object'
-    'properties': object:
-        'term': object:
-            'type': 'string'
-        'definition': object:
-            'type': 'string'
-    'required': ['term', 'definition']
-    'additionalProperties': False
+
+hydratable class Card:
+    term: str
+    definition: str
+
 let cards = object()
 for topic in topics:
     cards[topic] = ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}'
@@ -37,12 +33,19 @@ for topic in topics:
 ```spl
 assert hardest in topics "unexpected topic '{hardest}'"
 restrict './out':
-    write_file('./out/cards.json', json_stringify(cards, 2))
+    write_file('./out/cards.json', json_stringify(object(cards), 2))
 success object:
     'cards': len(cards)
     'hardest': hardest
 ```
 ````
+
+`schema=Card` decodes each answer into a nominal instance because `Card` explicitly
+opts into constructor-free hydration. Use a `struct` for plain structural data, or
+`schema=struct(Card)` for the class's field shape without instance identity.
+`object(cards)` makes a deep JSON-ready snapshot before writing.
+See [Gradual typing](Language.md#gradual-typing) and the offline
+[typed-data example](../lang/examples/typed-data.md).
 
 ## Control Randomness
 
@@ -84,6 +87,9 @@ success [recipe1, recipe2]
 3. **Guards you can see.** `fmt`, `schema` and `assert` check data; `restrict` checks actions.
    Prompt guidance (`enforce`, `forbid`, `len`) is kept separate from validation.
 4. **Readable.** Inputs, prompts, checks and outputs sit in one document, top to bottom.
+5. **Optional typed contracts.** Enums, structs, classes and reusable aliases describe model
+   output. Annotations, typed functions and persistent mutable contracts enforce consistency;
+   assertions still check whether the content makes sense.
 
 ## How a run works
 

@@ -95,6 +95,20 @@ spl flow.md --replay run.jsonl    # rerun code and guards with the recorded answ
 Replay needs the same model requests in the same order. After changing a prompt, record a new
 trace. Explicit tool calls still run during replay; see [traces and replay](CLI.md#traces-and-replay).
 
+## Try types without a model
+
+From a repository checkout's `lang` folder:
+
+```bash
+spl examples/typed-data.md
+```
+
+No login is required. The example uses primitive annotations, enums, reusable `type` aliases,
+exact structs, typed functions, unions, guarded lists and nominal classes.
+For generated data, select a descriptor explicitly with `ask(schema=YourType)`;
+an annotation alone does not configure model output. See
+[Gradual typing](Language.md#gradual-typing) and [Schemas and repairs](LLM-commands.md#schemas-and-repairs).
+
 ## VS Code extension
 
 Install from Marketplace: [spl](https://marketplace.visualstudio.com/items?itemName=spl-lang.spl-lang-vscode)

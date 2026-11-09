@@ -80,19 +80,18 @@ help/version and `--check` do not start a renderer.
 ## Language in brief
 
 ```spl
-let Rating = object:
-    'type': 'object'
-    'properties': object:
-        'score': object:
-            'type': 'integer'
-    'required': ['score']
+struct Rating:
+    score: int [minimum=1, maximum=5, desc='Review score']
 let review = read_file('review.txt')
-let rating = ask(schema=Rating, repairs=2) 'Rate this review from 1 to 5: {review}'
+let rating: Rating = ask(schema=Rating, repairs=2) 'Rate this review from 1 to 5: {review}'
 assert 1 <= rating.score and rating.score <= 5 'score out of range'
 restrict './out':
     write_file('./out/rating.json', json_stringify(rating))
 success rating
 ```
+
+Field metadata is model advice, not a range constraint: the assertion enforces the score.
+`schema=Rating` explicitly selects typed decoding; an annotation alone does not.
 
 * Exact tools `read_file`, `write_file`, `web_fetch`, `web_search` and `shell` never call a model.
 * `ask` and `think` generate values without tools; `agent` can act, within `restrict` scopes.
@@ -104,6 +103,10 @@ success rating
   load/save shared variables, read environment values, request human input, and use
   runtime tools and configured MCP servers. Explicit `agent` expressions keep their existing tool set.
 * `fmt`, `schema`, `repairs` and `assert` check output; `enforce`/`forbid` only guide prompts.
+* Optional types include `int`, `float`, `char`, enums, exact structs, `list[T]`, unions,
+  callable signatures and nominal classes. Reuse contracts with `type Money = int`.
+  Mutable contracts persist through untyped aliases. Try
+  [typed-data.md](examples/typed-data.md) without a model or login.
 * `randomness(...)` prefixes and the `eval(...)` statement have been removed. Move sampling
   controls into `ask(...)`; use `assert` and schemas for explicit output checks. Recreate pins
   and checkpoints after changing their source documents.
