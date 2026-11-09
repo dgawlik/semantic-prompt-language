@@ -48,9 +48,9 @@ let slide4: str = '''
 '''
 
 let slide5: str = '''
-    Checkpoints, replay and human input -> record responses with --trace, replay them with --replay;
+    Append-only traces and human input -> record a run with --trace run.jsonl;
     human input in the terminal or via repeated --human flags;
-    explicit --checkpoint/--resume for automation, not an automatic snapshot of external files
+    reuse the same --trace path to resume or replay deterministically, choose another file to restart
 '''
 
 let slide6: str = '''
@@ -80,8 +80,8 @@ enforce 'Use modern-web-standards skill':
 
 ## Why SPL?
 
-* **Short loops.** One file, run directly. `--check` needs no model; `--trace`/`--replay` rerun
-  code and guards against recorded answers.
+* **Short loops.** One file, run directly. `--check` needs no model; `--trace run.jsonl` resumes
+  recorded work and replays completed runs deterministically without repeating side effects.
 * **Exact code where it matters.** Control flow and I/O never call a model. `ask`/`think` generate
   values without tools; `agent` expressions and blockquotes can act.
 * **Guards you can see.** `fmt`, `schema` and `assert` check data; `restrict` limits files, network,

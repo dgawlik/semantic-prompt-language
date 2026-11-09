@@ -2,7 +2,7 @@
 
 This is a breaking source revision, including for unannotated programs. Migrate source manually;
 there is no legacy grammar mode or general-purpose automatic converter. Recreate pins and
-checkpoints after editing their source. The full contract is recorded in [TYPES.md](../TYPES.md).
+traces after editing their source. The full contract is recorded in [TYPES.md](../TYPES.md).
 
 ## Blocks and dictionaries
 
@@ -112,8 +112,8 @@ JavaScript number. For `int | float`, integer tokens select `int`, decimal/expon
 External JSON normalization may erase that distinction; only SPL's typed encoder/decoder
 provides this round-trip guarantee.
 
-`JsonFileStore` writes typed numeric tokens losslessly, but loading a store remains dynamic:
-files do not carry type descriptors or automatically restore typed contracts. Use an explicitly
+Explicit JSON file loading remains dynamic: files do not carry type descriptors or
+automatically restore typed contracts. Use an explicitly
 requested descriptor for typed numeric decoding; do not assume a generic JSON loader preserves
 signed-64-bit values or the `int`/`float` distinction.
 

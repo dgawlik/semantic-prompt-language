@@ -6,24 +6,17 @@ model: 'gpt-6-luna'
 
 # Rolling journal
 
-Remembers earlier runs through the variable store: top-level variables are saved on exit
-and loaded again on the next run.
+Reads and writes its state explicitly in `journal.json`. Initialize the file once:
 
-    spl examples/journal.md --store journal.json
+    echo '{"runs":0,"history":[]}' > journal.json
+    spl examples/journal.md --trace journal-run-1.jsonl
+
+Reuse that trace to resume or replay the same run; use a different trace for the next journal entry.
 
 ```spl
-def stored_runs():
-    try:
-        return runs
-    except first_run:
-        return 0
-def stored_history():
-    try:
-        return history
-    except first_run:
-        return []
-let runs = stored_runs() + 1
-let history = stored_history()
+let previous = json_parse(read_file('./journal.json'))
+let runs = previous.runs + 1
+let history = previous.history
 let notes = read_file('./examples/data/notes.txt')
 ```
 
@@ -43,6 +36,10 @@ let trend = ''
 > and save it to @trend. Otherwise leave @trend unchanged.
 
 ```spl
+write_file('./journal.json', json_stringify(object:
+    'runs': runs
+    'history': history
+))
 success object:
     'run': runs
     'today': today

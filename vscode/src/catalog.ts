@@ -74,7 +74,7 @@ export const keywords: Record<string, string> = {
     ask: "Generation-only call: ask(seed=42, temperature=0, top_p=0.01, fmt='integer', repairs=1) 'prompt'. Modifiers are optional; the prompt stays outside parentheses. Optional sampling controls apply only to ask; omitted values use provider defaults. Sampling is best-effort, not guaranteed deterministic replay. No tools or MCP access.",
     think: 'Generation-only model call with default medium reasoning. No tools or MCP access.',
     agent: 'Explicit model-directed actions using runtime/MCP tools subject to active restrictions.',
-    human: "Noninteractive human input: human 'question'. Suspend a checkpoint run, then resume with --answer-for and --answer or --answer-file. Returns exact text; no LLM modifiers.",
+    human: "Human input: human 'question'. Reads stdin or repeatable --human answers. With --trace, recorded answers replay and new answers are appended; reuse the trace path to resume. Returns exact text; no LLM modifiers.",
     break: 'Exit the innermost loop.',
     continue: 'Continue the innermost loop.',
     pass: 'No operation.',

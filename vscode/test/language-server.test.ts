@@ -531,7 +531,7 @@ test('all shipped examples parse without diagnostics', () => {
 test('human input has keyword help and no model modifier completion', () => {
     const source = "let answer = human 'Review this draft'";
     assert.deepEqual(analysis(source).diagnostics, []);
-    assert.match(JSON.stringify(hover(analysis(source), at(source, 'human'))?.contents), /Noninteractive human input/);
+    assert.match(JSON.stringify(hover(analysis(source), at(source, 'human'))?.contents), /Human input/);
     assert.ok(completions(analysis(''), { line: 0, character: 0 }).some((item) => item.label === 'human'));
     const incomplete = 'human (';
     const items = completions(analysis(incomplete), document(incomplete).positionAt(incomplete.length));

@@ -72,8 +72,9 @@ end the whole document.
 
 ```bash
 spl flow.md --check               # frontmatter and syntax, no model
-spl flow.md --trace run.jsonl     # live run that records every model call
-spl flow.md --replay run.jsonl    # rerun code and guards with the recorded answers
+spl flow.md --trace run.jsonl     # record an append-only execution history
+spl flow.md --trace run.jsonl     # resume automatically, or replay the completed run
+spl flow.md --trace next.jsonl    # start a fresh run
 ```
 
 Replay needs the same model requests in the same order. After changing a prompt, record a new

@@ -6,7 +6,6 @@ import { run } from '../src/interpreter.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
 import { extractMarkdown, parseMarkdown } from '../src/markdown.js';
-import { JsonFileStore } from '../src/store.js';
 import type { LlmRequest, RuntimeAction } from '../src/llm.js';
 import { LIVE_TIMEOUT, RecordingCopilot, live } from './live.js';
 
@@ -228,13 +227,14 @@ describe('examples with offline backends', () => {
             fs.mkdirSync(path.join(cwd, 'examples', 'data'), { recursive: true });
             fs.writeFileSync(path.join(cwd, 'examples', 'data', 'notes.txt'), 'Today we shipped.');
             const file = path.join(cwd, 'journal.json');
+            fs.writeFileSync(file, '{"runs":0,"history":[]}');
             for (let i = 1; i <= 6; i++) {
                 const { backend, counts } = scriptedBackend([
                     [save('today', `Summary ${i}`)],
                     i > 1 ? [save('trend', 'Steady progress.')] : [],
                 ]);
                 const result = await run(parseMarkdown(load('journal.md')), {
-                    cwd, logger: new Logger('silent'), store: new JsonFileStore(file), backend,
+                    cwd, logger: new Logger('silent'), backend,
                 });
                 expect(result, result.status === 'failure' ? JSON.stringify(result.failure) : undefined).toMatchObject({
                     status: 'success', value: { run: i, today: `Summary ${i}`, trend: i === 1 ? '' : 'Steady progress.' },

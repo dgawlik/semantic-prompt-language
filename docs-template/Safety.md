@@ -117,40 +117,20 @@ spl review.md                                      # asks directly and continues
 spl review.md --human "Make the wording clearer"    # supplies the answer without prompting
 ```
 
-### Explicit checkpoint mode
-
-For noninteractive automation, `--checkpoint` still saves progress to a journal, prints the question
-as JSON and exits with code 3. A later `--resume` invocation supplies the answer and continues without
-repeating completed tool or model calls. These modes never read stdin and cannot use `--human`.
+### Resuming with a trace
 
 ```bash
-spl review.md --checkpoint run.jsonl --silent        # exits 3 and prints the question
-spl review.md --resume run.jsonl                      # shows the pending question again
-spl review.md --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+spl review.md --trace run.jsonl
+spl review.md --trace run.jsonl --human "Make the wording clearer"
 ```
 
-The pending question looks like this:
+The same `--trace` path automatically replays recorded decisions, external effects and answers,
+then continues interrupted work. `--human` answers only questions not yet recorded; other new
+questions read stdin. Completed runs replay the same result without prompts or side effects.
+Choose another JSONL file to restart. There are no separate checkpoint, resume or answer-ID flags,
+JSON suspension envelopes, or waiting exit codes.
 
-```json
-{
-  "status": "waiting_for_input",
-  "run_id": "run-identifier",
-  "request_id": "request-identifier",
-  "question": "What should change in the release notes?",
-  "checkpoint": "/abs/path/run.jsonl",
-  "line": 9
-}
-```
-
-* Answer with the latest **`request_id`**, not the `run_id`. Each new question gets a new request ID.
-* `--answer text` and `--answer-file file` are alternatives; files keep all whitespace.
-* Finished runs print `{"status": "success", "run_id": ..., "value": ...}` or a failure envelope.
-* Exit codes: `0` success, `1` failure, `2` usage or invalid answer, `3` waiting, `70` journal error.
-
-Resume needs the same workspace, script, runtime, `--model`/`--provider`/`--mcp` options and environment. The
-journal is not a snapshot: files changed in between stay changed. If a run was interrupted mid-action,
-SPL refuses to guess and asks for manual recovery. Checkpoints cannot be combined with stores or
-trace/replay. Journals contain prompts and answers, so keep them private.
-
-In CI, treat exit code 3 as "waiting", publish the question to an authorized channel, and resume in
-the same persistent workspace once an answer arrives.
+The workspace, source, runtime and model/provider/MCP configuration must match. Arguments and accessed
+environment values are retained. External files are not restored: changes made between runs stay changed.
+An interrupted side effect with no recorded outcome requires manual recovery rather than an unsafe retry.
+See [Traces and replay](CLI.md#traces-and-replay) for corruption handling and privacy considerations.

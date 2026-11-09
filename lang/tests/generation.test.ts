@@ -6,7 +6,6 @@ import { run } from '../src/interpreter.js';
 import { LlmError, type LlmBackend, type LlmRequest } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
-import { RecordingBackend, ReplayBackend } from '../src/recording.js';
 
 let dir: string;
 beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-generation-')); });
@@ -450,99 +449,5 @@ def f():
 f()
 success x`, backend)).toMatchObject({ status: 'success', value: 2 });
         expect(await exec(`x = 1`, backend)).toMatchObject({ status: 'failure', failure: { status_code: 'runtime_error' } });
-    });
-});
-
-describe('offline generation record/replay', () => {
-    it('matches token budgets and preserves them through recorded repairs', async () => {
-        const file = path.join(dir, 'tokens.jsonl');
-        const source = `success ask(tokens=2048, fmt='integer', repairs=1) 'Prompt'`;
-        const recording = new RecordingBackend(scripted('invalid', '42').backend, file);
-        const expected = await exec(source, recording);
-        await recording.close();
-        const replay = new ReplayBackend(file);
-        expect(await exec(source.replace('2048', '4096'), replay)).toMatchObject({
-            status: 'failure', failure: { reason: expect.stringContaining('mismatch') },
-        });
-        expect(await exec(source, replay)).toEqual(expected);
-        await replay.close();
-    });
-
-    it('matches ordered requests and replays repairs without a live backend', async () => {
-        const file = path.join(dir, 'run.jsonl');
-        const source = `success ask(schema=${schema}, repairs=1) 'Extract'`;
-        const { backend, calls } = scripted('{}', '{"total":42}');
-        const recording = new RecordingBackend(backend, file);
-        const expected = await exec(source, recording);
-        await recording.close();
-        expect(calls).toHaveLength(2);
-        const replay = new ReplayBackend(file);
-        expect(await exec(source, replay)).toEqual(expected);
-        await replay.close();
-        expect(() => new RecordingBackend(backend, file)).toThrow();
-    });
-
-    it('rejects mismatches, exhausted recordings, and unused entries', async () => {
-        const file = path.join(dir, 'run.jsonl');
-        const recording = new RecordingBackend(scripted('answer').backend, file);
-        await exec(`success ask 'question'`, recording);
-        await recording.close();
-        const mismatch = new ReplayBackend(file);
-        expect(await exec(`success ask 'different'`, mismatch)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('mismatch') } });
-        await expect(mismatch.close()).rejects.toThrow(/unused/);
-        const replay = new ReplayBackend(file);
-        await exec(`success ask 'question'`, replay);
-        expect(await exec(`success ask 'question'`, replay)).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('exhausted') } });
-        await replay.close();
-    });
-
-    it.each([`write_file('blocked.txt', 'x')`, `shell('echo x')`, `web_fetch('https://example.com')`, `web_search('query')`, `agent 'Do work'`])('blocks replay side effects: %s', async (expression) => {
-        const file = path.join(dir, 'empty.jsonl');
-        fs.writeFileSync(file, '{"format":"spl-generation","version":1}\n');
-        const replay = new ReplayBackend(file);
-        expect(await exec(expression, replay)).toMatchObject({ status: 'failure', failure: { status_code: 'restriction_violation' } });
-        expect(fs.existsSync(path.join(dir, 'blocked.txt'))).toBe(false);
-        await replay.close();
-    });
-
-    it('allows local reads but refuses agents during recording', async () => {
-        const file = path.join(dir, 'run.jsonl');
-        const recording = new RecordingBackend(scripted().backend, file);
-        expect(await exec(`agent 'Do work'`, recording)).toMatchObject({ status: 'failure', failure: { status_code: 'restriction_violation' } });
-        await recording.close();
-        fs.writeFileSync(path.join(dir, 'input.txt'), 'local');
-        const replay = new ReplayBackend(file);
-        expect(await exec(`success read_file('input.txt')`, replay)).toMatchObject({ status: 'success', value: 'local' });
-        await replay.close();
-    });
-
-    it('matches model, reasoning, display options, and call kind without advancing on mismatch', async () => {
-        const file = path.join(dir, 'run.jsonl');
-        const { backend, calls } = scripted('answer');
-        const recording = new RecordingBackend(backend, file);
-        await exec(`success ask 'question'`, recording);
-        await recording.close();
-        const replay = new ReplayBackend(file);
-        const original = calls[0];
-        for (const request of [
-            { ...original, model: 'other-model' },
-            { ...original, reasoningEffort: 'high' as const },
-            { ...original, showReasoning: false },
-            { ...original, kind: 'think' as const },
-        ]) {
-            await expect(replay.call(request)).rejects.toThrow(/mismatch at call 1/);
-        }
-        expect(await replay.call(original)).toMatchObject({ text: 'answer' });
-        await replay.close();
-    });
-
-    it('rejects malformed or unsupported recordings explicitly', () => {
-        const file = path.join(dir, 'bad.jsonl');
-        fs.writeFileSync(file, '{"format":"spl-generation","version":2}\n');
-        expect(() => new ReplayBackend(file)).toThrow(/format\/version/);
-        fs.writeFileSync(file, '{"format":"spl-generation","version":1}\n{broken');
-        expect(() => new ReplayBackend(file)).toThrow(/JSON at line 2/);
-        fs.writeFileSync(file, '{"format":"spl-generation","version":1}\n{}\n');
-        expect(() => new ReplayBackend(file)).toThrow(/entry at line 2/);
     });
 });

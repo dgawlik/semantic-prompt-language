@@ -5,7 +5,6 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { createInterface, type Interface } from 'node:readline';
 import { Writable } from 'node:stream';
-import type { Program } from './ast.js';
 import { AiBackend } from './ai.js';
 import { AuthError, login, logout, parseProvider, type Provider } from './auth.js';
 import { Failure, SplSyntaxError } from './errors.js';
@@ -13,11 +12,9 @@ import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
 import { parseMarkdown } from './markdown.js';
 import { run, type RunResult } from './interpreter.js';
-import { JsonFileStore, MemoryStore, loadStoreModule, type VariableStore } from './store.js';
-import { encodeJson, fromJson, newDict, runtimeError, toJson } from './values.js';
+import { encodeJson, runtimeError } from './values.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
-import { RecordingBackend, ReplayBackend, TraceBackend } from './recording.js';
-import { Checkpoint, CheckpointError, checkpointFingerprint } from './checkpoint.js';
+import { Trace, TraceError, fingerprint } from './trace.js';
 import { CliLogging, canInteract } from './cli-logging.js';
 import { formatEvent, sanitize, terminalColor } from './log-format.js';
 import { Pin } from './pin.js';
@@ -47,22 +44,12 @@ Options:
   --human <answer>        answer a human question without prompting (repeatable, in question order)
                           Remaining questions read one line from stdin; prompts go to stderr.
   --mcp <file.json>       MCP servers in VS Code mcp.json format
-  --store <file.json>     persist top-level variables in a JSON file
-  --store-module <path>   custom variable store: module exporting createStore() -> { load(), save(vars) }
   --timeout <seconds>     per LLM call timeout (default: 300)
-  --trace <file.jsonl>    trace all LLM requests, responses, and failures (new file)
-  --record <file.jsonl>   record generation responses (new file; no agents)
-  --replay <file.jsonl>   replay LLM results without model providers/MCP; explicit script tools still run
-                          Legacy --record files allow only local reads and no stores.
+  --trace <file.jsonl>    append external inputs, model decisions, effects and results to a JSONL log
+                          Reuse the same path to resume; completed runs replay without external work.
+                          Choose another JSONL file to restart.
   --pin                   on success, save <workflow>.locked.md with responses in double blockquotes
                           Locked workflows replay without models, tools, stores or human prompts.
-  --checkpoint <file>    start a new resumable run; with --resume, continue that journal
-                          New runs never overwrite an existing file.
-  --resume [file]        inspect pending input, or resume with an answer
-                          Omit file when using --checkpoint <file>.
-  --answer-for <id>      ID of the pending human request being answered
-  --answer <text>        exact free-text answer (requires --resume and --answer-for)
-  --answer-file <file>   read the answer from a UTF-8 file instead of --answer
   --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
   --check                 validate script syntax and any --mcp config without executing
   -v, --version           print version
@@ -76,9 +63,8 @@ Provider environment:
 
 The script result (the value of 'success' or 'return', or the failure payload) is written to stdout.
 Normal runs ask for human input directly, even with --silent.
-Resumable runs print JSON envelopes and never read stdin.
 Exit codes: 0 success, 1 uncaught script failure, 2 syntax or usage error,
-3 waiting for human input, 70 internal/infrastructure error.`;
+70 internal/infrastructure error.`;
 
 function version(): string {
     const pkg = new URL('../package.json', import.meta.url);
@@ -88,83 +74,6 @@ function version(): string {
 function usageError(msg: string): never {
     new Logger('error').error(`spl: ${msg}\nTry 'spl --help'.`);
     process.exit(2);
-}
-
-interface CheckpointCliOptions {
-    provider?: string;
-    checkpoint?: string;
-    resume?: string;
-    'answer-for'?: string;
-    answer?: string;
-    'answer-file'?: string;
-    model?: string;
-    arg?: string[];
-    timeout?: string;
-}
-
-async function checkpointCommand(
-    source: string, program: Program, values: CheckpointCliOptions,
-    cwd: string, logger: Logger, mcpServers: McpServers | undefined,
-): Promise<number> {
-    let checkpoint: Checkpoint | undefined;
-    try {
-        const directory = fileURLToPath(new URL('.', import.meta.url));
-        const runtime = checkpointFingerprint([
-            version(), process.version,
-            ...fs.readdirSync(directory).filter((name) => name.endsWith('.js')).sort()
-                .map((name) => [name, fs.readFileSync(path.join(directory, name), 'utf8')]),
-        ]);
-        const context = {
-            source, runtime, cwd, args: values.arg,
-            configuration: { model: values.model ?? null, provider: values.provider ?? null, mcp: mcpServers ?? null },
-        };
-        checkpoint = values.resume !== undefined
-            ? Checkpoint.resume(values.resume, context)
-            : Checkpoint.create(values.checkpoint!, context);
-        if (values.resume !== undefined) {
-            if (values.answer === undefined && values['answer-file'] === undefined) {
-                const envelope = { status: 'waiting_for_input', ...checkpoint.request };
-                checkpoint.close();
-                process.stdout.write(JSON.stringify(envelope) + '\n');
-                return 3;
-            }
-            let answer = values.answer;
-            if (values['answer-file'] !== undefined) {
-                try {
-                    answer = fs.readFileSync(values['answer-file'], 'utf8');
-                } catch (error) {
-                    throw new CheckpointError(`cannot read answer file: ${(error as Error).message}`);
-                }
-            }
-            checkpoint.answer(values['answer-for']!, answer!);
-        }
-        const backend = new AiBackend({ logger, cwd, timeoutMs: Number(values.timeout ?? 300) * 1000, mcpServers,
-            provider: values.provider ? parseProvider(values.provider) : undefined });
-        let result: RunResult;
-        try {
-            result = await run(program, { backend, logger, cwd, model: values.model, checkpoint });
-        } finally {
-            await backend.close();
-        }
-        if (result.status === 'waiting_for_input') {
-            checkpoint.close();
-            process.stdout.write(JSON.stringify({ status: result.status, ...result.request }) + '\n');
-            return 3;
-        }
-        checkpoint.finish(result.status);
-        const envelope = result.status === 'success'
-            ? newDict([['status', result.status], ['run_id', checkpoint.runId], ['has_value', result.hasValue], ['value', result.value]])
-            : newDict([['status', result.status], ['run_id', checkpoint.runId], ['failure', fromJson(result.failure)]]);
-        checkpoint.close();
-        process.stdout.write(encodeJson(envelope) + '\n');
-        return result.status === 'success' ? 0 : 1;
-    } catch (error) {
-        if (!(error instanceof CheckpointError) || error.kind !== 'usage') throw error;
-        new Logger('error').error(`spl: ${error.message}`);
-        return 2;
-    } finally {
-        checkpoint?.close();
-    }
 }
 
 async function readApiKey(provider: Provider): Promise<string> {
@@ -210,7 +119,6 @@ function logoutCommand(provider?: Provider): number {
 
 async function main(): Promise<number> {
     let parsed;
-    let resumeWithCheckpoint = false;
     try {
         const options = {
             'log-level': { type: 'string' },
@@ -220,39 +128,16 @@ async function main(): Promise<number> {
             arg: { type: 'string', multiple: true },
             human: { type: 'string', multiple: true },
             mcp: { type: 'string' },
-            store: { type: 'string' },
-            'store-module': { type: 'string' },
             timeout: { type: 'string' },
             trace: { type: 'string' },
-            record: { type: 'string' },
-            replay: { type: 'string' },
             pin: { type: 'boolean' },
-            checkpoint: { type: 'string' },
-            resume: { type: 'string' },
-            'answer-for': { type: 'string' },
-            answer: { type: 'string' },
-            'answer-file': { type: 'string' },
             cwd: { type: 'string' },
             check: { type: 'boolean' },
             version: { type: 'boolean', short: 'v' },
             help: { type: 'boolean', short: 'h' },
         } as const;
-        const args = process.argv.slice(2);
-        // parseArgs has no optional string options; locate bare --resume using tokens.
-        const { tokens } = parseArgs({
-            args, options: { ...options, resume: { type: 'boolean' } },
-            allowPositionals: true, strict: false, tokens: true,
-        });
-        const checkpointHasScript = tokens.some((token) => token.kind === 'option' && token.name === 'checkpoint')
-            && tokens.filter((token) => token.kind === 'positional').length === 1;
-        const bareResume = new Set(tokens
-            .filter((token) => token.kind === 'option' && token.name === 'resume'
-                && token.value === undefined
-                && (checkpointHasScript || args[token.index + 1] === undefined || args[token.index + 1].startsWith('-')))
-            .map((token) => token.index));
-        resumeWithCheckpoint = bareResume.size > 0;
         parsed = parseArgs({
-            args: args.filter((_, index) => !bareResume.has(index)),
+            args: process.argv.slice(2),
             allowPositionals: true,
             options,
         });
@@ -295,35 +180,10 @@ async function main(): Promise<number> {
 
     const timeoutSec = Number(values.timeout ?? 300);
     if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) usageError('--timeout must be a positive number');
-    if (values.store && values['store-module']) usageError('--store and --store-module are mutually exclusive');
-    if ([values.trace, values.record, values.replay].filter((value) => value !== undefined).length > 1) {
-        usageError('--trace, --record, and --replay are mutually exclusive');
+    if (values.trace !== undefined && !values.trace.trim()) usageError('--trace requires a non-empty file path');
+    if (values.pin && values.trace !== undefined) {
+        usageError('--pin cannot be combined with --trace');
     }
-    if ([values.trace, values.record, values.replay].some((value) => value !== undefined && value.trim() === '')) {
-        usageError('--trace, --record, and --replay require a non-empty file path');
-    }
-    if (resumeWithCheckpoint) {
-        if (values.resume !== undefined) usageError('use either --resume <file> or --resume --checkpoint <file>');
-        if (values.checkpoint === undefined) usageError('--resume requires a file: use --resume <file> or --resume --checkpoint <file>');
-        values.resume = values.checkpoint;
-        delete values.checkpoint;
-    }
-    const resumable = values.checkpoint !== undefined || values.resume !== undefined;
-    if (values.pin && (resumable || values.trace !== undefined || values.record !== undefined || values.replay !== undefined)) {
-        usageError('--pin cannot be combined with --checkpoint, --resume, --trace, --record, or --replay');
-    }
-    if (resumable && values.human !== undefined) usageError('--human cannot be combined with --checkpoint or --resume; use --answer when resuming');
-    if (values.checkpoint !== undefined && values.resume !== undefined) usageError('--checkpoint and --resume are mutually exclusive');
-    if ([values.checkpoint, values.resume, values['answer-for'], values['answer-file']].some((value) => value !== undefined && !value.trim())) {
-        usageError('checkpoint, resume, answer-for, and answer-file require non-empty values');
-    }
-    if (resumable && [values.store, values['store-module'], values.trace, values.record, values.replay].some((value) => value !== undefined)) {
-        usageError('resumable runs cannot use --store, --store-module, --trace, --record, or --replay');
-    }
-    const answering = values.answer !== undefined || values['answer-file'] !== undefined;
-    if (values.answer !== undefined && values['answer-file'] !== undefined) usageError('--answer and --answer-file are mutually exclusive');
-    if ((answering || values['answer-for'] !== undefined) && values.resume === undefined) usageError('answer flags require --resume');
-    if (answering !== (values['answer-for'] !== undefined)) usageError('an answer requires --answer-for, and --answer-for requires an answer');
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
     const file = positionals[0];
@@ -347,9 +207,9 @@ async function main(): Promise<number> {
     }
     const locked = program.markdown?.lock !== undefined;
     if (/\.locked\.md$/i.test(file) && !locked) usageError('locked workflow is missing its execution journal');
-    if (locked && (values.pin || resumable || [values.trace, values.record, values.replay, values.store, values['store-module'], values.mcp, values.human]
+    if (locked && (values.pin || [values.trace, values.mcp, values.human]
         .some(value => value !== undefined))) {
-        usageError('locked workflows cannot use --pin, checkpoint/resume, trace/record/replay, stores, --mcp, or --human');
+        usageError('locked workflows cannot use --pin, --trace, --mcp, or --human');
     }
     const lockedFile = file.replace(/\.md$/i, '.locked.md');
     if (values.pin && !values.check && fs.existsSync(lockedFile)) {
@@ -362,32 +222,32 @@ async function main(): Promise<number> {
         return usageError((e as Error).message);
     }
     if (values.check) return 0;
-    if (resumable) return checkpointCommand(source, program, values, cwd, logger, mcpServers);
 
     let backend: LlmBackend;
+    let trace: Trace | undefined;
     try {
         if (locked) backend = {
             async call() { throw new LlmError('locked workflows cannot call a model'); },
             async close() {},
         };
-        else if (values.replay) backend = new ReplayBackend(values.replay);
         else {
+            if (values.trace) {
+                const directory = fileURLToPath(new URL('.', import.meta.url));
+                trace = Trace.open(values.trace, {
+                    source: program.lines.join('\n'), cwd, args: values.arg,
+                    runtime: fingerprint([version(), process.version,
+                        ...fs.readdirSync(directory).filter(name => name.endsWith('.js')).sort()
+                            .map(name => [name, fs.readFileSync(path.join(directory, name), 'utf8')])]),
+                    configuration: { model: values.model ?? null, provider: values.provider ?? null, mcp: mcpServers ?? null },
+                });
+            }
             backend = new AiBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider });
-            if (values.record) backend = new RecordingBackend(backend, values.record);
-            if (values.trace) backend = new TraceBackend(backend, values.trace);
         }
     } catch (e) {
+        trace?.close();
         if (!(e instanceof Error)) throw e;
-        return usageError(`cannot open recording: ${e.message}`);
-    }
-    if (backend.mode === 'replay' && (values.store || values['store-module'])) {
-        return usageError('--replay of legacy --record files cannot use a persistent variable store');
-    }
-    let store: VariableStore;
-    try {
-        store = values.store ? new JsonFileStore(values.store) : values['store-module'] ? await loadStoreModule(values['store-module']) : new MemoryStore();
-    } catch (e) {
-        return usageError((e as Error).message);
+        if (e instanceof TraceError && e.kind === 'infrastructure') throw e;
+        return usageError(`cannot open trace: ${e.message}`);
     }
     let result: RunResult | undefined;
     let interrupted = false;
@@ -399,6 +259,7 @@ async function main(): Promise<number> {
     const interrupt = (): void => {
         if (interrupted) return;
         interrupted = true;
+        trace?.cancel();
         input?.close();
         void (async () => {
             let deadline: ReturnType<typeof setTimeout> | undefined;
@@ -410,19 +271,12 @@ async function main(): Promise<number> {
             catch (error) { logger.error(`could not close backend: ${error instanceof Error ? error.message : String(error)}`); }
             finally {
                 clearTimeout(deadline);
+                trace?.close();
                 await presentation!.close('cancelled');
                 process.exit(130);
             }
         })();
     };
-    let initialVariables: ReturnType<VariableStore['load']>;
-    try { initialVariables = store.load(); }
-    catch (error) {
-        try { await closeBackend(); }
-        catch (closeError) { logger.error(`could not close backend: ${closeError instanceof Error ? closeError.message : String(closeError)}`); }
-        throw error;
-    }
-    const executionStore: VariableStore = { load: () => initialVariables, save: variables => store.save(variables) };
     const pin = values.pin ? Pin.capture(source, { cwd, args: values.arg ?? [], model: values.model }) : undefined;
     presentation = new CliLogging({
         interactive: !values.silent && canInteract(),
@@ -451,7 +305,7 @@ async function main(): Promise<number> {
     try {
         try {
             result = await run(program, {
-                backend, logger, store: backend.mode === 'replay' || locked ? undefined : executionStore,
+                backend, logger, trace,
                 cwd: locked && values.cwd === undefined ? undefined : cwd,
                 model: values.model, args: values.arg, human, pin,
             });
@@ -464,7 +318,14 @@ async function main(): Promise<number> {
                 if (result?.status !== 'failure') result = { status: 'failure', failure: new Failure('llm_error', e.message).payload() };
             }
         }
+        if (!interrupted) trace?.finish(result);
+    } catch (error) {
+        if (interrupted) return 130;
+        if (!(error instanceof TraceError) || error.kind !== 'usage') throw error;
+        new Logger('error').error(`spl: ${error.message}`);
+        return 2;
     } finally {
+        trace?.close();
         input?.close();
         if (input) process.stdin.pause();
         await presentation.close(interrupted ? 'cancelled' : result?.status === 'success' ? 'completed' : 'failed');
@@ -475,7 +336,6 @@ async function main(): Promise<number> {
         process.stdout.write(JSON.stringify(result.failure, null, 4) + '\n');
         return 1;
     }
-    if (result.status === 'waiting_for_input') throw new CheckpointError('unexpected human suspension without a checkpoint', 'infrastructure');
     if (pin) {
         try {
             fs.writeFileSync(lockedFile, pin.toMarkdown(source), { flag: 'wx', mode: 0o600 });

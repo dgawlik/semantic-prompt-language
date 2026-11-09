@@ -37,9 +37,9 @@ let slide4: str = '''
 '''
 
 let slide5: str = '''
-    Checkpoints, replay and human input -> record responses with --trace, replay them with --replay;
+    Append-only traces and human input -> record a run with --trace run.jsonl;
     human input in the terminal or via repeated --human flags;
-    explicit --checkpoint/--resume for automation, not an automatic snapshot of external files
+    reuse the same --trace path to resume or replay deterministically, choose another file to restart
 '''
 
 let slide6: str = '''

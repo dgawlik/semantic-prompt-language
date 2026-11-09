@@ -11,7 +11,7 @@ import type { Logger, LogLevel } from './logger.js';
 import { Restrictions, makeRestriction, type Restriction } from './restrict.js';
 import { MemoryStore, type VariableStore } from './store.js';
 import { ToolHost, TOOL_SPECS } from './tools.js';
-import { CheckpointError, SuspensionSignal, type Checkpoint, type HumanRequest } from './checkpoint.js';
+import { TraceError, type Trace } from './trace.js';
 import { isResponse, isToolValue, traceRequest } from './recording.js';
 import { Pin, PinError } from './pin.js';
 import { usesHuman } from './parser.js';
@@ -58,7 +58,7 @@ export interface RunOptions {
     /** Script arguments exposed as read-only `$args`; defaults to an empty list. */
     args?: readonly string[];
     maxCallDepth?: number;
-    checkpoint?: Checkpoint;
+    trace?: Trace;
     /** Capture a successful workflow for deterministic Markdown replay. */
     pin?: Pin;
     /** Handles human expressions and blockquote ask_human calls without suspending. */
@@ -70,8 +70,7 @@ export interface RunOptions {
 
 export type RunResult =
     | { status: 'success'; value: Value; hasValue: boolean }
-    | { status: 'failure'; failure: FailurePayload }
-    | { status: 'waiting_for_input'; request: HumanRequest };
+    | { status: 'failure'; failure: FailurePayload };
 
 type Signal = { k: 'break' } | { k: 'continue' } | { k: 'return'; v: Value; hasValue: boolean };
 type Completion = Signal | { k: 'value'; v: Value } | undefined;
@@ -106,7 +105,7 @@ export class ExecutionSession {
     private readonly state: SessionState = { globals: { vars: new Map() }, identities: new ObservationIdentities() };
     private running = false;
 
-    async run(program: Program, opts: Omit<RunOptions, 'store' | 'checkpoint' | 'pin'>): Promise<RunResult> {
+    async run(program: Program, opts: Omit<RunOptions, 'store' | 'trace' | 'pin'>): Promise<RunResult> {
         if (this.running) throw new Error('an execution session can only run one cell at a time');
         if (program.markdown?.lock) throw new PinError('locked workflows must run standalone with run(), not in an execution session');
         this.running = true;
@@ -133,7 +132,6 @@ class Interpreter {
     private constraints: Constraint[] = [];
     private restrictions: Restrictions;
     private depth = 0;
-    private naturalDepth = 0;
     private sourceLines: string[];
     private sourceUri?: string;
     private sourceVersion?: number;
@@ -154,11 +152,11 @@ class Interpreter {
         this.store = opts.store ?? new MemoryStore();
         this.model = opts.pin?.data.context.model ?? opts.model ?? program.directives.model;
         this.maxDepth = opts.maxCallDepth ?? 200;
-        const environment = opts.pin?.replaying ? opts.pin.data.environment ?? {} : process.env;
+        const environment = opts.pin?.replaying ? opts.pin.data.environment ?? {} : opts.trace?.environment ?? process.env;
         for (const [name, value] of Object.entries(environment)) {
             if (value !== undefined) setKey(this.runtimeEnv, name, value);
         }
-        this.runtimeArgs = [...(opts.pin?.data.context.args ?? opts.checkpoint?.args ?? opts.args ?? [])];
+        this.runtimeArgs = [...(opts.pin?.data.context.args ?? opts.trace?.args ?? opts.args ?? [])];
         Object.freeze(this.runtimeEnv);
         Object.freeze(this.runtimeArgs);
         this.restrictions = new Restrictions(this.cwd);
@@ -203,15 +201,12 @@ class Interpreter {
         let executing = false;
         try {
             checkProgram(this.program, this.globals);
-            if (this.opts.checkpoint && (this.opts.store || this.opts.backend.mode)) {
-                throw new CheckpointError('checkpoint runs cannot use stores or recording/replay backends');
+            if (this.opts.trace && this.opts.store) {
+                throw new TraceError('trace runs cannot use a variable store');
             }
-            this.opts.checkpoint?.validateSource(this.program.lines.join('\n'), this.opts.args);
-            if (!this.opts.checkpoint && !this.opts.pin?.replaying && !this.opts.human && usesHuman(this.program)) {
-                throw runtimeError('human input requires a human handler or checkpoint');
-            }
-            if (this.opts.backend.mode === 'replay' && this.opts.store) {
-                throw new Failure('restriction_violation', 'replay does not allow a persistent variable store');
+            this.opts.trace?.validateSource(this.program.lines.join('\n'), this.opts.args);
+            if (!this.opts.trace && !this.opts.pin?.replaying && !this.opts.human && usesHuman(this.program)) {
+                throw runtimeError('human input requires a human handler');
             }
             const variables = this.opts.pin
                 ? await this.opts.pin.effect({ kind: 'store' }, () => this.store.load(),
@@ -220,28 +215,27 @@ class Interpreter {
             for (const [k, v] of Object.entries(variables)) this.globals.vars.set(k, v);
             executing = true;
             const signal = await this.execBlock(this.program.body, this.globals);
-            this.opts.checkpoint?.assertConsumed();
+            this.opts.trace?.assertConsumed();
             if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
             if (signal && signal.k !== 'value') throw runtimeError(`'${signal.k}' outside of a loop`);
             if (this.sessionState && signal?.k === 'value') return { status: 'success', value: signal.v, hasValue: true };
             return { status: 'success', value: null, hasValue: false };
         } catch (e) {
-            if (e instanceof SuspensionSignal) return { status: 'waiting_for_input', request: e.request };
             if (e instanceof SuccessSignal) {
-                this.opts.checkpoint?.assertConsumed();
+                this.opts.trace?.assertConsumed();
                 return { status: 'success', value: e.value as Value, hasValue: true };
             }
             if (e instanceof Failure) {
                 e.source ??= this.sourceUri;
                 e.sourceVersion ??= this.sourceVersion;
-                this.opts.checkpoint?.assertConsumed();
+                this.opts.trace?.assertConsumed();
                 logger.error(`${e.statusCode}: ${e.reason} (line ${e.line})`);
                 return { status: 'failure', failure: e.payload() };
             }
             throw e;
         } finally {
             try {
-                if (executing && !this.sessionState && !this.opts.checkpoint && !this.opts.pin?.replaying && this.opts.backend.mode !== 'replay') {
+                if (executing && !this.sessionState && !this.opts.trace && !this.opts.pin?.replaying) {
                     const snapshot: Record<string, Value> = {};
                     for (const [k, v] of this.globals.vars) if (!isFunction(v) && !isDescriptor(v) && !isInstance(v)) snapshot[k] = v;
                     this.store.save(snapshot);
@@ -255,7 +249,7 @@ class Interpreter {
     // ---- environments --------------------------------------------------
 
     private logValues(level: LogLevel, values: Value[]): void {
-        if (!this.opts.checkpoint?.replaying) {
+        if (!this.opts.trace?.replaying) {
             this.opts.logger[level]('log:', ...values.map(value => isDict(value) || isList(value) ? toJson(value) : str(value)));
         }
     }
@@ -286,7 +280,7 @@ class Interpreter {
         const contract = env.contracts?.get(name);
         if (contract) value = validateValue(value, contract, name);
         if (env.readonlyNames?.has(name)) throw runtimeError(`type declaration '${name}' is immutable`);
-        this.observer.commit(env, name, value, !this.opts.checkpoint?.replaying);
+        this.observer.commit(env, name, value, !this.opts.trace?.replaying);
     }
 
     private type(expr: import('./ast.js').TypeExpr, env: Env): TypeDescriptor {
@@ -501,14 +495,14 @@ class Interpreter {
             const value = await compute(() => this.getKey(obj.fields, key), field.type);
             assertComplete(value);
             const checked = validateValue(value, field.type, `${obj.descriptor.name}.${key}`);
-            this.observer.mutate(obj.fields, env, key, !this.opts.checkpoint?.replaying, () => setKey(obj.fields, key, checked));
+            this.observer.mutate(obj.fields, env, key, !this.opts.trace?.replaying, () => setKey(obj.fields, key, checked));
             return;
         }
         if (target.t === 'member') {
             if (!isDict(obj)) throw runtimeError(`cannot set member '${target.name}' on ${typeName(obj)}`);
             const value = await compute(() => this.getKey(obj, target.name), contractOf(obj)?.fields?.[target.name]?.type);
             assertComplete(value);
-            this.observer.mutate(obj, env, target.name, !this.opts.checkpoint?.replaying, () => mutateContract(obj, draft => { setKey(draft as Record<string, Value>, target.name, value); return null; }));
+            this.observer.mutate(obj, env, target.name, !this.opts.trace?.replaying, () => mutateContract(obj, draft => { setKey(draft as Record<string, Value>, target.name, value); return null; }));
             return;
         }
         const index = await this.eval(target.index, env);
@@ -516,12 +510,12 @@ class Interpreter {
             const i = this.listIndex(obj, index);
             const value = await compute(() => obj[i], contractOf(obj)?.element);
             assertComplete(value);
-            this.observer.mutate(obj, env, String(i), !this.opts.checkpoint?.replaying, () => mutateContract(obj, draft => { (draft as Value[])[i] = value; return null; }));
+            this.observer.mutate(obj, env, String(i), !this.opts.trace?.replaying, () => mutateContract(obj, draft => { (draft as Value[])[i] = value; return null; }));
         } else if (isDict(obj)) {
             if (typeof index !== 'string') throw runtimeError(`dict keys must be strings, got ${typeName(index)}`);
             const value = await compute(() => this.getKey(obj, index), contractOf(obj)?.fields?.[index]?.type);
             assertComplete(value);
-            this.observer.mutate(obj, env, index, !this.opts.checkpoint?.replaying, () => mutateContract(obj, draft => { setKey(draft as Record<string, Value>, index, value); return null; }));
+            this.observer.mutate(obj, env, index, !this.opts.trace?.replaying, () => mutateContract(obj, draft => { setKey(draft as Record<string, Value>, index, value); return null; }));
         } else {
             throw runtimeError(`${typeName(obj)} does not support item assignment`);
         }
@@ -566,7 +560,7 @@ class Interpreter {
             case 'name': return this.lookup(e.name, env);
             case 'special':
                 if (e.name === 'env') {
-                    this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
+                    this.opts.trace?.observeEnvironment(this.runtimeEnv);
                     this.opts.pin?.observeEnvironment(this.runtimeEnv);
                 }
                 return e.name === 'env' ? this.runtimeEnv : this.runtimeArgs;
@@ -694,7 +688,7 @@ class Interpreter {
             const args = await this.evalArgs(argExprs, env, expected);
             args.forEach(value => assertComplete(value));
             return typeof obj === 'object' && obj !== null && isMutatingMethod(obj, callee.name)
-                ? this.observer.mutate(obj, env, callee.name, !this.opts.checkpoint?.replaying, () => callMethod(obj, callee.name, args))
+                ? this.observer.mutate(obj, env, callee.name, !this.opts.trace?.replaying, () => callMethod(obj, callee.name, args))
                 : callMethod(obj, callee.name, args);
         }
         if (callee.t === 'name' && (callee.name === 'validate' || callee.name === 'isinstance')) {
@@ -993,7 +987,7 @@ class Interpreter {
                 RUNTIME_PREAMBLE, this.program.markdown.preamble, req.prompt,
             ].filter(Boolean).join('\n\n') };
         }
-        const replaying = this.opts.checkpoint?.replaying;
+        const replaying = this.opts.trace?.replaying;
         if (!replaying) logger.modelPrompt(interaction, req.prompt, preface);
         const originalStream = req.onStream;
         let receiving = true;
@@ -1009,12 +1003,12 @@ class Interpreter {
                 try {
                     return await backend.call(req);
                 } catch (error) {
-                    if (error instanceof Failure || error instanceof CheckpointError || error instanceof PinError ||
-                        error instanceof SuccessSignal || error instanceof SuspensionSignal) throw error;
+                    if (error instanceof Failure || error instanceof TraceError || error instanceof PinError ||
+                        error instanceof SuccessSignal) throw error;
                     throw new Failure('llm_error', error instanceof Error ? error.message : String(error));
                 }
             };
-            const journal = this.opts.checkpoint ?? this.opts.pin;
+            const journal = this.opts.trace ?? this.opts.pin;
             const res = journal && !req.naturalLanguage
                 ? await journal.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
                 : await perform();
@@ -1029,7 +1023,7 @@ class Interpreter {
             }
             return res;
         } catch (e) {
-            if (e instanceof CheckpointError || e instanceof PinError || e instanceof SuspensionSignal || e instanceof SuccessSignal) throw e;
+            if (e instanceof TraceError || e instanceof PinError || e instanceof SuccessSignal) throw e;
             if (e instanceof Failure) throw e;
             if (e instanceof LlmError) throw new Failure('llm_error', e.message);
             throw new Failure('llm_error', (e as Error).message ?? String(e));
@@ -1040,9 +1034,6 @@ class Interpreter {
     }
 
     private async execNatural(text: string, line: number, env: Env): Promise<Completion> {
-        if (this.opts.backend.mode === 'record' || this.opts.backend.mode === 'replay') {
-            throw new Failure('restriction_violation', 'blockquotes are agents and cannot run in generation-only record/replay mode; use --trace');
-        }
         const bindings: Record<string, unknown> = Object.create(null);
         for (let scope: Env | undefined = env; scope; scope = scope.parent) {
             for (const [name, value] of scope.vars) {
@@ -1054,29 +1045,30 @@ class Interpreter {
         let interaction: ModelInteraction = { requestId: randomUUID(), kind: 'blockquote' };
         const savedRestrictions = this.restrictions;
         const savedConstraints = this.constraints;
-        this.naturalDepth++;
         try {
-            const checkpoint = this.opts.checkpoint;
-            const journal = checkpoint ?? this.opts.pin;
+            const trace = this.opts.trace;
+            const journal = trace ?? this.opts.pin;
+            const decisionRequest = () => ({
+                kind: 'natural', text, line, history: JSON.stringify(history), restrictions: this.restrictions.list,
+            });
             const decision = (perform: () => Promise<LlmResponse>) => journal
-                ? journal.effect({
-                    kind: 'natural', text, line, history: JSON.stringify(history), restrictions: this.restrictions.list,
-                }, perform, isResponse)
+                ? journal.effect(decisionRequest(), perform, isResponse)
                 : perform();
             const execute = async (action: RuntimeAction): Promise<unknown> => {
-                if (!checkpoint?.replaying) this.opts.logger.modelOutput({ ...interaction, role: 'action' }, JSON.stringify(action));
+                if (!trace?.replaying) this.opts.logger.modelOutput({ ...interaction, role: 'action' }, JSON.stringify(action));
                 const result = { value: describeValue(await this.execNaturalAction(action, line, env)) };
                 history.push({ action, result });
                 return result.value;
             };
             for (;;) {
                 interaction = { requestId: randomUUID(), kind: 'blockquote' };
-                if (checkpoint?.replaying || this.opts.pin?.replaying) {
-                    const response = await decision(async () => { throw new PinError('missing recorded runtime decision'); });
+                if (trace?.replaying || this.opts.pin?.replaying) {
+                    const response = await decision(async () => { throw new TraceError('missing recorded runtime decision'); });
                     if (!response.action) return;
                     await execute(response.action);
                     continue;
                 }
+                trace?.assertLive(decisionRequest());
                 let actionFailed = false;
                 const context = `${NATURAL_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings at command start:\n${JSON.stringify(bindings)}`;
                 const built = buildPromptParts({
@@ -1113,21 +1105,20 @@ class Interpreter {
                 await execute(response.action);
             }
         } finally {
-            this.naturalDepth--;
             this.restrictions = savedRestrictions;
             this.constraints = savedConstraints;
         }
     }
 
     private async askHuman(question: string, line: number): Promise<string> {
-        if (this.opts.checkpoint) return this.opts.checkpoint.human(question, line);
-        if (this.opts.pin) return this.opts.pin.effect({ kind: 'human', question, line },
+        const journal = this.opts.trace ?? this.opts.pin;
+        if (journal) return journal.effect({ kind: 'human', question, line },
             () => this.directHuman(question, line), (value): value is string => typeof value === 'string');
         return this.directHuman(question, line);
     }
 
     private async directHuman(question: string, line: number): Promise<string> {
-        if (!this.opts.human) throw runtimeError('human input requires a human handler or checkpoint');
+        if (!this.opts.human) throw runtimeError('human input requires a human handler');
         const answer = await this.opts.human(question, line);
         if (typeof answer !== 'string') throw runtimeError('human answer must be a string');
         return answer;
@@ -1165,10 +1156,13 @@ class Interpreter {
                 });
                 return this.callValue(fn, values);
             }
-            case 'get_env':
-                this.opts.checkpoint?.observeEnvironment(this.runtimeEnv);
+            case 'get_env': {
                 this.opts.pin?.observeEnvironment(this.runtimeEnv);
-                return this.externalAction(action, async () => this.getKey(this.runtimeEnv, String(args.name)));
+                const perform = () => this.getKey(this.runtimeEnv, String(args.name));
+                return this.opts.trace
+                    ? this.opts.trace.effect({ kind: 'environment-value', name: args.name }, perform, isToolValue)
+                    : perform();
+            }
             case 'ask_human':
                 return this.askHuman(String(args.question), line);
             case 'success':
@@ -1195,15 +1189,6 @@ class Interpreter {
         }
     }
 
-    private async externalAction(action: RuntimeAction, perform: () => Promise<Value>): Promise<Value> {
-        try {
-            return await (this.opts.backend.invokeTool ? this.opts.backend.invokeTool(action, perform) : perform());
-        } catch (error) {
-            if (error instanceof LlmError) throw new Failure('llm_error', error.message);
-            throw error;
-        }
-    }
-
     private async callTool(tool: ToolName, args: Value[]): Promise<Value> {
         const names = TOOL_SPECS[tool].required;
         if (args.length !== names.length) throw runtimeError(`${tool}() takes ${names.length} argument(s) but ${args.length} were given`);
@@ -1212,11 +1197,8 @@ class Interpreter {
             if (typeof args[i] !== 'string') throw runtimeError(`${tool}(): ${name} must be a string`);
             params[name] = args[i];
         });
-        const invoke = async () => new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay', true).invoke(tool, params);
-        const perform = () => this.naturalDepth
-            ? this.externalAction({ name: tool, arguments: { ...params, restrictions: this.restrictions.list } }, invoke)
-            : invoke();
-        const journal = this.opts.checkpoint ?? this.opts.pin;
+        const perform = async () => new ToolHost(this.restrictions, this.cwd, false, true).invoke(tool, params);
+        const journal = this.opts.trace ?? this.opts.pin;
         return journal
             ? journal.effect({ kind: 'tool', tool, params, restrictions: this.restrictions.list }, perform, (value): value is string => typeof value === 'string')
             : perform();
@@ -1224,8 +1206,9 @@ class Interpreter {
 
     private async makeRestriction(kind: Restriction['kind'], value: Value): Promise<Restriction> {
         const perform = () => makeRestriction(kind, value, this.cwd);
-        return this.opts.pin
-            ? this.opts.pin.effect({ kind: 'restriction', restriction: kind, value }, perform,
+        const journal = this.opts.trace ?? this.opts.pin;
+        return journal
+            ? journal.effect({ kind: 'restriction', restriction: kind, value }, perform,
                 (result): result is Restriction => isDict(result) && result.kind === kind
                     && Array.isArray(result.values) && result.values.every(item => typeof item === 'string'))
             : perform();
@@ -1234,9 +1217,6 @@ class Interpreter {
     private async evalGeneration(
         kind: LlmRequest['kind'], mods: Record<string, Expr>, promptExpr: Expr, env: Env,
     ): Promise<Value> {
-        if (kind === 'agent' && (this.opts.backend.mode === 'record' || this.opts.backend.mode === 'replay')) {
-            throw new Failure('restriction_violation', 'agents cannot run in record/replay mode; record generation-only workflows');
-        }
         const options: Record<string, Value> = {};
         for (const [name, expr] of Object.entries(mods)) setKey(options, name, await this.eval(expr, env));
         const sampling = Object.fromEntries(Object.entries(options).filter(([name]) => ['seed', 'temperature', 'top_p'].includes(name)));
@@ -1277,7 +1257,7 @@ class Interpreter {
                 ...(randomness !== undefined ? { randomness: { ...randomness } } : {}),
                 showReasoning: !hide,
                 restrictions: this.restrictions,
-                tools: new ToolHost(this.restrictions, this.cwd, this.opts.backend.mode === 'replay'),
+                tools: new ToolHost(this.restrictions, this.cwd),
             }, built.preface);
             try {
                 const value = target ? decodeTypedJson(text, target, fmt === 'text' ? undefined : fmt) : fmt === 'text' ? text : parseJsonResponse(text, fmt);
@@ -1285,7 +1265,7 @@ class Interpreter {
                 return value;
             } catch (e) {
                 if (!(e instanceof Failure) || (e.statusCode !== 'invalid_format' && e.statusCode !== 'validation_failed' && !(target && e.statusCode === 'type_error')) || attempt >= repairs) throw e;
-                if (!this.opts.checkpoint?.replaying) this.opts.logger.info(`repair ${attempt + 1}/${repairs}: ${e.reason}`);
+                if (!this.opts.trace?.replaying) this.opts.logger.info(`repair ${attempt + 1}/${repairs}: ${e.reason}`);
                 prompt = `${basePrompt}\n\nPrevious response:\n${text}\n\nValidation failed: ${e.reason}\nReturn a corrected JSON value.`;
             }
         }

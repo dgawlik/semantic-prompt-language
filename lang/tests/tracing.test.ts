@@ -1,294 +1,389 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Failure } from '../src/errors.js';
-import { run } from '../src/interpreter.js';
+import { run, type RunOptions } from '../src/interpreter.js';
 import { LlmError, type LlmBackend, type LlmRequest, type LlmResponse } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
-import { parse } from '../src/parser.js';
-import { RecordingBackend, ReplayBackend, TraceBackend } from '../src/recording.js';
-import { MemoryStore } from '../src/store.js';
-import type { LogEvent, ModelStreamEvent } from '../src/log-events.js';
+import { parseMarkdown } from '../src/markdown.js';
+import { parse, usesHuman } from '../src/parser.js';
+import { Trace, TraceError, type TraceContext } from '../src/trace.js';
 import { ToolHost } from '../src/tools.js';
+import type { ModelStreamEvent } from '../src/log-events.js';
 
-let dir: string;
+let cwd: string;
 let file: string;
+const logger = new Logger('silent');
+const unused: LlmBackend = { async call() { throw new Error('unexpected model call'); }, async close() {} };
 beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-trace-'));
-    file = path.join(dir, 'trace.jsonl');
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-trace-'));
+    file = path.join(cwd, 'run.jsonl');
 });
 afterEach(() => {
     vi.restoreAllMocks();
-    fs.rmSync(dir, { recursive: true, force: true });
+    vi.unstubAllEnvs();
+    fs.rmSync(cwd, { recursive: true, force: true });
 });
 
-const exec = (source: string, backend: LlmBackend, store?: MemoryStore) =>
-    run(parse(source), { backend, cwd: dir, logger: new Logger('silent'), store });
-
+const context = (source: string): TraceContext => ({ source, runtime: 'test-runtime', cwd });
+const rows = () => fs.readFileSync(file, 'utf8').trimEnd().split('\n').map(line => JSON.parse(line));
 function scripted(...outcomes: (string | Error)[]) {
-    const call = vi.fn(async (_req: LlmRequest): Promise<LlmResponse> => {
-        const outcome = outcomes.shift();
-        if (outcome instanceof Error) throw outcome;
-        if (outcome === undefined) throw new Error('unexpected LLM call');
-        return { text: outcome, reasoning: 'recorded reasoning', effective: { model: 'test', reasoningEffort: 'high' } };
+    return {
+        call: vi.fn(async (_req: LlmRequest): Promise<LlmResponse> => {
+            const outcome = outcomes.shift();
+            if (outcome instanceof Error) throw outcome;
+            if (outcome === undefined) throw new Error('unexpected model call');
+            return { text: outcome, reasoning: 'saved reasoning', effective: { model: 'test' } };
+        }),
+        async close() {},
+    };
+}
+async function execute(source: string, options: Partial<RunOptions> = {}, markdown = false) {
+    const program = markdown ? parseMarkdown(source) : parse(source);
+    const trace = Trace.open(file, context(program.lines.join('\n')));
+    try {
+        const result = await run(program, { backend: unused, logger, cwd, ...options, trace });
+        trace.finish(result);
+        return result;
+    } finally {
+        trace.close();
+    }
+}
+
+describe('append-only trace resumption', () => {
+    it('replays completed tools, model repairs, agents, human answers, arguments and environment without external work', async () => {
+        vi.stubEnv('SPL_TRACE_TEST', 'original');
+        const tools = vi.spyOn(ToolHost.prototype, 'invoke').mockResolvedValue('raw result');
+        const backend = scripted('bad JSON', '42', 'agent result');
+        const human = vi.fn(async () => '  exact\nanswer  ');
+        const source = `let results = [read_file('input'), write_file('output', 'text'), shell('command'),
+    web_fetch('https://example.test'), web_search('query')]
+let value = ask(tokens=2048, seed=42, temperature=0, fmt='integer', repairs=1) 'Number?'
+let answer = human 'Approve?'
+success [results, value, agent 'Act', answer, $args, $env.SPL_TRACE_TEST]`;
+        const program = parse(source);
+        let trace = Trace.open(file, { ...context(source), args: ['initial'] });
+        const first = await run(program, { backend, human, logger, cwd, trace });
+        trace.finish(first);
+        trace.close();
+        const original = fs.readFileSync(file, 'utf8');
+        vi.stubEnv('SPL_TRACE_TEST', 'changed');
+        tools.mockClear();
+        human.mockClear();
+        trace = Trace.open(file, context(source));
+        expect(await run(program, { backend: unused, human, logger, cwd, trace })).toEqual(first);
+        trace.finish(first);
+        trace.close();
+        expect(fs.readFileSync(file, 'utf8')).toBe(original);
+        expect(tools).not.toHaveBeenCalled();
+        expect(human).not.toHaveBeenCalled();
+        expect(backend.call).toHaveBeenCalledTimes(3);
+        expect(original).toContain('saved reasoning');
+        expect(original).toContain('\\"tokens\\":2048');
+        expect(original).not.toMatch(/bindingId|scopeId|payloadId|onStream/);
     });
-    return { call, close: vi.fn(async () => {}) };
-}
 
-function entries() {
-    return fs.readFileSync(file, 'utf8').trimEnd().split('\n').map((line) => JSON.parse(line));
-}
+    it('resumes interrupted human input, reconstructing loops, aliases and mutations exactly once', async () => {
+        const stopped = new Error('interrupted');
+        const tools = vi.spyOn(ToolHost.prototype, 'invoke').mockResolvedValue('written');
+        const source = `let answers = []
+let alias = answers
+def collect(i):
+    write_file('output', 'original')
+    alias.append(human 'Question {i}')
+for i in range(2):
+    collect(i)
+success [answers, alias == answers]`;
+        let calls = 0;
+        await expect(execute(source, { human: () => { if (calls++ === 0) return ''; throw stopped; } })).rejects.toThrow(/interrupted/);
+        const prefix = fs.readFileSync(file, 'utf8');
+        expect(tools).toHaveBeenCalledTimes(2);
+        const human = vi.fn(() => '  final\nanswer  ');
+        const result = await execute(source, { human });
+        expect(result).toMatchObject({ status: 'success', value: [['', '  final\nanswer  '], true] });
+        expect(human).toHaveBeenCalledExactlyOnceWith('Question 1', 5);
+        expect(tools).toHaveBeenCalledTimes(2);
+        expect(fs.readFileSync(file, 'utf8').startsWith(prefix)).toBe(true);
+        const complete = fs.readFileSync(file, 'utf8');
+        expect(await execute(source)).toEqual(result);
+        expect(fs.readFileSync(file, 'utf8')).toBe(complete);
+    });
 
-describe('workflow trace/replay', () => {
-    it.each(['trace', 'record'])('forwards live streams in %s mode without storing or replaying ephemeral updates', async mode => {
-        const streams: ModelStreamEvent[] = [];
-        const logger = new Logger('error', () => {}, { streamSink: event => streams.push(event) });
+    it('continues a valid prefix even when there is no pending input or completion event', async () => {
+        const source = `let value = ask 'First'\nsuccess [value, ask 'Second']`;
+        const backend = scripted('first', 'second');
+        const result = await execute(source, { backend });
+        const events = rows();
+        fs.writeFileSync(file, events.slice(0, 3).map(row => JSON.stringify(row)).join('\n') + '\n');
+        const prefix = fs.readFileSync(file, 'utf8');
+        const suffix = scripted('new second');
+        expect(await execute(source, { backend: suffix })).toMatchObject({ status: 'success', value: ['first', 'new second'] });
+        expect(suffix.call).toHaveBeenCalledOnce();
+        expect(fs.readFileSync(file, 'utf8').startsWith(prefix)).toBe(true);
+        expect(result.status).toBe('success');
+    });
+
+    it('replays durable failures deterministically and records raw generation repair failures', async () => {
+        const source = `try:
+    let value = ask 'Unavailable'
+except err:
+    assert err.status_code == 'llm_error'
+fail 'rejected'`;
+        const backend = scripted(new LlmError('offline'));
+        const first = await execute(source, { backend });
+        expect(first).toMatchObject({ status: 'failure', failure: { status_code: 'explicit_failure' } });
+        expect(await execute(source)).toEqual(first);
+        expect(backend.call).toHaveBeenCalledOnce();
+        expect(rows().find(row => row.type === 'outcome').outcome.error).toEqual({ status_code: 'llm_error', reason: 'offline' });
+    });
+
+    it('replays completed agent-owned effects, but refuses to repeat an agent with an unknown outcome', async () => {
+        const source = `success agent 'Write a file'`;
         const backend: LlmBackend = {
             async call(req) {
-                req.onStream?.({ channel: 'response', messageId: 'preview-only-id', mode: 'append', text: 'Ephemeral partial' });
-                return { text: 'Complete answer', effective: {} };
+                await req.tools.invoke('write_file', { path: 'agent.txt', content: 'original' });
+                return { text: 'done', effective: {} };
             },
             async close() {},
         };
-        const trace = mode === 'trace' ? new TraceBackend(backend, file) : new RecordingBackend(backend, file);
-        const program = parse(`success ask 'Prompt'`);
-        const expected = await run(program, { backend: trace, logger, cwd: dir });
-        await trace.close();
-        expect(streams.map(event => event.type)).toEqual(['update', 'end']);
-        expect(fs.readFileSync(file, 'utf8')).not.toMatch(/Ephemeral partial|preview-only-id|onStream/);
-        streams.length = 0;
-        const replay = new ReplayBackend(file);
-        expect(await run(program, { backend: replay, logger, cwd: dir })).toEqual(expected);
-        await replay.close();
-        expect(streams.map(event => event.type)).toEqual(['end']);
-        expect(streams[0]).toMatchObject({ response: 'Complete answer', outcome: 'completed' });
+        const first = await execute(source, { backend });
+        fs.unlinkSync(path.join(cwd, 'agent.txt'));
+        expect(await execute(source)).toEqual(first);
+        expect(fs.existsSync(path.join(cwd, 'agent.txt'))).toBe(false);
+        const history = rows();
+        fs.writeFileSync(file, history.slice(0, 2).map(row => JSON.stringify(row)).join('\n') + '\n');
+        const before = fs.readFileSync(file, 'utf8');
+        await expect(execute(source, { backend })).rejects.toThrow(/unresolved effect/);
+        expect(fs.readFileSync(file, 'utf8')).toBe(before);
+        expect(fs.existsSync(path.join(cwd, 'agent.txt'))).toBe(false);
     });
 
-    it('does not change results, evaluation/model/tool counts, stores or trace bytes when logging is enabled', async () => {
-        const tools = vi.spyOn(ToolHost.prototype, 'invoke').mockResolvedValue('raw result');
-        const source = `let n = 0
-def step():
-    n += 1
-    return n
-let items = []
-items.append(step())
-let input = read_file('offline')
-let answer = ask 'one'
-success [n, items, input, answer]`;
-        const outcomes: unknown[] = [];
-        for (const level of ['debug', 'silent'] as const) {
-            const target = path.join(dir, `${level}.jsonl`);
-            const backend = scripted('yes');
-            const trace = new TraceBackend(backend, target);
-            let saved = '';
-            const result = await run(parse(source), {
-                cwd: dir, backend: trace, logger: new Logger(level, () => {}),
-                store: { load: () => ({}), save: values => { saved = JSON.stringify(values); } },
-            });
-            await trace.close();
-            outcomes.push({ result, saved, trace: fs.readFileSync(target, 'utf8'), calls: backend.call.mock.calls.length });
-        }
-        expect(outcomes[0]).toEqual(outcomes[1]);
-        expect(tools).toHaveBeenCalledTimes(2);
-    });
-
-    it('keeps ordinary trace replay observable without adding event data to trace records', async () => {
-        const source = `let answer = ask 'one'\nlet items = []\nitems.append(answer)\nsuccess items`;
-        const trace = new TraceBackend(scripted('yes'), file);
-        const expected = await exec(source, trace);
-        await trace.close();
-        const history: LogEvent[] = [];
-        const replay = new ReplayBackend(file);
-        const result = await run(parse(source), {
-            backend: replay, logger: new Logger('error', undefined, { eventSink: event => history.push(event) }), cwd: dir,
-        });
-        await replay.close();
-        expect(result).toEqual(expected);
-        expect(history.filter(event => event.kind === 'state')).toHaveLength(3);
-        expect(history.filter(event => event.kind === 'model-input')).toHaveLength(1);
-        expect(JSON.stringify(entries())).not.toMatch(/bindingId|scopeId|payloadId/);
-    });
-
-    it('captures common structured inputs and complete responses for every LLM operation', async () => {
-        const backend = scripted('answer', 'thought', 'agent result');
-        const trace = new TraceBackend(backend, file);
-        const source = `success [ask(model='chosen', reasoning='high', hide=True) 'Ask', think 'Think', agent 'Act']`;
-        const expected = await exec(source, trace);
-        await trace.close();
-        expect(expected).toMatchObject({ status: 'success', value: ['answer', 'thought', 'agent result'] });
-        const [header, ...calls] = entries();
-        expect(header).toEqual({ format: 'spl-trace', version: 1 });
-        expect(calls.map((entry) => entry.request.kind)).toEqual(['ask', 'think', 'agent']);
-        expect(calls.map((entry) => entry.request.showReasoning)).toEqual([false, true, true]);
-        expect(calls[0]).toEqual({
-            request: {
-                kind: 'ask', prompt: backend.call.mock.calls[0][0].prompt,
-                model: 'chosen', reasoningEffort: 'high', showReasoning: false,
+    it('resumes blockquote actions inside functions without repeating writes, generation or shared mutations', async () => {
+        const source = `---\nextension: semantic-prompt-language\nversion: 1\n---\n
+\`\`\`spl
+let count = 0
+def approve():
+    count += 1
+    write_file('draft.txt', 'original')
+    return [ask(fmt='integer', repairs=1) 'Number?', human 'Approve?']
+\`\`\`
+> Invoke @approve, save the result to @answer, and finish.
+\`\`\`spl
+success [count, answer]
+\`\`\``;
+        const tools = vi.spyOn(ToolHost.prototype, 'invoke').mockResolvedValue('written');
+        let generations = 0;
+        const backend: LlmBackend = {
+            async call(req) {
+                if (!req.naturalLanguage) return { text: generations++ === 0 ? 'bad JSON' : '9', effective: {} };
+                const value = await req.invokeAction!({ name: 'call_function', arguments: { name: 'approve', args: [] } });
+                await req.invokeAction!({ name: 'save_variable', arguments: { name: 'answer', value } });
+                return { text: 'Done', effective: {} };
             },
-            response: {
-                text: 'answer', reasoning: 'recorded reasoning',
-                effective: { model: 'test', reasoningEffort: 'high' },
-            },
-        });
-        expect(backend.close).toHaveBeenCalledOnce();
-        const replay = new ReplayBackend(file);
-        expect(replay.mode).toBe('workflow-replay');
-        expect(await exec(source, replay)).toEqual(expected);
-        await replay.close();
-        expect(backend.call).toHaveBeenCalledTimes(3);
-        expect(() => new TraceBackend(backend, file)).toThrow();
-    });
-
-    it('replays agent results without repeating agent-owned tools or other backend work', async () => {
-        const backend = {
-            call: vi.fn(async (req: LlmRequest) => {
-                await req.tools.invoke('write_file', { path: 'agent.txt', content: 'live action' });
-                return { text: 'done', effective: { model: 'test' } };
-            }),
             async close() {},
         };
-        const trace = new TraceBackend(backend, file);
-        const source = `success agent 'Write the file'`;
-        expect(await exec(source, trace)).toMatchObject({ status: 'success', value: 'done' });
-        await trace.close();
-        fs.unlinkSync(path.join(dir, 'agent.txt'));
-        const replay = new ReplayBackend(file);
-        expect(await exec(source, replay)).toMatchObject({ status: 'success', value: 'done' });
-        await replay.close();
-        expect(fs.existsSync(path.join(dir, 'agent.txt'))).toBe(false);
-        expect(backend.call).toHaveBeenCalledOnce();
-    });
-
-    it('records every repair attempt and revalidates raw responses on replay', async () => {
-        const backend = scripted('not JSON', '3');
-        const source = `success ask(fmt='integer', repairs=1) 'Count'`;
-        const trace = new TraceBackend(backend, file);
-        expect(await exec(source, trace)).toMatchObject({ status: 'success', value: 3 });
-        await trace.close();
-        expect(entries()).toHaveLength(3);
-        expect(entries()[2].request.prompt).toContain('Previous response:\nnot JSON');
-        const replay = new ReplayBackend(file);
-        expect(await exec(source, replay)).toMatchObject({ status: 'success', value: 3 });
-        await replay.close();
-    });
-
-    it.each(['ask', 'think', 'agent'])('records and replays failures from %s', async (command) => {
-        const backend = scripted(new LlmError('transport failed'));
-        const trace = new TraceBackend(backend, file);
-        const source = `success ${command} 'Fail'`;
-        const expected = await exec(source, trace);
-        await trace.close();
-        expect(expected).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error', reason: 'transport failed' } });
-        expect(entries()[1].error).toEqual({ status_code: 'llm_error', reason: 'transport failed' });
-        const replay = new ReplayBackend(file);
-        expect(await exec(source, replay)).toEqual(expected);
-        await replay.close();
-    });
-
-    it('retains runtime failure categories and caught-error control flow', async () => {
-        const backend = scripted(new Failure('restriction_violation', 'denied agent action'), 'recovered');
-        const source = `
-try:
-    agent 'Act'
-except err:
-    assert err.status_code == 'restriction_violation'
-    assert err.reason == 'denied agent action'
-success ask 'Recover'
-`;
-        const trace = new TraceBackend(backend, file);
-        const expected = await exec(source, trace);
-        await trace.close();
-        expect(expected).toMatchObject({ status: 'success', value: 'recovered' });
-        const replay = new ReplayBackend(file);
-        expect(await exec(source, replay)).toEqual(expected);
-        await replay.close();
-    });
-
-    it('re-executes explicit writes, shell, and network tools under normal restrictions', async () => {
-        const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('network input'));
-        const backend = scripted('answer');
-        const source = `
-let input = web_fetch('https://example.com')
-let output = ask 'Process {input}'
-write_file('output.txt', output)
-success [read_file('output.txt'), shell('echo traced')]
-`;
-        const trace = new TraceBackend(backend, file);
-        const expected = await exec(source, trace);
-        await trace.close();
-        fs.unlinkSync(path.join(dir, 'output.txt'));
-        const replay = new ReplayBackend(file);
-        expect(await exec(source, replay)).toEqual(expected);
-        await replay.close();
-        expect(fs.readFileSync(path.join(dir, 'output.txt'), 'utf8')).toBe('answer');
-        expect(fetch).toHaveBeenCalledTimes(2);
-        expect(await exec(`restrict './allowed':
-    write_file('denied.txt', 'x')`, new ReplayBackend(file)))
-            .toMatchObject({ status: 'failure', failure: { status_code: 'restriction_violation' } });
-        expect(fs.existsSync(path.join(dir, 'denied.txt'))).toBe(false);
-    });
-
-    it('loads and saves persistent variables during trace replay, including after failure', async () => {
-        const backend = scripted('answer');
-        const source = `let output = ask 'Question'\nfail output`;
-        const trace = new TraceBackend(backend, file);
-        await exec(source, trace);
-        await trace.close();
-        const store = new MemoryStore();
-        const load = vi.spyOn(store, 'load');
-        const save = vi.spyOn(store, 'save');
-        const replay = new ReplayBackend(file);
-        expect(await exec(source, replay, store)).toMatchObject({ status: 'failure', failure: { reason: 'answer' } });
-        await replay.close();
-        expect(load).toHaveBeenCalledOnce();
-        expect(save).toHaveBeenCalledWith({ output: 'answer' });
-    });
-
-    it('matches all input fields in order and reports exhaustion and unused entries', async () => {
-        const backend = scripted('one', 'two');
-        const trace = new TraceBackend(backend, file);
-        await exec(`let first = ask 'First'\nsuccess ask 'Second'`, trace);
-        await trace.close();
-        const replay = new ReplayBackend(file);
-        const original = backend.call.mock.calls[0][0];
-        for (const request of [
-            { ...original, prompt: 'Changed' },
-            { ...original, kind: 'agent' as const },
-            { ...original, model: 'other' },
-            { ...original, reasoningEffort: 'high' as const },
-            { ...original, showReasoning: false },
-        ]) {
-            await expect(replay.call(request)).rejects.toThrow(/mismatch at call 1/);
-        }
-        const response = await replay.call(original);
-        response.effective.model = 'mutated';
-        await expect(replay.close()).rejects.toThrow(/1 unused/);
-        expect(await replay.call(backend.call.mock.calls[1][0])).toMatchObject({ text: 'two', effective: { model: 'test' } });
-        await expect(replay.call(original)).rejects.toThrow(/exhausted at call 3/);
-        await replay.close();
-    });
-
-    it('fails explicitly when a trace cannot be saved', async () => {
-        const backend = scripted('answer');
-        const trace = new TraceBackend(backend, file);
-        fs.unlinkSync(file);
-        fs.mkdirSync(file);
-        expect(await exec(`success ask 'Question'`, trace)).toMatchObject({
-            status: 'failure', failure: { status_code: 'llm_error', reason: expect.stringContaining('could not save trace') },
-        });
-        await trace.close();
+        const interrupted = new Error('interrupted');
+        await expect(execute(source, { backend, human: () => { throw interrupted; } }, true)).rejects.toThrow(/interrupted/);
+        const prefix = fs.readFileSync(file, 'utf8');
+        const resumed: LlmBackend = {
+            async call(req) {
+                expect(req.prompt).toContain('"value":[9,"approved"]');
+                await req.invokeAction!({ name: 'save_variable', arguments: { name: 'answer', value: [9, 'approved'] } });
+                return { text: 'Done', effective: {} };
+            },
+            async close() {},
+        };
+        const result = await execute(source, { backend: resumed, human: () => 'approved' }, true);
+        expect(result).toMatchObject({ status: 'success', value: [1, [9, 'approved']] });
+        expect(tools).toHaveBeenCalledOnce();
+        expect(generations).toBe(2);
+        expect(fs.readFileSync(file, 'utf8').startsWith(prefix)).toBe(true);
+        expect(await execute(source, {}, true)).toEqual(result);
+        expect(tools).toHaveBeenCalledOnce();
     });
 
     it.each([
-        {},
-        { request: { kind: ['ask'], prompt: 'x', model: null, reasoningEffort: null, showReasoning: false }, response: { text: 'x', effective: {} } },
-        { request: { kind: 'ask', prompt: 'x', model: null, reasoningEffort: 'invalid', showReasoning: false }, response: { text: 'x', effective: {} } },
-        { request: { kind: 'ask', prompt: 'x', model: null, reasoningEffort: null, showReasoning: false }, response: { text: 1, effective: {} } },
-        { request: { kind: 'ask', prompt: 'x', model: null, reasoningEffort: null, showReasoning: false }, error: { status_code: 'unknown', reason: 'bad' } },
-        { request: { kind: 'ask', prompt: 'x', model: null, reasoningEffort: null, showReasoning: false }, response: { text: 'x', effective: {} }, error: { status_code: 'llm_error', reason: 'bad' } },
-    ])('rejects malformed trace entries: %j', (entry) => {
-        fs.writeFileSync(file, JSON.stringify({ format: 'spl-trace', version: 1 }) + '\n' + JSON.stringify(entry) + '\n');
-        expect(() => new ReplayBackend(file)).toThrow(/entry at line 2/);
+        { name: 'success', arguments: { value: 9 } },
+        { name: 'fail', arguments: { reason: 'stop' } },
+        { name: 'call_function', arguments: { name: 'missing', args: [] } },
+        { name: 'read_file', arguments: { path: 'missing' } },
+    ])('replays immediately terminating blockquote $name actions', async action => {
+        const source = '---\nextension: semantic-prompt-language\nversion: 1\n---\n\n> Act.';
+        const backend: LlmBackend = {
+            async call(req) {
+                await req.invokeAction!(action);
+                throw new Error('must terminate');
+            },
+            async close() {},
+        };
+        const first = await execute(source, { backend }, true);
+        expect(await execute(source, {}, true)).toEqual(first);
+    });
+
+    it('records only requested agent environment values and replays them after changes', async () => {
+        vi.stubEnv('SPL_AGENT_PRIVATE', 'do-not-include');
+        vi.stubEnv('SPL_AGENT_PUBLIC', 'original');
+        const source = '---\nextension: semantic-prompt-language\nversion: 1\n---\n\n> Return the configured environment value.';
+        const backend: LlmBackend = {
+            async call(req) {
+                const value = await req.invokeAction!({ name: 'get_env', arguments: { name: 'SPL_AGENT_PUBLIC' } });
+                await req.invokeAction!({ name: 'success', arguments: { value } });
+                throw new Error('must terminate');
+            },
+            async close() {},
+        };
+        const first = await execute(source, { backend }, true);
+        expect(first).toMatchObject({ value: 'original' });
+        expect(fs.readFileSync(file, 'utf8')).not.toContain('do-not-include');
+        vi.stubEnv('SPL_AGENT_PUBLIC', 'changed');
+        expect(await execute(source, {}, true)).toEqual(first);
+    });
+
+    it('streams live previews without persisting or replaying ephemeral updates', async () => {
+        const streams: ModelStreamEvent[] = [];
+        const streamLogger = new Logger('error', () => {}, { streamSink: event => streams.push(event) });
+        const backend: LlmBackend = {
+            async call(req) {
+                req.onStream?.({ channel: 'response', messageId: 'preview-id', mode: 'append', text: 'partial preview' });
+                return { text: 'complete', effective: {} };
+            },
+            async close() {},
+        };
+        const source = `success ask 'Prompt'`;
+        const result = await execute(source, { backend, logger: streamLogger });
+        expect(streams.map(event => event.type)).toEqual(['update', 'end']);
+        expect(fs.readFileSync(file, 'utf8')).not.toMatch(/partial preview|preview-id/);
+        streams.length = 0;
+        expect(await execute(source, { logger: streamLogger })).toEqual(result);
+        expect(streams).toEqual([]);
+    });
+
+    it('replays named class schema hydration and typed integer results', async () => {
+        const source = `---\nextension: semantic-prompt-language\nversion: 1\n---\n
+\`\`\`spl
+hydratable class Data:
+    count: int
+\`\`\`
+> Save @data with schema @Data.
+\`\`\`spl
+success [isinstance(data, Data), data.count]
+\`\`\``;
+        const backend: LlmBackend = {
+            async call(req) {
+                await req.invokeAction!({ name: 'load_variable', arguments: { name: 'Data' } });
+                await req.invokeAction!({ name: 'save_variable', arguments: { name: 'data', value: { count: 15 }, schema: 'Data' } });
+                return { text: 'Done', effective: {} };
+            },
+            async close() {},
+        };
+        const result = await execute(source, { backend }, true);
+        expect(result).toMatchObject({ status: 'success', value: [true, 15n] });
+        expect(await execute(source, {}, true)).toEqual(result);
+    });
+
+    it('does not seal cancelled calls as failures, and reclaims a terminated writer lock', async () => {
+        const source = `success ask 'Prompt'`;
+        let trace = Trace.open(file, context(source));
+        const backend: LlmBackend = {
+            async call() {
+                trace.cancel();
+                throw new LlmError('cancelled provider');
+            },
+            async close() {},
+        };
+        try {
+            await expect(run(parse(source), { backend, logger, cwd, trace })).rejects.toThrow(/unusable/);
+        } finally { trace.close(); }
+        expect(rows().map(row => row.type)).toEqual([undefined, 'intent']);
+        const prefix = fs.readFileSync(file, 'utf8');
+        const terminated = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' });
+        expect(terminated.status).toBe(0);
+        fs.writeFileSync(`${file}.lock`, String(terminated.pid));
+        trace = Trace.open(file, context(source));
+        try {
+            const result = await run(parse(source), { backend: scripted('resumed'), logger, cwd, trace });
+            expect(result).toMatchObject({ status: 'success', value: 'resumed' });
+            trace.finish(result);
+        } finally { trace.close(); }
+        expect(fs.readFileSync(file, 'utf8').startsWith(prefix)).toBe(true);
+    });
+
+    it('supports exact integer completion and source, runtime, configuration and argument guards', async () => {
+        const source = `success 123456789012345678901234567890`;
+        const first = await execute(source);
+        expect(await execute(source)).toEqual(first);
+        const original = fs.readFileSync(file, 'utf8');
+        for (const change of [{ source: 'changed' }, { runtime: 'changed' }, { configuration: { model: 'changed' } }, { args: ['changed'] }]) {
+            expect(() => Trace.open(file, { ...context(source), ...change })).toThrow(/mismatch/);
+        }
+        expect(fs.readFileSync(file, 'utf8')).toBe(original);
+        expect(fs.existsSync(`${file}.lock`)).toBe(false);
+    });
+
+    it('guards mismatched effects, unused history and terminal results without modifying completed traces', async () => {
+        const source = `success ask 'Prompt'`;
+        await execute(source, { backend: scripted('answer') });
+        const original = fs.readFileSync(file, 'utf8');
+        const trace = Trace.open(file, context(source));
+        try {
+            await expect(trace.effect({ kind: 'unexpected' }, () => 'unused', (value): value is string => typeof value === 'string'))
+                .rejects.toThrow(/history mismatch/);
+            expect(() => trace.assertConsumed()).toThrow(/unused history/);
+            await run(parse(source), { backend: unused, logger, trace });
+            expect(() => trace.finish({ status: 'success', value: 'wrong', hasValue: true })).toThrow(/completion mismatch/);
+        } finally { trace.close(); }
+        expect(fs.readFileSync(file, 'utf8')).toBe(original);
+    });
+
+    it('never falls back to a live agent when a completed trace is missing its runtime decisions', async () => {
+        const source = '---\nextension: semantic-prompt-language\nversion: 1\n---\n\n> Act.';
+        await execute(source, { backend: scripted('Done') }, true);
+        const history = rows();
+        fs.writeFileSync(file, [history[0], history.at(-1)].map(row => JSON.stringify(row)).join('\n') + '\n');
+        const original = fs.readFileSync(file, 'utf8');
+        const backend = scripted('must never be used');
+        await expect(execute(source, { backend }, true)).rejects.toThrow(/history mismatch/);
+        expect(backend.call).not.toHaveBeenCalled();
+        expect(fs.readFileSync(file, 'utf8')).toBe(original);
+    });
+
+    it('rejects concurrent writers and malformed or truncated files without rewriting bytes', () => {
+        const source = 'pass';
+        const trace = Trace.open(file, context(source));
+        expect(() => Trace.open(file, context(source))).toThrow(/another trace writer/);
+        trace.close();
+        const header = fs.readFileSync(file, 'utf8');
+        for (const invalid of ['', '{broken\n', header + '{broken', header + '{}\n', '{"format":"spl-trace","version":1}\n']) {
+            fs.writeFileSync(file, invalid);
+            expect(() => Trace.open(file, context(source))).toThrow(TraceError);
+            expect(fs.readFileSync(file, 'utf8')).toBe(invalid);
+            expect(fs.existsSync(`${file}.lock`)).toBe(false);
+        }
+    });
+});
+
+describe('direct human input', () => {
+    it('preflights human syntax and missing handlers before executing effects', async () => {
+        expect(usesHuman(parse(`success 'human'`))).toBe(false);
+        expect(usesHuman(parse(`def later():\n    return human 'Question'`))).toBe(true);
+        expect(() => parse(`human(fmt='text') 'Question'`)).toThrow(/does not accept modifiers/);
+        expect(() => parse(`let human = 1`)).toThrow(/reserved/);
+        expect(() => parse('human')).toThrow(/requires a prompt/);
+        expect(await run(parse(`write_file('should-not-exist', 'x')\ndef later():\n    return human 'Question'`),
+            { backend: unused, logger, cwd })).toMatchObject({ status: 'failure', failure: { reason: 'human input requires a human handler' } });
+        expect(fs.existsSync(path.join(cwd, 'should-not-exist'))).toBe(false);
+    });
+
+    it('validates questions and exact answers, and propagates unexpected handler errors', async () => {
+        const human = vi.fn(() => 'unused');
+        expect(await run(parse('success human 42'), { backend: unused, logger, human }))
+            .toMatchObject({ status: 'failure', failure: { reason: 'human question must be a string' } });
+        expect(human).not.toHaveBeenCalled();
+        const failure = new Error('input unavailable');
+        await expect(run(parse(`success human 'Question'`),
+            { backend: unused, logger, human: () => { throw failure; } })).rejects.toBe(failure);
+        expect(await run(parse(`success human 'Question'`),
+            { backend: unused, logger, human: () => '  exact\nanswer  ' })).toMatchObject({ value: '  exact\nanswer  ' });
     });
 });

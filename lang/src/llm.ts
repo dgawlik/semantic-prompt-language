@@ -100,10 +100,7 @@ export interface LlmResponse {
 }
 
 export interface LlmBackend {
-    readonly mode?: 'record' | 'replay' | 'trace' | 'workflow-replay';
     call(req: LlmRequest): Promise<LlmResponse>;
-    /** Record/replay external effects of blockquote actions, including those inside SPL functions. */
-    invokeTool?(action: RuntimeAction, perform: () => Promise<Value>): Promise<Value>;
     close(): Promise<void>;
 }
 

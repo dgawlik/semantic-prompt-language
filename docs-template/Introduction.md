@@ -103,7 +103,7 @@ success person.toString()
 ## Why SPL?
 
 1. **Short loops.** One file, run directly. `--check` validates syntax without a model, and
-   trace/replay reruns your code and guards against recorded model answers.
+   `--trace run.jsonl` resumes recorded work automatically and replays completed runs deterministically.
 2. **Exact code where it matters.** Control flow, arithmetic and I/O never call a model.
    `ask` and `think` generate values without tools; `agent` expressions and blockquotes can act.
 3. **Guards you can see.** `fmt`, `schema` and `assert` check data; `restrict` checks actions.
@@ -134,6 +134,6 @@ success person.toString()
 * [Language](Language.md): SPL syntax, scopes, built-ins and tools.
 * [Natural language & models](LLM-commands.md): blockquotes, `ask`, `think`, `agent` and output validation.
 * [Guards & failures](Safety.md): restrictions, assertions, failures and human input.
-* [CLI & runtime](CLI.md): options, traces, stores, MCP and embedding.
+* [CLI & runtime](CLI.md): options, append-only traces, MCP and embedding.
 * [Examples](Examples.md): real-world workflows.
 * [Typing migration](Migration.md): breaking syntax, contracts, numeric representations and class schemas.

@@ -2,13 +2,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Checkpoint } from '../src/checkpoint.js';
 import { ExecutionSession, run } from '../src/interpreter.js';
 import type { LlmBackend, LlmRequest, LlmResponse, RuntimeAction } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown } from '../src/markdown.js';
 import { RUNTIME_PREAMBLE } from '../src/preamble.js';
-import { RecordingBackend, ReplayBackend, TraceBackend } from '../src/recording.js';
 import { NoLlm } from './helpers.js';
 
 const header = '---\nextension: semantic-prompt-language\nversion: 1\n';
@@ -181,23 +179,6 @@ hydratable class Review:
         ) })).toMatchObject({ status: 'failure', failure: { status_code: statusCode } });
     });
 
-    it('replays named descriptor schema loading and class hydration', async () => {
-        const cwd = directory();
-        const file = path.join(cwd, 'schema-trace.jsonl');
-        const source = document(fence('hydratable class Data:\n    count: int') +
-            '\n\n> Save @data using @validate[Data].\n\n' + fence('success [isinstance(data, Data), data.count]'));
-        const trace = new TraceBackend(actions(
-            action('load_variable', { name: 'Data' }),
-            action('save_variable', { name: 'data', value: { count: 15 }, schema: 'Data' }),
-        ), file);
-        expect(await run(parseMarkdown(source), { cwd, logger, backend: trace }))
-            .toMatchObject({ status: 'success', value: [true, 15n] });
-        await trace.close();
-        const replay = new ReplayBackend(file);
-        expect(await run(parseMarkdown(source), { cwd, logger, backend: replay }))
-            .toMatchObject({ status: 'success', value: [true, 15n] });
-        await replay.close();
-    });
 
     it('decodes JSON arguments for recursive typed functions and exposes their signatures', async () => {
         const source = document(fence(`def factorial(n: int) -> int:
@@ -373,7 +354,7 @@ ${code.split('\n').map(line => '    ' + line).join('\n')}`) +
         expect(fs.readFileSync(path.join(cwd, 'allowed', 'result.txt'), 'utf8')).toBe('6');
     });
 
-    it('fails immediately on human input without a handler or checkpoint', async () => {
+    it('fails immediately on human input without a handler', async () => {
         const cwd = directory();
         let turn = 0;
         const result = await run(parseMarkdown(document('> Ask a human.')), {
@@ -382,7 +363,7 @@ ${code.split('\n').map(line => '    ' + line).join('\n')}`) +
                 return { text: 'Ask', effective: {}, action: action('ask_human', { question: 'Approve?' }) };
             }),
         });
-        expect(result).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('checkpoint') } });
+        expect(result).toMatchObject({ status: 'failure', failure: { reason: expect.stringContaining('human handler') } });
         expect(turn).toBe(1);
     });
 
@@ -404,131 +385,11 @@ ${code.split('\n').map(line => '    ' + line).join('\n')}`) +
         expect(turns).toBe(1);
     });
 
-    it('resumes agent human input without repeating completed model turns or effects', async () => {
-        const cwd = directory();
-        const source = document('> Write a draft, request approval, and return it.');
-        const context = { source, cwd, runtime: 'test' };
-        const file = path.join(cwd, 'checkpoint.jsonl');
-        let checkpoint = Checkpoint.create(file, context);
-        const first = await run(parseMarkdown(source), {
-            logger, cwd, checkpoint, backend: actions(
-                action('write_file', { path: 'draft.txt', content: 'original' }),
-                action('ask_human', { question: 'Approve?' }),
-            ),
-        });
-        checkpoint.close();
-        expect(first.status).toBe('waiting_for_input');
-        fs.writeFileSync(path.join(cwd, 'draft.txt'), 'edited');
-        checkpoint = Checkpoint.resume(file, context);
-        checkpoint.answer(checkpoint.request!.request_id, 'approved');
-        const second = await run(parseMarkdown(source), { logger, cwd, checkpoint, backend: backend(async req => {
-            expect(req.prompt).toContain('"value":"approved"');
-            return { text: 'Done', effective: {}, action: action('success', { value: 'approved' }) };
-        }) });
-        checkpoint.finish(second.status === 'success' ? 'success' : 'failure');
-        checkpoint.close();
-        expect(second).toMatchObject({ status: 'success', value: 'approved' });
-        expect(fs.readFileSync(path.join(cwd, 'draft.txt'), 'utf8')).toBe('edited');
-    });
 
-    it('resumes inside invoked SPL functions without repeating effects or duplicating mutations', async () => {
-        const cwd = directory();
-        const source = document(fence(`let count = 0
-def approve():
-    count += 1
-    write_file('function.txt', 'original')
-    return human 'Function approval?'`) + '\n\n> Invoke @approve and save its answer to @answer.\n\n' + fence('success [count, answer]'));
-        const context = { source, cwd, runtime: 'test' };
-        const file = path.join(cwd, 'checkpoint.jsonl');
-        let checkpoint = Checkpoint.create(file, context);
-        const first = await run(parseMarkdown(source), {
-            cwd, checkpoint, logger, backend: actions(action('call_function', { name: 'approve', args: [] })),
-        });
-        checkpoint.close();
-        expect(first).toMatchObject({ status: 'waiting_for_input', request: { question: 'Function approval?' } });
-        fs.writeFileSync(path.join(cwd, 'function.txt'), 'edited');
-        checkpoint = Checkpoint.resume(file, context);
-        checkpoint.answer(checkpoint.request!.request_id, 'yes');
-        let turn = 0;
-        const result = await run(parseMarkdown(source), { cwd, checkpoint, logger, backend: backend(async req => {
-            expect(req.prompt).toContain('"result":{"value":"yes"}');
-            return { text: 'Done', effective: {}, action: turn++ === 0 ? action('save_variable', { name: 'answer', value: 'yes' }) : undefined };
-        }) });
-        checkpoint.finish('success');
-        checkpoint.close();
-        expect(result).toMatchObject({ status: 'success', value: [1, 'yes'] });
-        expect(fs.readFileSync(path.join(cwd, 'function.txt'), 'utf8')).toBe('edited');
-    });
 
-    it('replays function calls, shared mutations and nested generation without repeating agent effects', async () => {
-        const cwd = directory();
-        const file = path.join(cwd, 'recording.jsonl');
-        const source = document(fence("let count = 0\ndef number():\n    count += 1\n    write_file('number.txt', 'original')\n    return ask(fmt='integer') 'Number?'") +
-            '\n\n> Use @number and save the result to @numberResult.\n\n' + fence('assert count == 1\nsuccess numberResult'));
-        const live = backend(async req => {
-            if (!req.naturalLanguage) return { text: '42', effective: {} };
-            const value = await req.invokeAction!(action('call_function', { name: 'number', args: [] }));
-            expect(value).toBe(42);
-            await req.invokeAction!(action('save_variable', { name: 'numberResult', value }));
-            return { text: 'Done', effective: {} };
-        });
-        const recording = new TraceBackend(live, file);
-        expect(await run(parseMarkdown(source), { logger, cwd, backend: recording })).toMatchObject({ value: 42 });
-        await recording.close();
-        fs.writeFileSync(path.join(cwd, 'number.txt'), 'edited');
-        const replay = new ReplayBackend(file);
-        expect(await run(parseMarkdown(source), { logger, cwd, backend: replay })).toMatchObject({ value: 42 });
-        await replay.close();
-        expect(fs.readFileSync(path.join(cwd, 'number.txt'), 'utf8')).toBe('edited');
-    });
 
-    it.each([
-        action('success', { value: 9 }),
-        action('fail', { reason: 'stop now' }),
-        action('call_function', { name: 'missing', args: [] }),
-        action('save_variable', { name: 'value', value: 'bad', schema: { type: 'integer' } }),
-        action('read_file', { path: 'missing.txt' }),
-    ])('replays an immediately terminating $name call without an extra model response', async step => {
-        const cwd = directory();
-        const file = path.join(cwd, 'trace.jsonl');
-        const source = document('> Execute the requested action.');
-        const trace = new TraceBackend(actions(step), file);
-        const expected = await run(parseMarkdown(source), { logger, cwd, backend: trace });
-        await trace.close();
-        expect(expected).toMatchObject({ status: step.name === 'success' ? 'success' : 'failure' });
-        const replay = new ReplayBackend(file);
-        expect(await run(parseMarkdown(source), { logger, cwd, backend: replay })).toEqual(expected);
-        await replay.close();
-    });
 
-    it('rejects generation-only recordings before blockquote actions', async () => {
-        const cwd = directory();
-        const recording = new RecordingBackend(new NoLlm(), path.join(cwd, 'record.jsonl'));
-        expect(await run(parseMarkdown(document('> Act.')), { logger, cwd, backend: recording }))
-            .toMatchObject({ status: 'failure', failure: { status_code: 'restriction_violation' } });
-        await recording.close();
-    });
 
-    it('fails explicitly on a mismatched runtime-tool trace without executing the tool', async () => {
-        const cwd = directory();
-        const file = path.join(cwd, 'trace.jsonl');
-        const source = document('> Write a file.');
-        let turn = 0;
-        const trace = new TraceBackend(backend(async () => ({
-            text: 'Done', effective: {}, action: turn++ === 0 ? action('write_file', { path: 'file.txt', content: 'original' }) : undefined,
-        })), file);
-        const first = await run(parseMarkdown(source), { cwd, logger, backend: trace });
-        expect(first.status).toBe('success');
-        await trace.close();
-        const entries = fs.readFileSync(file, 'utf8').trimEnd().split('\n').map(line => JSON.parse(line));
-        entries[2].tool.arguments.path = 'different.txt';
-        fs.writeFileSync(file, entries.map(entry => JSON.stringify(entry)).join('\n') + '\n');
-        fs.writeFileSync(path.join(cwd, 'file.txt'), 'edited');
-        const result = await run(parseMarkdown(source), { cwd, logger, backend: new ReplayBackend(file) });
-        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'llm_error', reason: expect.stringContaining('replay tool mismatch') } });
-        expect(fs.readFileSync(path.join(cwd, 'file.txt'), 'utf8')).toBe('edited');
-        expect(fs.existsSync(path.join(cwd, 'different.txt'))).toBe(false);
-    });
 
     it('loads and saves JSON variables, accesses env and args, and preserves persistence', async () => {
         const source = document('> Set @result.\n\n' + fence("success [result, $args]"));
@@ -566,29 +427,6 @@ def approve():
             .toMatchObject({ status: 'success', value: 1 });
     });
 
-    it('records requested environment values without exposing the full environment or reading it again on replay', async () => {
-        const cwd = directory();
-        const file = path.join(cwd, 'trace.jsonl');
-        const source = document('> Read the configured environment value.\n\n' + fence('success value'));
-        vi.stubEnv('SPL_AGENT_TEST_VALUE', 'original');
-        vi.stubEnv('SPL_AGENT_TEST_PRIVATE', 'do-not-include');
-        let turn = 0;
-        const trace = new TraceBackend(backend(async req => {
-            expect(req.prompt).not.toContain('do-not-include');
-            if (turn === 1) expect(req.prompt).toContain('"value":"original"');
-            return { text: 'Done', effective: {}, action: [
-                action('get_env', { name: 'SPL_AGENT_TEST_VALUE' }),
-                action('save_variable', { name: 'value', value: 'original' }),
-                undefined,
-            ][turn++] };
-        }), file);
-        const expected = await run(parseMarkdown(source), { cwd, logger, backend: trace });
-        await trace.close();
-        vi.stubEnv('SPL_AGENT_TEST_VALUE', 'changed');
-        const replay = new ReplayBackend(file);
-        expect(await run(parseMarkdown(source), { cwd, logger, backend: replay })).toEqual(expected);
-        await replay.close();
-    });
 
     it.each([
         action('submit_spl', { source: "success 1" }),

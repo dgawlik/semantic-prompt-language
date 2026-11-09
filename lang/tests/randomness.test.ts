@@ -2,14 +2,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Checkpoint, type CheckpointContext } from '../src/checkpoint.js';
 import { run } from '../src/interpreter.js';
 import type { LlmRequest, LlmResponse } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import { parseMarkdown } from '../src/markdown.js';
 import { isReservedName, parse } from '../src/parser.js';
 import { Pin } from '../src/pin.js';
-import { RecordingBackend, ReplayBackend, TraceBackend, traceRequest } from '../src/recording.js';
 import { NoLlm } from './helpers.js';
 
 const logger = new Logger('silent');
@@ -178,32 +176,6 @@ success ask(${parameters}) prompt()`;
 });
 
 describe('sampling journal identity', () => {
-    it.each(['record', 'trace'] as const)('retains sampling in %s and compares it on replay', async mode => {
-        const file = path.join(cwd, 'recording.jsonl');
-        const backend = scripted('answer');
-        const recording = mode === 'record' ? new RecordingBackend(backend, file) : new TraceBackend(backend, file);
-        const source = "success ask(top_p=0.1, seed=42, temperature=0) 'Prompt'";
-        const expected = await run(parse(source), { backend: recording, logger, cwd });
-        await recording.close();
-        const request = backend.call.mock.calls[0][0];
-        expect(traceRequest(request).reasoningEffort).toBeNull();
-        expect(traceRequest(request).randomness).toEqual({ seed: 42, temperature: 0, top_p: 0.1 });
-        expect(traceRequest({ ...request, randomness: undefined })).not.toHaveProperty('randomness');
-        const replay = new ReplayBackend(file);
-        expect(await run(parse(source), { backend: replay, logger, cwd })).toEqual(expected);
-        await replay.close();
-        const mismatch = new ReplayBackend(file);
-        expect(await run(parse(source.replace('seed=42', 'seed=43')), { backend: mismatch, logger, cwd }))
-            .toMatchObject({ status: 'failure', failure: { status_code: 'llm_error', reason: expect.stringContaining('mismatch') } });
-        await expect(mismatch.close()).rejects.toThrow(/unused recorded response/);
-        expect(backend.call).toHaveBeenCalledOnce();
-        if (mode === 'trace') {
-            const [header, entry] = fs.readFileSync(file, 'utf8').trimEnd().split('\n').map(line => JSON.parse(line));
-            entry.request.randomness.seed = -1;
-            fs.writeFileSync(file, [header, entry].map(item => JSON.stringify(item)).join('\n'));
-            expect(() => new ReplayBackend(file)).toThrow(/invalid recording entry/);
-        }
-    });
 
     it('pins and replays sampled expressions without calling the backend', async () => {
         const source = markdown("success ask(seed=42, temperature=0, top_p=0) 'Prompt'");
@@ -215,22 +187,4 @@ describe('sampling journal identity', () => {
         expect(backend.call).toHaveBeenCalledOnce();
     });
 
-    it('retains requested sampling across checkpoint suspension and offline reconstruction', async () => {
-        const source = "let result = ask(seed=42, temperature=0) 'Prompt'\nlet answer = human 'Approve?'\nsuccess [result, answer]";
-        const context: CheckpointContext = { source, runtime: 'test', cwd };
-        const file = path.join(cwd, 'checkpoint.jsonl');
-        const backend = scripted('answer');
-        const checkpoint = Checkpoint.create(file, context);
-        const first = await run(parse(source), { backend, logger, cwd, checkpoint });
-        expect(first.status).toBe('waiting_for_input');
-        checkpoint.close();
-        const resumed = Checkpoint.resume(file, context);
-        resumed.answer(resumed.request!.request_id, 'yes');
-        const result = await run(parse(source), { backend: new NoLlm(), logger, cwd, checkpoint: resumed });
-        expect(result).toMatchObject({ status: 'success', value: ['answer', 'yes'] });
-        resumed.finish('success');
-        resumed.close();
-        expect(fs.readFileSync(file, 'utf8')).toContain('\\"randomness\\"');
-        expect(backend.call).toHaveBeenCalledOnce();
-    });
 });

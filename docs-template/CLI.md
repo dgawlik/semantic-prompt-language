@@ -7,8 +7,7 @@ the outcome through its exit code. Requires Node.js >=24.15.0.
 
 ```bash
 spl <workflow.md> [options] [--arg value ...]
-spl <workflow.md> --checkpoint run.jsonl
-spl <workflow.md> --resume run.jsonl [--answer-for ID (--answer text | --answer-file file)]
+spl <workflow.md> --trace run.jsonl
 spl login <openai|anthropic|google>
 spl logout [openai|anthropic|google]
 ```
@@ -25,10 +24,8 @@ spl logout [openai|anthropic|google]
 | `--silent` | No execution logs; human prompts still appear on stderr |
 | `--timeout <s>` | Per model call (default 300) |
 | `--mcp <file.json>` | MCP servers, see [MCP servers](#mcp-servers) |
-| `--trace` / `--replay <file.jsonl>` | Record or replay model calls, see [Traces and replay](#traces-and-replay) |
+| `--trace <file.jsonl>` | Append execution history, automatically resume or replay the same file; see [Traces and replay](#traces-and-replay) |
 | `--pin` | Save a successful workflow as self-contained [locked Markdown](#pinned-workflows) |
-| `--store <file.json>` / `--store-module <path>` | Persist top-level variables, see [Variable stores](#variable-stores) |
-| `--checkpoint`, `--resume`, `--answer-for`, `--answer`, `--answer-file` | [Human input](Safety.md#human-in-the-loop) |
 | `-v`, `--version` / `-h`, `--help` | Version / usage |
 
 Each `--arg` is one string; use `--arg=--value` for values starting with a dash.
@@ -45,8 +42,8 @@ spl lang/examples/color-poem.md --human blue --human apple
 Supplied answers are exact strings, including empty or multiline values; use `--human=--value`
 for answers starting with a dash. Once supplied answers are exhausted, remaining questions prompt
 normally, even with `--silent`. EOF without an answer is a script failure, not a suspension.
-`--human` cannot be combined with explicit `--checkpoint` or `--resume`; those retain the
-noninteractive journal/answer workflow described in [Human input](Safety.md#human-in-the-loop).
+With `--trace`, recorded answers replay without prompting or consuming supplied `--human` values;
+those values answer only new questions.
 
 ## Output and exit codes
 
@@ -73,7 +70,7 @@ initialization) and new value. Parameters, loop/handler bindings, closures and s
 are included. A shared mutation is one event listing all affected aliases. Same-value assignments,
 no-op methods, reads, scope exits and initial runtime/store baselines do not create events.
 Automatic executed-source and control-flow step traces no longer appear at any verbosity.
-Historical checkpoint reconstruction is suppressed; new commits and ordinary trace replay remain visible.
+Historical trace reconstruction is suppressed; newly completed steps remain visible.
 
 Terminal stdin and stderr enable an isolated BetterTUI view on stderr, even when stdout is piped.
 Event headers are bold when terminal styling is enabled. An animated trailing loading character
@@ -99,7 +96,7 @@ transcript contains each complete response once. Redirected logs remain expanded
 Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
 stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
 append-only output without changing workflow results. Non-terminal stdin/stderr, `TERM=dumb`,
-embedded sinks, silent, help/version, auth, check-only and checkpoint/resume never acquire the UI.
+embedded sinks, silent, help/version, auth and check-only never acquire the UI.
 Before a human prompt, the interactive renderer exits and restores the terminal; subsequent logs
 remain append-only so only the shell reads the answer. Supplied `--human` answers do not stop the UI.
 Before native rendering, the child queries cursor visibility and alternate-screen state.
@@ -110,9 +107,9 @@ Message, label and value controls are sanitized rather than executed as terminal
 
 Colors are enabled automatically when stderr is a terminal, and disabled for redirected output
 or `TERM=dumb`. Set `NO_COLOR=1` to disable color, or `FORCE_COLOR=1` to enable it when redirecting;
-`FORCE_COLOR=0` disables color, and `NO_COLOR` takes precedence. stdout results, checkpoint
-envelopes, trace journals and variable stores remain plain, machine-readable data.
-`--silent` suppresses execution logs; usage, syntax and checkpoint-usage diagnostics still appear
+`FORCE_COLOR=0` disables color, and `NO_COLOR` takes precedence. stdout results and trace journals
+remain plain, machine-readable data.
+`--silent` suppresses execution logs; usage, syntax and trace-usage diagnostics still appear
 on stderr so command-line errors are not hidden.
 `--log-level` retains ordinary severity filtering; model transcripts and state events appear at
 every non-silent level. Forced color never enables cursor controls or keyboard input.
@@ -141,36 +138,47 @@ without running getters, serializers or custom inspectors.
 | `0` | Success |
 | `1` | Script failure |
 | `2` | Syntax or usage error |
-| `3` | Waiting for human input in explicit checkpoint/resume mode |
 | `70` | Internal or infrastructure error |
 
 ## Traces and replay
 
 ```bash
 spl flow.md --trace run.jsonl
-spl flow.md --replay run.jsonl --silent
+spl flow.md --trace run.jsonl --silent  # resume or replay the same run
+spl flow.md --trace next-run.jsonl     # start a fresh run
 ```
 
-`--trace` writes every `ask`, `think`, `agent` and blockquote request with its raw response or failure
-to a new JSONL file. `--replay` feeds those results back without contacting model providers or MCP servers,
-so you can iterate on code and guards for free. Requests must match exactly and in order (prompt,
-kind, model, reasoning, display setting); a mismatch, missing or unused entry fails.
-Traces and recordings retain the `showReasoning` request field: it is now `true` by default,
-and `hide=True` sets it to `false`. To replay older entries with `showReasoning:false`,
-add `hide=True` to the matching calls or record a new trace.
+`--trace` is the only CLI persistence and replay option. A missing file starts a run; an existing
+file reconstructs local variables, functions, loops and shared mutations from its recorded external
+inputs, then continues at the first unrecorded step. Records are appended and flushed durably:
+existing bytes are never rewritten. A completed success or failure replays deterministically,
+prints the same result and leaves the trace unchanged. To restart, choose a different JSONL file.
 
-Replay is not a dry run: explicit `read_file`, `write_file`, `shell` and web calls, and stores, still run.
-Agent actions are not repeated, and their side effects are not recreated. Blockquote decisions
-rebuild shared bindings and run existing functions against recorded external-tool results.
+The version 2 JSONL journal records model requests, raw responses and failures (including repairs,
+reasoning, sampling and token budgets), blockquote decisions, explicit file/shell/web tool outcomes,
+human answers and the terminal result. Completed effects are not executed again: replay never
+contacts model providers or MCP, re-reads files, repeats writes/commands/network calls, or prompts
+for recorded answers. It does not recreate side effects if their files have been removed or changed.
 
-```json
-{"format":"spl-trace","version":1}
-{"request":{"kind":"ask","prompt":"Question","model":null,"reasoningEffort":null,"showReasoning":true},"response":{"text":"Answer","effective":{"model":"actual-model"}}}
-```
+Source, runtime, working directory and model/provider/MCP configuration must match. Arguments are
+retained; omitting `--arg` reuses them, while explicitly different arguments fail. Requests must
+match exactly and in order; malformed, mismatched and unused history fail without falling back
+to live work. Legacy trace and generation-recording formats are not accepted.
 
-The older `--record` mode writes generation-only recordings; replaying them blocks writes, shell,
-network, agents (including blockquotes) and stores. Traces and recordings contain full prompts,
-answers and requested environment values, so keep them private.
+After an interruption, a recorded human question or tool-free generation request can continue.
+If a write, shell command or agent was interrupted between its durable intent and outcome, its
+side effects may already have occurred: SPL reports an unresolved effect instead of repeating it.
+Truncated final records likewise require manual recovery; SPL never truncates the log to guess.
+Only one process can write a trace at a time; a lock from a terminated process is reclaimed.
+
+Human input still uses stdin or repeatable `--human` flags; there are no suspension envelopes,
+answer IDs or waiting exit codes. The former `--store`, `--store-module`, `--record`, `--replay`,
+`--checkpoint`, `--resume`, `--answer-for`, `--answer` and `--answer-file` options are removed.
+
+**Keep traces private.** They include prompts, responses, human answers and tool results.
+`$env` access captures the environment snapshot for deterministic reconstruction; a blockquote
+`get_env` records only the requested value. These may contain secrets. New files use owner-only
+permissions where supported. Trace logging is not a transaction system or a sandbox.
 
 ## Pinned workflows
 
@@ -198,40 +206,14 @@ retained. When `$env` or a blockquote environment tool is used, the environment 
 as well. Replay checks source identity, execution options, request order and complete journal
 consumption; missing, malformed, mismatched or unused entries fail without falling back to live calls.
 
-Pinning cannot be combined with checkpoint/resume or trace/record/replay. Locked workflows also
-reject stores, MCP configuration and supplied human answers. Explicit argument, model or working-directory
+Pinning cannot be combined with `--trace`. Locked workflows also
+reject MCP configuration and supplied human answers. Explicit argument, model or working-directory
 overrides must match the pinned values. To change the workflow or its inputs, run the original file
 with `--pin` again after moving or removing the old locked file.
 
 **Keep locked files private.** Responses, human answers, file contents, initial variables and any
 accessed environment snapshot can contain secrets. Pinning is not a sandbox: the original run still
 performs all requested actions; locked replay does not repeat those actions or recreate their effects.
-
-## Variable stores
-
-`--store state.json` loads top-level variables at start and saves them at exit, even after a failure.
-Functions and `$env`/`$args` are not saved. See [journal.md](../lang/examples/journal.md).
-The built-in `JsonFileStore` writes typed numeric tokens losslessly, but its loader remains
-dynamic and stores do not contain descriptors. Explicit typed decoding is needed to recover
-new numeric representations and contracts; ordinary JSON loading is not a typed round trip.
-
-`--store-module ./store.mjs` uses a module exporting `createStore()`, which returns synchronous
-`load()` and `save(vars)` methods:
-
-`store.mjs`
-
-```js
-import fs from 'node:fs';
-import { encodeJson } from 'spl-lang';
-
-export function createStore() {
-  const file = './state.json';
-  return {
-    load: () => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}),
-    save: (vars) => fs.writeFileSync(file, encodeJson(vars)),
-  };
-}
-```
 
 ## MCP servers
 
@@ -304,20 +286,22 @@ try {
   const program = parseMarkdown(fs.readFileSync('flow.md', 'utf8'));
   const result = await run(program, { backend, logger, cwd: process.cwd(), args: ['first'] });
   if (result.status === 'success') console.log(result.value);
-  else console.error(result.failure ?? result.request);
+  else console.error(result.failure);
 } finally {
   await backend.close();
 }
 ```
 
-`run` returns `success` (with `value`), `failure` (with `failure`), or `waiting_for_input` when given a
-`Checkpoint`. Options include `backend`, `logger`, `cwd`, `args` (default `[]`, never `process.argv`),
-`store`, `model`, `human` and `checkpoint`. A `human(question, line)` handler returns a string or
+`run` returns `success` (with `value`) or `failure` (with `failure`).
+Options include `backend`, `logger`, `cwd`, `args` (default `[]`, never `process.argv`),
+`store` (embedding-only bindings/snapshots), `model`, `human` and `trace`. A `human(question, line)` handler returns a string or
 `Promise<string>` for both human expressions and blockquote `ask_human` calls. Embedded runs never
-read stdin themselves; provide this handler or a checkpoint when requesting human input.
-A checkpoint takes precedence over the handler and retains suspension semantics.
-Wrap a backend in `TraceBackend` to record, or use `ReplayBackend`
-to replay; close it to check for unused entries. A custom backend implements `call(request)` and `close()`;
+read stdin themselves; provide this handler when requesting new human input.
+Use `Trace.open(file, { source: program.lines.join('\n'), runtime: 'your-runtime-id', cwd, args, configuration })`
+and pass the result as `trace`. After execution and backend cleanup, call `trace.finish(result)`;
+always call `trace.close()` in `finally`. The same file automatically resumes or replays.
+Trace runs cannot use an embedding variable store; local state is reconstructed from history.
+A custom backend implements `call(request)` and `close()`;
 only requests of kind `agent` may run tools. Raw `parse` and `run` still accept plain SPL source.
 `AiBackend` accepts an optional `provider` alongside `logger`, `cwd`, `timeoutMs` and `mcpServers`.
 The previous `CopilotBackend` export is an alias for embedding compatibility, not a Copilot connection.

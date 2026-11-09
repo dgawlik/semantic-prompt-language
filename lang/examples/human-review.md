@@ -12,10 +12,12 @@ Supply `--human` to answer without prompting:
     spl examples/human-review.md
     spl examples/human-review.md --human "Make the wording clearer"
 
-For noninteractive checkpoint/resume automation instead:
+To record and automatically resume the same run:
 
-    spl examples/human-review.md --checkpoint run.jsonl --silent
-    spl examples/human-review.md --resume run.jsonl --answer-for REQUEST_ID --answer-file feedback.txt
+    spl examples/human-review.md --trace run.jsonl
+    spl examples/human-review.md --trace run.jsonl --human "Make the wording clearer"
+
+Completed runs replay without prompts or side effects. Choose another JSONL file to restart.
 
 ```spl
 let changes = read_file('./examples/data/product-update.md')

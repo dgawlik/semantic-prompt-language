@@ -83,14 +83,14 @@ assert len(summary) < 300 'summary is too long'
 
 `--check` validates syntax only; it cannot validate a blockquote's intent. `--trace` records the
 agent's decisions and runtime tool results. Replay restores shared-variable changes and function
-execution without repeating agent-owned external effects or contacting MCP. Generation-only
-`--record` cannot record blockquotes. Run only trusted documents.
+execution without repeating external effects or contacting MCP. Reuse the same `--trace` path
+to resume or replay; choose another JSONL file to restart. Run only trusted documents.
 Old traces containing submitted SPL are incompatible with agent commands; record a new trace.
 
 Human input prompts directly in the shell and returns the answer to the same agent session.
-Repeat `--human <answer>` to answer questions in order without prompting. The explicit
-`--checkpoint`/`--resume` workflow remains available for automation: completed decisions and effects
-are replayed from the journal after `--resume`, then the agent receives the answer and continues.
+Repeat `--human <answer>` to answer questions in order without prompting. With `--trace`,
+completed decisions, effects and human answers replay from the same file, then the agent continues
+with any new answers. Supplied answers are consumed only for questions not already recorded.
 See [Human input](Safety.md#human-in-the-loop).
 
 ## Generation: ask and think
@@ -234,14 +234,13 @@ For sampling controls,
 default numeric value was sent.
 `effective.reasoningEffort` is `none` when disabling thinking is honored, or `null` when the adapter
 cannot honor that setting; `null` does not mean thinking is disabled.
-Traces, recordings, checkpoints and pinned workflows include requested
+Traces and pinned workflows include requested
 sampling controls in request identity; changing them cannot silently reuse an old response.
-Calls without sampling controls or `tokens` retain compatibility with existing replay files.
-Recordings retain the same sampling request shape, but recreate pins and checkpoints after
-editing their source documents.
+Recreate pins and choose new trace files after editing source documents; legacy trace and
+generation-recording formats are not accepted by the append-only trace journal.
 
 Even extreme settings cannot guarantee identical outputs from hosted models. Use
-[`--pin`](CLI.md#pinned-workflows) for fully deterministic offline replay.
+[`--trace`](CLI.md#traces-and-replay) or [`--pin`](CLI.md#pinned-workflows) for deterministic offline replay.
 See the official [OpenAI](https://ai-sdk.dev/providers/ai-sdk-providers/openai),
 [Google](https://ai-sdk.dev/providers/ai-sdk-providers/google) and
 [Anthropic](https://ai-sdk.dev/providers/ai-sdk-providers/anthropic) adapter documentation.

@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { RUNTIME_PREAMBLE } from '../src/preamble.js';
 
 const CLI = path.resolve(__dirname, '..', 'dist', 'cli.js');
 let dir: string;
@@ -60,7 +59,8 @@ ToolHost.prototype.invoke = async function(...args) {
             NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`,
             SPL_PIN_CLI: 'original environment',
         };
-        const source = markdown(`let input = read_file('input.txt')
+        const source = markdown(`let seed = ['initial']
+let input = read_file('input.txt')
 let answer = ask(model='other') 'Answer {input}'
 let approval = human 'Approve?'
 write_file('effect.txt', approval)
@@ -70,9 +70,8 @@ success [answer, approval, $env.SPL_PIN_CLI, $args, seed]`);
         const locked = path.join(dir, 'flow.locked.md');
         fs.writeFileSync(file, source);
         fs.writeFileSync(path.join(dir, 'input.txt'), 'original input');
-        fs.writeFileSync(path.join(dir, 'variables.json'), JSON.stringify({ seed: ['initial'] }));
         const first = run([file, '--pin', '--silent', '--human=  approved  ', '--model=pinned-model',
-            '--arg=original', '--store=variables.json'], env);
+            '--arg=original'], env);
         expect(first.code).toBe(0);
         expect(first.err).toBe('');
         expect(JSON.parse(first.out)).toEqual([
@@ -85,7 +84,6 @@ success [answer, approval, $env.SPL_PIN_CLI, $args, seed]`);
         expect(lockedSource).toContain('captured reasoning');
         fs.unlinkSync(path.join(dir, 'effect.txt'));
         fs.unlinkSync(path.join(dir, 'input.txt'));
-        fs.writeFileSync(path.join(dir, 'variables.json'), 'invalid and must not be loaded');
         const replay = run([locked, '--silent'], { ...env, PIN_REPLAY: '1', SPL_PIN_CLI: 'changed environment' });
         expect(replay).toEqual(first);
         expect(fs.readFileSync(path.join(dir, 'calls.txt'), 'utf8')).toBe('pinned-model\n');
@@ -136,7 +134,7 @@ AiBackend.prototype.close = async function() { throw new LlmError('cleanup faile
         expect(fs.existsSync(path.join(dir, 'flow.locked.md'))).toBe(false);
     });
 
-    it.each(['--trace=trace.jsonl', '--record=record.jsonl', '--replay=replay.jsonl', '--checkpoint=checkpoint.jsonl', '--resume=checkpoint.jsonl'])(
+    it.each(['--trace=trace.jsonl'])(
         'rejects --pin with %s before running', option => {
             const result = spl('success 42', '--pin', option, '--silent');
             expect(result.code).toBe(2);
@@ -148,7 +146,7 @@ AiBackend.prototype.close = async function() { throw new LlmError('cleanup faile
     it('rejects live overrides and missing journals without falling back to execution', () => {
         expect(spl('success $args', '--pin', '--arg=original', '--silent').code).toBe(0);
         const locked = path.join(dir, 's.locked.md');
-        for (const option of ['--pin', '--store=variables.json', '--mcp=missing.json', '--human=answer', '--trace=trace.jsonl']) {
+        for (const option of ['--pin', '--mcp=missing.json', '--human=answer', '--trace=trace.jsonl']) {
             const result = run([locked, option, '--silent']);
             expect(result.code).toBe(2);
             expect(result.err).toContain('locked workflows cannot');
@@ -280,147 +278,123 @@ globalThis.fetch = async (url, init) => {
     }
 });
 
-describe('noninteractive checkpoint CLI', () => {
-    it.each(['file', 'checkpoint'] as const)('pauses, inspects, answers and completes with --resume %s', (syntax) => {
-        const state = path.join(dir, 'run.jsonl');
-        const resume = syntax === 'file' ? ['--resume', state] : ['--resume', '--checkpoint', state];
-        const script = `write_file('output.txt', 'original')\nlet a = human 'First question'\nlet b = human 'Second question'\nsuccess [a, b, $args]`;
-        const first = spl(script, '--checkpoint', state, '--arg=initial', '--silent');
-        expect(first.code).toBe(3);
-        expect(first.err).toBe('');
-        const pending = JSON.parse(first.out);
-        expect(pending).toMatchObject({ status: 'waiting_for_input', question: 'First question', line: 8, checkpoint: state });
-        const before = fs.readFileSync(state, 'utf8');
-        expect(spl(script, ...resume, '--silent')).toEqual(first);
-        expect(fs.readFileSync(state, 'utf8')).toBe(before);
-        fs.writeFileSync(path.join(dir, 'output.txt'), 'not overwritten');
-        const stale = spl(script, ...resume, '--answer-for', pending.run_id, '--answer=yes', '--silent');
-        expect(stale.code).toBe(2);
-        expect(stale.out).toBe('');
-        expect(stale.err).toContain('use request_id from the latest waiting_for_input response, not run_id');
-        expect(fs.readFileSync(state, 'utf8')).toBe(before);
-        expect(spl(script, '--checkpoint', state, '--silent').code).toBe(2);
-        expect(fs.readFileSync(state, 'utf8')).toBe(before);
-        const second = spl(script, ...resume, '--answer-for', pending.request_id, '--answer=', '--silent');
-        expect(second.code).toBe(3);
-        const next = JSON.parse(second.out);
-        expect(next.request_id).not.toBe(pending.request_id);
-        expect(next.run_id).toBe(pending.run_id);
-        expect(next.checkpoint).toBe(state);
-        expect(next.question).toBe('Second question');
-        const afterSecond = fs.readFileSync(state, 'utf8');
-        expect(afterSecond.startsWith(before)).toBe(true);
-        expect(spl(script, ...resume, '--silent')).toEqual(second);
-        expect(spl(script, ...resume, '--answer-for', pending.request_id, '--answer=yes').code).toBe(2);
-        expect(fs.readFileSync(state, 'utf8')).toBe(afterSecond);
-        const answer = '  "quoted"\nmultiline\n';
-        const answerFile = path.join(dir, 'answer.txt');
-        fs.writeFileSync(answerFile, answer);
-        const done = spl(script, ...resume, '--answer-for', next.request_id, '--answer-file', answerFile, '--silent');
-        expect(done.code).toBe(0);
-        expect(JSON.parse(done.out)).toEqual({
-            status: 'success', run_id: pending.run_id, has_value: true, value: ['', answer, ['initial']],
-        });
-        expect(fs.readFileSync(path.join(dir, 'output.txt'), 'utf8')).toBe('not overwritten');
-        expect(fs.readFileSync(state, 'utf8').startsWith(afterSecond)).toBe(true);
-        expect(spl(script, ...resume, '--silent').code).toBe(2);
-        expect(fs.existsSync(`${state}.lock`)).toBe(false);
+
+describe('append-only trace CLI', () => {
+    it('replays a completed flow byte-for-byte without prompts, models, MCP or explicit side effects', () => {
+        const preload = path.join(dir, 'trace-backend.mjs');
+        fs.writeFileSync(preload, `import fs from 'node:fs';
+import { AiBackend } from ${JSON.stringify(new URL('../dist/ai.js', import.meta.url).href)};
+AiBackend.prototype.call = async function(request) {
+    if (process.env.TRACE_OFFLINE) throw new Error('unexpected live model call');
+    fs.appendFileSync('calls.txt', request.kind + '\\n');
+    return { text: 'saved answer', reasoning: 'saved reasoning', effective: { model: 'test' } };
+};
+AiBackend.prototype.close = async function() {};`);
+        const env = {
+            NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`,
+            SPL_TRACE_INPUT: 'original',
+        };
+        const script = `let input = read_file('input.txt')
+let answer = ask 'Answer {input}'
+let approval = human 'Approve?'
+write_file('output.txt', approval)
+success [answer, approval, $args, $env.SPL_TRACE_INPUT]`;
+        const source = path.join(dir, 'flow.md');
+        const trace = path.join(dir, 'trace.jsonl');
+        fs.writeFileSync(source, markdown(script));
+        fs.writeFileSync(path.join(dir, 'input.txt'), 'original');
+        const first = run([source, '--trace', trace, '--arg=initial', '--silent'], env, '  approved  \n');
+        expect(first.code).toBe(0);
+        expect(JSON.parse(first.out)).toEqual(['saved answer', '  approved  ', ['initial'], 'original']);
+        const original = fs.readFileSync(trace, 'utf8');
+        expect(JSON.parse(original.split('\n')[0])).toMatchObject({ format: 'spl-trace', version: 2 });
+        fs.unlinkSync(path.join(dir, 'input.txt'));
+        fs.unlinkSync(path.join(dir, 'output.txt'));
+        const replay = run([source, '--trace', trace, '--silent'], { ...env, TRACE_OFFLINE: '1', SPL_TRACE_INPUT: 'changed' });
+        expect(replay).toEqual({ code: 0, out: first.out, err: '' });
+        expect(fs.readFileSync(trace, 'utf8')).toBe(original);
+        expect(fs.readFileSync(path.join(dir, 'calls.txt'), 'utf8')).toBe('ask\n');
+        expect(fs.existsSync(path.join(dir, 'output.txt'))).toBe(false);
+        expect(fs.existsSync(`${trace}.lock`)).toBe(false);
     });
 
-    it.each([
-        ['--resume={state}'],
-        ['--resume', '{state}'],
-        ['--checkpoint={state}', '--resume'],
-        ['--resume', '--checkpoint={state}'],
-    ])('supports inline paths and either flag order: %j', (...options) => {
-        const state = path.join(dir, 'state with spaces.jsonl');
-        const script = `success human 'question'`;
-        const first = spl(script, '--checkpoint', state, '--silent');
-        const resume = options.map((option) => option.replace('{state}', state));
-        expect(spl(script, ...resume, '--silent')).toEqual(first);
-        const done = run([...resume, path.join(dir, 's.md'), '--answer-for', JSON.parse(first.out).request_id, '--answer=--resume', '--silent']);
-        expect(done.code).toBe(0);
-        expect(JSON.parse(done.out).value).toBe('--resume');
+    it('resumes an interrupted question using --human only for unrecorded answers', () => {
+        const preload = path.join(dir, 'interrupt-input.mjs');
+        fs.writeFileSync(preload, `import { Trace } from ${JSON.stringify(new URL('../dist/trace.js', import.meta.url).href)};
+const effect = Trace.prototype.effect;
+Trace.prototype.effect = async function(request, perform, valid) {
+    if (request.kind === 'human' && request.question === 'Second?' && !this.replaying && !process.env.CONTINUE_TRACE) {
+        perform = () => { throw new Error('simulated interruption'); };
+    }
+    return effect.call(this, request, perform, valid);
+};`);
+        const env = { NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}` };
+        const source = path.join(dir, 'flow.md');
+        const trace = path.join(dir, 'resume.jsonl');
+        fs.writeFileSync(source, markdown(`write_file('output.txt', 'original')
+let first = human 'First?'
+let second = human 'Second?'
+success [first, second]`));
+        const stopped = run([source, '--trace', trace, '--human=one', '--silent'], env);
+        expect(stopped.code).toBe(70);
+        const prefix = fs.readFileSync(trace, 'utf8');
+        fs.writeFileSync(path.join(dir, 'output.txt'), 'edited');
+        expect(run([source, '--trace', trace, '--human=two', '--silent'], { ...env, CONTINUE_TRACE: '1' }))
+            .toEqual({ code: 0, out: '[\n  "one",\n  "two"\n]\n', err: '' });
+        expect(fs.readFileSync(path.join(dir, 'output.txt'), 'utf8')).toBe('edited');
+        expect(fs.readFileSync(trace, 'utf8').startsWith(prefix)).toBe(true);
     });
 
-    it('does not interpret --resume after the option terminator as an option', () => {
-        fs.writeFileSync(path.join(dir, '--resume.md'), markdown('success 7'));
-        expect(run(['--silent', '--', '--resume.md'])).toEqual({ code: 0, out: '7\n', err: '' });
+    it('creates a fresh flow only for a different trace path, preserves failures, and skips --check output', () => {
+        const firstFile = path.join(dir, 'first.jsonl');
+        expect(spl('success 1', '--trace', firstFile, '--check')).toEqual({ code: 0, out: '', err: '' });
+        expect(fs.existsSync(firstFile)).toBe(false);
+        const first = spl(`write_file('effect.txt', 'original')\nsuccess 1`, '--trace', firstFile, '--silent');
+        expect(first).toEqual({ code: 0, out: '1\n', err: '' });
+        fs.writeFileSync(path.join(dir, 'effect.txt'), 'changed');
+        expect(spl(`write_file('effect.txt', 'original')\nsuccess 1`, '--trace', firstFile, '--silent')).toEqual(first);
+        expect(fs.readFileSync(path.join(dir, 'effect.txt'), 'utf8')).toBe('changed');
+        expect(spl(`write_file('effect.txt', 'original')\nsuccess 1`, '--trace', path.join(dir, 'second.jsonl'), '--silent')).toEqual(first);
+        expect(fs.readFileSync(path.join(dir, 'effect.txt'), 'utf8')).toBe('original');
+        const failureFile = path.join(dir, 'failure.jsonl');
+        const failure = spl(`fail 'rejected'`, '--trace', failureFile, '--silent');
+        expect(failure.code).toBe(1);
+        const bytes = fs.readFileSync(failureFile, 'utf8');
+        expect(spl(`fail 'rejected'`, '--trace', failureFile, '--silent')).toEqual(failure);
+        expect(fs.readFileSync(failureFile, 'utf8')).toBe(bytes);
+        expect(spl('pass', '--trace', path.join(dir, 'empty.jsonl'), '--silent')).toEqual({ code: 0, out: '', err: '' });
     });
 
-    it('allows unused human expressions and accepts --check without creating a checkpoint', () => {
-        const state = path.join(dir, 'check.jsonl');
-        const script = `write_file('bad.txt', 'x')
-if False:
-    human 'later'
-success 1`;
-        expect(spl(script, '--silent')).toEqual({ code: 0, out: '1\n', err: '' });
-        expect(fs.readFileSync(path.join(dir, 'bad.txt'), 'utf8')).toBe('x');
-        expect(spl(script, '--check', '--checkpoint', state)).toEqual({ code: 0, out: '', err: '' });
-        expect(fs.existsSync(state)).toBe(false);
-        expect(fs.existsSync(`${state}.lock`)).toBe(false);
+    it('rejects mismatched scripts and arguments without changing the trace', () => {
+        const trace = path.join(dir, 'guarded.jsonl');
+        expect(spl('success $args', '--trace', trace, '--arg=one', '--silent').code).toBe(0);
+        const original = fs.readFileSync(trace, 'utf8');
+        for (const result of [
+            spl('success 2', '--trace', trace, '--silent'),
+            spl('success $args', '--trace', trace, '--arg=two', '--silent'),
+        ]) {
+            expect(result.code).toBe(2);
+            expect(result.out).toBe('');
+            expect(result.err).toContain('mismatch');
+        }
+        expect(fs.readFileSync(trace, 'utf8')).toBe(original);
     });
 
-    it('returns terminal JSON failure/no-value envelopes and never treats waiting as failure', () => {
-        const state = path.join(dir, 'failure.jsonl');
-        const result = spl(`fail 'rejected'`, '--checkpoint', state, '--silent');
-        expect(result.code).toBe(1);
-        expect(JSON.parse(result.out)).toMatchObject({ status: 'failure', failure: { status_code: 'explicit_failure', reason: 'rejected' } });
-        const empty = spl(`pass`, '--checkpoint', path.join(dir, 'empty.jsonl'), '--silent');
-        expect(empty.code).toBe(0);
-        expect(JSON.parse(empty.out)).toMatchObject({ status: 'success', has_value: false, value: null });
+    it.each(['--store=file', '--store-module=file', '--record=file', '--replay=file', '--checkpoint=file',
+        '--resume=file', '--answer-for=id', '--answer=value', '--answer-file=file', '--answre-file=file',
+        '--trace=', '--trace'])('rejects removed or invalid option %s', option => {
+        const result = spl('success 1', option, '--silent');
+        expect(result).toMatchObject({ code: 2, out: '' });
+        expect(result.err).toContain('spl:');
     });
 
-    it.each([
-        ['--answer=yes'],
-        ['--answer-for=id'],
-        ['--checkpoint=a', '--resume=b'],
-        ['--resume'],
-        ['--resume', '--silent'],
-        ['--resume', '--checkpoint='],
-        ['--resume', '--checkpoint=a', '--resume=b'],
-        ['--resume', '--checkpoint=a', '--answer=yes'],
-        ['--resume', '--checkpoint=a', '--answer-for=id'],
-        ['--resume', '--checkpoint=a', '--trace=b'],
-        ['--resume', '--checkpoint=a', '--store=b'],
-        ['--resume=a', '--answer=yes'],
-        ['--resume=a', '--answer-for=id'],
-        ['--resume=a', '--answer-for=id', '--answer=yes', '--answer-file=answer.txt'],
-        ['--checkpoint=a', '--trace=b'],
-        ['--checkpoint=a', '--record=b'],
-        ['--checkpoint=a', '--replay=b'],
-        ['--checkpoint=a', '--store=b'],
-        ['--checkpoint=a', '--store-module=b'],
-        ['--checkpoint='],
-        ['--human'],
-        ['--checkpoint=a', '--human=yes'],
-        ['--resume=a', '--human=yes'],
-    ])('rejects incompatible/invalid options: %j', (...options) => {
-        const result = spl(`success 1`, ...options);
-        expect(result.code).toBe(2);
-        expect(result.out).toBe('');
-        expect(fs.existsSync(path.join(dir, 'a'))).toBe(false);
-    });
-
-    it.each(['file', 'checkpoint'] as const)('rejects changed scripts and arguments with --resume %s', (syntax) => {
-        const state = path.join(dir, 'run.jsonl');
-        const resume = syntax === 'file' ? ['--resume', state] : ['--resume', '--checkpoint', state];
-        const first = spl(`success human 'question'`, '--checkpoint', state, '--arg=one', '--silent');
-        const id = JSON.parse(first.out).request_id;
-        const original = fs.readFileSync(state, 'utf8');
-        expect(spl(`success human 'changed'`, ...resume, '--answer-for', id, '--answer=yes', '--silent').code).toBe(2);
-        expect(spl(`success human 'question'`, ...resume, '--arg=two', '--answer-for', id, '--answer=yes', '--silent').code).toBe(2);
-        expect(fs.readFileSync(state, 'utf8')).toBe(original);
-    });
-
-    it('does not create a missing journal when resuming with --checkpoint', () => {
-        const state = path.join(dir, 'missing.jsonl');
-        const result = spl(`success human 'question'`, '--resume', '--checkpoint', state, '--silent');
-        expect(result.code).toBe(2);
-        expect(result.out).toBe('');
-        expect(result.err).toContain('cannot resume checkpoint');
-        expect(fs.existsSync(state)).toBe(false);
-        expect(fs.existsSync(`${state}.lock`)).toBe(false);
+    it('advertises only the consolidated trace interface', () => {
+        const help = run(['--help']).out;
+        expect(help).toContain('--trace <file.jsonl>');
+        expect(help).toContain('Reuse the same path to resume');
+        for (const option of ['--store', '--record', '--replay', '--checkpoint', '--resume', '--answer']) {
+            expect(help).not.toContain(option);
+        }
     });
 });
 
@@ -477,14 +451,12 @@ syncBuiltinESMExports();
 registerHooks({ resolve(specifier, context, next) { if (specifier.startsWith('@bettertui/')) { record('native'); throw new Error('test native forbidden'); } return next(specifier, context); } });`);
         const file = path.join(dir, 'excluded.md');
         fs.writeFileSync(file, markdown("success human 'question'"));
-        const journal = path.join(dir, 'excluded.jsonl');
         const preloadUrl = pathToFileURL(preload).href;
         const invoke = (args: string[]) => spawnSync(process.execPath, ['--import', preloadUrl, CLI, ...args], {
             encoding: 'utf8', env: { ...process.env, TERM: 'xterm', NO_COLOR: '1', SPL_HOME: path.join(dir, 'spl-home') },
         });
         for (const [args, code] of [
             [['--help'], 0], [['--version'], 0], [['logout'], 0], [[file, '--check'], 0],
-            [[file, '--checkpoint', journal], 3], [[file, '--resume', journal], 3],
         ] as const) {
             const result = invoke([...args]);
             expect({ code: result.status, err: result.stderr }).toEqual({ code, err: '' });
@@ -499,35 +471,7 @@ registerHooks({ resolve(specifier, context, next) { if (specifier.startsWith('@b
         expect(fs.existsSync(marker)).toBe(false);
     });
 
-    it('retains failed model requests only, and reports backend-close errors before printing failure results', () => {
-        const file = path.join(dir, 'failed-trace.jsonl');
-        fs.writeFileSync(file, [
-            JSON.stringify({ format: 'spl-trace', version: 1 }),
-            JSON.stringify({ request: {
-                kind: 'agent', prompt: `${RUNTIME_PREAMBLE}\n\nThink carefully about the problem before giving the final answer.\n\nAct`,
-                model: null, reasoningEffort: 'medium', showReasoning: true,
-            }, error: { status_code: 'llm_error', reason: 'backend unavailable' } }), '',
-        ].join('\n'));
-        const failed = spl("success agent 'Act'", '--replay', file);
-        expect(failed.code).toBe(1);
-        expect(JSON.parse(failed.out)).toMatchObject({ status_code: 'llm_error', reason: 'backend unavailable' });
-        expect(failed.err.match(/-> input agent/g)).toHaveLength(1);
-        expect(failed.err).not.toContain('<- output');
-        const unused = spl("log('before close')\nsuccess 'unused'", '--replay', file);
-        expect(unused.code).toBe(1);
-        expect(JSON.parse(unused.out).reason).toContain('unused');
-        expect(unused.err.indexOf('[info] log: before close')).toBeLessThan(unused.err.indexOf('x error'));
-        expect(unused.out).not.toContain('\u001b');
-    });
 
-    it('cleans up an unexpected runtime exception before returning exit 70', () => {
-        const mod = path.join(dir, 'unexpected-store.mjs');
-        fs.writeFileSync(mod, "export function createStore() { return { load() { throw new Error('unexpected load failure'); }, save() {} }; }");
-        const result = spl('success 1', '--store-module', mod);
-        expect(result).toMatchObject({ code: 70, out: '' });
-        expect(result.err).toContain('x error spl: internal error: Error: unexpected load failure');
-        expect(result.err).not.toContain('Enter/Space');
-    });
 
     it('keeps renderer IPC and cancellation timers responsive during long deterministic execution', () => {
         const script = `import {run,parse,Logger} from ${JSON.stringify(new URL('../dist/index.js', import.meta.url).href)};
@@ -679,121 +623,11 @@ fail 'unreachable'`, '--silent');
         expect(JSON.parse(r.out)).toMatchObject({ status_code: 'runtime_error', reason: expect.stringContaining('len must be') });
     });
 
-    it.each([true, false])('replays generation offline and blocks external actions with showReasoning: %s', showReasoning => {
-        const file = path.join(dir, 'responses.jsonl');
-        fs.writeFileSync(file, [
-            JSON.stringify({ format: 'spl-generation', version: 1 }),
-            JSON.stringify({
-                request: JSON.stringify({ kind: 'ask', prompt: `${RUNTIME_PREAMBLE}\n\nquestion`, model: null, reasoningEffort: null, showReasoning }),
-                response: { text: 'offline answer', effective: { model: 'test' } },
-            }),
-            '',
-        ].join('\n'));
-        expect(spl(`success ask${showReasoning ? '' : '(hide=True)'} 'question'`, '--replay', file, '--silent')).toEqual({ code: 0, out: 'offline answer\n', err: '' });
-        if (!showReasoning) {
-            const mismatch = spl(`success ask 'question'`, '--replay', file, '--silent');
-            expect(mismatch.code).toBe(1);
-            expect(JSON.parse(mismatch.out).reason).toContain('mismatch');
-        }
-        expect(spl(`success ask 'changed'`, '--replay', file, '--silent').code).not.toBe(0);
-        const empty = path.join(dir, 'empty.jsonl');
-        fs.writeFileSync(empty, '{"format":"spl-generation","version":1}\n');
-        const inputs = spl(`success [$env.SPL_HOME, $args[0], $args[1]]`, '--arg=current', '--replay', empty, '--silent');
-        expect(inputs.code).toBe(0);
-        expect(JSON.parse(inputs.out)).toEqual([path.join(dir, 'spl-home'), 'current', null]);
-        expect(inputs.err).toBe('');
-        const denied = spl(`write_file('blocked.txt', 'x')`, '--replay', empty, '--silent');
-        expect(denied.code).toBe(1);
-        expect(JSON.parse(denied.out).status_code).toBe('restriction_violation');
-        expect(fs.existsSync(path.join(dir, 'blocked.txt'))).toBe(false);
-        expect(spl(`success 1`, '--record', file, '--silent').code).toBe(2);
-        expect(spl(`success 1`, '--record', file, '--replay', file).code).toBe(2);
-        expect(spl(`success 1`, '--replay', file, '--store', path.join(dir, 'vars.json')).code).toBe(2);
-    });
 
-    it('persists variables with --store', () => {
-        const store = path.join(dir, 'vars.json');
-        spl(`let n = 41`, '--store', store);
-        expect(spl(`n += 1\nsuccess n`, '--store', store).out).toBe('42\n');
-    });
 
-    it('--trace creates a new trace even with --silent, and --check does not create one', () => {
-        const file = path.join(dir, 'trace.jsonl');
-        expect(spl(`success 1`, '--trace', file, '--check')).toEqual({ code: 0, out: '', err: '' });
-        expect(fs.existsSync(file)).toBe(false);
-        expect(spl(`success 1`, '--trace', file, '--silent')).toEqual({ code: 0, out: '1\n', err: '' });
-        expect(fs.readFileSync(file, 'utf8')).toBe('{"format":"spl-trace","version":1}\n');
-        expect(spl(`success 1`, '--trace', file, '--silent').code).toBe(2);
-        expect(fs.readFileSync(file, 'utf8')).toBe('{"format":"spl-trace","version":1}\n');
-        for (const flags of [
-            ['--trace', file, '--record', file],
-            ['--trace', file, '--replay', file],
-            ['--trace='],
-            ['--trace'],
-        ]) {
-            expect(spl(`success 1`, ...flags).code).toBe(2);
-        }
-    });
 
-    it('replays agent traces without Copilot or MCP, but runs explicit writes and JSON stores', () => {
-        const file = path.join(dir, 'trace.jsonl');
-        const store = path.join(dir, 'vars.json');
-        const mcp = path.join(dir, 'mcp.json');
-        const marker = path.join(dir, 'mcp-started.txt');
-        fs.writeFileSync(mcp, JSON.stringify({ servers: {
-            offline: { command: process.execPath, args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'started')`] },
-        } }));
-        fs.writeFileSync(file, [
-            JSON.stringify({ format: 'spl-trace', version: 1 }),
-            JSON.stringify({
-                request: {
-                    kind: 'agent', prompt: `${RUNTIME_PREAMBLE}\n\nThink carefully about the problem before giving the final answer.\n\nAct`,
-                    model: null, reasoningEffort: 'medium', showReasoning: true,
-                },
-                response: { text: 'offline agent', effective: { model: 'test' } },
-            }),
-            '',
-        ].join('\n'));
-        const result = spl(`let answer = agent 'Act'\nwrite_file('output.txt', answer)\nsuccess answer`,
-            '--replay', file, '--store', store, '--mcp', mcp, '--silent');
-        expect(result).toEqual({ code: 0, out: 'offline agent\n', err: '' });
-        expect(fs.readFileSync(path.join(dir, 'output.txt'), 'utf8')).toBe('offline agent');
-        expect(JSON.parse(fs.readFileSync(store, 'utf8'))).toEqual({ answer: 'offline agent' });
-        expect(fs.existsSync(marker)).toBe(false);
-        const unused = spl(`success 'not replayed'`, '--replay', file, '--silent');
-        expect(unused.code).toBe(1);
-        expect(JSON.parse(unused.out)).toMatchObject({ status_code: 'llm_error', reason: expect.stringContaining('unused') });
-    });
 
-    it('allows custom store modules for workflow traces but rejects them before import for legacy recordings', () => {
-        const file = path.join(dir, 'trace.jsonl');
-        const legacy = path.join(dir, 'legacy.jsonl');
-        const mod = path.join(dir, 'store.mjs');
-        const marker = path.join(dir, 'imported.txt');
-        const saved = path.join(dir, 'saved.json');
-        fs.writeFileSync(file, '{"format":"spl-trace","version":1}\n');
-        fs.writeFileSync(legacy, '{"format":"spl-generation","version":1}\n');
-        fs.writeFileSync(mod, `import fs from 'node:fs';
-fs.writeFileSync(${JSON.stringify(marker)}, 'imported');
-export function createStore() {
-    return { load: () => ({ base: 7 }), save: (vars) => fs.writeFileSync(${JSON.stringify(saved)}, JSON.stringify(vars)) };
-}`);
-        expect(spl(`success 1`, '--replay', legacy, '--store-module', mod, '--silent').code).toBe(2);
-        expect(fs.existsSync(marker)).toBe(false);
-        expect(spl(`let answer = base * 6\nsuccess answer`, '--replay', file, '--store-module', mod, '--silent'))
-            .toEqual({ code: 0, out: '42\n', err: '' });
-        expect(JSON.parse(fs.readFileSync(saved, 'utf8'))).toEqual({ base: 7, answer: 42 });
-    });
 
-    it('supports a pluggable store module', () => {
-        const mod = path.join(dir, 'store.mjs');
-        fs.writeFileSync(
-            mod,
-            `import fs from 'node:fs';\nexport function createStore() { return { load: () => ({ base: 7 }), save: (v) => fs.writeFileSync(${JSON.stringify(path.join(dir, 'saved.json'))}, JSON.stringify(v)) }; }`,
-        );
-        expect(spl(`let r = base * 6\nsuccess r`, '--store-module', mod).out).toBe('42\n');
-        expect(JSON.parse(fs.readFileSync(path.join(dir, 'saved.json'), 'utf8'))).toEqual({ base: 7, r: 42 });
-    });
 
     it('rejects bad usage and the removed mock/seed options', () => {
         const r = spawnSync(process.execPath, [CLI], { encoding: 'utf8' });

@@ -36,8 +36,8 @@ folder, for example `spl examples/hi.md`. Each example's header shows its argume
 | Example | Shows |
 | --- | --- |
 | [mcp.md](../lang/examples/mcp.md) | An agent limited to one MCP tool |
-| [journal.md](../lang/examples/journal.md) | State across runs with `--store` |
-| [human-review.md](../lang/examples/human-review.md) | Asking for review directly, with optional checkpoint/resume automation |
+| [journal.md](../lang/examples/journal.md) | Explicit JSON journal state with resumable trace runs |
+| [human-review.md](../lang/examples/human-review.md) | Asking for review directly, with optional append-only trace resumption |
 
 ## Extract an invoice
 

@@ -50,8 +50,6 @@ process.on('message', async (request: ExecuteCell) => {
                 line: result.failure.line, column: 1, source: result.failure.source ?? request.source,
                 version: result.failure.source_version ?? request.version,
             });
-        } else if (result.status === 'waiting_for_input') {
-            throw new Error('human input requires a checkpoint; use the SPL CLI with --checkpoint');
         } else {
             send({ id: request.id, kind: 'result', ...(result.hasValue ? { text: formatNotebookValue(result.value) } : {}) });
         }

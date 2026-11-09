@@ -128,7 +128,7 @@ human_expr     = "human" , postfix ;
 
 (* Sampling modifiers are accepted only by ask. Unknown or duplicate modifiers are syntax errors.
    human takes no modifiers and
-   requires a checkpoint run. Tools are ordinary functions: read_file, write_file,
+   uses a host input handler (stdin or --human in the CLI). Tools are ordinary functions: read_file, write_file,
    web_fetch, web_search, shell. *)
 
 string         = [ "r" ] , quote , { char | escape | interpolation } , closing_quote ;

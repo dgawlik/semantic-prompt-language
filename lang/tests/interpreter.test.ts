@@ -6,7 +6,6 @@ import { run, type RunResult } from '../src/interpreter.js';
 import { Failure } from '../src/errors.js';
 import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
-import { JsonFileStore } from '../src/store.js';
 import { NoLlm } from './helpers.js';
 
 let dir: string;
@@ -114,16 +113,14 @@ success [caught, args, sliced, env.SPL_TEST_INPUT, $env.get('SPL_TEST_INPUT'),
 
     it('does not automatically persist runtime inputs or let stores shadow them', async () => {
         vi.stubEnv('SPL_TEST_MISSING', undefined);
-        const file = path.join(dir, 'inputs.json');
-        fs.writeFileSync(file, JSON.stringify({ '$env': { fake: 'stored' }, '$args': ['stored'] }));
+        let saved: unknown;
         const { result } = await exec(`let kept = $args[0]\nsuccess [$env.SPL_TEST_MISSING, $args]`, {
-            args: ['current'], store: new JsonFileStore(file),
+            args: ['current'], store: { load: () => ({ '$env': { fake: 'stored' }, '$args': ['stored'] }), save: vars => { saved = vars; } },
         });
         expect(value(result)).toEqual([null, ['current']]);
-        expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ '$env': { fake: 'stored' }, '$args': ['stored'], kept: 'current' });
-        const cleanFile = path.join(dir, 'clean.json');
-        await exec(`assert $args[0] == None`, { store: new JsonFileStore(cleanFile) });
-        expect(JSON.parse(fs.readFileSync(cleanFile, 'utf8'))).toEqual({});
+        expect(saved).toEqual({ '$env': { fake: 'stored' }, '$args': ['stored'], kept: 'current' });
+        await exec(`assert $args[0] == None`, { store: { load: () => ({}), save: vars => { saved = vars; } } });
+        expect(saved).toEqual({});
     });
 
     it('copies host inputs once per run without freezing or changing the originals', async () => {
@@ -489,7 +486,7 @@ fail 'unreachable'`)).result)).toBe(7);
     });
 
     it('restores scopes after expression failures and persists only top-level bindings', async () => {
-        const file = path.join(dir, 'store.json');
+        let saved: unknown;
         const { result } = await exec(`
 let x = 1
 try:
@@ -502,9 +499,9 @@ except e:
     let transient = 3
     x += 4
 success x
-`, { store: new JsonFileStore(file) });
+`, { store: { load: () => ({}), save: vars => { saved = vars; } } });
         expect(value(result)).toBe(5);
-        expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ x: 5 });
+        expect(saved).toEqual({ x: 5 });
     });
 
     it('returns immediately from any scope', async () => {
@@ -729,23 +726,24 @@ describe('restrict enforcement', () => {
 });
 
 describe('variable store', () => {
-    it('persists top-level variables to a JSON file and reloads them', async () => {
-        const file = path.join(dir, 'store.json');
+    it('passes top-level snapshots to an embedding host', async () => {
+        let saved: Record<string, Value> = {};
+        const store = { load: () => saved, save: (vars: Record<string, Value>) => { saved = vars; } };
         await exec(`let counter = 1
 let data = object:
     'a': [1, 2]
 def f():
-    return 1`, { store: new JsonFileStore(file) });
-        expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ counter: 1, data: { a: [1, 2] } });
-        const second = await exec(`counter += 1\nsuccess counter`, { store: new JsonFileStore(file) });
+    return 1`, { store });
+        expect(saved).toEqual({ counter: 1, data: { a: [1, 2] } });
+        const second = await exec(`counter += 1\nsuccess counter`, { store });
         expect(value(second.result)).toBe(2);
-        expect(JSON.parse(fs.readFileSync(file, 'utf8')).counter).toBe(2);
+        expect(saved.counter).toBe(2);
     });
 
     it('saves the store even when the script fails', async () => {
-        const file = path.join(dir, 'store.json');
-        await exec(`let x = 5\nfail 'no'`, { store: new JsonFileStore(file) });
-        expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ x: 5 });
+        let saved: unknown;
+        await exec(`let x = 5\nfail 'no'`, { store: { load: () => ({}), save: vars => { saved = vars; } } });
+        expect(saved).toEqual({ x: 5 });
     });
 });
 

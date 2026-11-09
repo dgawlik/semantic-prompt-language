@@ -1,4 +1,4 @@
-import { checkpointFingerprint } from './checkpoint.js';
+import { fingerprint as traceFingerprint } from './trace.js';
 import { Failure, SplSyntaxError } from './errors.js';
 import { isTraceError } from './recording.js';
 
@@ -46,7 +46,7 @@ function isPinData(value: unknown): value is PinData {
 }
 
 function fingerprint(source: string): string {
-    return checkpointFingerprint(source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trimEnd());
+    return traceFingerprint(source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trimEnd());
 }
 
 export function parsePin(text: string, line: number): PinData {
@@ -84,8 +84,8 @@ export class Pin {
         return new Pin(structuredClone(data), true);
     }
 
-    validateOptions(options: { cwd?: string; args?: readonly string[]; model?: string; store?: unknown; checkpoint?: unknown }): void {
-        if (options.checkpoint) throw new PinError('pinned workflows cannot use checkpoints');
+    validateOptions(options: { cwd?: string; args?: readonly string[]; model?: string; store?: unknown; trace?: unknown }): void {
+        if (options.trace) throw new PinError('pinned workflows cannot use traces');
         if (!this.replaying) return;
         if (options.store) throw new PinError('locked workflows cannot use a variable store');
         const context = this.data.context;
