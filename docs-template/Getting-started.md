@@ -25,22 +25,6 @@ automatically. With multiple providers, select one with `--provider`, `SPL_PROVI
 such as `--model google/gemini-2.5-flash`, or a saved login default.
 See [Models and authentication](CLI.md#models-and-authentication) for precedence and defaults.
 
-`spl logout <provider>` removes only that provider's saved key/default; `spl logout` deletes all
-saved credentials. Neither changes environment variables. GitHub Copilot tokens and CLI logins
-are no longer used. This is API-key login, not browser/subscription OAuth.
-Workflows that never call a model, `--check` and replay need no login.
-
-The result goes to stdout; execution logs go to stderr with one header per event. `->` input is
-magenta, `<-` output/action cyan, `~` variable state yellow, `x` error red, `!` warning yellow,
-`i` info blue and `.` debug gray. Automatic logs show actual changes in defining scopes,
-not source statements, unchanged operations or initial runtime/store state.
-Terminal stdin/stderr folds generated model prefaces and JSON by default, keeping the requested
-prompt visible: Up/Down selects, Enter/Space toggles,
-Page Up/Down scrolls, and Home/End reaches the ends. Completion retains a complete expanded
-transcript without a keypress. Redirected/embedded output is always expanded and non-interactive.
-Use `--silent` to suppress execution logs; model/state logs remain at every other verbosity.
-`NO_COLOR` wins over `FORCE_COLOR`, `FORCE_COLOR=0` disables color, and forced color never
-enables input. See [CLI & runtime](CLI.md) for all output and lifecycle rules.
 
 ## Write a workflow
 
@@ -95,23 +79,10 @@ spl flow.md --replay run.jsonl    # rerun code and guards with the recorded answ
 Replay needs the same model requests in the same order. After changing a prompt, record a new
 trace. Explicit tool calls still run during replay; see [traces and replay](CLI.md#traces-and-replay).
 
-## Try types without a model
-
-From a repository checkout's `lang` folder:
-
-```bash
-spl examples/typed-data.md
-```
-
-No login is required. The example uses primitive annotations, enums, reusable `type` aliases,
-exact structs, typed functions, unions, guarded lists and nominal classes.
-For generated data, select a descriptor explicitly with `ask(schema=YourType)`;
-an annotation alone does not configure model output. See
-[Gradual typing](Language.md#gradual-typing) and [Schemas and repairs](LLM-commands.md#schemas-and-repairs).
 
 ## VS Code extension
 
-Install from Marketplace: [spl](https://marketplace.visualstudio.com/items?itemName=spl-lang.spl-lang-vscode)
+Install from Marketplace: **[SPL](https://marketplace.visualstudio.com/items?itemName=spl-lang.spl-lang-vscode)**
 
 The extension in `vscode/` adds parser/type-checker diagnostics, completions, hover, go to
 definition (F12), references (Shift+F12), safe rename (F2), signature help, document symbols,
@@ -139,7 +110,7 @@ Or install from repository:
 cd vscode
 npm install
 npm run package
-code --install-extension spl-lang-vscode-1.5.0.vsix
+code --install-extension spl-lang-vscode-1.13.1.vsix
 ```
 
 ## Run the tests
