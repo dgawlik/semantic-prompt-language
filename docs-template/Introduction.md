@@ -1,6 +1,6 @@
 # Build AI workflows in minutes, not hours
 
-Turn Markdown into runnable AI workflows—natural-language steps alongside deterministic code, validation, and human approval.
+Turn Markdown into runnable AI workflows — natural-language steps alongside deterministic code, validation, and human approval.
 
 `hi.md`
 
@@ -40,12 +40,11 @@ success object:
 ```
 ````
 
-`schema=Card` decodes each answer into a nominal instance because `Card` explicitly
-opts into constructor-free hydration. Use a `struct` for plain structural data, or
-`schema=struct(Card)` for the class's field shape without instance identity.
-`object(cards)` makes a deep JSON-ready snapshot before writing.
-See [Gradual typing](Language.md#gradual-typing) and the offline
-[typed-data example](../lang/examples/typed-data.md).
+* built-in `ask` generates LLM response with schema validation and one repair 
+* natural language blockquote uses **agent** mode to follow instructions and uses **tools** 
+to save variable, the variable is saved to global scope 
+* `schema=Card` decodes each answer and hydrates contructor-free instance of class `Card`, 
+see [Gradual typing](Language.md#gradual-typing)
 
 ## Control Randomness
 
