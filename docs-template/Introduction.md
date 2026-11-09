@@ -45,6 +45,10 @@ success object:
 to save variable, the variable is saved to global scope 
 * `schema=Card` decodes each answer and hydrates contructor-free instance of class `Card`, 
 see [Gradual typing](Language.md#gradual-typing)
+* `assert` breaks flow in case of mimatch
+* `restrict` limits scope's file access to particular location
+* `success` returns json 
+
 
 ## Control Randomness
 
