@@ -37,7 +37,7 @@ hydratable class Plan:
 >
 > Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.
 > Crashes, data loss and security problems are high priority.
-> @validate[Plan] save to @plan
+> @validate[list[Plan]] save to @plan
 
 ```spl
 let numbers = []
