@@ -50,35 +50,80 @@ see [Gradual typing](Language.md#gradual-typing)
 * `success` returns json 
 
 
-## Control Randomness
+## Opt-in Types 
 
-The language has built in constructs that limit LLM drift and let you concisely
-define what you are expecting.
-Set `temperature` near zero and `top_p` to a small value (for example, `0.0001`) in `ask(...)`
-to reduce variability where supported. Sampling is best-effort, not guaranteed reproducibility.
+Language is dynamic but has full support for opt-in static type checker. There are supported 
+primitive types, structs, classes and dynamic catch-all objects. Functions are first class citizens.
 
 ````markdown
----
-extension: 'semantic-prompt-language'
-version: 1
-model: 'gpt-6-luna'
----
-
-# Randomness Controls
-
-This document shows how to limit randomness in LLM prompts with `ask` sampling modifiers.
-Sampling is best-effort and does not guarantee identical responses.
 
 ```spl
-let recipe1 = ask(seed=13, temperature=0.0, top_p=0.0001, tokens=1024) \
-                '<most-frequent>give a recipe for an apple pie</most-frequent>';
+enum Color = 'red' | 'green' | 'blue'
+type Palette = list[Color]
+type Money = int [minimum=0, desc='Amount in cents']
+type MaybeMoney = Money | None
 
-let recipe2 = ask(seed=13, temperature=0.0, top_p=0.0001, tokens=1024) \
-                '<most-frequent>give a recipe for an apple pie</most-frequent>';
+struct Address:
+    city: str
+    postalCode: str | None
 
-success [recipe1, recipe2]
+hydratable class Person:
+    name: str
+    favorite: Color
+    address: Address
+
+    def Person(name: str, favorite: Color, address: Address):
+        self.name = name
+        self.favorite = favorite
+        self.address = address
+
+    def greeting() -> str:
+        return 'Hello {self.name}'
+
+def repeat(text: str, count: int) -> str:
+    return text * count
+
+struct Handler:
+    callback: fn(str, int) -> str
+
+let count: int = 2
+let ratio: float = 1.0
+let initial: char = 'A'
+let enabled: bool = True
+let colors: Palette = ['blue']
+let alias = colors
+alias.append('green')
+assert len(colors) == 2 'untyped aliases share the same guarded list'
+
+let subtotal: Money = 1250
+let total: Money = subtotal * count
+let discount: MaybeMoney = None
+assert total >= 0 'amounts must not be negative'
+let typed_length: int = int(len(colors))
+let scaled: float = float(count) * ratio
+assert typed_length == count and scaled == float(count) 'convert dynamic or mixed numbers explicitly'
+assert json_stringify([count, ratio]) == '[2,1.0]' 'typed numeric JSON preserves representations'
+
+let raw_address = json_parse(r'{"city":"London","postalCode":null}')
+let address: Address = validate(raw_address, Address)
+let person = Person('Ada', colors[0], address)
+let handler: Handler = object:
+    'callback': repeat
+let choice: int | str = count
+if isinstance(choice, int):
+    assert choice == count 'the union currently contains an integer'
+choice = 'blue'
+if isinstance(choice, str):
+    assert choice.upper() == 'BLUE' 'narrow unions before string operations'
+assert initial == 'A' and enabled and discount == None 'primitive and nullable values'
+assert handler.callback('Hi ', count) == 'Hi Hi ' 'callable fields check arguments and results'
+
+let snapshot = object(person)
+snapshot.address.city = 'Paris'
+assert person.address.city == 'London' 'deep projections must not mutate the source'
+log(person.greeting(), handler.callback('Hi ', count))
+success object(person)
 ```
-
 ````
 
 ## Why SPL?
