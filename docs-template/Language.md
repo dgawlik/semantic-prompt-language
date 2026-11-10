@@ -275,7 +275,12 @@ Integer `/` produces a float. Counts from `len` and `range` remain untyped numbe
 
 Declare read-only, transparent aliases with optional semantic advice:
 
-```spl
+```spl 
+let a = 10
+let b: int = int(a)
+let c: float = float(b)
+
+
 type Money = int [minimum=0, desc='Amount in cents']
 type Prices = list[Money]
 type MaybeMoney = Money | None
@@ -284,6 +289,18 @@ let computed: Money = 0
 computed += subtotal
 let prices: Prices = [subtotal, computed]
 let discount: MaybeMoney = None
+
+def computeDiscount(total: Money, 
+                    discount: MaybeMoney) -> Money:
+    let discountWithDefault = if isinstance(discount, None):
+        int(10)
+    else:
+        validate(discount, Money)
+    return int(total * (100-discountWithDefault)/100)
+
+
+log(computeDiscount(1000, None))
+
 ```
 
 Aliases accept the same values and operations as their underlying types, without implicit
@@ -294,21 +311,32 @@ appended separately. `type(value)` remains the type-name builtin.
 
 ### Enums, structs and functions
 
-```spl
-enum Color = 'red' | 'green' | 'blue'
-struct Entry:
-    color: Color
-    note: str | None
-    callback: fn(str, int) -> str
-def repeat(text: str, count: int) -> str:
-    return text * count
-let names: list[str] = ['Ada']
-let count: int = 2
-let ratio: float = 1.0
-let entry: Entry = object:
-    'color': 'blue'
-    'note': None
-    'callback': repeat
+```spl 
+enum Greeting = 'hello' | 'world'
+
+# let g: Greeting = 'hi' // error
+let g: Greeting = 'hello'
+log(g)
+
+struct Test:
+    num: int 
+    desc: str 
+
+let t: Test = object:
+    'num': 1
+    'desc': 'hi'
+
+log(t)
+
+let o1 = object:
+    'a': 1
+    'b': [2,3]
+let o2 = object:
+    'a': 1
+    'b': [2,3]
+
+assert o1 == o2
+   
 ```
 
 Enums accept matching strings directly and are subtypes of `str`. Structs are structural:

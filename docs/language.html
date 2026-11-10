@@ -7,11 +7,11 @@
 spl fences: values, bindings, control flow, functions, built-ins and exact tools.">
 <meta name="color-scheme" content="light dark">
 <title>Language - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=f448ab2be652">
-<link rel="stylesheet" href="assets/style.css?v=f448ab2be652">
+<link rel="icon" type="image/png" href="assets/icon.png?v=03c1a85f6d1d">
+<link rel="stylesheet" href="assets/style.css?v=03c1a85f6d1d">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=f448ab2be652"></script>
-<script defer src="assets/site.js?v=f448ab2be652"></script>
+<script defer src="assets/search-index.js?v=03c1a85f6d1d"></script>
+<script defer src="assets/site.js?v=03c1a85f6d1d"></script>
 </head>
 <body data-page="language">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -305,7 +305,12 @@ can lose integer precision. Mixed <code>int</code>/<code>float</code> arithmetic
 Integer <code>/</code> produces a float. Counts from <code>len</code> and <code>range</code> remain untyped numbers.</p>
 <h3 id="transparent-type-aliases">Transparent type aliases<a class="heading-anchor" href="#transparent-type-aliases" aria-label="Link to Transparent type aliases">#</a></h3>
 <p>Declare read-only, transparent aliases with optional semantic advice:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">type</span> <span class="hljs-title class_">Money</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">int</span> [minimum<span class="hljs-operator">=</span><span class="hljs-number">0</span>, desc<span class="hljs-operator">=</span><span class="hljs-string">&#x27;Amount in cents&#x27;</span>]
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">let</span> a <span class="hljs-operator">=</span> <span class="hljs-number">10</span>
+<span class="hljs-keyword">let</span> b: <span class="hljs-built_in">int</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">int</span>(a)
+<span class="hljs-keyword">let</span> c: <span class="hljs-built_in">float</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">float</span>(b)
+
+
+<span class="hljs-keyword">type</span> <span class="hljs-title class_">Money</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">int</span> [minimum<span class="hljs-operator">=</span><span class="hljs-number">0</span>, desc<span class="hljs-operator">=</span><span class="hljs-string">&#x27;Amount in cents&#x27;</span>]
 <span class="hljs-keyword">type</span> <span class="hljs-title class_">Prices</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>[Money]
 <span class="hljs-keyword">type</span> <span class="hljs-title class_">MaybeMoney</span> <span class="hljs-operator">=</span> Money <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
 <span class="hljs-keyword">let</span> subtotal: Money <span class="hljs-operator">=</span> <span class="hljs-number">1250</span>
@@ -313,6 +318,18 @@ Integer <code>/</code> produces a float. Counts from <code>len</code> and <code>
 computed <span class="hljs-operator">+=</span> subtotal
 <span class="hljs-keyword">let</span> prices: Prices <span class="hljs-operator">=</span> [subtotal, computed]
 <span class="hljs-keyword">let</span> discount: MaybeMoney <span class="hljs-operator">=</span> <span class="hljs-literal">None</span>
+
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">computeDiscount</span>(total: Money, 
+                    discount: MaybeMoney) <span class="hljs-operator">-&gt;</span> Money:
+    <span class="hljs-keyword">let</span> discountWithDefault <span class="hljs-operator">=</span> <span class="hljs-keyword">if</span> <span class="hljs-built_in">isinstance</span>(discount, <span class="hljs-literal">None</span>):
+        <span class="hljs-built_in">int</span>(<span class="hljs-number">10</span>)
+    <span class="hljs-keyword">else</span>:
+        <span class="hljs-built_in">validate</span>(discount, Money)
+    <span class="hljs-keyword">return</span> <span class="hljs-built_in">int</span>(total <span class="hljs-operator">*</span> (<span class="hljs-number">100</span><span class="hljs-operator">-</span>discountWithDefault)<span class="hljs-operator">/</span><span class="hljs-number">100</span>)
+
+
+<span class="hljs-built_in">log</span>(computeDiscount(<span class="hljs-number">1000</span>, <span class="hljs-literal">None</span>))
+
 </code></pre></figure>
 <p>Aliases accept the same values and operations as their underlying types, without implicit
 conversion. Advice is included in generated schemas&#39; descriptions, including when an alias
@@ -320,20 +337,31 @@ is used as a field or list element; it does not enforce extra constraints. Alias
 inherits its advice, with newly supplied keys overriding inherited keys. Field advice is
 appended separately. <code>type(value)</code> remains the type-name builtin.</p>
 <h3 id="enums-structs-and-functions">Enums, structs and functions<a class="heading-anchor" href="#enums-structs-and-functions" aria-label="Link to Enums, structs and functions">#</a></h3>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Color</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;red&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;green&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;blue&#x27;</span>
-<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Entry</span>:
-    color: Color
-    note: <span class="hljs-built_in">str</span> <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
-    callback: <span class="hljs-keyword">fn</span>(<span class="hljs-built_in">str</span>, <span class="hljs-built_in">int</span>) <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>
-<span class="hljs-keyword">def</span> <span class="hljs-title function_">repeat</span>(text: <span class="hljs-built_in">str</span>, count: <span class="hljs-built_in">int</span>) <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
-    <span class="hljs-keyword">return</span> text <span class="hljs-operator">*</span> count
-<span class="hljs-keyword">let</span> names: <span class="hljs-built_in">list</span>[<span class="hljs-built_in">str</span>] <span class="hljs-operator">=</span> [<span class="hljs-string">&#x27;Ada&#x27;</span>]
-<span class="hljs-keyword">let</span> count: <span class="hljs-built_in">int</span> <span class="hljs-operator">=</span> <span class="hljs-number">2</span>
-<span class="hljs-keyword">let</span> ratio: <span class="hljs-built_in">float</span> <span class="hljs-operator">=</span> <span class="hljs-number">1.0</span>
-<span class="hljs-keyword">let</span> entry: Entry <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;color&#x27;</span>: <span class="hljs-string">&#x27;blue&#x27;</span>
-    <span class="hljs-string">&#x27;note&#x27;</span>: <span class="hljs-literal">None</span>
-    <span class="hljs-string">&#x27;callback&#x27;</span>: repeat
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Greeting</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;hello&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;world&#x27;</span>
+
+<span class="hljs-comment"># let g: Greeting = &#x27;hi&#x27; // error</span>
+<span class="hljs-keyword">let</span> g: Greeting <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;hello&#x27;</span>
+<span class="hljs-built_in">log</span>(g)
+
+<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Test</span>:
+    num: <span class="hljs-built_in">int</span> 
+    desc: <span class="hljs-built_in">str</span> 
+
+<span class="hljs-keyword">let</span> t: Test <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
+    <span class="hljs-string">&#x27;num&#x27;</span>: <span class="hljs-number">1</span>
+    <span class="hljs-string">&#x27;desc&#x27;</span>: <span class="hljs-string">&#x27;hi&#x27;</span>
+
+<span class="hljs-built_in">log</span>(t)
+
+<span class="hljs-keyword">let</span> o1 <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
+    <span class="hljs-string">&#x27;a&#x27;</span>: <span class="hljs-number">1</span>
+    <span class="hljs-string">&#x27;b&#x27;</span>: [<span class="hljs-number">2</span>,<span class="hljs-number">3</span>]
+<span class="hljs-keyword">let</span> o2 <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
+    <span class="hljs-string">&#x27;a&#x27;</span>: <span class="hljs-number">1</span>
+    <span class="hljs-string">&#x27;b&#x27;</span>: [<span class="hljs-number">2</span>,<span class="hljs-number">3</span>]
+
+<span class="hljs-keyword">assert</span> o1 <span class="hljs-operator">==</span> o2
+   
 </code></pre></figure>
 <p>Enums accept matching strings directly and are subtypes of <code>str</code>. Structs are structural:
 equivalent field contracts are interchangeable. Fields are exact and required; nullable does
