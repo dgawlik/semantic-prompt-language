@@ -41,6 +41,20 @@ describe('structured logging foundation', () => {
         expect(eventSink).not.toHaveBeenCalled();
     });
 
+    it.each(['error', 'info', 'silent'] as const)('filters state snapshots before evaluation and allocation at %s', level => {
+        const history: LogEvent[] = [];
+        const sink = vi.fn();
+        const snapshot = vi.fn();
+        const logger = new Logger(level, sink, { eventSink: event => history.push(event) });
+        expect(logger.observesState).toBe(false);
+        logger.state(snapshot);
+        expect(snapshot).not.toHaveBeenCalled();
+        expect(history).toEqual([]);
+        expect(sink).not.toHaveBeenCalled();
+        logger.error('visible');
+        expect(history.map(event => event.sequence)).toEqual(level === 'silent' ? [] : [1]);
+    });
+
     describe('ordered JSON payloads', () => {
         it('retains tokens and text around multiple balanced multiline containers', () => {
             const history: LogEvent[] = [];

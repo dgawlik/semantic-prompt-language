@@ -1,17 +1,25 @@
-# Review Report
+# Code Review Report
 
-## High
+Scope: `src/restrict.ts`, `src/typed-json.ts`, and `src/auth.ts`.
 
-### Redirects can bypass network host restrictions
+## Summary
 
-- **Location:** `src/restrict.ts`, `Restrictions.checkUrl()`
-- **Finding:** Network restrictions validate only the URL’s initial hostname. A redirect-following HTTP client may follow a redirect from an allowed host to an unallowed host, bypassing the restriction.
-- **Fix:** Validate the hostname on every redirect, or disable automatic redirects and validate each `Location` header before following it.
+- High: 1
+- Medium: 0
+- Low: 0
 
-## Medium
+## High Severity
 
-_No findings._
+### Unbounded JSON nesting can crash parsing
 
-## Low
+**Location:** `src/typed-json.ts` — recursive `value()` in `parseWire`
 
-_No findings._
+**Recommended fix:** Track nesting depth and reject input beyond a documented limit with `Failure('invalid_format', ...)`; consider also bounding total input size to prevent oversized responses from exhausting resources.
+
+## Medium Severity
+
+No findings.
+
+## Low Severity
+
+No findings.

@@ -42,7 +42,7 @@ for f in review.findings:
         groups.low.append(f)
 ```
 
-> @CTL(restrict={fs: ['./reports']})
+> @CTL(restrict={fs: ['./reports']}, model='gpt-6.1-sol')
 >
 > Write convert @groups to markdown report 
 > and write to './reports/review.md'

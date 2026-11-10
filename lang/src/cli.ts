@@ -27,7 +27,7 @@ Usage: spl <workflow.md> [options]
 
 Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
-                          All levels include model input/output and variable-state changes.
+                          All levels include model input/output; debug adds variable-state changes.
                           State logs identify defining scopes and before/after values.
                           No source traces, reads, no-op assignments or baseline dumps.
                           Icons: -> input (magenta), <- output (cyan), ~ state (yellow),

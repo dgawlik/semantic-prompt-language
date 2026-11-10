@@ -75,7 +75,8 @@ indentation. stdout results and trace journals remain machine-readable.
 If terminal-mode queries are unsupported or an alternate screen is already active,
 SPL diagnoses the limitation and uses append-only output without taking over that screen.
 
-`--log-level` filters severity; model/state events remain visible at every non-silent level.
+`--log-level` filters severity; model events remain visible at every non-silent level.
+Variable-state changes appear only with `--log-level debug`.
 `--silent` suppresses execution logs. `NO_COLOR` wins over `FORCE_COLOR`; `FORCE_COLOR=0`
 disables color and forced color never enables interactivity. Auth,
 help/version and `--check` do not start a renderer.

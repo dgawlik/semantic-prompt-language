@@ -407,7 +407,7 @@ let items = [1]
 let alias = items
 alias.append(2)
 success count`;
-        const result = spl(source);
+        const result = spl(source, '--log-level', 'debug');
         expect(result).toMatchObject({ code: 0, out: '2\n' });
         expect(result.err.match(/^~ state /gm)).toHaveLength(5);
         expect(result.err).toContain('count @ global (scope-1): <unbound> -> 1');
@@ -418,6 +418,11 @@ success count`;
         expect(mutation).toContain('[\n  1\n] -> [\n  1,\n  2\n]');
         expect(result.err).not.toMatch(/\u001b|count = count|success count|\[folded\]/);
         expect(spl(source, '--silent')).toEqual({ code: 0, out: '2\n', err: '' });
+    });
+
+    it.each([undefined, 'error', 'info'] as const)('hides state changes at %s verbosity without changing results', level => {
+        const result = spl('let items = []\nitems.append(1)\nsuccess items', ...(level ? ['--log-level', level] : []));
+        expect(result).toEqual({ code: 0, out: '[\n  1\n]\n', err: '' });
     });
 
     it.each([

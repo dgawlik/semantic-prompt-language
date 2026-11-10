@@ -286,7 +286,7 @@ test('cancelling a running worker stops unbounded code and rejects queued work',
     }, () => {}), /cancelled/);
 });
 
-test('worker keeps state/model logs separate from explicit output and uses current cells without native UI', async t => {
+test('worker hides debug state logs and uses current cells without native UI', async t => {
     const workerPath = path.resolve(__dirname, '..', 'notebookWorker.cjs');
     const bundled = readFileSync(workerPath, 'utf8');
     assert.doesNotMatch(bundled, /@bettertui|cli-renderer\.js|setRawMode/);
@@ -302,8 +302,9 @@ test('worker keeps state/model logs separate from explicit output and uses curre
         source: 'cell:second', frontmatter: DEFAULT_FRONTMATTER, language: 'spl' },
         (text, output) => second.push({ text, output }));
     assert.equal(first.length, count);
+    assert.deepEqual(first, []);
     assert.deepEqual(result, { id: 2, kind: 'result', text: '[\n  1\n]' });
-    assert.ok(second.some(log => log.text.startsWith('~ state') && !log.output));
+    assert.ok(!second.some(log => log.text.startsWith('~ state')));
     assert.deepEqual(second.filter(log => log.output), [{ text: '[info] log: explicit', output: true }]);
     assert.ok(!second.some(log => /deterministic|line \d+ \(/.test(log.text)));
 });

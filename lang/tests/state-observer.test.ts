@@ -18,6 +18,19 @@ async function observe(source: string, overrides: Partial<RunOptions> = {}) {
 const names = (events: StateEvent[]) => events.map(event => event.change.bindings.map(delta => delta.binding.name));
 
 describe('binding commit observation', () => {
+    it.each(['error', 'info', 'debug', 'silent'] as const)('logs binding and mutation changes only at debug, not %s', async level => {
+        const history: LogEvent[] = [];
+        const result = await run(parse(`let n = 0
+let items = []
+n += 1
+items.append(n)
+success [n, items]`), {
+            backend: new NoLlm(), logger: new Logger(level, undefined, { eventSink: event => history.push(event) }),
+        });
+        expect(result).toMatchObject({ status: 'success', value: [1, [1]] });
+        expect(history.map(event => event.kind)).toEqual(level === 'debug' ? ['state', 'state', 'state', 'state'] : []);
+    });
+
     it('distinguishes unbound/null, Object.is scalar changes and equal-content reference replacement', async () => {
         const { result, states } = await observe(`let n = None
 n = None
@@ -88,7 +101,7 @@ success n`), {
         const history: LogEvent[] = [];
         let turn = 0;
         const result = await run(parseMarkdown('---\nextension: semantic-prompt-language\nversion: 1\n---\n\n> Save a number.'), {
-            logger: new Logger('error', undefined, { eventSink: event => history.push(event) }),
+            logger: new Logger('debug', undefined, { eventSink: event => history.push(event) }),
             backend: {
                 async call() {
                     return { text: 'actual response', effective: {},
@@ -218,7 +231,7 @@ success n`);
         const history: LogEvent[] = [];
         const items: Value[] = [];
         const globals: Env = { vars: new Map([['items', items]]) };
-        const observer = new StateObserver(globals, new Logger('info', undefined, { eventSink: event => history.push(event) }));
+        const observer = new StateObserver(globals, new Logger('debug', undefined, { eventSink: event => history.push(event) }));
         const error = new Error('partial failure');
         expect(() => observer.mutate(items, globals, 'test', true, () => { items.push(1); throw error; })).toThrow(error);
         expect(history).toHaveLength(1);
@@ -241,7 +254,7 @@ success n`);
             store: { load: () => ({ foreign, proxy }), save() {} },
         });
         const globals: Env = { vars: new Map() };
-        new StateObserver(globals, new Logger('info', () => {})).commit(globals, 'opaque', proxy, true);
+        new StateObserver(globals, new Logger('debug', () => {})).commit(globals, 'opaque', proxy, true);
         expect(result).toMatchObject({ status: 'success', value: 1 });
         expect(states.filter(event => event.change.operation === 'mutation')).toHaveLength(1);
         expect(getter).not.toHaveBeenCalled();

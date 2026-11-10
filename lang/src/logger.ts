@@ -34,7 +34,7 @@ export class Logger {
         this.color = options.color ?? (sink === stderr && terminalColor());
     }
 
-    get observesState(): boolean { return this.level !== 'silent'; }
+    get observesState(): boolean { return this.level === 'debug'; }
     get streamsModels(): boolean { return this.level !== 'silent' && this.options.streamSink !== undefined; }
 
     modelStream(event: ModelStreamEvent): void {

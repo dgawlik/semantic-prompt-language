@@ -7,11 +7,11 @@
 the outcome through its exit code. Requires Node.js &gt;=24.15.0.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=94bd06be75f2">
-<link rel="stylesheet" href="assets/style.css?v=94bd06be75f2">
+<link rel="icon" type="image/png" href="assets/icon.png?v=dd5187c43fc9">
+<link rel="stylesheet" href="assets/style.css?v=dd5187c43fc9">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=94bd06be75f2"></script>
-<script defer src="assets/site.js?v=94bd06be75f2"></script>
+<script defer src="assets/search-index.js?v=dd5187c43fc9"></script>
+<script defer src="assets/site.js?v=dd5187c43fc9"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -112,7 +112,8 @@ those values answer only new questions.</p>
 <h2 id="output-and-exit-codes">Output and exit codes<a class="heading-anchor" href="#output-and-exit-codes" aria-label="Link to Output and exit codes">#</a></h2>
 <p>stdout gets the <code>success</code> value: strings as-is, everything else as JSON. An uncaught failure prints
 its <a href="safety.html#failure-payload">payload</a> instead. stderr gets logs, including every model prompt and
-response and committed variable-state changes. Use <code>--silent</code> when logs could expose sensitive data.</p>
+response, plus committed variable-state changes with <code>--log-level debug</code>.
+Use <code>--silent</code> when logs could expose sensitive data.</p>
 <p>Each event has one header, without repeated continuation badges, panels or timestamps:</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Output and exit codes reference table"><table>
 <thead>
@@ -203,8 +204,8 @@ or <code>TERM=dumb</code>. Set <code>NO_COLOR=1</code> to disable color, or <cod
 remain plain, machine-readable data.
 <code>--silent</code> suppresses execution logs; usage, syntax and trace-usage diagnostics still appear
 on stderr so command-line errors are not hidden.
-<code>--log-level</code> retains ordinary severity filtering; model transcripts and state events appear at
-every non-silent level. Forced color never enables cursor controls or keyboard input.</p>
+<code>--log-level</code> retains ordinary severity filtering; model transcripts appear at every non-silent
+level, while state events appear only at <code>debug</code>. Forced color never enables cursor controls or keyboard input.</p>
 <p>For example, <code>log(&#39;review:&#39;, review)</code> produces:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-3">[info] log: review:
 {

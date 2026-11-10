@@ -49,7 +49,8 @@ those values answer only new questions.
 
 stdout gets the `success` value: strings as-is, everything else as JSON. An uncaught failure prints
 its [payload](Safety.md#failure-payload) instead. stderr gets logs, including every model prompt and
-response and committed variable-state changes. Use `--silent` when logs could expose sensitive data.
+response, plus committed variable-state changes with `--log-level debug`.
+Use `--silent` when logs could expose sensitive data.
 
 Each event has one header, without repeated continuation badges, panels or timestamps:
 
@@ -111,8 +112,8 @@ or `TERM=dumb`. Set `NO_COLOR=1` to disable color, or `FORCE_COLOR=1` to enable 
 remain plain, machine-readable data.
 `--silent` suppresses execution logs; usage, syntax and trace-usage diagnostics still appear
 on stderr so command-line errors are not hidden.
-`--log-level` retains ordinary severity filtering; model transcripts and state events appear at
-every non-silent level. Forced color never enables cursor controls or keyboard input.
+`--log-level` retains ordinary severity filtering; model transcripts appear at every non-silent
+level, while state events appear only at `debug`. Forced color never enables cursor controls or keyboard input.
 
 For example, `log('review:', review)` produces:
 

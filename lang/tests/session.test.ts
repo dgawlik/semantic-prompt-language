@@ -23,10 +23,10 @@ let saved = None
     let captured = []
     def update():
         captured.append(2)
-    saved = update`), { backend: new NoLlm(), logger: new Logger('info', undefined, { eventSink: event => old.push(event) }) });
+    saved = update`), { backend: new NoLlm(), logger: new Logger('debug', undefined, { eventSink: event => old.push(event) }) });
         const before = old.length;
         await session.run(parse('change(items)\nsaved()'), {
-            backend: new NoLlm(), logger: new Logger('info', undefined, { eventSink: event => current.push(event) }),
+            backend: new NoLlm(), logger: new Logger('debug', undefined, { eventSink: event => current.push(event) }),
         });
         expect(old).toHaveLength(before);
         const mutations = current.filter(event => event.kind === 'state' && event.change.operation === 'mutation');
@@ -36,7 +36,7 @@ let saved = None
         expect(original?.kind === 'state' && mutations[0].kind === 'state' &&
             mutations[0].change.bindings.some(delta => delta.binding.bindingId === original.change.bindings[0].binding.bindingId)).toBe(true);
         const lines: string[] = [];
-        await session.run(parse('items.append(3)'), { backend: new NoLlm(), logger: new Logger('info', line => lines.push(line)) });
+        await session.run(parse('items.append(3)'), { backend: new NoLlm(), logger: new Logger('debug', line => lines.push(line)) });
         expect(lines).toHaveLength(1);
         expect(lines[0]).toContain('~ state');
     });

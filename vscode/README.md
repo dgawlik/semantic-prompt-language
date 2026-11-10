@@ -150,8 +150,8 @@ colon. See the [language reference](https://github.com/dgawlik/semantic-prompt-l
    A separate live log output
    shows cell progress, runtime information, warnings and errors, keeping the last 20 lines and
    at most 4,000 characters, including a truncation notice when older content is omitted.
-   Full AI transcripts and variable-state changes stay in **Output > SPL Notebook**.
-   Automatic executed-source traces are not emitted.
+   Full AI transcripts stay in **Output > SPL Notebook**.
+   Debug-level variable-state changes and automatic executed-source traces are not emitted.
    Explicit `log(...)` messages, final replies, results and error outputs are not subject to
    this brief-log limit. Full runtime logs remain in the output channel.
 4. To add an instruction cell, insert a **code** cell, switch its language to **Markdown**, and
