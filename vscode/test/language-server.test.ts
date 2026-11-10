@@ -149,6 +149,32 @@ if isinstance(value, Data):
     assert.ok(TextDocument.applyEdits(document(source), [items[0].textEdit]).endsWith("log('😀 {value.total}')"));
 });
 
+test('lambda parameters have expression-local definitions and references', () => {
+    const source = `let x = 10
+let first = [1].map(lambda x: x + 1)
+let nested = lambda a: lambda b, c: a + b + c
+let last = x`;
+    const result = analysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    assert.deepEqual(definition(result, at(source, 'x + 1'))?.range.start, at(source, 'x:'));
+    assert.deepEqual(definition(result, at(source, 'x', 3))?.range.start, at(source, 'x', 0));
+    assert.deepEqual(definition(result, at(source, 'a + b'))?.range.start, at(source, 'a:'));
+    assert.deepEqual(definition(result, at(source, 'b + c'))?.range.start, at(source, 'b, c'));
+    assert.ok(completions(result, at(source, 'let last')).every(item => !['a', 'b', 'c'].includes(item.label)));
+    assert.ok(completions(result, at(source, 'let last')).some(item => item.label === 'lambda'));
+    const partial = 'let f = lambda parameter: par';
+    assert.ok(completions(analysis(partial), document(partial).positionAt(partial.length))
+        .some(item => item.label === 'parameter'));
+});
+
+test('typed lists offer map, filter and reduce completions only on lists', () => {
+    const source = 'let xs: list[int] = [1, 2]\nxs.';
+    assert.deepEqual(completions(analysis(source), after(source, 'xs.')).map(item => item.label),
+        ['map', 'filter', 'reduce']);
+    const string = "let xs: str = 'abc'\nxs.";
+    assert.deepEqual(completions(analysis(string), after(string, 'xs.')), []);
+});
+
 test('member completion follows checker narrowing, shadowing, and reassignment rules', () => {
     const declarations = `struct Left:
     shared: int
@@ -971,6 +997,16 @@ render(len([1, 2]), `;
         assert.ok(help.signatures[0].label.slice(...parameter.label).startsWith('schema='));
         assert.equal(help.signatures[0].label.includes('seed='), command === 'ask');
     }
+});
+
+test('lambda parameter commas are not counted as call arguments in signature help', () => {
+    const declaration = 'def apply(callback, initial):\n    return initial\n';
+    for (const tail of ['apply(lambda x, y', 'apply(lambda x, y: x + y']) {
+        const source = declaration + tail;
+        assert.equal(signatureHelp(analysis(source), document(source).positionAt(source.length))?.activeParameter, 0);
+    }
+    const source = declaration + 'apply(lambda x, y: x + y, ';
+    assert.equal(signatureHelp(analysis(source), document(source).positionAt(source.length))?.activeParameter, 1);
 });
 
 test('signature help ignores comments, strings, member calls, declarations and shadowed built-ins', () => {

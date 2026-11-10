@@ -224,6 +224,7 @@
     "keywords": {
       "patterns": [
         { "name": "storage.type.spl", "match": "\\b(?:enum|struct|class|hydratable|fn)\\b" },
+        { "name": "storage.type.function.spl", "match": "\\blambda\\b" },
         { "name": "support.type.spl", "match": "\\b(?:char|object)\\b" },
         { "name": "support.type.spl", "match": "\\b(?:int|float|str|bool|list)\\b(?!\\s*\\()" },
         { "name": "storage.modifier.restrict-kind.spl", "match": "(?<=,)\\s*\\b(?:fs|net|exec|mcp)\\b(?=\\s+(?:['\"\\[]))" },

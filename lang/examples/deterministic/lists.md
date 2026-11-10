@@ -43,4 +43,13 @@ log('Inserted: {ins}')
 ins.clear()
 log('Cleared: {ins}')
 
+let numbers = [1,2,3,4,5]
+
+let f = numbers.filter(lambda i: i % 2 ==0)
+assert f == [2, 4]
+
+let m = f.map(lambda i: i*2)
+assert m == [4, 8]
+
+let r = m.reduce(lambda acc, i: acc + i)
 ```

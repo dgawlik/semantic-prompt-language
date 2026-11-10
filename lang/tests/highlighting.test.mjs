@@ -66,9 +66,9 @@ success True`;
     });
 
     it('does not inherit Python-only syntax', () => {
-        const source = 'import lambda\n# ask {ignored}\ndef run(value):\n    return 1e-3 // 2';
+        const source = 'import yield\n# ask {ignored}\ndef run(value):\n    return 1e-3 // 2';
         const html = highlight(source);
-        for (const keyword of ['import', 'lambda']) expect(html).not.toContain(`>${keyword}</span>`);
+        for (const keyword of ['import', 'yield']) expect(html).not.toContain(`>${keyword}</span>`);
         expect(html).toContain('<span class="hljs-title function_">run</span>');
         expect(html).toContain('<span class="hljs-number">1e-3</span>');
         expect(html).toContain('<span class="hljs-operator">//</span>');
@@ -76,6 +76,12 @@ success True`;
         expect(decode(html)).toBe(source);
     });
 
+    it('highlights lambda expressions as SPL keywords', () => {
+        const source = '[1, 2].map(lambda x: x * 2)';
+        const html = highlight(source);
+        expect(html).toContain('<span class="hljs-keyword">lambda</span>');
+        expect(decode(html)).toBe(source);
+    });
     it('highlights declaration names, descriptors, unions and typed arrows', () => {
         const text = "type Money = int [minimum=0]\nenum Color = 'red' | 'blue'\nstruct Data:\n    color: Color\nhydratable class Person:\n    name: str\nlet callback: fn(str, int) -> str = repeat\nlet values: list[int | str] = []\nlet data = object()\nvalidate(data, Data)\ntype(1)";
         const html = highlight(text);

@@ -5,8 +5,10 @@ import {
     equals,
     fromJson,
     hasKey,
+    isDescriptor,
     isDict,
     isFloat,
+    isFunction,
     isList,
     newDict,
     runtimeError,
@@ -381,11 +383,45 @@ const dictMethods: Record<string, Method> = {
 const MUTATING_LIST_METHODS = new Set(['append', 'extend', 'insert', 'pop', 'remove', 'reverse', 'sort', 'clear']);
 const MUTATING_DICT_METHODS = new Set(['pop', 'update', 'clear']);
 
+export function isListCallbackMethod(name: string): boolean {
+    return name === 'map' || name === 'filter' || name === 'reduce';
+}
+
+async function callListCallbackMethod(
+    self: Value[], name: string, args: Value[], invoke: (fn: Value, args: Value[]) => Promise<Value>,
+): Promise<Value> {
+    arity(name, args, 1, name === 'reduce' ? 2 : 1);
+    const fn = args[0];
+    if (!isFunction(fn) && !(isDescriptor(fn) && ['int', 'float', 'str', 'char', 'bool', 'object', 'struct', 'class'].includes(fn.kind))) {
+        throw runtimeError(`${name}() expects a callable, got ${typeName(fn)}`);
+    }
+    const items = [...iterate(self)];
+    if (name === 'reduce') {
+        if (!items.length && args.length === 1) throw runtimeError('reduce() of an empty list with no initial value');
+        let acc = args.length === 2 ? args[1] : items[0];
+        for (let i = args.length === 2 ? 0 : 1; i < items.length; i++) acc = await invoke(fn, [acc, items[i]]);
+        return acc;
+    }
+    const out: Value[] = [];
+    for (const item of items) {
+        const result = await invoke(fn, [item]);
+        if (name === 'map') out.push(result);
+        else if (truthy(result)) out.push(item);
+    }
+    return out;
+}
+
 export function isMutatingMethod(self: Value, name: string): boolean {
     return isList(self) ? MUTATING_LIST_METHODS.has(name) : isDict(self) && MUTATING_DICT_METHODS.has(name);
 }
 
-export function callMethod(self: Value, name: string, args: Value[]): Value {
+export function callMethod(
+    self: Value, name: string, args: Value[], invoke?: (fn: Value, args: Value[]) => Promise<Value>,
+): Value | Promise<Value> {
+    if (isList(self) && isListCallbackMethod(name)) {
+        if (!invoke) throw runtimeError(`${name}() requires a function-call context`);
+        return callListCallbackMethod(self, name, args, invoke);
+    }
     const table = typeof self === 'string' ? stringMethods : isList(self) ? listMethods : isDict(self) ? dictMethods : undefined;
     if (!table || !Object.prototype.hasOwnProperty.call(table, name)) {
         throw runtimeError(`${typeName(self)} has no method '${name}'`);
@@ -402,6 +438,7 @@ export function callMethod(self: Value, name: string, args: Value[]): Value {
 }
 
 export function hasBuiltinMethod(self: Value, name: string): boolean {
+    if (isList(self) && isListCallbackMethod(name)) return true;
     const table = typeof self === 'string' ? stringMethods : isList(self) ? listMethods : isDict(self) ? dictMethods : undefined;
     return table !== undefined && Object.hasOwn(table, name);
 }

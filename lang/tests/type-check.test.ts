@@ -25,6 +25,53 @@ async function rejectsBeforeModel(source: string, reason?: string) {
 }
 
 describe('static typed preflight', () => {
+    it('contextually checks lambda signatures and list callback types', async () => {
+        const { result } = await exec(`let increment: fn(int) -> int = lambda x: x + 1
+let constant: fn() -> int = lambda: 5
+let xs: list[int] = [1, 2, 3]
+let mapped: list[str] = xs.map(lambda x: str(x))
+let filtered: list[int] = xs.filter(lambda x: x > 1)
+let total: int = xs.reduce(lambda acc, x: acc + x, 0)
+let unseeded: int = xs.reduce(lambda acc, x: acc + x)
+let last = xs.reduce(lambda acc, x: x, None)
+success [increment(4), constant(), mapped, filtered, total, unseeded, xs, last]`);
+        expect(result).toMatchObject({ status: 'success', value: [5n, 5n, ['1', '2', '3'], [2n, 3n], 6n, 6n, [1n, 2n, 3n], 3n] });
+    });
+
+    it('keeps callable element guards when mapping, filtering and reducing typed lists', async () => {
+        const { result } = await exec(`def identity(value):
+    return value
+let callbacks: list[fn(int) -> int] = [identity]
+let mapped = callbacks.map(lambda callback: callback(3))
+let selected = callbacks.filter(lambda callback: True)
+let callback = callbacks.reduce(lambda acc, callback: callback)
+success [mapped, selected[0](4), callback(5)]`);
+        expect(result).toMatchObject({ status: 'success', value: [[3n], 4n, 5n] });
+    });
+
+    it.each([
+        ["let fnValue: fn(int) -> int = lambda x: 'wrong'", 'expected int'],
+        ['let fnValue: fn(int) -> int = lambda x, y: x', 'parameters'],
+        ["let xs: list[int] = [1]\nxs.map(lambda x: x + 'wrong')", 'typed'],
+        ["def wrong(x: str) -> str:\n    return x\nlet xs: list[int] = [1]\nxs.map(wrong)", 'expected str'],
+        ['let xs: list[int] = [1]\nxs.filter(lambda x, y: True)', 'parameters'],
+        ['let xs: list[int] = [1]\nxs.reduce(lambda x: x)', 'parameters'],
+        ["let xs: list[int] = [1]\nlet ys: list[str] = xs.map(lambda x: x + 1)", 'expected list[str]'],
+        ["def wrong(acc: int, x: int) -> str:\n    return str(x)\nlet xs: list[int] = [1, 2]\nxs.reduce(wrong, 0)", 'reduce callback return'],
+        ["let xs: list[int] = [1]\nxs.filter('not callable')", 'not callable'],
+    ])('rejects statically invalid lambdas or callbacks before models: %s', async (source, reason) => {
+        await rejectsBeforeModel(source, reason);
+    });
+
+    it('invalidates captured narrowing after list callbacks', async () => {
+        await rejectsBeforeModel(`let value: int | str = 'before'
+def use() -> str:
+    let change = lambda x: value
+    if isinstance(value, str):
+        [1].map(change)
+        return value`);
+    });
+
     it('accepts explicit struct-to-class validation and observes nominal member types', () => {
         const program = parse(`class Person:
     age: int

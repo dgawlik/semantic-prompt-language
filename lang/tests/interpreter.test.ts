@@ -245,6 +245,134 @@ success [
         expect(value(result)).toEqual([5, 42n, { __float: 1.5 }, '3', [1, 2, 3], 6, 5, 2, ['a', 'b'], 'x-y', 'HI', 'aXc', ['k'], 9, { a: [1] }, '{"a":[1]}', 2, 3.14, [[0, 'a']], 'list', 'None']);
     });
 
+    it('supports first-class lambdas, lexical capture, shadowing and recursion', async () => {
+        const { result } = await exec(`
+let x = 10
+let add = lambda y: x + y
+x = 20
+let nested = (lambda x: lambda y: x + y)(3)
+let fact = lambda n: 1 if n <= 1 else n * fact(n - 1)
+let constant = lambda: 7
+success [add(2), nested(4), x, fact(5), constant(), (lambda x: x + 1)(2)]
+`);
+        expect(value(result)).toEqual([22, 7, 20, 120, 7, 3]);
+    });
+
+    it('maps, filters and reduces lists with lambdas, named functions and builtins', async () => {
+        const { result } = await exec(`
+def double(x):
+    return x * 2
+let xs = [1, 2, 3, 4]
+let mapped = xs.map(double)
+let selected = xs.filter(lambda x: x % 2 == 0)
+let total = xs.reduce(lambda acc, x: acc + x)
+let seeded = xs.reduce(lambda acc, x: acc + x, 10)
+let digits = xs.map(str).reduce(lambda acc, x: acc + x, '')
+let truthy = [None, False, 0, '', [], 2, 'yes'].filter(bool)
+success [mapped, selected, total, seeded, digits, truthy, xs,
+    xs.filter(lambda x: x > 1).map(lambda x: x * 3).reduce(lambda a, b: a + b, 0)]
+`);
+        expect(value(result)).toEqual([[2, 4, 6, 8], [2, 4], 10, 20, '1234', [2, 'yes'], [1, 2, 3, 4], 27]);
+    });
+
+    it('handles empty lists, singletons and explicit None reduce seeds without invoking callbacks', async () => {
+        const { result } = await exec(`
+def unexpected(x):
+    fail 'must not run'
+def unexpectedReduce(a, b):
+    fail 'must not run'
+success [[].map(unexpected), [].filter(unexpected), [].reduce(unexpectedReduce, None),
+    [].reduce(unexpectedReduce, 0), [9].reduce(unexpectedReduce)]
+`);
+        expect(value(result)).toEqual([[], [], null, 0, 9]);
+        const failed = await exec(`success [].reduce(lambda a, b: a + b)`);
+        expect(failure(failed.result).reason).toContain('empty list');
+        expect(value((await exec('success [1, 2].reduce(lambda acc, x: x, None)')).result)).toBe(2);
+    });
+
+    it('passes bound methods as callbacks and evaluates arguments left to right', async () => {
+        const { result } = await exec(`
+class Multiplier:
+    factor: int
+    def Multiplier(factor: int):
+        self.factor = factor
+    def apply(value: int) -> int:
+        return value * self.factor
+let multiplier = Multiplier(3)
+let xs: list[int] = [1, 2]
+let events = []
+def makeCallback():
+    events.append('callback')
+    return lambda acc, x: acc + x
+def makeSeed():
+    events.append('seed')
+    return 0
+let total = [1, 2].reduce(makeCallback(), makeSeed())
+success [xs.map(multiplier.apply), total, events]
+`);
+        expect(value(result)).toEqual([[3n, 6n], 3, ['callback', 'seed']]);
+    });
+
+    it('awaits callbacks sequentially and stops at the first callback failure', async () => {
+        const questions: string[] = [];
+        const { result } = await exec(`
+let mapped = ['one', 'two'].map(lambda x: human x)
+let filtered = ['yes', ''].filter(lambda x: human x)
+let reduced = ['a', 'b'].reduce(lambda acc, x: human (acc + x), '')
+success [mapped, filtered, reduced]
+`, { human: async question => {
+            await new Promise(resolve => setTimeout(resolve, 1));
+            questions.push(question);
+            return question;
+        } });
+        expect(value(result)).toEqual([['one', 'two'], ['yes'], 'ab']);
+        expect(questions).toEqual(['one', 'two', 'yes', '', 'a', 'ab']);
+        const failed = await exec(`
+def check(x):
+    assert x < 2 'stop'
+    return human str(x)
+success [1, 2, 3].map(check)
+`, { human: question => { questions.push(question); return question; } });
+        expect(failure(failed.result).reason).toContain('stop');
+        expect(questions.at(-1)).toBe('1');
+    });
+
+    it('uses a snapshot when callbacks mutate the source and preserves shallow element identity', async () => {
+        const { result } = await exec(`
+let xs = [1, 2]
+def grow(x):
+    xs.append(x + 10)
+    return x * 2
+let mapped = xs.map(grow)
+let child = [1]
+let selected = [child].filter(lambda x: True)
+selected[0].append(2)
+success [mapped, xs, child]
+`);
+        expect(value(result)).toEqual([[2, 4], [1, 2, 11, 12], [1, 2]]);
+    });
+
+    it.each([
+        ["'abc'.map(lambda x: x)", "str has no method 'map'"],
+        ["'abc'.filter(lambda x: x)", "str has no method 'filter'"],
+        ["'abc'.reduce(lambda a, b: a)", "str has no method 'reduce'"],
+        ['object().map(lambda x: x)', "key 'map' not found"],
+        ['object().filter(lambda x: x)', "key 'filter' not found"],
+        ['object().reduce(lambda a, b: a)', "key 'reduce' not found"],
+        ['1.map(lambda x: x)', "number has no method 'map'"],
+        ['[].map(1)', 'callable'],
+        ['[].filter(None)', 'callable'],
+        ['[].reduce(False, 0)', 'callable'],
+        ['[1].map()', 'argument count'],
+        ['[1].filter(lambda x: x, 0)', 'argument count'],
+        ['[1].reduce(lambda a, b: a, 0, 1)', 'argument count'],
+        ['[1].map(lambda: 0)', 'parameters'],
+        ['(lambda x: x)()', 'arguments'],
+    ])('rejects invalid list callbacks and lambda calls: %s', async (source, reason) => {
+        const { result } = await exec(`success ${source}`);
+        expect(failure(result).reason).toContain(reason);
+    });
+
     it('keeps __proto__ keys harmless', async () => {
         const { result } = await exec(`
 let d = object()

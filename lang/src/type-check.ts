@@ -1,6 +1,7 @@
 import type { AssignTarget, DefStmt, Expr, FieldDecl, Program, Stmt, TypeExpr } from './ast.js';
 import { types as nodeTypes } from 'node:util';
 import { Failure } from './errors.js';
+import { isListCallbackMethod } from './builtins.js';
 import {
     aliasType, assignable, contractOf, descriptor, equivalent, INT_MAX, INT_MIN, primitives, resolveFields, resolveType,
     type TypeDescriptor,
@@ -557,6 +558,7 @@ class Checker {
             }
             case 'bool': return { type: primitive('bool'), typed, literal: expr.v };
             case 'none': return { type: primitive('None'), typed, literal: null };
+            case 'lambda': return this.lambda(expr, scope, expected?.kind === 'fn' ? { params: [...expected.params!], result: expected.result } : undefined);
             case 'name': {
                 const value = this.find(scope, expr.name)?.value ?? unknown();
                 return this.effective(value);
@@ -950,28 +952,73 @@ class Checker {
     }
 
     private invoke(value: Info, args: Expr[], scope: Scope, name: string): Info {
+        return this.invokeArguments(value, args.length, (i, type) => this.expr(args[i], scope, type), scope, name);
+    }
+
+    private invokeArguments(value: Info, count: number, argument: (i: number, type?: TypeDescriptor) => Info, scope: Scope, name: string): Info {
         const info = this.effective(value);
         if (info.type?.kind === 'union' && info.typed) {
             if (!info.type.members!.every(type => type.kind === 'fn')) this.error(`${info.type.name} is not callable without narrowing`);
             const signatures = info.type.members!;
-            if (signatures.some(type => type.params!.length !== args.length)) this.error(`${name}: incompatible callable arity`);
-            args.forEach((arg, i) => {
-                const value = this.expr(arg, scope, signatures[0].params![i]);
+            if (signatures.some(type => type.params!.length !== count)) this.error(`${name}: incompatible callable arity`);
+            for (let i = 0; i < count; i++) {
+                const value = argument(i, signatures[0].params![i]);
                 for (const signature of signatures) this.require(value, signature.params![i], `${name} argument ${i + 1}`);
-            });
+            }
             this.invalidate(scope, undefined, true);
             return { type: this.union(signatures.map(type => type.result!)), typed: true };
         }
         const callable = info.callable ?? (info.type?.kind === 'fn' ? { params: [...info.type.params!], result: info.type.result } : undefined);
-        if (callable && callable.params.length !== args.length) this.error(`${name}: expected ${callable.params.length} arguments, got ${args.length}`);
-        args.forEach((arg, i) => {
+        if (callable && callable.params.length !== count) this.error(`${name}: expected ${callable.params.length} arguments, got ${count}`);
+        for (let i = 0; i < count; i++) {
             const type = callable?.params[i];
-            const value = this.expr(arg, scope, type);
+            const value = argument(i, type);
             if (type) this.require(value, type, `${name} argument ${i + 1}`);
-        });
+        }
         if (info.typed && info.type && !callable && info.type.kind !== 'union') this.error(`${info.type.name} is not callable`);
         this.invalidate(scope, undefined, true);
         return callable?.result ? concrete(callable.result) : callable?.inferred ?? unknown();
+    }
+
+    private lambda(expr: Extract<Expr, { t: 'lambda' }>, scope: Scope, context?: Callable): Info {
+        return this.def({
+            t: 'def', name: '<lambda>', params: expr.params, line: expr.line,
+            body: [{ t: 'return', value: expr.body, line: expr.line }],
+        }, scope, false, undefined, context);
+    }
+
+    private listCallbackMethod(info: Info, name: string, args: Expr[], scope: Scope): Info {
+        if (args.length < 1 || args.length > (name === 'reduce' ? 2 : 1)) this.error(`${name}: incompatible argument count`);
+        const element = info.type?.kind === 'list' ? concrete(info.type.element!, !!info.typed)
+            : info.identity?.items ? this.merge(info.identity.items) : unknown();
+        let expr = args[0];
+        while (expr.t === 'group') expr = expr.e;
+        let callback = expr.t === 'lambda' ? unknown() : this.expr(args[0], scope);
+        const initialType = callback.callable?.params[0] ?? (info.typed ? element.type : undefined);
+        const initial = args[1] && this.expr(args[1], scope, initialType);
+        const accumulator = initial ?? element;
+        if (expr.t === 'lambda') callback = this.lambda(expr, scope, {
+            params: name === 'reduce' ? [accumulator.type, element.type] : [element.type],
+        });
+        if (callback.descriptor) {
+            const kind = callback.descriptor.kind;
+            if (['int', 'float', 'str', 'char', 'bool', 'object', 'struct'].includes(kind)) {
+                callback = { callable: { params: [undefined], result: callback.descriptor } };
+            } else if (kind !== 'class') this.error(`${name}: ${callback.descriptor.name} is not callable`);
+        }
+        if (!callback.callable && (callback.legacy || callback.identity || callback.type && !['fn', 'union'].includes(callback.type.kind))) {
+            this.error(`${name}: ${callback.type?.name ?? 'value'} is not callable`);
+        }
+        const inputs = name === 'reduce' ? [accumulator, element] : [element];
+        const result = this.invokeArguments(callback, inputs.length, i => inputs[i], scope, name);
+        if (name === 'reduce') {
+            const param = expr.t !== 'lambda' ? callback.callable?.params[0] : undefined;
+            if (param) this.require(result, param, 'reduce callback return');
+            return this.merge([accumulator, result]);
+        }
+        const output = name === 'filter' ? element : result;
+        return output.type ? { type: descriptor('list', `list[${output.type.name}]`, { element: output.type }), typed: !!output.typed }
+            : { identity: { kind: 'list' } };
     }
 
     private builtinMethod(value: Info, name: string, args: Expr[], scope: Scope): Info | undefined {
@@ -983,6 +1030,7 @@ class Checker {
             return this.merge(values as Info[]);
         }
         const kind = info.type?.kind ?? info.identity?.kind;
+        if (kind === 'list' && isListCallbackMethod(name)) return this.listCallbackMethod(info, name, args, scope);
         const stringMethods = ['upper', 'lower', 'strip', 'lstrip', 'rstrip', 'title', 'capitalize', 'isdigit', 'split', 'splitlines', 'join', 'replace', 'startswith', 'endswith', 'find', 'count'];
         if (info.type && this.stringType(info.type) && stringMethods.includes(name)) {
             const arities: Record<string, [number, number]> = {
@@ -1094,9 +1142,10 @@ class Checker {
         return { ...info };
     }
 
-    private def(stmt: DefStmt, scope: Scope, declare = true, self?: TypeDescriptor): Info {
-        const params = stmt.params.map((_, i) => stmt.paramTypes?.[i] && this.resolve(stmt.paramTypes[i]!, scope));
-        const result = stmt.returnType && this.resolve(stmt.returnType, scope);
+    private def(stmt: DefStmt, scope: Scope, declare = true, self?: TypeDescriptor, context?: Callable): Info {
+        if (context && context.params.length !== stmt.params.length) this.error(`${stmt.name}: expected ${context.params.length} parameters, got ${stmt.params.length}`);
+        const params = stmt.params.map((_, i) => stmt.paramTypes?.[i] ? this.resolve(stmt.paramTypes[i]!, scope) : context?.params[i]);
+        const result = stmt.returnType ? this.resolve(stmt.returnType, scope) : context?.result;
         const callable: Callable = { params, result };
         const info: Info = { callable, typed: !!result || params.some(Boolean) };
         if (params.every(Boolean) && result) info.type = descriptor('fn', stmt.name, { params: params as TypeDescriptor[], result });

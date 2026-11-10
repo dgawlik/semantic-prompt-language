@@ -1,5 +1,5 @@
 import type { AssignTarget, DefStmt, Expr, Program, Stmt, StrPart, ToolName } from './ast.js';
-import { callMethod, hasBuiltinMethod, isMutatingMethod, iterate, makeBuiltins } from './builtins.js';
+import { callMethod, hasBuiltinMethod, isListCallbackMethod, isMutatingMethod, iterate, makeBuiltins } from './builtins.js';
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
 import { LlmError, buildPromptParts, parseJsonResponse, validateRandomness, validateTokens, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import { AGENT_TOOLS, actionArguments } from './agent.js';
@@ -296,6 +296,14 @@ class Interpreter {
         };
     }
 
+    private makeLambda(e: Extract<Expr, { t: 'lambda' }>, env: Env, params?: readonly (TypeDescriptor | undefined)[], result?: TypeDescriptor): UserFunction {
+        return {
+            ...this.makeFunction({ t: 'def', name: '<lambda>', params: e.params, body: [{ t: 'return', value: e.body, line: e.line }], line: e.line }, env),
+            paramTypes: params ? [...params] : undefined,
+            returnType: result,
+        };
+    }
+
     // ---- statements ----------------------------------------------------
 
     private async execBlock(stmts: Stmt[], env: Env): Promise<Completion> {
@@ -542,6 +550,7 @@ class Interpreter {
             case 'str': return this.text(e.parts, env);
             case 'bool': return e.v;
             case 'none': return null;
+            case 'lambda': return this.makeLambda(e, env, expected?.kind === 'fn' ? expected.params : undefined, expected?.kind === 'fn' ? expected.result : undefined);
             case 'block':
             case 'if': {
                 const completion = await this.execStmt(e, env);
@@ -680,6 +689,15 @@ class Interpreter {
             if (isDict(obj) && !hasBuiltinMethod(obj, callee.name)) {
                 const fn = this.getKey(obj, callee.name);
                 return this.callValue(fn, await this.evalArgs(argExprs, env, this.callParams(fn)));
+            }
+            if (isList(obj) && isListCallbackMethod(callee.name)) {
+                const args: Value[] = [];
+                for (const [i, arg] of argExprs.entries()) {
+                    const expected = callee.name === 'reduce' && i === 1 ? this.callParams(args[0])?.[0] ?? contractOf(obj)?.element : undefined;
+                    args.push(await this.eval(arg, env, expected));
+                }
+                args.forEach(value => assertComplete(value));
+                return callMethod(obj, callee.name, args, (fn, values) => this.callValue(fn, values));
             }
             const type = contractOf(obj);
             const expected: (TypeDescriptor | undefined)[] = callee.name === 'append' ? [type?.element]

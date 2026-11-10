@@ -50,6 +50,7 @@ export const keywords: Record<string, string> = {
     let: 'Declare or redeclare a binding in the current block scope, shadowing enclosing declarations.',
     type: "Declare a transparent read-only type alias: type Money = int [minimum=0, desc='Amount in cents']. Bracket metadata is model advice, not a validation constraint.",
     def: 'Define a function with positional parameters and lexical access to enclosing bindings.',
+    lambda: 'Anonymous function: lambda x: expression or lambda acc, x: expression. Captures lexical bindings and implicitly returns its expression.',
     enum: "Declare a named union of string literals: enum Color = 'red' | 'blue'. Matching strings are accepted directly.",
     struct: 'Declare an exact structural record with required typed fields and optional advisory metadata.',
     class: 'Declare nominal instances with typed fields, explicitly named constructor and implicitly bound self. No inheritance.',
@@ -84,6 +85,12 @@ export const keywords: Record<string, string> = {
     True: 'Boolean true.',
     False: 'Boolean false.',
     None: 'The null value.',
+};
+
+export const listCallbacks: Record<string, Help> = {
+    map: { signature: 'map(callback)', description: 'List only. Call callback(item) in order and return a new list of results.' },
+    filter: { signature: 'filter(callback)', description: 'List only. Return a new list of items for which callback(item) is truthy.' },
+    reduce: { signature: 'reduce(callback, initial?)', description: 'List only. Fold left with callback(accumulator, item). Without an initial value, use the first item; an empty list then fails.' },
 };
 
 export const modifiers: Record<string, Help> = {

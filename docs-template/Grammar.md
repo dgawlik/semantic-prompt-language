@@ -93,7 +93,10 @@ restrict_clause = [ "fs" | "net" | "exec" | "mcp" ] , expr ;
    A bare-colon block containing pass yields None.
    All bodies are nonempty. Functions need an explicit return. *)
 
-expr           = or_expr , [ "if" , or_expr , "else" , expr ] ;
+expr           = lambda_expr | or_expr , [ "if" , or_expr , "else" , expr ] ;
+lambda_expr    = "lambda" , [ NAME , { "," , NAME } , [ "," ] ] , ":" , expr ;
+                 (* positional names only, no annotations or defaults;
+                    the expression is implicitly returned in a lexical function scope *)
 or_expr        = and_expr , { "or" , and_expr } ;
 and_expr       = not_expr , { "and" , not_expr } ;
 not_expr       = "not" , not_expr | comparison ;

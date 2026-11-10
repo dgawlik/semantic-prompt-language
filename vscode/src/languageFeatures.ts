@@ -88,6 +88,7 @@ interface Call {
     declaration: boolean;
     modifier: boolean;
     argumentName?: string;
+    lambdaHeader?: boolean;
 }
 
 function signatureParameters(signature: string): { label: [number, number] }[] {
@@ -124,6 +125,7 @@ export function signatureHelp(analysis: Analysis, position: Position): Signature
         const token = tokens[i];
         if (token.type !== 'op') {
             const call = stack.at(-1);
+            if (call && token.type === 'name' && token.value === 'lambda') call.lambdaHeader = true;
             if (call && token.type === 'name' && call.argumentName === undefined) call.argumentName = token.value;
             continue;
         }
@@ -138,9 +140,12 @@ export function signatureHelp(analysis: Analysis, position: Position): Signature
             });
         } else if ([')', ']', '}'].includes(token.value)) {
             stack.pop();
+        } else if (token.value === ':') {
+            const call = stack.at(-1);
+            if (call) call.lambdaHeader = false;
         } else if (token.value === ',') {
             const call = stack.at(-1);
-            if (call) { call.commas++; call.argumentName = undefined; }
+            if (call && !call.lambdaHeader) { call.commas++; call.argumentName = undefined; }
         }
     }
     const call = stack.at(-1);

@@ -31,6 +31,7 @@ export type Expr =
     | { t: 'logic'; op: 'and' | 'or'; l: Expr; r: Expr }
     | { t: 'compare'; ops: string[]; operands: Expr[] }
     | { t: 'ternary'; cond: Expr; then: Expr; else: Expr }
+    | { t: 'lambda'; params: string[]; body: Expr; line: number }
     | { t: 'call'; callee: Expr; args: Expr[] }
     | { t: 'member'; obj: Expr; name: string; line?: number; col?: number }
     | { t: 'index'; obj: Expr; index: Expr }

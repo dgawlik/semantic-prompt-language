@@ -16,7 +16,7 @@ import { tokenize, type StringPart, type Token } from './lexer.js';
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
     'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass', 'and', 'or', 'not',
-    'True', 'False', 'None', 'enum', 'struct', 'class', 'hydratable', 'fn',
+    'True', 'False', 'None', 'enum', 'struct', 'class', 'hydratable', 'fn', 'lambda',
 ]);
 
 export function isReservedName(name: string): boolean {
@@ -55,7 +55,7 @@ export function blockLocalDeclarations(program: Program): Set<string> {
     const visit = (value: unknown): void => {
         if (Array.isArray(value)) return value.forEach(visit);
         if (typeof value !== 'object' || value === null) return;
-        if ('t' in value && value.t === 'def') return;
+        if ('t' in value && (value.t === 'def' || value.t === 'lambda')) return;
         if ('t' in value && value.t === 'let' && 'name' in value) names.add(value.name as string);
         Object.values(value).forEach(visit);
     };
@@ -618,6 +618,24 @@ class Parser {
     // ---- expressions ---------------------------------------------------
 
     private parseExpr(): Expr {
+        if (this.isName('lambda')) {
+            const line = this.next().line;
+            const params: string[] = [];
+            while (!this.isOp(':')) {
+                const at = this.tok;
+                const name = this.expectIdent('a parameter name');
+                if (params.includes(name)) this.fail(`duplicate parameter '${name}'`, at);
+                params.push(name);
+                if (!this.isOp(',')) break;
+                this.next();
+            }
+            this.expectOp(':');
+            const savedLoop = this.loopDepth;
+            this.loopDepth = 0;
+            const body = this.parseExpr();
+            this.loopDepth = savedLoop;
+            return { t: 'lambda', params, body, line };
+        }
         let e = this.parseOr();
         if (this.atSuiteEnd()) return e;
         if (this.isOp('|')) {

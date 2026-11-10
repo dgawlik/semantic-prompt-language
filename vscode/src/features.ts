@@ -10,7 +10,7 @@ import { primitives, type TypeDescriptor } from '../../lang/src/types.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
-import { builtins, keywords, modifiers, specialVariables, type Help } from './catalog';
+import { builtins, keywords, listCallbacks, modifiers, specialVariables, type Help } from './catalog';
 
 export type NamedToken = Extract<Token, { type: 'name' }>;
 
@@ -294,6 +294,38 @@ export function analyze(document: TextDocument): Analysis {
                 if (isName(variable)) add(variable, loopScope, `for ${variable.value}`);
                 else if (!isOp(variable, ',')) break;
             }
+        } else if (token.value === 'lambda') {
+            const params: NamedToken[] = [];
+            let j = i + 1;
+            for (;;) {
+                const param = tokens[j];
+                if (!isName(param)) break;
+                params.push(param);
+                j++;
+                if (!isOp(tokens[j], ',')) break;
+                j++;
+            }
+            if (!isOp(tokens[j], ':')) continue;
+            let depth = 0;
+            let headers = 0;
+            let end = j + 1;
+            for (; end < tokens.length; end++) {
+                const next = tokens[end];
+                if (depth === 0 && (['nl', 'dedent', 'eof'].includes(next.type) || isOp(next, ';') ||
+                    isOp(next, ',') && headers === 0 || next.type === 'op' && [')', ']', '}'].includes(next.value))) break;
+                if (next.type === 'op' && ['(', '[', '{'].includes(next.value)) depth++;
+                else if (next.type === 'op' && [')', ']', '}'].includes(next.value)) depth--;
+                else if (depth === 0 && isName(next) && next.value === 'lambda') headers++;
+                else if (depth === 0 && isOp(next, ':') && headers > 0) headers--;
+            }
+            const lambdaScope: Scope = {
+                start: offset(document, token),
+                end: tokens[end] ? offset(document, tokens[end]) : source.length,
+                includesEnd: tokens[end]?.type === 'eof' || tokens[end]?.type === 'nl' && offset(document, tokens[end]) === source.length,
+                parent: scope,
+            };
+            scopes.push(lambdaScope);
+            for (const param of params) add(param, lambdaScope, `parameter ${param.value}`);
         } else if (token.value === 'def' && isName(name) && isOp(tokens[i + 2], '(')) {
             const params: NamedToken[] = [];
             let j = i + 3;
@@ -415,6 +447,9 @@ function memberItems(type: TypeDescriptor | undefined): CompletionItem[] {
             .map(item => ({ ...item, detail: [...new Set(branches.map(branch =>
                 branch.find(other => other.label === item.label)!.detail))].join(' | ') }));
     }
+    if (type?.kind === 'list') return Object.entries(listCallbacks).map(([name, help]) => ({
+        label: name, kind: CompletionItemKind.Method, detail: help.signature, documentation: help.description,
+    }));
     if (type?.kind !== 'struct' && type?.kind !== 'class') return [];
     return [
         ...Object.entries(type.fields ?? {}).map(([name, field]) => ({

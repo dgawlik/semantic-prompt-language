@@ -39,6 +39,28 @@ def f():
 });
 
 describe('parser: accepted syntax', () => {
+    it('parses lambdas with zero or multiple parameters and low-precedence expression bodies', () => {
+        const program = parse(`let empty = lambda: 42
+let choose = lambda x, y: x if x > y else y
+let nested = lambda x: lambda y: x + y
+success [1, 2].map(lambda x: x * 2)`);
+        expect(program.body[0]).toMatchObject({ value: { t: 'lambda', params: [], body: { t: 'num', v: 42 } } });
+        expect(program.body[1]).toMatchObject({ value: { t: 'lambda', params: ['x', 'y'], body: { t: 'ternary' } } });
+        expect(program.body[2]).toMatchObject({ value: { t: 'lambda', params: ['x'], body: { t: 'lambda', params: ['y'] } } });
+        expect(program.body[3]).toMatchObject({ value: { t: 'call', args: [{ t: 'lambda', params: ['x'] }] } });
+    });
+
+    it.each([
+        ['let f = lambda x, x: x', /duplicate parameter/],
+        ['let f = lambda if: 1', /reserved word/],
+        ['let lambda = 1', /reserved word/],
+        ['let f = lambda x x', /expected ':'/],
+        ['let f = lambda x:', /unexpected end of line/],
+        ['let f = lambda x=1: x', /expected ':'/],
+    ])('rejects malformed lambda syntax: %s', (source, reason) => {
+        bad(source, reason);
+    });
+
     it.each(['ask', 'think', 'agent'])('parses multiline %s modifiers, nested values, and trailing commas', (command) => {
         const program = parse(`let score = ${command}(
     fmt = 'integer',

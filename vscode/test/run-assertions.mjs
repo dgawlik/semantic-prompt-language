@@ -9,6 +9,8 @@ import { loadGrammar, root, vsctm } from './load-grammar.mjs';
 
 const ASSERT = /^#(\s*)(\^+)\s+(.+?)\s*$/;
 const grammar = await loadGrammar();
+const lambdaTokens = grammar.tokenizeLine('lambda x: x + 1', vsctm.INITIAL).tokens;
+assert.ok(lambdaTokens[0].scopes.includes('storage.type.function.spl'), 'lambda is a function keyword');
 const markdown = await loadGrammar('text.html.markdown');
 const sampled = "let answer = ask(seed=42, temperature=0, top_p=0.01) 'Prompt'";
 const sampledTokens = grammar.tokenizeLine(sampled, vsctm.INITIAL).tokens;
