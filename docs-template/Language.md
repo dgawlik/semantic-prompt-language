@@ -195,33 +195,47 @@ but keep SPL's lexical scopes.
 expression, or `None`. Anonymous value-producing blocks begin with a bare `:`, as in `result`
 above. `object()` is an empty dictionary; a block containing only `pass` yields `None`.
 
-```spl
-let score = 6
-let label = if score > 7:
-    'high'
-elif score > 3:
-    'medium'
-else:
-    'low'
-let data = object:
-    'a': 1
-    'b': 2
-for key, value in items(data):
-    log(key, value)
-if score < 0:
-    pass
+```spl 
+let i = 0
+while True:
+    let msg = if not i % 2:
+        '{i} is Even'
+    elif i == 5:
+        i += 1
+        continue
+    elif i == 11:
+        break
+    else:
+        '{i} is Odd'
+    log(level='debug')(msg)
+    i += 1
+
+let numbers = list(range(0,10,2))
+for i, n in enumerate(numbers):
+    log('{i} = {n}')
 ```
 
 ## Functions
 
 `def` defines a function with lexical closures and recursion. Functions return `None`
-unless they use an explicit `return`.
+unless they use an explicit `return`. Functions are first class citizens and can be passed around. `lambda` defines lambda function defined inline.
 
-```spl
+```spl 
 def fib(n):
-    if n < 2:
-        return n
-    return fib(n - 1) + fib(n - 2)
+    return if n < 2:
+        1
+    else:
+        fib(n-1) + fib(n-2)
+
+log(fib(10))
+
+def iterate(from, to, f):
+    for n in range(from, to):
+        log(f(n))
+
+iterate(9,10,fib)
+
+iterate(1, 10, lambda x: x*2 + 3)
 ```
 
 ## Gradual typing
