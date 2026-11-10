@@ -2,6 +2,9 @@
 
 SPL is a small Python-like language with colon-and-indentation blocks. This page covers the code inside
 `spl` fences: values, bindings, control flow, functions, built-ins and exact tools.
+Markdown blockquotes use a single optional `@CTL(restrict=..., enforce=..., forbid=..., model=..., reasoning=...)`
+header for [agent controls](LLM-commands.md#blockquotes). These controls are separate from SPL syntax;
+human input in blockquotes is requested in plain language, without a special marker.
 
 ## Values and strings
 

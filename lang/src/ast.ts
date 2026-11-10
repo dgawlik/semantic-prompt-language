@@ -50,6 +50,14 @@ export interface AskMods {
 export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'web_search' | 'shell';
 export type RestrictKind = 'fs' | 'net' | 'exec' | 'mcp';
 
+export interface NaturalControls {
+    restrict?: Partial<Record<RestrictKind, string | string[]>>;
+    enforce?: string | string[];
+    forbid?: string | string[];
+    model?: string;
+    reasoning?: 'low' | 'medium' | 'high';
+}
+
 export type AssignTarget =
     | { t: 'name'; name: string }
     | { t: 'member'; obj: Expr; name: string; line?: number; col?: number }
@@ -71,7 +79,7 @@ export type Stmt = Base &
         | { t: 'break' }
         | { t: 'continue' }
         | { t: 'pass' }
-        | { t: 'natural'; text: string }
+        | { t: 'natural'; text: string; controls?: NaturalControls }
         | { t: 'def'; name: string; params: string[]; paramTypes?: (TypeExpr | undefined)[]; returnType?: TypeExpr; body: Stmt[] }
         | { t: 'enum'; name: string; values: string[] }
         | { t: 'type-alias'; name: string; type: TypeExpr; advice: Record<string, unknown> }

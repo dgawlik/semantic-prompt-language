@@ -168,7 +168,7 @@ def approve():
     write_file('draft.txt', 'original')
     return [ask(fmt='integer', repairs=1) 'Number?', human 'Approve?']
 \`\`\`
-> Invoke @approve, save the result to @answer, and finish.
+> @CTL(restrict={fs: ["."]}, enforce="Be precise", model="quote-model", reasoning="high") Invoke @approve, save the result to @answer, and finish.
 \`\`\`spl
 success [count, answer]
 \`\`\``;

@@ -4,6 +4,7 @@ import type { Program } from './ast.js';
 import { SplSyntaxError } from './errors.js';
 import { parse } from './parser.js';
 import { parsePin, validatePinSource, type PinData } from './pin.js';
+import { parseNatural } from './controls.js';
 
 export const EXTENSION = 'semantic-prompt-language';
 
@@ -135,7 +136,7 @@ export function parseMarkdown(source: string): Program {
     };
     for (const block of document.blocks) {
         if (block.kind === 'natural') {
-            program.body.push({ t: 'natural', text: block.text, line: block.line });
+            program.body.push(parseNatural(block.text, block.line));
         } else {
             const parsed = parse('\n'.repeat(block.line - 1) + block.text);
             if (parsed.directives.model !== undefined) {

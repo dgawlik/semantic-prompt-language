@@ -4,9 +4,9 @@ version: 1
 model: 'gpt-6-luna'
 ---
 
-> @HUMAN What is your favorite color? Save to @color
+> Ask the human "What is your favorite color?" Save to @color
 
-> @HUMAN What is your favorite fruit? Save to @fruit
+> Ask the human "What is your favorite fruit?" Save to @fruit
 
 > A paragraph long poem about @color and @fruit -> @poem
 

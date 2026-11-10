@@ -66,6 +66,118 @@ test('Markdown validates each fence independently', () => {
     assert.match(result.diagnostics[0].message, /indented block/);
 });
 
+test('Markdown validates grouped blockquote controls before execution', () => {
+    const valid = markdownAnalysis(markdownSource('> @CTL(restrict={fs: ["./src"]}, model="other", reasoning="high") Review files.'));
+    assert.deepEqual(valid.diagnostics, []);
+    const invalid = markdownAnalysis(markdownSource('> @CTL(\n> reasoning="invalid") Act.'));
+    assert.equal(invalid.diagnostics[0].range.start.line, 6);
+    assert.match(invalid.diagnostics[0].message, /reasoning must be/);
+    assert.match(markdownAnalysis(markdownSource('> @Human Approve?')).diagnostics[0].message, /removed/);
+});
+
+test('blockquote completion offers CTL and references instead of SPL statement keywords', () => {
+    const source = markdownSource('```spl\nlet notes = "draft"\ndef review():\n    pass\n```\n\n> @');
+    const result = markdownAnalysis(source);
+    const items = completions(result, result.document.positionAt(source.length));
+    for (const name of ['CTL', 'notes', 'review', 'validate', 'success', 'fail']) {
+        assert.ok(items.some(item => item.label === name), name);
+    }
+    for (const name of ['let', 'if', 'restrict', 'enforce', 'forbid', 'human']) {
+        assert.ok(!items.some(item => item.label === name), name);
+    }
+    assert.equal(items.find(item => item.label === 'CTL')?.textEdit?.newText, 'CTL($0)');
+    const existing = markdownSource('> @CTL()');
+    const existingAnalysis = markdownAnalysis(existing);
+    const marker = completions(existingAnalysis, after(existing, '@CT')).find(item => item.label === 'CTL');
+    assert.ok(marker?.textEdit && 'range' in marker.textEdit);
+    assert.equal(TextDocument.applyEdits(existingAnalysis.document, [marker.textEdit]), existing);
+    const prose = markdownSource('> Write a review');
+    assert.deepEqual(completions(markdownAnalysis(prose), TextDocument.create('', 'markdown', 1, prose).positionAt(prose.length)), []);
+});
+
+test('CTL completion handles incomplete groups, used settings and restriction keys', () => {
+    const items = (body: string) => {
+        const source = markdownSource(body);
+        const result = markdownAnalysis(source);
+        return completions(result, result.document.positionAt(source.length));
+    };
+    assert.deepEqual(items('> @CTL(').map(item => item.label), ['restrict', 'enforce', 'forbid', 'model', 'reasoning']);
+    const settings = items("> @CTL(enforce='Be brief',\n>     rea");
+    assert.ok(!settings.some(item => item.label === 'enforce'));
+    assert.equal(settings.find(item => item.label === 'reasoning')?.textEdit?.newText, 'reasoning=');
+    assert.deepEqual(items("> @CTL(restrict={fs: ['./src'], e").map(item => item.label), ['exec', 'net', 'mcp']);
+    assert.deepEqual(items("> @CTL(enforce='Use @no"), []);
+    assert.deepEqual(items("> @CTL(restrict={fs: ['@no"), []);
+    assert.deepEqual(items('> @CTL(enforce=['), []);
+    assert.deepEqual(items("> @CTL(model='arbitrary"), []);
+});
+
+test('CTL value completion preserves quotes, full tokens and existing separators', () => {
+    for (const [body, needle, label, expected] of [
+        ['> @CTL(reasoning=)', 'reasoning=', 'high', "> @CTL(reasoning='high')"],
+        ["> @CTL(reasoning='h", "'h", 'high', "> @CTL(reasoning='high'"],
+        ['> @CTL(reasoning="medium")', '"me', 'high', '> @CTL(reasoning="high")'],
+        ['> @CTL(reasoning="low")', 'reas', 'reasoning', '> @CTL(reasoning="low")'],
+        ['> @CTL(restrict={"fs": ["./src"]})', '"f', 'net', '> @CTL(restrict={"net": ["./src"]})'],
+    ]) {
+        const source = markdownSource(body);
+        const result = markdownAnalysis(source);
+        const item = completions(result, after(source, needle)).find(item => item.label === label);
+        assert.ok(item?.textEdit && 'range' in item.textEdit, body);
+        assert.equal(TextDocument.applyEdits(result.document, [item.textEdit]), markdownSource(expected));
+    }
+    const source = markdownSource('> @CTL(model=)').replace('version: 1', 'version: 1\nmodel: document-model');
+    const result = markdownAnalysis(source);
+    assert.equal(completions(result, after(source, 'model=')).find(item => item.label === 'document-model')?.textEdit?.newText, "'document-model'");
+});
+
+test('blockquote variable completion respects document order, scopes, escaping and UTF-16 ranges', () => {
+    const source = markdownSource('```spl\nlet notes = "draft"\nif True:\n    let private = 1\n```\n\n' +
+        '> Summarize @notes -> @summary\n\n> Use 😀 @sumSuffix\n\n```spl\nlet future = 1\n```').replace(/\n/g, '\r\n');
+    const result = markdownAnalysis(source);
+    const items = completions(result, after(source, '😀 @sum'));
+    for (const name of ['private', 'future', 'CTL']) assert.ok(!items.some(item => item.label === name), name);
+    for (const name of ['notes', 'summary']) assert.ok(items.some(item => item.label === name), name);
+    const edit = items.find(item => item.label === 'summary')?.textEdit;
+    assert.ok(edit && 'range' in edit);
+    assert.ok(TextDocument.applyEdits(result.document, [edit]).includes('> Use 😀 @summary\r\n'));
+    for (const marker of ['@@notes', '\\@notes', 'email@notes']) {
+        const escaped = markdownSource('> ' + marker);
+        assert.deepEqual(completions(markdownAnalysis(escaped), TextDocument.create('', 'markdown', 1, escaped).positionAt(escaped.length)), []);
+    }
+});
+
+test('CTL literals are not variable references or inferred blockquote outputs', () => {
+    const source = markdownSource('```spl\nlet notes = "draft"\n```\n\n' +
+        '> @CTL(enforce="save to @hidden", model="@not_a_model_binding") Review @notes -> @summary');
+    const result = markdownAnalysis(source);
+    assert.ok(!result.names.some(token => ['CTL', 'hidden', 'not_a_model_binding'].includes(token.value)));
+    assert.ok(!result.bindings.some(binding => binding.name === 'hidden'));
+    assert.ok(result.bindings.some(binding => binding.name === 'summary'));
+    assert.equal(definition(result, after(source, '@note'))?.range.start.line, 6);
+});
+
+test('blockquote schema completion offers visible types rather than runtime values', () => {
+    const source = markdownSource('```spl\nstruct Review:\n    title: str\nlet notes = ""\n```\n\n> @validate[Re');
+    const result = markdownAnalysis(source);
+    const items = completions(result, result.document.positionAt(source.length));
+    for (const name of ['Review', 'str', 'int']) assert.ok(items.some(item => item.label === name), name);
+    for (const name of ['notes', 'let', 'CTL']) assert.ok(!items.some(item => item.label === name), name);
+});
+
+test('semantic coloring distinguishes multiline CTL syntax, literal values and blockquote variables', () => {
+    const source = markdownSource('```spl\nlet notes = "draft"\n```\n\n> @CTL(\n' +
+        '>     restrict={fs: ["./src"], exec: ["git"]},\n>     forbid="inventing @hidden", reasoning="high"\n> )\n>\n> Use 😀 @notes.').replace(/\n/g, '\r\n');
+    const result = markdownAnalysis(source);
+    const tokens = decodedTokens(source, result);
+    assert.equal(tokens.find(token => token.text === '@CTL')?.type, 'keyword');
+    for (const name of ['restrict', 'fs', 'exec', 'forbid', 'reasoning']) assert.equal(tokens.find(token => token.text === name)?.type, 'property', name);
+    for (const value of ['"./src"', '"git"', '"inventing @hidden"', '"high"']) assert.equal(tokens.find(token => token.text === value)?.type, 'string', value);
+    assert.ok(!tokens.some(token => token.text === 'hidden'));
+    assert.equal(tokens.filter(token => token.text === 'notes').length, 2);
+    assert.equal(tokens.findLast(token => token.text === 'notes')?.character, after(source, 'Use 😀 @').character);
+});
+
 test('invoice blockquote results have typed completion and shared language features', () => {
     const source = readFileSync(path.resolve(root, '..', 'lang', 'examples', 'extract-invoice.md'), 'utf8');
     const result = markdownAnalysis(source);

@@ -38,6 +38,47 @@ const markers = quoteTokens
     .filter(token => token.scopes.includes('variable.other.reference.spl'))
     .map(token => quote.slice(token.startIndex, token.endIndex));
 assert.deepEqual(markers, ['@count', '@success']);
+const controlledQuote = "> @CTL(restrict={fs: ['./src']}, enforce='Be concise', reasoning='high') Use @count.";
+const controlTokens = markdown.tokenizeLine(controlledQuote, vsctm.INITIAL).tokens;
+assert.ok(controlTokens.some(token => controlledQuote.slice(token.startIndex, token.endIndex) === '@CTL' &&
+    token.scopes.includes('keyword.control.spl')), 'CTL is a control marker');
+for (const name of ['restrict', 'enforce', 'reasoning']) {
+    assert.ok(controlTokens.some(token => controlledQuote.slice(token.startIndex, token.endIndex) === name &&
+        token.scopes.includes('variable.parameter.modifier.spl')), name);
+}
+assert.ok(controlTokens.some(token => controlledQuote.slice(token.startIndex, token.endIndex) === 'fs' &&
+    token.scopes.includes('variable.other.property.spl')), 'restriction keys are properties');
+assert.ok(controlTokens.some(token => controlledQuote.slice(token.startIndex, token.endIndex) === './src' &&
+    token.scopes.includes('string.quoted.spl')), 'restriction values are strings');
+assert.ok(controlTokens.some(token => controlledQuote.slice(token.startIndex, token.endIndex) === '@count' &&
+    token.scopes.includes('variable.other.reference.spl')), 'variables remain highlighted after CTL closes');
+for (const text of ['ordinary @CTL(model="x")', 'ordinary model="x"', '> Mention model= in prose.']) {
+    assert.ok(!markdown.tokenizeLine(text, vsctm.INITIAL).tokens.some(token =>
+        token.scopes.includes('keyword.control.spl') || token.scopes.includes('variable.parameter.modifier.spl')), text);
+}
+let controlStack = vsctm.INITIAL;
+for (const [line, value, scope] of [
+    ['> @CTL(', '@CTL', 'keyword.control.spl'],
+    ['>     restrict={', 'restrict', 'variable.parameter.modifier.spl'],
+    [">         fs: ['./src'],", 'fs', 'variable.other.property.spl'],
+    [">         exec: ['git']", 'exec', 'variable.other.property.spl'],
+    ['>     },', '}', 'punctuation.section.mapping.end.spl'],
+    [">     reasoning='high',", 'reasoning', 'variable.parameter.modifier.spl'],
+    [">     forbid='mentioning @literal (or model=)'", '@literal', 'string.quoted.spl'],
+    ['> ) Use @notes.', '@notes', 'variable.other.reference.spl'],
+]) {
+    const result = markdown.tokenizeLine(line, controlStack);
+    controlStack = result.ruleStack;
+    const from = line.indexOf(value);
+    assert.ok(result.tokens.some(token => token.startIndex <= from && token.endIndex >= from + value.length &&
+        token.scopes.includes(scope)), line);
+    if (value === '@literal') assert.ok(!result.tokens.some(token => token.scopes.includes('variable.other.reference.spl')), line);
+}
+assert.equal(markdown.tokenizeLine('', controlStack).ruleStack.depth, 1, 'CTL closes without leaking into later Markdown');
+const incompleteControls = markdown.tokenizeLine('> @CTL(restrict={fs: [', vsctm.INITIAL).ruleStack;
+assert.ok(!markdown.tokenizeLine('ordinary @name', incompleteControls).tokens.some(token =>
+    token.scopes.includes('meta.control.spl') || token.scopes.includes('variable.other.reference.spl')),
+    'incomplete CTL does not leak into ordinary prose');
 assert.ok(quoteTokens.find(token => quote.slice(token.startIndex, token.endIndex) === 'Return ')
     .scopes.includes('string.unquoted.blockquote.spl'), 'blockquote text uses the theme string color');
 assert.ok(quoteTokens.filter(token => token.scopes.includes('variable.other.reference.spl'))

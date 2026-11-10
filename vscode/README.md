@@ -12,6 +12,10 @@ available in other Markdown files.
 * **Diagnostics** from the interpreter's own parser and static type checker, updated as you type.
 * **Completions** for keywords, built-ins, tools, modifiers, `$env`/`$args`, visible bindings, and
   `@name` references in blockquotes.
+  Blockquotes offer `@CTL(...)` settings, restriction keys and reasoning values, rather than SPL
+  statement keywords. Completion works while groups and strings are incomplete, omits settings
+  already supplied, and preserves existing quotes and separators. `model=` offers the document's
+  frontmatter model when present; `@validate[...]` offers visible declared and primitive types.
   `ask(...)` includes sampling modifier help for `seed`, `temperature`, and `top_p`;
   `think` and `agent` keep their existing modifiers.
 * **Copilot inline context** for SPL notebook code cells: native syntax rules and parser-checked
@@ -38,12 +42,17 @@ available in other Markdown files.
   its variable color (or the default text color for themes without a variable color). Ordinary
   prose and fenced examples do not receive blockquote/reference highlighting. `spl` fences are
   also highlighted in the Markdown preview.
-* **Snippets**: `splworkflow` for a new document, plus `ask`, `askschema`, `agent`, `restrict`, `try`,
+  Multiline `@CTL` blocks distinguish settings, restriction keys, strings and punctuation.
+  Literal control values are not variable references or inferred outputs, even if they contain
+  text such as `save to @name`.
+* **Snippets**: `splworkflow` for a new document, `splctl` for blockquote controls, plus `ask`, `askschema`, `agent`, `restrict`, `try`,
   `retry`, tools and control flow inside fences.
 
 * **Native notebooks** for existing workflow Markdown: edit SPL fences and natural-language
   blockquotes as runnable cells, with rendered commentary, execution counts, formatted results,
   streamed model responses, brief live runtime logs, and errors in cell outputs and the Problems panel.
+  Markdown instruction cells have CTL/reference coloring and completion using declarations and
+  inferred outputs from preceding executable cells in notebook source order.
 
 The language server only reads source: it never runs workflows, calls tools or contacts models.
 Notebook execution is explicit and requires a trusted workspace. Language server errors appear
@@ -98,10 +107,11 @@ rewritten. Ranges use UTF-16 positions and preserve CRLF documents.
   signatures; fields and methods still appear in the outline.
 * References and rename are document-local. Workspace symbol search indexes open documents only;
   it does not scan files on disk or invent cross-file imports.
-* Notebook language analysis is per code cell, not a model of the kernel's execution history.
-  Shared cross-cell state is available when running the notebook, but static cross-fence
-  navigation is available in the Markdown text editor. Markdown instruction cells without
-  workflow frontmatter remain outside the Markdown language-server analysis.
+* Notebook language analysis is not a model of the kernel's execution history. Instruction-cell
+  coloring and completion use preceding executable cells in source order, not runtime values or
+  later cells. SPL-cell diagnostics and navigation remain per code cell; cross-fence navigation
+  is available in the Markdown text editor. Ordinary Markdown cells and other notebook types
+  do not receive instruction-cell features.
 * Standalone `.spl` files are editor/scratch documents. The CLI and notebook workflow format
   remains executable Markdown with frontmatter. Incomplete lexical input can limit navigation;
   parser diagnostics and static keyword/tool completions remain available.

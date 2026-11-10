@@ -23,6 +23,6 @@ End with a line "Sources:" followed by the URLs of the pages you used.'''
 assert 'Sources:' in answer 'the answer does not cite its sources'
 ```
 
-> @FORBID adding facts that are not in @answer
+> @CTL(forbid='adding facts that are not in @answer')
 >
 > Rewrite @answer as at most five short bullet points followed by its sources and return it with @SUCCESS

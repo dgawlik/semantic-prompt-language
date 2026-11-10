@@ -8,10 +8,10 @@ folder, for example `spl examples/hi.md`. Each example's header shows its argume
 | Example | Shows |
 | --- | --- |
 | [hi.md](../lang/examples/hi.md) | Hydrated class schemas, shared variables, an assertion and a restricted JSON projection |
-| [basics.md](../lang/examples/basics.md) | Checking a model's answer against exact code; guidance with `@ENFORCE` and `@FORBID` |
+| [basics.md](../lang/examples/basics.md) | Checking a model's answer against exact code; grouped guidance with `@CTL(enforce=..., forbid=...)` |
 | [is-friday.md](../lang/examples/is-friday.md) | Branching on a JSON answer |
 | [env.md](../lang/examples/env.md) | Reading `$env` and `--arg` values |
-| [color-poem.md](../lang/examples/color-poem.md) | Asking a person directly with `@HUMAN`, or supplying `--human blue --human apple` |
+| [color-poem.md](../lang/examples/color-poem.md) | Asking a person directly in plain language, or supplying `--human blue --human apple` |
 
 ## Developer workflows
 
@@ -86,7 +86,7 @@ struct Invoice:
     total: Money
 ```
 
-> @FORBID filling in values that are not printed on the invoice
+> @CTL(forbid='filling in values that are not printed on the invoice')
 >
 > Extract the invoice in @document. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,
 > and there is one entry per line item. Convert printed monetary amounts to integer cents
@@ -157,7 +157,7 @@ hydratable class Plan:
 type TriagePlan = list[Plan]
 ```
 
-> @FORBID judging an issue by its title alone when the body says otherwise
+> @CTL(forbid='judging an issue by its title alone when the body says otherwise')
 >
 > Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.
 > Crashes, data loss and security problems are high priority.
@@ -179,7 +179,7 @@ for p in plan:
     table.append("#{p.number} -> {p.label} ({p.priority}): {p.reason}")
 ```
 
-> @HUMAN Show the @table lines and ask "Apply these labels? (yes/no)". Save the answer to @approved
+> Show the @table lines and ask the human "Apply these labels? (yes/no)". Save the answer to @approved
 
 ```spl
 if not approved.strip().lower().startswith('y'):

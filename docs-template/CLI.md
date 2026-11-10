@@ -30,7 +30,7 @@ spl logout [openai|anthropic|google]
 
 Each `--arg` is one string; use `--arg=--value` for values starting with a dash.
 
-Normal runs handle `human` expressions and blockquote `@HUMAN` questions directly. The shell
+Normal runs handle `human` expressions and blockquote `ask_human` questions directly. The shell
 prints each question on stderr and reads one line from stdin, preserving whitespace except the
 line ending. Repeat `--human` to supply answers in question order without prompting:
 

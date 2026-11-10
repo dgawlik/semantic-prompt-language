@@ -56,14 +56,48 @@ An inline JSON Schema object or boolean, or the name of a binding holding one, k
 existing validation-only behavior without class hydration. Invalid values fail before saving.
 
 `@name` marks a binding or operation (`@notes`, `@success`, `@read_file`), not text substitution.
-Plain language works too. Common conventions guide the agent's tool choices:
+Plain language works too. Put optional controls in one `@CTL(...)` block at the start of the
+blockquote; omit any settings you do not need:
+
+```markdown
+> @CTL(
+>     restrict={fs: ['./src'], exec: ['git'], net: ['docs.example.com'], mcp: ['docs/search']},
+>     enforce='Be concise',
+>     forbid='Suggesting purely stylistic changes',
+>     model='gpt-6-luna',
+>     reasoning='high'
+> )
+>
+> Review the source files and save findings to @notes.
+```
+
+| Setting | Values | Effect |
+| --- | --- | --- |
+| `restrict` | A map with `fs`, `exec`, `net`, or `mcp` keys; each value is a string or list of strings | Narrow runtime permissions before the first tool call, using the same validation as SPL `restrict` |
+| `enforce`, `forbid` | A literal string or list of literal strings | Add prompt guidance for this command and its nested model calls, not runtime validation |
+| `model` | A nonempty literal string | Override the document model for this blockquote; CLI `--model` still takes precedence |
+| `reasoning` | `'low'`, `'medium'`, or `'high'` | Select this blockquote agent's reasoning effort; defaults to `'medium'` |
+
+Controls are parsed and applied by the runtime, not interpreted by the model. Names and restriction
+kinds must be unique; unknown settings, wrong value types and multiple or misplaced `@CTL` blocks are
+syntax errors, including with `--check`. Settings accept literals, not SPL expressions or interpolation.
+Strings use SPL quoting and escapes; use raw strings or doubled braces for literal braces.
+The restriction map's braces are control syntax, not SPL dictionary literals.
+Multiline settings and trailing commas are supported. The marker is case-insensitive.
+Each specified restriction requires at least one nonblank entry; restriction values and paths
+are checked at runtime before contacting the model.
+
+All settings expire at the end of the blockquote. Restrictions intersect with existing restrictions,
+and guidance is also inherited by invoked SPL functions and their model calls. Model and reasoning
+settings select only the blockquote agent; nested generation keeps its own modifiers and defaults.
+The separate `@Restrict`, `@Enforce`, `@Forbid` and `@Human` markers have been removed and are syntax
+errors. Request human input in plain language; the agent uses `ask_human`.
+
+Other conventions guide the agent's tool choices:
 
 | Marker | Agent behavior |
 | --- | --- |
-| `@ENFORCE text` / `@FORBID text` | Follow prompt guidance; use `set_guidance` for nested model calls |
-| `@RESTRICT fs['./src'] exec['git']` | Narrow the command's restrictions with `restrict` |
 | `@validate[Schema]` | Inspect `Schema`, then pass its name to `save_variable` for validation and typed decoding; invalid values stop the command |
-| `@HUMAN question` | Call `ask_human`; the shell prompts or consumes the next `--human` answer |
 | `@SUCCESS`, `@fail` | End the document |
 
 For a list or union schema, declare a named alias first, such as

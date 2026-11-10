@@ -1,35 +1,203 @@
 {
   "scopeName": "spl.markdown.injection",
-  "injectionSelector": "L:text.html.markdown -comment -markup.fenced_code.block",
+  "injectionSelector": "L:text.html.markdown -comment -markup.fenced_code.block -meta.control.spl",
   "patterns": [
     {
       "begin": "^ {0,3}(`{3,})spl\\s*$",
       "end": "^ {0,3}\\1`*\\s*$",
       "name": "markup.fenced_code.block.spl",
       "contentName": "meta.embedded.block.spl",
-      "patterns": [{ "include": "source.spl" }]
+      "patterns": [
+        {
+          "include": "source.spl"
+        }
+      ]
     },
     {
       "begin": "^ {0,3}(~{3,})spl\\s*$",
       "end": "^ {0,3}\\1~*\\s*$",
       "name": "markup.fenced_code.block.spl",
       "contentName": "meta.embedded.block.spl",
-      "patterns": [{ "include": "source.spl" }]
+      "patterns": [
+        {
+          "include": "source.spl"
+        }
+      ]
     },
     {
       "begin": "^ {0,3}>\\s?",
-      "end": "$",
+      "end": "$|(?=^(?! {0,3}>))",
       "name": "markup.quote.spl",
       "contentName": "string.unquoted.blockquote.spl",
       "beginCaptures": {
-        "0": { "name": "punctuation.definition.quote.begin.spl" }
+        "0": {
+          "name": "punctuation.definition.quote.begin.spl"
+        }
       },
       "patterns": [
         {
-          "match": "(?<![\\w@])@[A-Za-z_]\\w*",
+          "include": "#controls"
+        },
+        {
+          "match": "(?i)(?<![\\w@\\\\])@CTL\\b",
+          "name": "meta.embedded.inline.spl keyword.control.spl"
+        },
+        {
+          "match": "(?<![\\w@\\\\])@[A-Za-z_]\\w*",
           "name": "meta.embedded.inline.spl variable.other.reference.spl"
         }
       ]
     }
-  ]
+  ],
+  "repository": {
+    "controls": {
+      "begin": "(?i)(?<![\\w@\\\\])(@CTL)\\s*(\\()",
+      "end": "\\)|(?=^(?! {0,3}>))",
+      "name": "meta.embedded.inline.spl meta.control.spl",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.spl"
+        },
+        "2": {
+          "name": "punctuation.section.arguments.begin.spl"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.arguments.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#quote-prefix"
+        },
+        {
+          "include": "#control-strings"
+        },
+        {
+          "match": "\\b(restrict|enforce|forbid|model|reasoning)(?=\\s*=)",
+          "name": "variable.parameter.modifier.spl"
+        },
+        {
+          "include": "#restriction-map"
+        },
+        {
+          "include": "#control-list"
+        },
+        {
+          "match": "=|,",
+          "name": "keyword.operator.spl"
+        }
+      ]
+    },
+    "quote-prefix": {
+      "match": "^ {0,3}>[ \\t]?",
+      "name": "punctuation.definition.quote.begin.spl"
+    },
+    "restriction-map": {
+      "begin": "\\{",
+      "end": "\\}|(?=^(?! {0,3}>))",
+      "name": "meta.mapping.spl",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.mapping.begin.spl"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.mapping.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#quote-prefix"
+        },
+        {
+          "match": "(?:\\b(?:fs|exec|net|mcp)\\b|(['\"])(?:fs|exec|net|mcp)\\1)(?=\\s*:)",
+          "name": "variable.other.property.spl"
+        },
+        {
+          "include": "#control-strings"
+        },
+        {
+          "include": "#control-list"
+        },
+        {
+          "match": ":|,",
+          "name": "keyword.operator.spl"
+        }
+      ]
+    },
+    "control-list": {
+      "begin": "\\[",
+      "end": "\\]|(?=^(?! {0,3}>))",
+      "name": "meta.sequence.spl",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.sequence.begin.spl"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.sequence.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#quote-prefix"
+        },
+        {
+          "include": "#control-strings"
+        },
+        {
+          "match": ",",
+          "name": "keyword.operator.spl"
+        }
+      ]
+    },
+    "control-strings": {
+      "patterns": [
+        {
+          "begin": "\\br('''|\"\"\")",
+          "end": "\\1|(?=^(?! {0,3}>))",
+          "name": "string.quoted.raw.spl",
+          "patterns": [
+            {
+              "include": "#quote-prefix"
+            }
+          ]
+        },
+        {
+          "begin": "('''|\"\"\")",
+          "end": "\\1|(?=^(?! {0,3}>))",
+          "name": "string.quoted.multi.spl",
+          "patterns": [
+            {
+              "include": "#quote-prefix"
+            },
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.spl"
+            }
+          ]
+        },
+        {
+          "begin": "\\br(['\"])",
+          "end": "\\1|$",
+          "name": "string.quoted.raw.spl"
+        },
+        {
+          "begin": "(['\"])",
+          "end": "\\1|$",
+          "name": "string.quoted.spl",
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.spl"
+            }
+          ]
+        }
+      ]
+    }
+  }
 }

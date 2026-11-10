@@ -1,5 +1,5 @@
 import {
-    CompletionItemKind, DiagnosticSeverity, MarkupKind, SymbolKind,
+    CompletionItemKind, DiagnosticSeverity, InsertTextFormat, MarkupKind, SymbolKind,
     type CompletionItem, type Diagnostic, type DocumentSymbol, type Hover, type Location,
     type Position, type Range,
 } from 'vscode-languageserver/node';
@@ -11,6 +11,7 @@ import { tokenize, type Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
 import { builtins, keywords, listCallbacks, modifiers, specialVariables, type Help } from './catalog';
+import { blockquoteText, controlCompletions, scanControls } from './blockquoteFeatures';
 
 export type NamedToken = Extract<Token, { type: 'name' }>;
 
@@ -46,6 +47,7 @@ export interface Analysis {
     scopes: Scope[];
     bindings: Binding[];
     blocks?: MarkdownBlock[];
+    model?: string;
 }
 
 export function tokenRange(token: NamedToken): Range {
@@ -110,6 +112,7 @@ export function expressionTokens(analysis: Analysis, tokens = analysis.tokens): 
 export function analyze(document: TextDocument): Analysis {
     let source = document.getText();
     let blocks: MarkdownBlock[] | undefined;
+    let model: string | undefined;
     if (document.languageId === 'markdown') {
         if (!isWorkflowMarkdown(source)) {
             return { document, diagnostics: [], tokens: [], names: [], scopes: [], bindings: [], blocks: [] };
@@ -121,6 +124,7 @@ export function analyze(document: TextDocument): Analysis {
         if (blocks) {
             const extracted = extractMarkdown(source);
             blocks = extracted.blocks;
+            model = extracted.model;
             source = extracted.code;
             checkProgram(parseMarkdown(document.getText()));
         } else {
@@ -156,16 +160,18 @@ export function analyze(document: TextDocument): Analysis {
     }
     for (const block of blocks ?? []) {
         if (block.kind !== 'natural') continue;
-        const start = { line: block.line - 1, character: 0 };
         const end = { line: block.endLine, character: 0 };
-        const from = document.offsetAt(start);
-        const text = document.getText({ start, end })
-            .replace(/^ {0,3}(?:>[ \t]?)+/gm, prefix => ' '.repeat(prefix.length));
+        const quote = blockquoteText(document, block);
+        const from = quote.from;
+        const controls = scanControls(quote.text);
+        const text = controls
+            ? quote.text.slice(0, controls.end).replace(/[^\r\n]/g, ' ') + quote.text.slice(controls.end)
+            : quote.text;
         const name = (value: string, at: number): NamedToken => {
             const position = document.positionAt(from + at);
             return { type: 'name', value, line: position.line + 1, col: position.character + 1 };
         };
-        const references = [...text.matchAll(/(?<![\w@])@([A-Za-z_]\w*)/g)]
+        const references = [...text.matchAll(/(?<![\w@\\])@([A-Za-z_]\w*)/g)]
             .map(match => ({ token: name(match[1], match.index + 1), at: match.index }));
         const schemas: { token: NamedToken; at: number }[] = [];
         for (const reference of references) {
@@ -359,7 +365,7 @@ export function analyze(document: TextDocument): Analysis {
             for (const param of params) add(param, functionScope, `parameter ${param.value}`);
         }
     }
-    const result: Analysis = { document, diagnostics, tokens, names, scopes, bindings, blocks };
+    const result: Analysis = { document, diagnostics, tokens, names, scopes, bindings, blocks, model };
     for (const output of naturalOutputs) {
         if (visibleBindings(result, output.availableFrom).some(binding => binding.name === output.token.value)) continue;
         const schema = output.schema && resolveBinding(result, output.schema);
@@ -511,7 +517,9 @@ function memberCompletions(analysis: Analysis, range: Range): CompletionItem[] |
 }
 
 export function completions(analysis: Analysis, position: Position): CompletionItem[] {
-    if (analysis.blocks && !analysis.blocks.some((block) => position.line >= block.line - 1 && position.line < block.endLine)) return [];
+    const block = analysis.blocks?.find(block => position.line >= block.line - 1 && position.line < block.endLine);
+    if (analysis.blocks && !block) return [];
+    if (block?.kind === 'natural') return naturalCompletions(analysis, block, position);
     const at = analysis.document.offsetAt(position);
     const prefix = /\$[A-Za-z0-9_]*$|[A-Za-z_][A-Za-z0-9_]*$/.exec(analysis.document.getText().slice(0, at))?.[0] ?? '';
     const range = { start: analysis.document.positionAt(at - prefix.length), end: position };
@@ -549,6 +557,57 @@ export function completions(analysis: Analysis, position: Position): CompletionI
         });
     }
     return [...modifierItems, ...[...items.values()].map((item) => ({ ...item, textEdit: { range, newText: item.label } }))];
+}
+
+function naturalCompletions(analysis: Analysis, block: MarkdownBlock, position: Position): CompletionItem[] {
+    const quote = blockquoteText(analysis.document, block);
+    const at = analysis.document.offsetAt(position) - quote.from;
+    const range = (from: number, to: number): Range => ({
+        start: analysis.document.positionAt(quote.from + from), end: analysis.document.positionAt(quote.from + to),
+    });
+    const controls = controlCompletions(quote.text, at, range, analysis.model);
+    if (controls) return controls;
+    const before = quote.text.slice(0, at);
+    const suffix = /^\w*/.exec(quote.text.slice(at))![0];
+    const schema = /(?<![\w@\\])@validate\s*\[\s*([A-Za-z_]\w*)?$/.exec(before);
+    if (schema) {
+        return [...new Set([
+            ...primitives.keys(),
+            ...visibleBindings(analysis, quote.from + at).filter(binding =>
+                [SymbolKind.Enum, SymbolKind.Struct, SymbolKind.Class, SymbolKind.TypeParameter].some(kind => kind === binding.kind))
+                .map(binding => binding.name),
+        ])].map(name => ({
+            label: name, kind: CompletionItemKind.TypeParameter,
+            textEdit: { range: range(at - (schema[1]?.length ?? 0), at + suffix.length), newText: name },
+        }));
+    }
+    const reference = /(?<![\w@\\])@([A-Za-z_]\w*)?$/.exec(before);
+    const empty = !before.trim();
+    if (!reference && !empty) return [];
+    const edit = range(at - (reference?.[1]?.length ?? 0), at + suffix.length);
+    const items = new Map<string, CompletionItem>();
+    if (!quote.text.slice(0, reference?.index ?? at).trim()) {
+        const hasArguments = /^\s*\(/.test(quote.text.slice(at + suffix.length));
+        items.set('CTL', {
+            label: 'CTL', kind: CompletionItemKind.Snippet, detail: '@CTL(restrict=..., enforce=..., forbid=..., model=..., reasoning=...)',
+            documentation: 'Grouped controls at the start of this blockquote.',
+            insertTextFormat: hasArguments ? InsertTextFormat.PlainText : InsertTextFormat.Snippet,
+            textEdit: { range: edit, newText: `${empty ? '@' : ''}CTL${hasArguments ? '' : '($0)'}` },
+        });
+    }
+    if (empty) return [...items.values()];
+    for (const [name, help] of Object.entries(builtins)) {
+        items.set(name, { label: name, kind: CompletionItemKind.Function, detail: help.signature, documentation: help.description });
+    }
+    for (const name of ['validate', 'success', 'fail']) {
+        items.set(name, { label: name, kind: CompletionItemKind.Keyword, documentation: keywords[name] ?? builtins[name].description });
+    }
+    for (const binding of visibleBindings(analysis, quote.from + at)) {
+        items.set(binding.name, { label: binding.name,
+            kind: binding.kind === SymbolKind.Function ? CompletionItemKind.Function : CompletionItemKind.Variable,
+            detail: binding.signature });
+    }
+    return [...items.values()].map(item => ({ ...item, textEdit: item.textEdit ?? { range: edit, newText: item.label } }));
 }
 
 function helpHover(help: Help, range: Range): Hover {

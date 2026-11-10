@@ -2,6 +2,7 @@ import { SplSyntaxError } from '../../lang/src/errors.js';
 import { extractMarkdown } from '../../lang/src/markdown.js';
 import { parse } from '../../lang/src/parser.js';
 import type { Program } from '../../lang/src/ast.js';
+import { parseNatural } from '../../lang/src/controls.js';
 
 export const NOTEBOOK_TYPE = 'spl-workflow';
 export const DEFAULT_FRONTMATTER = '---\nextension: semantic-prompt-language\nversion: 1\n---';
@@ -112,7 +113,7 @@ export function parseWorkflowCell(value: string, language: string, frontmatter: 
             lines.slice(blocks[0].endLine).join('\n').trim()) {
             throw new SplSyntaxError('a natural-language cell cannot contain text outside its blockquote', 1, 1);
         }
-        program = { body: [{ t: 'natural', text: blocks[0].text, line: 1 }], directives: {}, lines: value.split('\n') };
+        program = { body: [parseNatural(blocks[0].text, 1)], directives: {}, lines: value.split('\n') };
     } else {
         throw new Error(`unsupported workflow cell language '${language}'; use SPL or Markdown`);
     }

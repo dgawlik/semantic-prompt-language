@@ -37,7 +37,7 @@ hydratable class Plan:
 type TriagePlan = list[Plan]
 ```
 
-> @FORBID judging an issue by its title alone when the body says otherwise
+> @CTL(forbid='judging an issue by its title alone when the body says otherwise')
 >
 > Classify every issue in @issues with exactly one label from @LABELS, a priority and a one-sentence reason.
 > Crashes, data loss and security problems are high priority.
@@ -59,7 +59,7 @@ for p in plan:
     table.append("#{p.number} -> {p.label} ({p.priority}): {p.reason}")
 ```
 
-> @HUMAN Show the @table lines and ask "Apply these labels? (yes/no)". Save the answer to @approved
+> Show the @table lines and ask the human "Apply these labels? (yes/no)". Save the answer to @approved
 
 ```spl
 if not approved.strip().lower().startswith('y'):

@@ -49,9 +49,10 @@ def headings(text):
 let keep = protected(source)
 ```
 
-> @ENFORCE Keep the Markdown structure, URLs, e-mail addresses and `code spans` exactly as in the source
->
-> @ENFORCE Use the product's informal, friendly tone and localize UI paths such as menu names
+> @CTL(enforce=[
+>     'Keep the Markdown structure, URLs, e-mail addresses and `code spans` exactly as in the source',
+>     "Use the product's informal, friendly tone and localize UI paths such as menu names"
+> ])
 >
 > Translate @source into every language code in @languages.
 > Save a dict mapping each language code to its translated Markdown to @translations

@@ -4,9 +4,7 @@ version: 1
 model: 'gpt-6-luna'
 ---
 
-> @FORBID suggesting purely stylistic changes
->
-> @RESTRICT fs['./src'] exec['git']
+> @CTL(restrict={fs: ['./src'], exec: ['git']}, forbid='suggesting purely stylistic changes')
 >
 > List source files with `git ls-files src`.
 > Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
@@ -44,7 +42,7 @@ for f in review.findings:
         groups.low.append(f)
 ```
 
-> @RESTRICT fs['./reports']
+> @CTL(restrict={fs: ['./reports']})
 >
 > Write convert @groups to markdown report 
 > and write to './reports/review.md'

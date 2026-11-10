@@ -379,7 +379,7 @@ class Interpreter {
             case 'pass':
                 return;
             case 'natural':
-                return this.execNatural(s.text, s.line, env);
+                return this.execNatural(s, env);
             case 'break':
                 return { k: 'break' };
             case 'continue':
@@ -1051,7 +1051,7 @@ class Interpreter {
         }
     }
 
-    private async execNatural(text: string, line: number, env: Env): Promise<Completion> {
+    private async execNatural({ text, line, controls }: Extract<Stmt, { t: 'natural' }>, env: Env): Promise<Completion> {
         const bindings: Record<string, unknown> = Object.create(null);
         for (let scope: Env | undefined = env; scope; scope = scope.parent) {
             for (const [name, value] of scope.vars) {
@@ -1064,10 +1064,21 @@ class Interpreter {
         const savedRestrictions = this.restrictions;
         const savedConstraints = this.constraints;
         try {
+            for (const kind of ['fs', 'exec', 'net', 'mcp'] as const) {
+                const value = controls?.restrict?.[kind];
+                if (value !== undefined) this.restrictions = this.restrictions.with(await this.makeRestriction(kind, value));
+            }
+            for (const kind of ['enforce', 'forbid'] as const) {
+                const value = controls?.[kind];
+                if (value !== undefined) {
+                    this.constraints = [...this.constraints, ...[value].flat().map(text => ({ kind, text }))];
+                }
+            }
             const trace = this.opts.trace;
             const journal = trace ?? this.opts.pin;
             const decisionRequest = () => ({
                 kind: 'natural', text, line, history: JSON.stringify(history), restrictions: this.restrictions.list,
+                ...(controls ? { controls } : {}),
             });
             const decision = (perform: () => Promise<LlmResponse>) => journal
                 ? journal.effect(decisionRequest(), perform, isResponse)
@@ -1096,7 +1107,8 @@ class Interpreter {
                 const request: LlmRequest = {
                     kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS,
                     prompt: built.prompt,
-                    model: this.model, reasoningEffort: 'medium', showReasoning: true,
+                    model: this.opts.pin?.data.context.model ?? this.opts.model ?? controls?.model ?? this.model,
+                    reasoningEffort: controls?.reasoning ?? 'medium', showReasoning: true,
                     restrictions: this.restrictions, tools: new ToolHost(this.restrictions, this.cwd),
                     currentRestrictions: () => this.restrictions,
                     invokeAction: async action => {

@@ -8,9 +8,10 @@ import type { Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, MODIFIER_NAMES } from '../../lang/src/parser.js';
 import { builtins, keywords, modifiers, specialVariables } from './catalog';
 import { expressionTokens, nameAt, resolveBinding, tokenRange, type Analysis, type Binding, type NamedToken } from './features';
+import { blockquoteText, scanControls } from './blockquoteFeatures';
 
 export const semanticTokenLegend = {
-    tokenTypes: ['variable', 'parameter', 'function', 'class', 'struct', 'enum', 'type', 'keyword', 'property'],
+    tokenTypes: ['variable', 'parameter', 'function', 'class', 'struct', 'enum', 'type', 'keyword', 'property', 'string', 'operator'],
     tokenModifiers: ['declaration', 'readonly', 'defaultLibrary'],
 };
 
@@ -223,6 +224,7 @@ export function foldingRanges(analysis: Analysis): FoldingRange[] {
 
 export function semanticTokens(analysis: Analysis): SemanticTokens {
     const builder = new SemanticTokensBuilder();
+    const entries: { line: number; character: number; length: number; type: string; flags: number }[] = [];
     const names = [...analysis.names].sort((a, b) => a.line - b.line || a.col - b.col);
     const kind = (binding: Binding): string => binding.signature.startsWith('parameter ') ? 'parameter' :
         binding.kind === SymbolKind.Function ? 'function' : binding.kind === SymbolKind.Enum ? 'enum' :
@@ -252,11 +254,40 @@ export function semanticTokens(analysis: Analysis): SemanticTokens {
             }             else if (token.value === 'type' && next?.type === 'name') type = 'keyword';
             else if (Object.hasOwn(keywords, token.value) && token.value !== 'type') type = 'keyword';
             else if (Object.hasOwn(builtins, token.value)) { type = 'function'; flags = 4; }
+            else if (index === undefined) type = 'variable';
         }
         if (type) {
             const range = tokenRange(token);
-            builder.push(range.start.line, range.start.character, token.value.length, semanticTokenLegend.tokenTypes.indexOf(type), flags);
+            entries.push({ ...range.start, length: token.value.length, type, flags });
         }
+    }
+    for (const block of analysis.blocks ?? []) {
+        if (block.kind !== 'natural') continue;
+        const quote = blockquoteText(analysis.document, block);
+        const tokens = scanControls(quote.text)?.tokens ?? [];
+        for (const [index, token] of tokens.entries()) {
+            const next = tokens[index + 1];
+            const type = token.kind === 'marker' ? 'keyword' :
+                (token.kind === 'name' || token.kind === 'string') &&
+                    next?.kind === 'punctuation' && ['=', ':'].includes(next.value) ? 'property' :
+                token.kind === 'string' ? 'string' : token.kind === 'punctuation' ? 'operator' : undefined;
+            if (!type) continue;
+            const start = analysis.document.positionAt(quote.from + token.from);
+            const end = analysis.document.positionAt(quote.from + token.to);
+            for (let line = start.line; line <= end.line; line++) {
+                const lineText = analysis.document.getText({
+                    start: { line, character: 0 }, end: { line: line + 1, character: 0 },
+                }).replace(/\r?\n$/, '');
+                const prefix = /^ {0,3}(?:>[ \t]?)+/.exec(lineText)?.[0].length ?? 0;
+                const character = Math.max(prefix, line === start.line ? start.character : 0);
+                const length = (line === end.line ? end.character : lineText.length) - character;
+                if (length > 0) entries.push({ line, character, length, type, flags: 0 });
+            }
+        }
+    }
+    entries.sort((a, b) => a.line - b.line || a.character - b.character);
+    for (const entry of entries) {
+        builder.push(entry.line, entry.character, entry.length, semanticTokenLegend.tokenTypes.indexOf(entry.type), entry.flags);
     }
     return builder.build();
 }

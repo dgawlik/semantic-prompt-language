@@ -101,13 +101,17 @@ def number():
     count += 1
     restrict './output':
         write_file('./output/value.txt', 'original')
-    return ask(fmt='integer', repairs=1) 'Number?'`) + '\n\n> Call @number, ask for approval and return the result.');
+    return ask(fmt='integer', repairs=1) 'Number?'`) +
+            '\n\n> @CTL(restrict={fs: ["./output"]}, enforce="Be precise", model="quote-model", reasoning="high") Call @number, ask for approval and return the result.');
         const tools = vi.spyOn(ToolHost.prototype, 'invoke').mockResolvedValue('written');
         const human = vi.fn(async () => 'approved');
         let attempts = 0;
         const backend: LlmBackend = {
             call: vi.fn(async req => {
                 if (!req.naturalLanguage) return { text: attempts++ === 0 ? 'bad' : '9', effective: {} };
+                expect(req.model).toBe('quote-model');
+                expect(req.reasoningEffort).toBe('high');
+                expect(req.restrictions.has('fs')).toBe(true);
                 const invoke = (name: string, args: Record<string, unknown>) => req.invokeAction!({ name, arguments: args });
                 const value = await invoke('call_function', { name: 'number', args: [] });
                 const answer = await invoke('ask_human', { question: 'Approve?' });

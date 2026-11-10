@@ -11,12 +11,52 @@ class Emitter<T> {
         return new Disposable(() => this.listeners.delete(listener));
     };
     fire(value: T) { for (const listener of this.listeners) listener(value); }
+    dispose() { this.listeners.clear(); }
 }
+export { Emitter as EventEmitter };
 export class Position {
     constructor(public line: number, public character: number) {}
 }
 export class Range {
     constructor(public start: Position, public end: Position) {}
+}
+export class SnippetString {
+    constructor(public value: string) {}
+}
+export class MarkdownString {
+    constructor(public value: string) {}
+}
+export class CompletionItem {
+    detail?: string;
+    documentation?: string | MarkdownString;
+    filterText?: string;
+    sortText?: string;
+    range?: Range;
+    insertText?: string | SnippetString;
+    constructor(public label: string, public kind?: number) {}
+}
+export class SemanticTokens {
+    constructor(public data: Uint32Array) {}
+}
+export class SemanticTokensLegend {
+    constructor(public tokenTypes: string[], public tokenModifiers: string[]) {}
+}
+export class SemanticTokensBuilder {
+    private entries: number[][] = [];
+    push(line: number, character: number, length: number, type: number, flags: number) {
+        this.entries.push([line, character, length, type, flags]);
+    }
+    build() {
+        let line = 0;
+        let character = 0;
+        const data = this.entries.flatMap(([nextLine, nextCharacter, length, type, flags]) => {
+            const entry = [nextLine - line, nextLine === line ? nextCharacter - character : nextCharacter, length, type, flags];
+            line = nextLine;
+            character = nextCharacter;
+            return entry;
+        });
+        return new SemanticTokens(new Uint32Array(data));
+    }
 }
 export class Diagnostic {
     source?: string;
@@ -142,7 +182,26 @@ export const workspace = {
     changeText(document: TextDocument, value: string) { document.setText(value); textChanged.fire({ document }); },
 };
 export const diagnostics = new Map<string, Map<string, Diagnostic[]>>();
+export const completionProviders: { selector: unknown; triggers: string[]; provider: {
+    provideCompletionItems(document: TextDocument, position: Position): CompletionItem[];
+} }[] = [];
+export const semanticProviders: { selector: unknown; legend: SemanticTokensLegend; provider: {
+    onDidChangeSemanticTokens: (listener: () => void) => Disposable;
+    provideDocumentSemanticTokens(document: TextDocument): SemanticTokens | undefined;
+} }[] = [];
 export const languages = {
+    registerCompletionItemProvider(selector: unknown, provider: typeof completionProviders[number]['provider'], ...triggers: string[]) {
+        const entry = { selector, provider, triggers };
+        completionProviders.push(entry);
+        return new Disposable(() => completionProviders.splice(completionProviders.indexOf(entry), 1));
+    },
+    registerDocumentSemanticTokensProvider(
+        selector: unknown, provider: typeof semanticProviders[number]['provider'], legend: SemanticTokensLegend,
+    ) {
+        const entry = { selector, provider, legend };
+        semanticProviders.push(entry);
+        return new Disposable(() => semanticProviders.splice(semanticProviders.indexOf(entry), 1));
+    },
     createDiagnosticCollection(name: string) {
         const items = new Map<string, Diagnostic[]>();
         diagnostics.set(name, items);
@@ -196,4 +255,6 @@ export function reset() {
     outputLines.length = 0;
     diagnostics.clear();
     installedExtensions.clear();
+    completionProviders.length = 0;
+    semanticProviders.length = 0;
 }

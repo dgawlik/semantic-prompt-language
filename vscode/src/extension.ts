@@ -3,6 +3,7 @@ import { LanguageClient, TransportKind } from 'vscode-languageclient/node';
 import { extendMarkdownIt } from './markdownPreview';
 import { registerNotebooks } from './notebook';
 import { registerCopilotContext } from './copilotContext';
+import { notebookSemanticTokens, registerNotebookLanguageFeatures } from './notebookLanguageFeatures';
 
 let client: LanguageClient | undefined;
 
@@ -20,6 +21,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ exte
         {
             documentSelector: [{ language: 'markdown' }, { language: 'spl' }],
             outputChannel,
+            middleware: {
+                provideDocumentSemanticTokens: (document, token, next) => notebookSemanticTokens(document) ?? next(document, token),
+            },
         },
     );
     try {
@@ -29,6 +33,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ exte
         void vscode.window.showErrorMessage('SPL language server failed to start. See the SPL Language Server output.');
         throw error;
     }
+    registerNotebookLanguageFeatures(context);
     await registerCopilotContext(context, outputChannel);
     return { extendMarkdownIt };
 }

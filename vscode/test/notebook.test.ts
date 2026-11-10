@@ -93,14 +93,15 @@ test('edited and newly inserted cells produce executable Markdown with safe fenc
 });
 
 test('instruction cells hide outer quote markers and preserve multiline guidance when saved', () => {
-    const markdown = source('> @ENFORCE Answer in Chinese\n>\n> @FORBID Mentioning the word cat\n>\n> Paragraph about a pet animal -> @animal\n');
+    const markdown = source("> @CTL(enforce='Answer in Chinese', forbid='Mentioning the word cat')\n>\n> Paragraph about a pet animal -> @animal\n");
     const notebook = decodeWorkflow(markdown);
-    const instruction = '@ENFORCE Answer in Chinese\n\n@FORBID Mentioning the word cat\n\nParagraph about a pet animal -> @animal';
+    const instruction = "@CTL(enforce='Answer in Chinese', forbid='Mentioning the word cat')\n\nParagraph about a pet animal -> @animal";
     assert.equal(notebook.cells[0].kind, 'natural');
     assert.equal(notebook.cells[0].value, instruction);
     assert.equal(encodeWorkflow(notebook), markdown);
     assert.deepEqual(parseWorkflowCell(instruction, 'markdown', notebook.frontmatter).body,
-        [{ t: 'natural', text: instruction, line: 1 }]);
+        [{ t: 'natural', text: 'Paragraph about a pet animal -> @animal', line: 1,
+            controls: { enforce: 'Answer in Chinese', forbid: 'Mentioning the word cat' } }]);
 
     notebook.cells[0].value = instruction.replace('pet animal', 'pet dog');
     const encoded = encodeWorkflow(notebook);
@@ -153,6 +154,14 @@ test('cell parsing inherits model/preamble and does not parse unrelated cells', 
     assert.deepEqual(parseWorkflowCell('Instruction.\n\nAnother paragraph.', 'markdown', header).body,
         [{ t: 'natural', text: 'Instruction.\n\nAnother paragraph.', line: 1 }]);
     assert.throws(() => decodeWorkflow('# Ordinary Markdown'), /frontmatter/);
+    const controlled = parseWorkflowCell('@CTL(model="quote", reasoning="low", restrict={fs: ["./src"]}) Use @x.', 'markdown', header);
+    assert.deepEqual(controlled.body, [{
+        t: 'natural', line: 1, text: 'Use @x.',
+        controls: { model: 'quote', reasoning: 'low', restrict: { fs: ['./src'] } },
+    }]);
+    assert.equal(controlled.directives.model, 'test-model');
+    assert.throws(() => parseWorkflowCell('@CTL(reasoning="invalid") Act.', 'markdown', header), /reasoning/);
+    assert.throws(() => parseWorkflowCell('@Human Approve?', 'markdown', header), /removed/);
 });
 
 test('kernel forwards live stream IPC updates without resolving the cell early', async t => {

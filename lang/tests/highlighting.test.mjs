@@ -95,13 +95,21 @@ success True`;
     });
 
     it('highlights references and agent markers only in blockquotes', () => {
-        const text = 'Email user@example.com and mention @outside.\n\n> @FORBID guessing @facts; @validate[Schema] save to @result';
+        const text = "Email user@example.com and mention @outside.\n\n> @CTL(forbid='guessing') Inspect @facts; @validate[Schema] save to @result";
         const html = highlight(text, 'markdown');
-        expect(html).toContain('<span class="hljs-keyword">@FORBID</span>');
+        expect(html).toContain('<span class="hljs-keyword">@CTL</span>');
+        expect(html).toContain('<span class="hljs-attr">forbid</span>');
         expect(html).toContain('<span class="hljs-keyword">@validate</span>');
         for (const name of ['@facts', '@result']) expect(html).toContain(`<span class="hljs-variable">${name}</span>`);
         for (const name of ['@example', '@outside']) expect(html).not.toContain(`>${name}</span>`);
         expect(decode(html)).toBe(text);
+    });
+
+    it('does not highlight removed blockquote markers as keywords', () => {
+        const html = highlight('> @RESTRICT @ENFORCE @FORBID @HUMAN', 'markdown');
+        for (const name of ['RESTRICT', 'ENFORCE', 'FORBID', 'HUMAN']) {
+            expect(html).not.toContain(`<span class="hljs-keyword">@${name}</span>`);
+        }
     });
 
     it('highlights embedded SPL in all supported Markdown fence styles', () => {

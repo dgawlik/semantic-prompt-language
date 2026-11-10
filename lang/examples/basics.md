@@ -40,9 +40,7 @@ assert fib10 == modelFib10 'Oops, the model got it wrong'
 
 > @joke = a joke about programmers as an object with "setup" and "punchline"
 
-> @ENFORCE Answer in Chinese
->
-> @FORBID Mentioning the word cat
+> @CTL(enforce='Answer in Chinese', forbid='Mentioning the word cat')
 >
 > Paragraph of funny story about a pet animal -> @animal
 

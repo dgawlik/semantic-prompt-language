@@ -37,6 +37,10 @@ What is checked:
 Models are told the active restrictions, and the runtime enforces them on every call.
 `ask` and `think` have no tools at all.
 
+For a Markdown blockquote, use `@CTL(restrict={fs: ['./src'], exec: ['git']})` at its start.
+The runtime applies these restrictions before the agent runs, including to invoked functions
+and MCP tools, then restores the previous scope afterward. See [blockquote controls](LLM-commands.md#blockquotes).
+
 ## Assertions, fail and success
 
 ```spl
@@ -103,7 +107,8 @@ ending. Execution continues immediately without a suspension or repeating comple
 Use repeatable `--human <answer>` flags to supply exact answers in question order and skip prompting.
 Remaining questions prompt normally, including with `--silent`; EOF without an answer fails the script.
 
-Blockquote agents use the `ask_human` tool for the same workflow (`@HUMAN`). The answer is returned to the
+Blockquote agents use the `ask_human` tool for the same workflow when asked in plain language.
+There is no special human marker. The answer is returned to the
 same agent session, which may then make new model calls and save it to a shared variable. Runtime
 actions completed before the question are not repeated, including actions inside invoked functions.
 

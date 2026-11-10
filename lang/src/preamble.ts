@@ -16,9 +16,9 @@ Validate values before saving; a rejected tool call stops the command and is not
 call_function invokes an existing SPL function or builtin with positional JSON arguments.
 Annotated arguments and existing typed bindings decode JSON according to their declared types. Use JSON numbers for int/float, not numeric strings; untyped values stay dynamic.
 get_env reads one read-only environment variable; load_variable('$args') reads CLI arguments.
-ask_human asks the user a question and returns their answer. Use it for @HUMAN; never invent a human answer.
+ask_human asks the user a question and returns their answer when human input is requested; never invent a human answer.
 success ends the whole document successfully; fail ends it with an explicit failure. Use these only when requested.
-@ENFORCE and @FORBID are guidance for this command. Follow any requested format, schema and restrictions.
+@CTL settings are applied by the runtime before this command starts. Follow the active guidance and restrictions.
 Use restrict(kind, value) to narrow actions for the rest of this command, including functions and MCP.
 Restriction kinds are fs, exec, net or mcp; value is a string or list of strings.
 Use set_guidance(kind, text) to apply enforce/forbid guidance to nested model calls for this command.

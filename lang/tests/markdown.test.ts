@@ -96,6 +96,76 @@ ${fence('count += 2\nsuccess count')}`);
             { t: 'natural', text: 'Next instruction' },
         ]);
     });
+
+    it('parses grouped literal controls without including them in the instruction', () => {
+        const parsed = parseMarkdown(document(`> @CTL(
+>     restrict={fs: ['./src', './reports'], exec: 'git', net: ['api.example.com'], mcp: ['docs/search'],},
+>     enforce=['Be concise', 'Use Markdown'],
+>     forbid="Do not invent facts (or sources)",
+>     model='other-model', reasoning='high',
+> )
+>
+> Review @notes.`).replace(/\n/g, '\r\n'));
+        expect(parsed.body).toEqual([{
+            t: 'natural', text: 'Review @notes.', line: 6,
+            controls: {
+                restrict: { fs: ['./src', './reports'], exec: 'git', net: ['api.example.com'], mcp: ['docs/search'] },
+                enforce: ['Be concise', 'Use Markdown'], forbid: 'Do not invent facts (or sources)',
+                model: 'other-model', reasoning: 'high',
+            },
+        }]);
+    });
+
+    it('supports quoted restriction keys, escapes, raw strings and empty settings', () => {
+        const parsed = parseMarkdown(document(String.raw`> @CTL(restrict={'fs': r'C:\work\'}, enforce='Say \'hello\' (briefly)') Act.
+
+> @CTL() Continue.`));
+        expect(parsed.body[0]).toMatchObject({
+            text: 'Act.', controls: { restrict: { fs: 'C:\\work\\' }, enforce: "Say 'hello' (briefly)" },
+        });
+        expect(parsed.body[1]).toMatchObject({ text: 'Continue.', controls: {} });
+    });
+
+    it.each([
+        ['@CTL(unknown="x")', /unknown setting/],
+        ['@CTL(model="one", model="two")', /duplicate setting/],
+        ['@CTL(model=" ")', /non-empty string/],
+        ['@CTL(model=42)', /literal string/],
+        ['@CTL(reasoning="extreme")', /reasoning must be/],
+        ['@CTL(enforce=notes)', /literal string/],
+        ['@CTL(enforce="{notes}")', /no interpolation/],
+        ['@CTL(enforce=["ok", 1])', /literal string/],
+        ['@CTL(restrict="src")', /expected '\{'/],
+        ['@CTL(restrict={other: []})', /unknown restriction/],
+        ['@CTL(restrict={fs: [], fs: []})', /duplicate restriction/],
+        ['@CTL(restrict={fs: [42]})', /literal string/],
+        ['@CTL(enforce="x"', /unterminated @CTL/],
+        ['@CTL() @CTL() Act.', /once at the start/],
+        ['Act. @CTL(model="other")', /once at the start/],
+        ['@CTL', /once at the start/],
+        ['@Restrict fs["src"]', /has been removed; use @CTL/],
+        ['@Enforce Be concise', /has been removed; use @CTL/],
+        ['@FORBID Inventions', /has been removed; use @CTL/],
+        ['@Human Approve?', /removed; request human input/],
+    ])('rejects invalid or removed controls: %s', (instruction, error) => {
+        expect(() => parseMarkdown(document('> ' + instruction))).toThrow(error);
+    });
+
+    it('keeps multiline control diagnostics on the original document line', () => {
+        try {
+            parseMarkdown(document('> @CTL(\n> model="ok",\n> reasoning="invalid") Act.'));
+            expect.fail('invalid reasoning must fail');
+        } catch (error) {
+            expect(error).toMatchObject({ line: 8 });
+        }
+    });
+
+    it('parses every maintained workflow with the current marker syntax', () => {
+        const examples = path.resolve(__dirname, '..', 'examples');
+        for (const file of fs.readdirSync(examples).filter(file => file.endsWith('.md'))) {
+            expect(() => parseMarkdown(fs.readFileSync(path.join(examples, file), 'utf8')), file).not.toThrow();
+        }
+    });
 });
 
 describe('shared natural-language execution', () => {
@@ -369,7 +439,7 @@ ${code.split('\n').map(line => '    ' + line).join('\n')}`) +
 
     it('returns a direct human answer to the same agent session and shared bindings', async () => {
         const human = vi.fn(async () => '  approved\nexactly  ');
-        const source = document('> @HUMAN Approve this and save to @answer.\n\n' + fence('success answer'));
+        const source = document('> Ask a human to approve this and save to @answer.\n\n' + fence('success answer'));
         let turns = 0;
         const result = await run(parseMarkdown(source), {
             logger, human, backend: backend(async req => {
@@ -482,6 +552,74 @@ ${code.split('\n').map(line => '    ' + line).join('\n')}`) +
         }) });
         expect(result).toMatchObject({ status: 'success', value: 'done' });
         expect(fs.readFileSync(path.join(cwd, 'outside.txt'), 'utf8')).toBe('allowed after command');
+    });
+
+    it('applies CTL before the first action and restores defaults for following blocks', async () => {
+        const cwd = directory();
+        const requests: LlmRequest[] = [];
+        const source = document(fence("def generate():\n    return ask(model='nested-model') 'Generate'") +
+            '\n\n> @CTL(restrict={fs: ["./allowed"], exec: ["git"], net: ["api.example.com"], mcp: ["docs/search"]}, ' +
+            'enforce=["Be formal", "Be brief"], forbid="Inventions", model="quote-model", reasoning="high") Invoke @generate.' +
+            '\n\n> Write outside the previous restriction.\n\n' + fence("success ask 'Final'"), 'model: document-model\n');
+        let turn = 0;
+        const result = await run(parseMarkdown(source), { cwd, logger, backend: backend(async req => {
+            requests.push(req);
+            if (requests.length <= 3) {
+                expect(req.prompt).toContain('Follow: Be formal');
+                expect(req.prompt).toContain('Follow: Be brief');
+                expect(req.prompt).toContain('Avoid: Inventions');
+                expect(req.restrictions.has('fs')).toBe(true);
+                expect(() => req.restrictions.checkExec('npm')).toThrow(/blocked/);
+                expect(() => req.restrictions.checkHost('example.com')).toThrow(/blocked/);
+                expect(req.restrictions.has('mcp')).toBe(true);
+                expect(req.prompt).not.toContain('@CTL(');
+            } else {
+                expect(req.restrictions.active).toBe(false);
+                expect(req.prompt).not.toContain('Follow: Be formal');
+            }
+            if (!req.naturalLanguage) return { text: 'Generated', effective: {} };
+            const next = [
+                action('call_function', { name: 'generate', args: [] }), undefined,
+                action('write_file', { path: 'outside.txt', content: 'allowed' }), undefined,
+            ][turn++];
+            return { text: 'Done', effective: {}, action: next };
+        }) });
+        expect(result, result.status === 'failure' ? result.failure.reason : undefined)
+            .toMatchObject({ status: 'success', value: 'Generated' });
+        expect(requests.map(req => req.model)).toEqual([
+            'quote-model', 'nested-model', 'quote-model', 'document-model', 'document-model', 'document-model',
+        ]);
+        expect(requests.map(req => req.reasoningEffort)).toEqual(['high', undefined, 'high', 'medium', 'medium', undefined]);
+        expect(fs.readFileSync(path.join(cwd, 'outside.txt'), 'utf8')).toBe('allowed');
+    });
+
+    it('preserves CLI model precedence over blockquote controls', async () => {
+        const result = await run(parseMarkdown(document('> @CTL(model="quote", reasoning="low") Act.')), {
+            logger, model: 'cli', backend: backend(async req => {
+                expect(req.model).toBe('cli');
+                expect(req.reasoningEffort).toBe('low');
+                return { text: 'Done', effective: {} };
+            }),
+        });
+        expect(result.status).toBe('success');
+    });
+
+    it('enforces CTL restrictions on the first function call without relying on the model', async () => {
+        const cwd = directory();
+        const source = document(fence("def write():\n    write_file('outside.txt', 'blocked')") +
+            '\n\n> @CTL(restrict={fs: ["./allowed"]}) Invoke @write.');
+        expect(await run(parseMarkdown(source), { cwd, logger, backend: actions(
+            action('call_function', { name: 'write', args: [] }),
+        ) })).toMatchObject({ status: 'failure', failure: { status_code: 'restriction_violation' } });
+        expect(fs.existsSync(path.join(cwd, 'outside.txt'))).toBe(false);
+    });
+
+    it('preserves existing restriction validation before contacting the model', async () => {
+        expect(await run(parseMarkdown(document('> @CTL(restrict={net: []}) Act.')), {
+            logger, backend: new NoLlm(),
+        })).toMatchObject({ status: 'failure', failure: {
+            status_code: 'runtime_error', reason: 'restrict net needs at least one entry',
+        } });
     });
 });
 

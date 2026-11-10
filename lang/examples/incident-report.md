@@ -47,7 +47,7 @@ for item in items(groups):
     errors.append("{item[1].count}x {item[0]} (first at {item[1].first})")
 ```
 
-> @FORBID speculating beyond what @errors and @counts show; mark guesses as hypotheses
+> @CTL(forbid='speculating beyond what @errors and @counts show; mark guesses as hypotheses')
 >
 > Write a blameless incident report in Markdown for errors between @first and @last.
 > Use the sections "Summary", "Timeline", "Impact", "Likely root cause" and "Follow-ups",

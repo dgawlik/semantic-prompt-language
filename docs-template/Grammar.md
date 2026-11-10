@@ -38,9 +38,22 @@ markdown_block = spl_fence | blockquote | commentary ;
 spl_fence      = fence , "spl" , NL , program , fence ;
 fence          = 3 * "`" , { "`" } | 3 * "~" , { "~" } ;
                  (* matching fences; each is a complete program without directives *)
-blockquote     = ">" , text , { NL , ">" , text } ;
+blockquote     = ">" , [ controls ] , text , { NL , ">" , text } ;
                  (* natural language; the agent acts through shared-scope tools,
-                    not by submitting generated SPL *)
+                    not by submitting generated SPL; quote prefixes may continue controls *)
+controls       = "@CTL" , "(" , [ control , { "," , control } , [ "," ] ] , ")" ;
+control        = "restrict" , "=" , restriction_map
+               | ( "enforce" | "forbid" ) , "=" , control_strings
+               | "model" , "=" , plain_string
+               | "reasoning" , "=" , ( "'low'" | "'medium'" | "'high'" ) ;
+restriction_map = "{" , [ restriction_entry , { "," , restriction_entry } , [ "," ] ] , "}" ;
+restriction_entry = ( "fs" | "exec" | "net" | "mcp" | plain_string ) , ":" , control_strings ;
+control_strings = plain_string | "[" , [ plain_string , { "," , plain_string } , [ "," ] ] , "]" ;
+                 (* literal values only; restriction keys must name one of the four kinds;
+                    marker case-insensitive, keys unique, model nonempty;
+                    controls appear once at the start and may span lines;
+                    reasoning strings may use either quote style;
+                    removed @Restrict/@Enforce/@Forbid/@Human markers are errors *)
 commentary     = ? any other Markdown ? ;
 
 (* Programs *)

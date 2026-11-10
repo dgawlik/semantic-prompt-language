@@ -40,7 +40,7 @@ assert len(pages) > 0 'none of the sources could be fetched'
 let sources = keys(pages)
 ```
 
-> @FORBID facts that are not supported by @pages
+> @CTL(forbid='facts that are not supported by @pages')
 >
 > Write a digest about @topic: a 3-sentence overview, then up to 5 bullet points with key facts.
 > End each bullet with its source URL in square brackets. Save the Markdown to @digest

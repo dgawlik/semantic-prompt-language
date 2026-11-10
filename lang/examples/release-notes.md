@@ -31,9 +31,10 @@ if commits == '':
 log("{len(commits.splitlines())} commit(s) since {since}")
 ```
 
-> @ENFORCE Write for users of the product: describe the impact, not the implementation
->
-> @FORBID inventing changes that are not in @commits, and listing internal refactors or CI tweaks
+> @CTL(
+>     enforce='Write for users of the product: describe the impact, not the implementation',
+>     forbid='inventing changes that are not in @commits, and listing internal refactors or CI tweaks'
+> )
 >
 > Group @commits into the sections "Features", "Fixes" and "Other" (omit empty sections) and
 > write Markdown release notes for @version. Start with the heading `## <version>`, use `###` for sections

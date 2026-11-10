@@ -9,6 +9,8 @@ import type { ModelStreamSink } from '../../lang/src/log-events.js';
 import { registerCopilotContext, type CopilotContextProvider } from '../src/copilotContext';
 import { extendMarkdownIt } from '../src/markdownPreview';
 import { parse } from '../../lang/src/parser.js';
+import { registerNotebookLanguageFeatures } from '../src/notebookLanguageFeatures';
+import { TextDocument as ProtocolDocument } from 'vscode-languageserver-textdocument';
 import * as mock from './vscodeMock';
 
 const contexts: ReturnType<typeof mock.context>[] = [];
@@ -20,6 +22,7 @@ const setup = (body: string) => {
     const context = mock.context();
     contexts.push(context);
     registerNotebooks(context);
+    registerNotebookLanguageFeatures(context);
     const serializer = mock.serializers[0].value;
     const source = DEFAULT_FRONTMATTER + '\n\n' + body;
     const data = serializer.deserializeNotebook(Buffer.from(source));
@@ -29,6 +32,75 @@ const setup = (body: string) => {
     return { notebook, controller: mock.controllers[0], serializer, data, source };
 };
 const fence = (code: string) => '```spl\n' + code + '\n```';
+
+test('instruction completions include CTL settings and bindings from preceding notebook cells', () => {
+    const { notebook } = setup(fence("let notes = 'draft'") + '\n\n> Summarize @notes -> @summary\n\n> Use @sum');
+    const document = notebook.getCells()[2].document;
+    const { provider, selector, triggers } = mock.completionProviders[0];
+    assert.deepEqual(selector, { language: 'markdown', scheme: 'vscode-notebook-cell', notebookType: 'spl-workflow' });
+    assert.ok(triggers.includes('@') && triggers.includes('='));
+    const items = provider.provideCompletionItems(document, new mock.Position(0, 8));
+    const summary = items.find(item => item.label === 'summary')!;
+    assert.equal(summary.detail, 'let summary: unknown');
+    assert.deepEqual(summary.range, new mock.Range(new mock.Position(0, 5), new mock.Position(0, 8)));
+    assert.equal(summary.insertText, 'summary');
+    assert.ok(items.some(item => item.label === 'notes'));
+    assert.ok(!items.some(item => item.label === 'let'));
+
+    mock.workspace.changeText(document, '@CTL(\n    rea');
+    const settings = provider.provideCompletionItems(document, new mock.Position(1, 7));
+    assert.equal(settings.find(item => item.label === 'reasoning')?.insertText, 'reasoning=');
+    assert.deepEqual(settings[0].range, new mock.Range(new mock.Position(1, 4), new mock.Position(1, 7)));
+    mock.workspace.changeText(document, "@CTL(reasoning='h");
+    const values = provider.provideCompletionItems(document, new mock.Position(0, 17));
+    assert.equal(values.find(item => item.label === 'high')?.insertText, "high'");
+});
+
+test('instruction highlighting maps CTL and variables to native cell offsets and refreshes on edits', () => {
+    const { notebook } = setup(fence("let notes = 'draft'") +
+        '\n\n> @CTL(\n>     restrict={fs: ["./src"]}, reasoning="high"\n> )\n>\n> Use 😀 @notes.');
+    const document = notebook.getCells()[1].document;
+    const { provider, legend } = mock.semanticProviders[0];
+    let refreshes = 0;
+    const listener = provider.onDidChangeSemanticTokens(() => refreshes++);
+    const decode = () => {
+        const source = ProtocolDocument.create('cell:test', 'markdown', 1, document.getText());
+        const data = provider.provideDocumentSemanticTokens(document)!.data;
+        const tokens: { text: string; type: string; line: number; character: number }[] = [];
+        let line = 0;
+        let character = 0;
+        for (let i = 0; i < data.length; i += 5) {
+            line += data[i];
+            character = data[i] === 0 ? character + data[i + 1] : data[i + 1];
+            const from = source.offsetAt({ line, character });
+            tokens.push({ text: source.getText().slice(from, from + data[i + 2]), type: legend.tokenTypes[data[i + 3]], line, character });
+        }
+        return tokens;
+    };
+    const tokens = decode();
+    assert.deepEqual(tokens.find(token => token.text === '@CTL'), { text: '@CTL', type: 'keyword', line: 0, character: 0 });
+    for (const name of ['restrict', 'fs', 'reasoning']) assert.equal(tokens.find(token => token.text === name)?.type, 'property');
+    assert.equal(tokens.find(token => token.text === '"./src"')?.type, 'string');
+    assert.deepEqual(tokens.find(token => token.text === 'notes'), { text: 'notes', type: 'variable', line: 4, character: 8 });
+    mock.workspace.changeText(notebook.getCells()[0].document, "let updated = 'draft'");
+    mock.workspace.changeText(document, 'Use @updated.');
+    assert.ok(refreshes >= 2);
+    assert.ok(decode().some(token => token.text === 'updated' && token.type === 'variable'));
+    listener.dispose();
+});
+
+test('notebook instruction providers leave markup cells and other notebook types untouched', () => {
+    const { notebook } = setup('# Commentary\n\n' + fence('let value = 1') + '\n\n> Use @value.');
+    const complete = mock.completionProviders[0].provider.provideCompletionItems;
+    const color = mock.semanticProviders[0].provider.provideDocumentSemanticTokens;
+    const comment = notebook.getCells()[0].document;
+    assert.deepEqual(complete(comment, new mock.Position(0, 0)), []);
+    assert.equal(color(comment), undefined);
+    notebook.notebookType = 'another-notebook';
+    const instruction = notebook.getCells()[2].document;
+    assert.deepEqual(complete(instruction, new mock.Position(0, 5)), []);
+    assert.equal(color(instruction), undefined);
+});
 
 test('Markdown preview highlights ask sampling parameters, not removed keywords', () => {
     const markdown = extendMarkdownIt({ options: { highlight: (_code: string, _lang: string, _attrs: string) => 'fallback' } });
@@ -293,11 +365,11 @@ test('native serializer exposes editable code/instruction cells and transient ou
 });
 
 test('native instruction cells edit plain text and save blockquote markers automatically', () => {
-    const { data, serializer } = setup('> @ENFORCE Answer in Chinese\n>\n> Tell a story -> @animal\n');
-    assert.equal(data.cells[0].value, '@ENFORCE Answer in Chinese\n\nTell a story -> @animal');
-    data.cells[0].value = '@ENFORCE Answer in Chinese\n\nTell a funny story -> @animal';
+    const { data, serializer } = setup("> @CTL(enforce='Answer in Chinese')\n>\n> Tell a story -> @animal\n");
+    assert.equal(data.cells[0].value, "@CTL(enforce='Answer in Chinese')\n\nTell a story -> @animal");
+    data.cells[0].value = "@CTL(enforce='Answer in Chinese')\n\nTell a funny story -> @animal";
     const saved = Buffer.from(serializer.serializeNotebook(data)).toString();
-    assert.match(saved, /> @ENFORCE Answer in Chinese\n> \n> Tell a funny story -> @animal/);
+    assert.match(saved, /> @CTL\(enforce='Answer in Chinese'\)\n> \n> Tell a funny story -> @animal/);
     assert.equal(serializer.deserializeNotebook(Buffer.from(saved)).cells[0].value, data.cells[0].value);
     assert.equal(mock.diagnostics.get('spl-notebook-syntax')?.size, 0);
 });

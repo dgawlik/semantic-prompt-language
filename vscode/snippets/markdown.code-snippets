@@ -1,4 +1,13 @@
 {
+  "SPL blockquote controls": {
+    "prefix": "splctl",
+    "body": [
+      "> @CTL(restrict={fs: ['${1:./src}']}, enforce='${2:Be concise}', forbid='${3:Unsupported claims}', model='${4:model-name}', reasoning='${5|low,medium,high|}')",
+      ">",
+      "> ${0:Instruction}"
+    ],
+    "description": "A blockquote with grouped restrictions, guidance, model and reasoning controls"
+  },
   "SPL workflow": {
     "prefix": "splworkflow",
     "body": [
