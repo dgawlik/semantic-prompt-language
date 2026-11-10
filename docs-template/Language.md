@@ -43,6 +43,56 @@ Escapes: `\n` `\t` `\r` `\0` `\\` `\'` `\"` `\{` `\}`. Python-style operators wo
 `+ - * / // % **`, comparisons, `in`/`not in`, `and`/`or`/`not`, `a if cond else b`, indexing,
 slicing with negative indexes, and `d.key` as a shorthand for `d['key']`.
 
+
+## Lists 
+
+```spl
+let lst = [1,2,3,4];
+
+# Indexing and searching for index
+let secondElement = lst[1];
+let thirdIndex = lst.index(3);
+log('Second element: {secondElement}');
+log('Threes index: {thirdIndex}')
+
+# List concatenation
+let l2 = [5,6];
+let combined = lst + l2
+log('Extend list {combined}')
+
+# Clone list and pop second element
+let removedSecond = combined.copy()
+removedSecond.pop(1)
+log('Removed second: {removedSecond}')
+
+# Remove elements from the end
+let removedLast = combined.copy()
+removedLast.pop(-1)
+log('Removed last: {removedLast}')
+
+# Remove by value
+let remove3 = combined.copy()
+remove3.remove(3)
+log('Removed 3: {remove3}')
+
+# Remove by nonexisting throws exception
+try:
+    let remove7 = combined.copy()
+    remove7.remove(7)
+except e:
+    log(e.reason)
+
+# Insert value at index
+let ins = [1,10]
+ins.insert(1, 100)
+log('Inserted: {ins}')
+
+# Clear list
+ins.clear()
+log('Cleared: {ins}')
+```
+
+
 ## Bindings and scopes
 
 `let` declares a name in the current block; plain assignment updates the nearest existing declaration.
