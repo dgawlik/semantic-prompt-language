@@ -52,4 +52,5 @@ let m = f.map(lambda i: i*2)
 assert m == [4, 8]
 
 let r = m.reduce(lambda acc, i: acc + i)
+assert r == 12
 ```
