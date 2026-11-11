@@ -25,6 +25,32 @@ async function rejectsBeforeModel(source: string, reason?: string) {
 }
 
 describe('static typed preflight', () => {
+    it('preserves list and string result types through stepped slices', async () => {
+        const { result } = await exec(`let items: list[int] = [1, 2, 3, 4]
+let step: int = -2
+let sliced: list[int] = items[None:None:step]
+let text: str = 'abcde'
+let reversed: str = text[::-1]
+success [sliced, reversed, items]`);
+        expect(result).toMatchObject({ status: 'success', value: [[4n, 2n], 'edcba', [1n, 2n, 3n, 4n]] });
+    });
+
+    it('checks typed expressions inside slice steps before executing models', async () => {
+        await rejectsBeforeModel(`let items: list[int] = [1, 2]
+let step: int = 1
+success items[::step + 'wrong']`, 'typed');
+        await rejectsBeforeModel("let items: list[int] = [1, 2]\nlet wrong: list[str] = items[::-1]", 'expected list[str]');
+    });
+
+    it('keeps callable element guards when slicing typed lists', async () => {
+        const { result } = await exec(`def identity(value):
+    return value
+let callbacks: list[fn(int) -> int] = [identity]
+let sliced = callbacks[::-1]
+success sliced[0](3)`);
+        expect(result).toMatchObject({ status: 'success', value: 3n });
+    });
+
     it('contextually checks lambda signatures and list callback types', async () => {
         const { result } = await exec(`let increment: fn(int) -> int = lambda x: x + 1
 let constant: fn() -> int = lambda: 5

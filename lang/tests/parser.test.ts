@@ -39,6 +39,29 @@ def f():
 });
 
 describe('parser: accepted syntax', () => {
+    it('parses slice bounds and steps independently and preserves postfix chaining', () => {
+        const program = parse(`let a = items[1:4:2]
+let b = items[::]
+let c = items[::-1]
+let d = items[:3:]
+let e = items[1::2]
+let f = items[::(1 if True else 2)][0]`);
+        expect(program.body[0]).toMatchObject({ value: {
+            t: 'slice', lo: { t: 'num', v: 1 }, hi: { t: 'num', v: 4 }, step: { t: 'num', v: 2 },
+        } });
+        expect(program.body[1]).toMatchObject({ value: { t: 'slice', lo: undefined, hi: undefined, step: undefined } });
+        expect(program.body[2]).toMatchObject({ value: { t: 'slice', step: { t: 'unary', op: '-' } } });
+        expect(program.body[3]).toMatchObject({ value: { t: 'slice', lo: undefined, hi: { t: 'num', v: 3 }, step: undefined } });
+        expect(program.body[4]).toMatchObject({ value: { t: 'slice', lo: { t: 'num', v: 1 }, hi: undefined, step: { t: 'num', v: 2 } } });
+        expect(program.body[5]).toMatchObject({ value: { t: 'index', obj: { t: 'slice', step: { t: 'group', e: { t: 'ternary' } } } } });
+    });
+
+    it.each(['items[:::]', 'items[1:2:3:4]', 'items[::,]', 'items[1:2:3] = []'])(
+        'rejects malformed or assignment slice syntax: %s', source => {
+            bad(source, /expected|unexpected|invalid assignment target/);
+        },
+    );
+
     it('parses lambdas with zero or multiple parameters and low-precedence expression bodies', () => {
         const program = parse(`let empty = lambda: 42
 let choose = lambda x, y: x if x > y else y

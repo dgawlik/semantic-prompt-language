@@ -14,6 +14,8 @@ let block = '''
 Triple-quoted strings span lines.
 '''
 
+assert name[0:1] == 'A'
+
 let split1 = 'hello world'
 assert split1.split() == ['hello', 'world']
 assert split1.split('e') == ['h', 'llo world']

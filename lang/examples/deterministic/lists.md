@@ -53,4 +53,6 @@ assert m == [4, 8]
 
 let r = m.reduce(lambda acc, i: acc + i)
 assert r == 12
+
+log(numbers[0:2])
 ```

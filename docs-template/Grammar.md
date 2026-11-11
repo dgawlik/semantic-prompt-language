@@ -122,7 +122,7 @@ power          = postfix , [ "**" , unary ] ;
 postfix        = primary , { call | index | slice | member } ;
 call           = "(" , [ expr , { "," , expr } , [ "," ] ] , ")" ;
 index          = "[" , expr , "]" ;
-slice          = "[" , [ expr ] , ":" , [ expr ] , "]" ;
+slice          = "[" , [ expr ] , ":" , [ expr ] , [ ":" , [ expr ] ] , "]" ;
 member         = "." , NAME ;
 primary        = NUMBER | string | "True" | "False" | "None" | NAME | special_var
                | "(" , expr , ")" | list | object_expr | type_expr | block | if_stmt | log_expr | human_expr

@@ -35,7 +35,7 @@ export type Expr =
     | { t: 'call'; callee: Expr; args: Expr[] }
     | { t: 'member'; obj: Expr; name: string; line?: number; col?: number }
     | { t: 'index'; obj: Expr; index: Expr }
-    | { t: 'slice'; obj: Expr; lo?: Expr; hi?: Expr }
+    | { t: 'slice'; obj: Expr; lo?: Expr; hi?: Expr; step?: Expr }
     | { t: 'block'; body: Stmt[]; line: number }
     | { t: 'if'; branches: { cond: Expr; body: Stmt[] }[]; orelse?: Stmt[]; line: number }
     | { t: 'log'; level: Expr; args: Expr[] }

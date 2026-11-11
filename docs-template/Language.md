@@ -36,6 +36,8 @@ let block = '''
 Triple-quoted strings span lines.
 '''
 
+assert name[0:1] == 'A'
+
 let split1 = 'hello world'
 assert split1.split() == ['hello', 'world']
 assert split1.split('e') == ['h', 'llo world']
@@ -70,6 +72,23 @@ assert totrim.strip() == 'word'
 Escapes: `\n` `\t` `\r` `\0` `\\` `\'` `\"` `\{` `\}`. Python-style operators work as expected:
 `+ - * / // % **`, comparisons, `in`/`not in`, `and`/`or`/`not`, `a if cond else b`, indexing,
 slicing with negative indexes, and `d.key` as a shorthand for `d['key']`.
+
+Lists and strings support `value[start:stop:step]`. The stop is exclusive; omitted bounds
+select the sequence ends in the direction of the step, which defaults to `1`.
+Negative indexes count from the end, and out-of-range bounds are clipped.
+Bounds and steps must be integers or `None` (`None` uses the omitted default); a zero step
+is a runtime error. List slices are new shallow copies; string slices use Unicode code points.
+Slices are read-only expressions, not assignment targets.
+
+```spl
+let numbers = [0, 1, 2, 3, 4]
+assert numbers[1:4] == [1, 2, 3]
+assert numbers[::2] == [0, 2, 4]
+assert numbers[::-1] == [4, 3, 2, 1, 0]
+assert numbers[4:0:-2] == [4, 2]
+assert 'hello'[::-1] == 'olleh'
+assert 'hello'[1::2] == 'el'
+```
 
 
 ## Lists 
@@ -129,6 +148,8 @@ assert m == [4, 8]
 
 let r = m.reduce(lambda acc, i: acc + i)
 assert r == 12
+
+assert numbers[0:2] == [1,2]
 ```
 
 ## Objects 

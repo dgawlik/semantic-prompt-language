@@ -653,6 +653,7 @@ class Checker {
                 const object = this.effective(this.expr(expr.obj, scope));
                 if (expr.lo) this.expr(expr.lo, scope);
                 if (expr.hi) this.expr(expr.hi, scope);
+                if (expr.step) this.expr(expr.step, scope);
                 return object.type?.kind === 'list' ? concrete(object.type, !!object.typed) : object.type && this.stringType(object.type) ? concrete(primitive('str'), !!object.typed) : unknown();
             }
             case 'call': return this.call(expr, scope);

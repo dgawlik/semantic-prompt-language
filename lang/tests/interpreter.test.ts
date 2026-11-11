@@ -227,6 +227,92 @@ success [l, d, l[1:], 'hello'[1:3], 'hello'[-1], d.a.b, len(d)]
         expect(value(result)).toEqual([[11, 20, 31], { a: { b: 6 }, c: 'x' }, [20, 31], 'el', 'o', 6, 2]);
     });
 
+    it.each([
+        [':', [0, 1, 2, 3, 4]],
+        ['::', [0, 1, 2, 3, 4]],
+        ['1:4', [1, 2, 3]],
+        ['-4:-1', [1, 2, 3]],
+        ['::2', [0, 2, 4]],
+        ['1::2', [1, 3]],
+        [':4:2', [0, 2]],
+        ['1:4:', [1, 2, 3]],
+        ['::-1', [4, 3, 2, 1, 0]],
+        ['4:0:-2', [4, 2]],
+        [':1:-1', [4, 3, 2]],
+        ['-2::-2', [3, 1]],
+        ['4:-1:-1', []],
+        ['1:4:-1', []],
+        ['4:1:1', []],
+        ['-99:99:2', [0, 2, 4]],
+        ['99:-99:-2', [4, 2, 0]],
+        ['-99::-1', []],
+        [':99:-1', []],
+        ['::99', [0]],
+        ['::-99', [4]],
+        ['None:None:None', [0, 1, 2, 3, 4]],
+        ['None:None:-1', [4, 3, 2, 1, 0]],
+        ["int('-9223372036854775808'):int('9223372036854775807'):int(2)", [0, 2, 4]],
+        ["int('9223372036854775807'):int('-9223372036854775808'):int(-2)", [4, 2, 0]],
+    ])('slices lists and strings with [%s]', async (slice, expected) => {
+        const { result } = await exec(`success [[0, 1, 2, 3, 4][${slice}], 'abcde'[${slice}]]`);
+        expect(value(result)).toEqual([expected, expected.map(index => 'abcde'[index]).join('')]);
+    });
+
+    it('handles empty slices, Unicode code points and chained slicing', async () => {
+        const { result } = await exec(`success [
+    [][::-1], ''[::-1], [1][::-1], 'A\u{1F600}B\u{1F680}C'[::-2],
+    'A\u{1F600}B\u{1F680}C'[::-1], 'A\u{1F600}B\u{1F680}C'[1::2],
+    [0, 1, 2, 3, 4][::-1][1:4:2], 'abcde'[::-1][1:4:2],
+]`);
+        expect(value(result)).toEqual([[], '', [1], 'CBA', 'C\u{1F680}B\u{1F600}A', '\u{1F600}\u{1F680}', [3, 1], 'db']);
+    });
+
+    it('evaluates the receiver and slice components once from left to right', async () => {
+        const { result } = await exec(`let calls = []
+def source():
+    calls.append('source')
+    return [0, 1, 2, 3, 4]
+def bound(name, value):
+    calls.append(name)
+    return value
+let sliced = source()[bound('start', 1):bound('stop', 5):bound('step', 2)]
+success [sliced, calls]`);
+        expect(value(result)).toEqual([[1, 3], ['source', 'start', 'stop', 'step']]);
+    });
+
+    it('returns independent shallow list copies without mutating sources or runtime inputs', async () => {
+        const { result } = await exec(`let child = []
+let source = [child, 1, 2]
+let sliced = source[::-1]
+sliced[0] = 9
+sliced[2].append('shared')
+let args = $args[::-1]
+args.append('copy')
+success [source, sliced, args, $args]`, { args: ['a', 'b'] });
+        expect(value(result)).toEqual([[['shared'], 1, 2], [9, 1, ['shared']], ['b', 'a', 'copy'], ['a', 'b']]);
+    });
+
+    it.each([
+        ['[1][::0]', 'slice step cannot be zero'],
+        ["'abc'[::0]", 'slice step cannot be zero'],
+        ['[][::0]', 'slice step cannot be zero'],
+        ['[1][::int(0)]', 'slice step cannot be zero'],
+        ['[1][::1.5]', 'slice indices must be integers or None'],
+        ['[1][::True]', 'slice indices must be integers or None'],
+        ["[1][::'2']", 'slice indices must be integers or None'],
+        ['[1][::float(2)]', 'slice indices must be integers or None'],
+        ['[1][0.5::]', 'slice indices must be integers or None'],
+        ["'abc'[:False:]", 'slice indices must be integers or None'],
+        ['object()[::1]', 'dict cannot be sliced'],
+        ['42[::-1]', 'number cannot be sliced'],
+    ])('reports catchable slice errors for %s', async (expr, reason) => {
+        const { result } = await exec(`try:
+    let sliced = ${expr}
+except err:
+    success [err.status_code, err.reason]`);
+        expect(value(result)).toEqual(['runtime_error', reason]);
+    });
+
     it('provides builtins and methods', async () => {
         const { result } = await exec(`
 success [

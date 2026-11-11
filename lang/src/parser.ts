@@ -813,9 +813,14 @@ class Parser {
             return { t: 'index', obj, index: lo };
         }
         this.expectOp(':');
-        const hi = this.isOp(']') ? undefined : this.parseExpr();
+        const hi = this.isOp(']') || this.isOp(':') ? undefined : this.parseExpr();
+        let step: Expr | undefined;
+        if (this.isOp(':')) {
+            this.next();
+            if (!this.isOp(']')) step = this.parseExpr();
+        }
         this.expectOp(']');
-        return { t: 'slice', obj, lo, hi };
+        return { t: 'slice', obj, lo, hi, step };
     }
 
     private parsePrimary(): Expr {

@@ -659,7 +659,8 @@ class Interpreter {
                 const obj = await this.eval(e.obj, env);
                 const lo = e.lo ? await this.eval(e.lo, env) : undefined;
                 const hi = e.hi ? await this.eval(e.hi, env) : undefined;
-                return this.slice(obj, lo, hi);
+                const step = e.step ? await this.eval(e.step, env) : undefined;
+                return this.slice(obj, lo, hi, step);
             }
             case 'ask':
             case 'think':
@@ -976,16 +977,30 @@ class Interpreter {
         throw runtimeError(`${typeName(obj)} is not subscriptable`);
     }
 
-    private slice(obj: Value, lo: Value | undefined, hi: Value | undefined): Value {
+    private slice(obj: Value, lo: Value | undefined, hi: Value | undefined, step: Value | undefined): Value {
         if (typeof obj !== 'string' && !isList(obj)) throw runtimeError(`${typeName(obj)} cannot be sliced`);
         const items = typeof obj === 'string' ? Array.from(obj) : obj;
-        const bound = (v: Value | undefined, dflt: number): number => {
-            if (v === undefined) return dflt;
-            if (typeof v === 'bigint') v = Number(v);
-            if (typeof v !== 'number' || !Number.isInteger(v)) throw runtimeError('slice indices must be integers');
-            return Math.min(Math.max(v < 0 ? items.length + v : v, 0), items.length);
+        const integer = (v: Value): number => {
+            if (typeof v !== 'bigint' && (typeof v !== 'number' || !Number.isInteger(v))) {
+                throw runtimeError('slice indices must be integers or None');
+            }
+            return Number(v);
         };
-        const part = items.slice(bound(lo, 0), bound(hi, items.length));
+        const stride = step === undefined || step === null ? 1 : integer(step);
+        if (stride === 0) throw runtimeError('slice step cannot be zero');
+        const lower = stride < 0 ? -1 : 0;
+        const upper = stride < 0 ? items.length - 1 : items.length;
+        const bound = (v: Value | undefined, dflt: number): number => {
+            if (v === undefined || v === null) return dflt;
+            const index = integer(v);
+            return Math.min(Math.max(index < 0 ? items.length + index : index, lower), upper);
+        };
+        const start = bound(lo, stride < 0 ? items.length - 1 : 0);
+        const stop = bound(hi, stride < 0 ? -1 : items.length);
+        const part: Value[] = [];
+        for (let i = start; stride > 0 ? i < stop : i > stop; i += stride) {
+            part.push(contractRead(items, i));
+        }
         return typeof obj === 'string' ? part.join('') : part;
     }
 
