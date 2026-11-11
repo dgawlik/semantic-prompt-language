@@ -4,6 +4,7 @@ import type {
     Directives,
     Expr,
     FieldDecl,
+    ImportStmt,
     Program,
     RestrictKind,
     Stmt,
@@ -16,7 +17,7 @@ import { tokenize, type StringPart, type Token } from './lexer.js';
 const KEYWORDS = new Set([
     'let', 'if', 'elif', 'else', 'for', 'in', 'while', 'def', 'return', 'try', 'except', 'assert', 'fail',
     'success', 'enforce', 'forbid', 'restrict', 'ask', 'think', 'agent', 'human', 'break', 'continue', 'pass', 'and', 'or', 'not',
-    'True', 'False', 'None', 'enum', 'struct', 'class', 'hydratable', 'fn', 'lambda',
+    'True', 'False', 'None', 'enum', 'struct', 'class', 'hydratable', 'fn', 'lambda', 'import',
 ]);
 
 export function isReservedName(name: string): boolean {
@@ -179,7 +180,7 @@ class Parser {
         }
         const body: Stmt[] = [];
         while (this.tok.type !== 'eof') {
-            body.push(this.parseStatement());
+            body.push(this.parseStatement(true));
             this.endOfStatement();
             this.skipSeparators();
         }
@@ -250,12 +251,44 @@ class Parser {
         this.next();
     }
 
-    private parseStatement(): Stmt {
+    private parseImport(): ImportStmt {
+        const line = this.next().line;
+        const bindings: ImportStmt['bindings'] = [];
+        let namespace: string | undefined;
+        if (this.isOp('*')) {
+            this.next();
+            this.expectKeyword('as');
+            namespace = this.expectIdent('a namespace binding');
+        } else {
+            this.expectOp('{');
+            while (!this.isOp('}')) {
+                const imported = this.expectIdent('an imported name');
+                let local = imported;
+                if (this.isName('as')) {
+                    this.next();
+                    local = this.expectIdent('an import alias');
+                }
+                if (bindings.some(binding => binding.local === local)) this.fail(`duplicate imported binding '${local}'`);
+                bindings.push({ imported, local });
+                if (!this.isOp(',')) break;
+                this.next();
+            }
+            this.expectOp('}');
+        }
+        this.expectKeyword('from');
+        const specifier = this.parseLiteralString('import path');
+        return { t: 'import', line, specifier, bindings, namespace };
+    }
+
+    private parseStatement(topLevel = false): Stmt {
         const t = this.tok;
         const line = t.line;
         if (t.type === 'op' && t.value === '@') this.fail('directives are only allowed at the top of the script');
         if (t.type === 'name') {
             switch (t.value) {
+                case 'import':
+                    if (!topLevel) this.fail('imports are only allowed at the top level');
+                    return this.parseImport();
                 case 'let': return this.parseLet();
                 case 'for': {
                     this.next();

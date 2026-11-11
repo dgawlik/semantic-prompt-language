@@ -68,13 +68,18 @@ compound_stmt  = if_stmt | for_stmt | while_stmt | def_stmt | try_stmt | struct_
                | guidance_stmt | restrict_stmt | block ;
 block          = ":" , NL , INDENT , statement , { statement } , DEDENT ;
 
-simple_stmt    = declaration | assignment | enum_stmt | type_alias
+simple_stmt    = import_stmt | declaration | assignment | enum_stmt | type_alias
                | "return" , [ expr ] | "success" , [ expr ]
                | "assert" , expr , [ expr ] | "fail" , expr
                | "break" | "continue" | "pass" | expr ;
                  (* a compound statement or block-valued expression is not an
                     inline semicolon suite; its body must use block layout *)
 declaration    = "let" , NAME , [ ":" , type_expr ] , "=" , expr ;
+import_stmt    = "import" , ( named_imports | "*" , "as" , NAME ) , "from" , plain_string ;
+named_imports  = "{" , [ import_binding , { "," , import_binding } , [ "," ] ] , "}" ;
+import_binding = NAME , [ "as" , NAME ] ;
+                 (* imports occur only at program top level; paths are relative .spl files;
+                    all top-level declarations are exported automatically *)
 assignment     = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
 target         = NAME | postfix , "." , NAME | postfix , "[" , expr , "]" ;
 if_stmt        = "if" , expr , block , { "elif" , expr , block } , [ "else" , block ] ;

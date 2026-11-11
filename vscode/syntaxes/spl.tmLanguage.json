@@ -223,6 +223,7 @@
 
     "keywords": {
       "patterns": [
+        { "name": "keyword.control.import.spl", "match": "\\b(?:import|from|as)\\b" },
         { "name": "storage.type.spl", "match": "\\b(?:enum|struct|class|hydratable|fn)\\b" },
         { "name": "storage.type.function.spl", "match": "\\blambda\\b" },
         { "name": "support.type.spl", "match": "\\b(?:char|object)\\b" },

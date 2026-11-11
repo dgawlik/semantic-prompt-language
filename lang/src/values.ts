@@ -20,6 +20,12 @@ export interface Env {
     parent?: Env;
     contracts?: Map<string, TypeDescriptor>;
     readonlyNames?: Set<string>;
+    imports?: Map<string, { env: Env; name: string }>;
+}
+
+export function bindingValue(env: Env, name: string): Value | undefined {
+    const imported = env.imports?.get(name);
+    return imported ? bindingValue(imported.env, imported.name) : env.vars.get(name);
 }
 
 export interface UserFunction {

@@ -19,9 +19,11 @@ import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
 import { randomUUID } from 'node:crypto';
 import { setImmediate as yieldExecution } from 'node:timers/promises';
 import { ObservationIdentities, StateObserver } from './state-observer.js';
+import { createNamespace, isModuleSources, linkModules, moduleDirectory, namespaceBindings, readModuleSources, type ModuleFile, type ModuleGraph, type RuntimeModule } from './modules.js';
 import type { ModelInteraction, ScopeKind } from './log-events.js';
 import {
     assertMutable,
+    bindingValue,
     compareValues,
     describeValue,
     equals,
@@ -98,6 +100,8 @@ interface SessionState {
     globals: Env;
     identities: ObservationIdentities;
     current?: Interpreter;
+    moduleFiles?: ModuleFile[];
+    modules?: Map<string, RuntimeModule>;
 }
 
 /** An isolated interactive scope, retaining values and function closures between runs. */
@@ -137,6 +141,8 @@ class Interpreter {
     private sourceVersion?: number;
     private steps = 0;
     private returnType?: TypeDescriptor;
+    private moduleGraph?: ModuleGraph;
+    private readonly modules: Map<string, RuntimeModule>;
 
     constructor(
         private readonly program: Program,
@@ -144,6 +150,7 @@ class Interpreter {
         private readonly sessionState?: SessionState,
     ) {
         this.globals = sessionState?.globals ?? { vars: new Map() };
+        this.modules = sessionState ? sessionState.modules ??= new Map() : new Map();
         this.observer = new StateObserver(this.globals, opts.logger, sessionState?.identities);
         this.sourceLines = program.lines;
         this.sourceUri = opts.source;
@@ -200,12 +207,29 @@ class Interpreter {
         const { logger } = this.opts;
         let executing = false;
         try {
-            checkProgram(this.program, this.globals);
             if (this.opts.trace && this.opts.store) {
                 throw new TraceError('trace runs cannot use a variable store');
             }
             this.opts.trace?.validateSource(this.program.lines.join('\n'), this.opts.args);
-            if (!this.opts.trace && !this.opts.pin?.replaying && !this.opts.human && usesHuman(this.program)) {
+            if (this.program.body.some(stmt => stmt.t === 'import')) {
+                const read = () => readModuleSources(this.program, moduleDirectory(this.opts.source, this.cwd),
+                    this.sessionState?.moduleFiles, this.opts.source);
+                const recorder = this.opts.pin ?? this.opts.trace;
+                const sources = recorder ? await recorder.effect({ kind: 'modules' }, read, isModuleSources) : read();
+                this.moduleGraph = linkModules(this.program, sources, this.opts.source);
+                for (const module of this.moduleGraph.modules.values()) {
+                    const id = process.platform === 'win32' ? module.id.toLowerCase() : module.id;
+                    module.globals = this.modules.get(id)?.env;
+                }
+                if (this.sessionState) {
+                    const files = new Map(this.sessionState.moduleFiles?.map(file => [file.path, file]));
+                    for (const file of sources.files) files.set(file.path, file);
+                    this.sessionState.moduleFiles = [...files.values()];
+                }
+            }
+            checkProgram(this.program, this.globals, undefined, this.moduleGraph);
+            if (!this.opts.trace && !this.opts.pin?.replaying && !this.opts.human && (usesHuman(this.program)
+                || [...this.moduleGraph?.modules.values() ?? []].some(module => usesHuman(module.program)))) {
                 throw runtimeError('human input requires a human handler');
             }
             const variables = this.opts.pin
@@ -214,6 +238,7 @@ class Interpreter {
                 : this.store.load();
             for (const [k, v] of Object.entries(variables)) this.globals.vars.set(k, v);
             executing = true;
+            await this.initializeImports(this.program, this.globals);
             const signal = await this.execBlock(this.program.body, this.globals);
             this.opts.trace?.assertConsumed();
             if (signal?.k === 'return') return { status: 'success', value: signal.v, hasValue: signal.hasValue };
@@ -237,7 +262,10 @@ class Interpreter {
             try {
                 if (executing && !this.sessionState && !this.opts.trace && !this.opts.pin?.replaying) {
                     const snapshot: Record<string, Value> = {};
-                    for (const [k, v] of this.globals.vars) if (!isFunction(v) && !isDescriptor(v) && !isInstance(v)) snapshot[k] = v;
+                    for (const [k, v] of this.globals.vars) {
+                        if (!this.globals.imports?.has(k) && !(typeof v === 'object' && v !== null && namespaceBindings(v))
+                            && !isFunction(v) && !isDescriptor(v) && !isInstance(v)) snapshot[k] = v;
+                    }
                     this.store.save(snapshot);
                 }
             } catch (e) {
@@ -248,6 +276,54 @@ class Interpreter {
 
     // ---- environments --------------------------------------------------
 
+    private async initializeImports(program: Program, env: Env): Promise<void> {
+        for (const stmt of program.body) {
+            if (stmt.t !== 'import') continue;
+            const module = this.moduleGraph!.imports.get(stmt)!;
+            const id = process.platform === 'win32' ? module.id.toLowerCase() : module.id;
+            let runtime = this.modules.get(id);
+            if (!runtime) {
+                const scope: Env = { vars: new Map() };
+                this.observer.scope(scope, 'global', module.id);
+                runtime = { env: scope, namespace: createNamespace(scope, module.exports), initialized: false };
+                this.modules.set(id, runtime);
+                const saved = { lines: this.sourceLines, uri: this.sourceUri, version: this.sourceVersion, result: this.returnType };
+                this.sourceLines = module.program.lines;
+                this.sourceUri = module.id;
+                this.sourceVersion = undefined;
+                this.returnType = undefined;
+                try {
+                    await this.initializeImports(module.program, scope);
+                    const completion = await this.execBlock(module.program.body, scope);
+                    if (completion && completion.k !== 'value') throw runtimeError('return is not allowed during module initialization');
+                    runtime.initialized = true;
+                } catch (error) {
+                    this.modules.delete(id);
+                    if (error instanceof SuccessSignal) error = runtimeError('success is not allowed during module initialization');
+                    if (error instanceof Failure) throw error.locate(1, module.program.lines[0] ?? '', module.id);
+                    throw error;
+                } finally {
+                    this.sourceLines = saved.lines;
+                    this.sourceUri = saved.uri;
+                    this.sourceVersion = saved.version;
+                    this.returnType = saved.result;
+                }
+            }
+            if (!runtime.initialized) throw runtimeError(`module '${module.id}' is not initialized`);
+            if (stmt.namespace) {
+                if (env.vars.get(stmt.namespace) !== runtime.namespace) this.commit(env, stmt.namespace, runtime.namespace);
+                (env.readonlyNames ??= new Set()).add(stmt.namespace);
+            }
+            for (const binding of stmt.bindings) {
+                const existing = env.imports?.get(binding.local);
+                if (existing?.env === runtime.env && existing.name === binding.imported) continue;
+                this.commit(env, binding.local, bindingValue(runtime.env, binding.imported)!);
+                (env.imports ??= new Map()).set(binding.local, { env: runtime.env, name: binding.imported });
+                (env.readonlyNames ??= new Set()).add(binding.local);
+            }
+        }
+    }
+
     private logValues(level: LogLevel, values: Value[]): void {
         if (!this.opts.trace?.replaying) {
             this.opts.logger[level]('log:', ...values.map(value => isDict(value) || isList(value) ? toJson(value) : str(value)));
@@ -256,7 +332,7 @@ class Interpreter {
 
     private lookup(name: string, env: Env): Value {
         const scope = this.bindingScope(name, env);
-        if (scope) return scope.vars.get(name)!;
+        if (scope) return bindingValue(scope, name)!;
         const b = this.builtins.get(name);
         if (b) return b;
         throw runtimeError(`name '${name}' is not defined`);
@@ -276,6 +352,11 @@ class Interpreter {
     }
 
     private commit(env: Env, name: string, value: Value): void {
+        const current = env.vars.get(name);
+        if (env.imports?.has(name) || env.readonlyNames?.has(name)
+            && typeof current === 'object' && current !== null && namespaceBindings(current)) {
+            throw runtimeError(`imported binding '${name}' is read-only`);
+        }
         assertComplete(value);
         const contract = env.contracts?.get(name);
         if (contract) value = validateValue(value, contract, name);
@@ -336,6 +417,7 @@ class Interpreter {
 
     private async execStmtInner(s: Stmt, env: Env): Promise<Completion> {
         switch (s.t) {
+            case 'import': return;
             case 'let': {
                 const type = s.annotation ? this.type(s.annotation, env) : undefined;
                 const existing = env.contracts?.get(s.name);
@@ -687,7 +769,7 @@ class Interpreter {
                 if (!method || callee.name === obj.descriptor.name) throw runtimeError(`unknown instance method '${callee.name}'`);
                 return this.callValue({ ...method, self: obj }, await this.evalArgs(argExprs, env, method.paramTypes));
             }
-            if (isDict(obj) && !hasBuiltinMethod(obj, callee.name)) {
+            if (isDict(obj) && (namespaceBindings(obj) || !hasBuiltinMethod(obj, callee.name))) {
                 const fn = this.getKey(obj, callee.name);
                 return this.callValue(fn, await this.evalArgs(argExprs, env, this.callParams(fn)));
             }
@@ -1069,9 +1151,9 @@ class Interpreter {
     private async execNatural({ text, line, controls }: Extract<Stmt, { t: 'natural' }>, env: Env): Promise<Completion> {
         const bindings: Record<string, unknown> = Object.create(null);
         for (let scope: Env | undefined = env; scope; scope = scope.parent) {
-            for (const [name, value] of scope.vars) {
+            for (const name of scope.vars.keys()) {
                 if (Object.hasOwn(bindings, name)) continue;
-                bindings[name] = describeValue(value);
+                bindings[name] = describeValue(bindingValue(scope, name)!);
             }
         }
         const history: unknown[] = [];

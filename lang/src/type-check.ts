@@ -6,7 +6,8 @@ import {
     aliasType, assignable, contractOf, descriptor, equivalent, INT_MAX, INT_MIN, primitives, resolveFields, resolveType,
     type TypeDescriptor,
 } from './types.js';
-import { isDescriptor, isDict, isFloat, isFunction, isInstance, isList, type Env, type Value } from './values.js';
+import { bindingValue, isDescriptor, isDict, isFloat, isFunction, isInstance, isList, type Env, type Value } from './values.js';
+import { importBindings, namespaceBindings, type ModuleGraph } from './modules.js';
 
 interface Callable {
     params: (TypeDescriptor | undefined)[];
@@ -16,6 +17,7 @@ interface Callable {
 
 interface Identity {
     kind: 'list' | 'object';
+    module?: boolean;
     contract?: TypeDescriptor;
     items?: Info[];
     fields?: Map<string, Info>;
@@ -41,6 +43,7 @@ interface Binding {
     captured?: boolean;
     readonly?: boolean;
     prior?: boolean;
+    imported?: boolean;
 }
 
 interface Scope {
@@ -63,30 +66,39 @@ const numeric = (type: TypeDescriptor): boolean => type.kind === 'int' || type.k
 const mutable = (type: TypeDescriptor): boolean => ['list', 'struct', 'class'].includes(type.kind);
 
 /** Checks only statically known contracts; dynamic values are left to runtime validation. */
-export function checkProgram(program: Program, globals?: Env, onMember?: MemberObserver): void {
-    new Checker(program, onMember).check(globals);
+export function checkProgram(program: Program, globals?: Env, onMember?: MemberObserver, modules?: ModuleGraph): void {
+    new Checker(program, onMember, modules).check(globals);
 }
 
-export type MemberObserver = (expr: Extract<Expr | AssignTarget, { t: 'member' }>, receiver: TypeDescriptor | undefined) => void;
+export type MemberObserver = (
+    expr: Extract<Expr | AssignTarget, { t: 'member' }>,
+    receiver: TypeDescriptor | undefined,
+    moduleExports?: readonly string[],
+) => void;
 
 class Checker {
     private nextId = 1;
     private line = 1;
     private function?: FunctionContext;
 
-    constructor(private readonly program: Program, private readonly onMember?: MemberObserver) {}
+    constructor(
+        private readonly program: Program,
+        private readonly onMember?: MemberObserver,
+        private readonly modules?: ModuleGraph,
+        private readonly moduleScopes = new Map<string, Scope>(),
+    ) {}
 
     private error(reason: string, line = this.line): never {
         throw new Failure('type_error', reason).locate(line, this.program.lines[line - 1]?.trim() ?? '');
     }
 
-    check(globals?: Env): void {
+    check(globals?: Env): Scope {
         const root: Scope = { bindings: new Map(), narrow: new Map(), functionId: 0 };
         for (const [name, type] of primitives) this.define(root, name, { descriptor: type });
         const importEnv = (env: Env): void => {
             if (env.parent) importEnv(env.parent);
             for (const [name, value] of env.vars) {
-                const info = this.runtimeInfo(value, new Map());
+                const info = this.runtimeInfo(bindingValue(env, name)!, new Map());
                 const existing = root.bindings.get(name);
                 const contract = env.contracts?.get(name);
                 const binding = existing ?? this.define(root, name, info, contract);
@@ -94,10 +106,58 @@ class Checker {
                 binding.value = contract ? { ...info, type: contract, typed: true } : info;
                 binding.contract = contract;
                 binding.readonly = env.readonlyNames?.has(name);
+                binding.imported = env.imports?.has(name) || typeof value === 'object' && value !== null && !!namespaceBindings(value);
             }
         };
         if (globals) importEnv(globals);
+        for (const stmt of this.program.body) {
+            if (stmt.t !== 'import') continue;
+            this.line = stmt.line;
+            const module = this.modules?.imports.get(stmt);
+            if (!module) {
+                for (const name of importBindings(stmt)) {
+                    const binding = this.define(root, name, unknown());
+                    binding.readonly = binding.imported = true;
+                }
+                continue;
+            }
+            let scope = this.moduleScopes.get(module.id);
+            if (!scope) {
+                try {
+                    scope = new Checker(module.globals ? { ...module.program, body: [] } : module.program,
+                        undefined, this.modules, this.moduleScopes).check(module.globals);
+                } catch (error) {
+                    if (error instanceof Failure) error.source ??= module.id;
+                    throw error;
+                }
+                this.moduleScopes.set(module.id, scope);
+            }
+            const allowRepeatedImport = (name: string, imported?: string): void => {
+                if (!module.globals || !root.bindings.get(name)?.prior) return;
+                const previous = globals?.imports?.get(name);
+                const value = globals?.vars.get(name);
+                if (previous?.env === module.globals && previous.name === imported
+                    || imported === undefined && typeof value === 'object' && value !== null
+                        && namespaceBindings(value)?.env === module.globals) {
+                    root.bindings.delete(name);
+                }
+            };
+            if (stmt.namespace) {
+                allowRepeatedImport(stmt.namespace);
+                const fields = new Map(module.exports.map(name => [name, scope!.bindings.get(name)!.value]));
+                const binding = this.define(root, stmt.namespace, { identity: { kind: 'object', fields, module: true } });
+                binding.readonly = binding.imported = true;
+            }
+            for (const item of stmt.bindings) {
+                allowRepeatedImport(item.local, item.imported);
+                const exported = scope.bindings.get(item.imported)!;
+                const binding = this.define(root, item.local, exported.value, exported.contract);
+                binding.readonly = binding.imported = true;
+                binding.captured = true;
+            }
+        }
         this.block(this.program.body, root);
+        return root;
     }
 
     private runtimeInfo(value: Value, seen: Map<object, Info>): Info {
@@ -122,7 +182,12 @@ class Checker {
         seen.set(value, info);
         if (isList(value)) info.identity!.items = Array.from({ length: value.length }, (_, index) =>
             own[index] && 'value' in own[index] ? this.runtimeInfo(own[index].value as Value, seen) : unknown());
-        else if (isDict(value)) {
+        else if (namespaceBindings(value)) {
+            const namespace = namespaceBindings(value)!;
+            info.identity!.module = true;
+            info.identity!.fields = new Map(namespace.names.map(name =>
+                [name, this.runtimeInfo(bindingValue(namespace.env, name)!, seen)]));
+        } else if (isDict(value)) {
             info.identity!.fields = new Map(Object.entries(own).filter(([, field]) => field.enumerable).map(([key, field]) =>
                 [key, 'value' in field ? this.runtimeInfo(field.value as Value, seen) : unknown()]));
         }
@@ -416,6 +481,12 @@ class Checker {
                         binding.value = binding.contract ? concrete(binding.contract) : unknown();
                     }
                     if (binding.value.identity && !binding.value.identity.contract) {
+                        if (binding.value.identity.module) {
+                            binding.value.identity.fields?.forEach((value, key, fields) => {
+                                if (!value.descriptor && !value.callable) fields.set(key, value.typed && value.type ? concrete(value.type) : unknown());
+                            });
+                            continue;
+                        }
                         binding.value.identity.open = true;
                         binding.value.identity.items = undefined;
                         binding.value.identity.fields?.forEach((_, key, map) => map.set(key, unknown()));
@@ -796,12 +867,19 @@ class Checker {
 
     private memberReceiver(expr: Extract<Expr | AssignTarget, { t: 'member' }>, scope: Scope): Info {
         const value = this.expr(expr.obj, scope);
-        this.onMember?.(expr, this.effective(value).type);
+        const info = this.effective(value);
+        this.onMember?.(expr, info.type, info.identity?.module ? [...info.identity.fields!.keys()] : undefined);
         return value;
     }
 
     private member(value: Info, name: string, writing = false): Info {
         const info = this.effective(value);
+        if (info.identity?.module) {
+            if (writing) this.error('module namespaces are read-only');
+            const field = info.identity.fields?.get(name);
+            if (!field) this.error(`module namespace has no export '${name}'`);
+            return field;
+        }
         if (info.type?.kind === 'union') {
             return this.merge(info.type.members!.map(type => this.member(concrete(type, !!info.typed), name, writing)));
         }
@@ -821,6 +899,11 @@ class Checker {
 
     private index(value: Info, index: Info, writing = false): Info {
         const info = this.effective(value);
+        if (info.identity?.module) {
+            if (writing) this.error('module namespaces are read-only');
+            const name = stringKey(index);
+            return name === undefined ? unknown() : this.member(info, name);
+        }
         if (info.type?.kind === 'union') return this.merge(info.type.members!.map(type => this.index(concrete(type, !!info.typed), index, writing)));
         if (info.type?.kind === 'list') {
             if (info.typed && (index.type && index.type.kind !== 'int' && !index.legacy
@@ -934,7 +1017,7 @@ class Checker {
         }
         if (expr.callee.t === 'member') {
             const object = this.memberReceiver(expr.callee, scope);
-            const method = this.builtinMethod(object, expr.callee.name, expr.args, scope);
+            const method = object.identity?.module ? undefined : this.builtinMethod(object, expr.callee.name, expr.args, scope);
             if (method) return method;
             return this.invoke(this.member(object, expr.callee.name), expr.args, scope, expr.callee.name);
         }
@@ -1224,7 +1307,7 @@ class Checker {
     private assignment(target: AssignTarget, op: string, expr: Expr, scope: Scope): void {
         if (target.t === 'name') {
             const binding = this.find(scope, target.name);
-            if (binding?.readonly) this.error(`cannot reassign type declaration '${target.name}'`);
+            if (binding?.readonly) this.error(binding.imported ? `imported binding '${target.name}' is read-only` : `cannot reassign type declaration '${target.name}'`);
             const value = this.expr(expr, scope, binding?.contract);
             const assigned = op === '=' ? value : this.binary(op.slice(0, -1), binding?.value ?? unknown(), value, !!binding?.contract);
             if (binding) {
@@ -1254,6 +1337,7 @@ class Checker {
 
     private statement(stmt: Stmt, scope: Scope, expected?: TypeDescriptor): Info {
         switch (stmt.t) {
+            case 'import': break;
             case 'let': {
                 const type = stmt.annotation && this.resolve(stmt.annotation, scope);
                 const value = this.expr(stmt.value, scope, type);

@@ -18,6 +18,7 @@ import { Trace, TraceError, fingerprint } from './trace.js';
 import { CliLogging, canInteract } from './cli-logging.js';
 import { formatEvent, sanitize, terminalColor } from './log-format.js';
 import { Pin } from './pin.js';
+import { isModuleSources, linkModules, loadModules } from './modules.js';
 
 const HELP = `spl - Semantic Prompt Language interpreter
 
@@ -51,7 +52,7 @@ Options:
   --pin                   on success, save <workflow>.locked.md with responses in double blockquotes
                           Locked workflows replay without models, tools, stores or human prompts.
   --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
-  --check                 validate script syntax and any --mcp config without executing
+  --check                 validate script/import syntax and any --mcp config without executing
   -v, --version           print version
   -h, --help              print this help
 
@@ -221,7 +222,25 @@ async function main(): Promise<number> {
     } catch (e) {
         return usageError((e as Error).message);
     }
-    if (values.check) return 0;
+    if (values.check) {
+        try {
+            if (program.body.some(stmt => stmt.t === 'import')) {
+                if (program.markdown?.lock) {
+                    const entry = program.markdown.lock.entries[0];
+                    if (!entry || entry.request !== JSON.stringify({ kind: 'modules' })
+                        || !('value' in entry.outcome) || !isModuleSources(entry.outcome.value)) {
+                        throw runtimeError('locked workflow is missing its module sources');
+                    }
+                    linkModules(program, entry.outcome.value, path.resolve(file));
+                } else loadModules(program, path.resolve(file), cwd);
+            }
+        } catch (error) {
+            if (!(error instanceof Failure)) throw error;
+            new Logger('error').error(`${error.source ?? file}:${error.line}: ${error.reason}`);
+            return 2;
+        }
+        return 0;
+    }
 
     let backend: LlmBackend;
     let trace: Trace | undefined;
@@ -305,7 +324,7 @@ async function main(): Promise<number> {
     try {
         try {
             result = await run(program, {
-                backend, logger, trace,
+                backend, logger, trace, source: program.body.some(stmt => stmt.t === 'import') ? path.resolve(file) : undefined,
                 cwd: locked && values.cwd === undefined ? undefined : cwd,
                 model: values.model, args: values.arg, human, pin,
             });

@@ -308,3 +308,37 @@ test('worker hides debug state logs and uses current cells without native UI', a
     assert.deepEqual(second.filter(log => log.output), [{ text: '[info] log: explicit', output: true }]);
     assert.ok(!second.some(log => /deterministic|line \d+ \(/.test(log.text)));
 });
+
+test('packaged notebook worker imports local SPL modules and retains live state across cells', async t => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), 'spl-notebook-imports-'));
+    writeFileSync(path.join(directory, 'helpers.spl'), `let count = 0
+def next():
+    count += 1
+    return count`);
+    const worker = fork(path.resolve(__dirname, '..', 'notebookWorker.cjs'), [], {
+        cwd: directory, execArgv: [], silent: true,
+    });
+    t.after(async () => {
+        if (worker.exitCode === null && worker.signalCode === null) {
+            const exited = new Promise<void>(resolve => worker.once('exit', () => resolve()));
+            worker.kill();
+            await exited;
+        }
+        rmSync(directory, { recursive: true, force: true });
+    });
+    const execute = (id: number, value: string) => new Promise<WorkerReply>((resolve, reject) => {
+        const message = (reply: WorkerReply) => {
+            if (reply.id !== id || reply.kind === 'log' || reply.kind === 'stream') return;
+            worker.off('message', message);
+            worker.off('error', reject);
+            resolve(reply);
+        };
+        worker.on('message', message);
+        worker.once('error', reject);
+        worker.send({ id, value, source: `cell:${id}`, frontmatter: DEFAULT_FRONTMATTER, language: 'spl' });
+    });
+    assert.deepEqual(await execute(1, "import { next, count } from './helpers.spl'\nnext()"),
+        { id: 1, kind: 'result', text: '1' });
+    assert.deepEqual(await execute(2, "import * as helpers from './helpers.spl'\n[next(), count, helpers.count]"),
+        { id: 2, kind: 'result', text: '[\n  2,\n  2,\n  2\n]' });
+});

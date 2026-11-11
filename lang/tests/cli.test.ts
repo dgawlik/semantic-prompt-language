@@ -36,6 +36,36 @@ function run(args: string[], env: NodeJS.ProcessEnv = {}, input?: string) {
     return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
+describe('module import CLI', () => {
+    it('resolves modules next to the Markdown file even with a different --cwd', () => {
+        const workflows = path.join(dir, 'workflows');
+        fs.mkdirSync(workflows);
+        fs.writeFileSync(path.join(workflows, 'helpers.spl'), 'def double(value):\n    return value * 2');
+        const file = path.join(workflows, 'main.md');
+        fs.writeFileSync(file, markdown("import { double } from './helpers.spl'\nsuccess double(21)"));
+        expect(run([file, '--cwd', dir, '--silent'])).toEqual({ code: 0, out: '42\n', err: '' });
+    });
+
+    it('--check validates imports without executing module effects and reports missing dependencies', () => {
+        fs.writeFileSync(path.join(dir, 'helpers.spl'), "fail 'not executed'\nlet value = 42");
+        expect(spl("import { value } from './helpers.spl'\nsuccess value", '--check')).toEqual({ code: 0, out: '', err: '' });
+        const missing = spl("import { value } from './missing.spl'", '--check');
+        expect(missing).toMatchObject({ code: 2, out: '' });
+        expect(missing.err).toContain('cannot import');
+    });
+
+    it('pins imported source and replays and checks a locked workflow without the library file', () => {
+        const library = path.join(dir, 'helpers.spl');
+        fs.writeFileSync(library, 'let value = 42');
+        expect(spl("import { value } from './helpers.spl'\nsuccess value", '--pin', '--silent'))
+            .toEqual({ code: 0, out: '42\n', err: '' });
+        fs.unlinkSync(library);
+        const locked = path.join(dir, 's.locked.md');
+        expect(run([locked, '--silent'])).toEqual({ code: 0, out: '42\n', err: '' });
+        expect(run([locked, '--check'])).toEqual({ code: 0, out: '', err: '' });
+    });
+});
+
 describe('pinned workflow CLI', () => {
     it('saves a successful run beside its source and replays all external inputs without calls, effects or prompts', () => {
         const preload = path.join(dir, 'pin-backend.mjs');

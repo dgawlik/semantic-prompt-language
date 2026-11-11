@@ -262,6 +262,46 @@ iterate(9,10,fib)
 iterate(1, 10, lambda x: x*2 + 3)
 ```
 
+## Modules
+
+Import reusable raw `.spl` files from a Markdown workflow's fenced SPL blocks, or from another
+`.spl` module, using JavaScript-style named or namespace imports:
+
+```spl
+import { double, label as helperLabel } from './helpers.spl'
+import * as helpers from './helpers.spl'
+success [double(21), helpers.double(3), helperLabel]
+```
+
+The corresponding `helpers.spl` contains plain SPL, without Markdown frontmatter or fences:
+
+```spl
+let label = 'helpers'
+def double(value):
+    return value * 2
+```
+
+Every top-level declaration is exported automatically: variables, functions, enums, type aliases,
+structs, classes, and imported bindings. Block-local declarations are not exported. No `export`
+keyword is required. Named imports can also bring type declarations into scope for annotations.
+
+Imports are top-level statements. Paths must start with `./` or `../` and explicitly end in `.spl`;
+they resolve relative to the importing file, not `--cwd`. Package names, remote URLs, Markdown
+modules, default imports and bare side-effect imports are not supported.
+
+The complete dependency graph is linked and type-checked before execution. Dependencies initialize
+before the importing file's statements, once per workflow run or notebook session. Module variables
+are isolated from the caller; functions retain their module's lexical scope. Imported bindings
+are live and cannot be reassigned, and namespace properties are read-only. Exported lists and
+objects remain mutable. Circular imports, missing files/exports, and invalid module source report
+explicit errors.
+
+Modules use the caller's model, arguments, environment and tool working directory. Module model
+directives are not supported, and `return`/`success` cannot terminate module initialization.
+Imported functions run under the caller's active restrictions. Resetting a notebook session
+clears its module cache. Traces and pinned workflows capture module source so replay does not
+need the original `.spl` files.
+
 ## Gradual typing
 
 Annotations are optional enforced contracts, not advisory lint hints. Untyped bindings remain

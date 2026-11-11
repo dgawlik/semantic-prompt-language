@@ -6,6 +6,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Failure, SplSyntaxError } from '../../lang/src/errors.js';
 import { checkProgram } from '../../lang/src/type-check.js';
+import { loadModules } from '../../lang/src/modules.js';
 import { primitives, type TypeDescriptor } from '../../lang/src/types.js';
 import { tokenize, type Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
@@ -126,22 +127,26 @@ export function analyze(document: TextDocument): Analysis {
             blocks = extracted.blocks;
             model = extracted.model;
             source = extracted.code;
-            checkProgram(parseMarkdown(document.getText()));
+            const program = parseMarkdown(document.getText());
+            checkProgram(program, undefined, undefined, loadModules(program, document.uri));
         } else {
-            checkProgram(parse(source));
+            const program = parse(source);
+            checkProgram(program, undefined, undefined, loadModules(program, document.uri));
         }
     } catch (error) {
         if (!(error instanceof SplSyntaxError) && !(error instanceof Failure)) throw error;
+        const external = error instanceof Failure && error.source && error.source !== document.uri ? error.source : undefined;
+        const line = external ? Math.max(0, source.split(/\r?\n/).findIndex(line => /^\s*import\b/.test(line))) : Math.max(0, error.line - 1);
         const start = document.positionAt(document.offsetAt({
-            line: Math.max(0, error.line - 1),
-            character: error instanceof SplSyntaxError ? error.col - 1 : 0,
+            line,
+            character: !external && error instanceof SplSyntaxError ? error.col - 1 : 0,
         }));
         const end = document.positionAt(Math.min(document.getText().length, document.offsetAt(start) + 1));
         diagnostics.push({
             range: { start, end },
             severity: DiagnosticSeverity.Error,
             source: 'spl',
-            message: error.message,
+            message: external ? `${external}:${error.line}: ${error.message}` : error.message,
         });
     }
 
@@ -267,6 +272,27 @@ export function analyze(document: TextDocument): Analysis {
             const binding = add(token, scope, document.getText().slice(offset(document, token),
                 offset(document, tokens[end])).trim(), SymbolKind.Field);
             binding.property = true;
+        } else if (token.value === 'import') {
+            let j = i + 1;
+            const alias = tokens[j + 1], namespace = tokens[j + 2];
+            if (isOp(tokens[j], '*') && isName(alias) && alias.value === 'as' && isName(namespace)) {
+                add(namespace, scope, 'import namespace', SymbolKind.Module);
+            } else if (isOp(tokens[j], '{')) {
+                j++;
+                while (isName(tokens[j])) {
+                    const imported = tokens[j] as NamedToken;
+                    let local = imported;
+                    const alias = tokens[j + 1], name = tokens[j + 2];
+                    if (isName(alias) && alias.value === 'as' && isName(name)) {
+                        local = name;
+                        j += 2;
+                    }
+                    add(local, scope, `import ${imported.value}`);
+                    j++;
+                    if (!isOp(tokens[j], ',')) break;
+                    j++;
+                }
+            }
         } else if ((token.value === 'let' || token.value === 'except') && isName(name)) {
             const open = token.value === 'except' ? bodyOpen(i + 2) : undefined;
             let end = i + 2;
@@ -494,6 +520,7 @@ function memberCompletions(analysis: Analysis, range: Range): CompletionItem[] |
     // Complete just the member token and open groups; keep the surrounding control flow intact.
     const patched = source.slice(0, start) + '_' + source.slice(at + suffix.length, end) + closing + source.slice(end);
     let receiver: TypeDescriptor | undefined;
+    let moduleExports: readonly string[] | undefined;
     try {
         const program = analysis.blocks ? parseMarkdown(patched) : parse(patched);
         // Natural-language outputs are editor bindings, not runtime declarations.
@@ -505,15 +532,21 @@ function memberCompletions(analysis: Analysis, range: Range): CompletionItem[] |
             return [stmt, ...outputs.flatMap(binding =>
                 parse(`${binding.signature.replace(/: unknown$/, '')} = ${binding.name}`).body)];
         });
-        checkProgram(program, undefined, (expr, type) => {
-            if (expr.line === dot.line && expr.col === dot.col) receiver = type;
-        });
+        checkProgram(program, undefined, (expr, type, exports) => {
+            if (expr.line === dot.line && expr.col === dot.col) {
+                receiver = type;
+                moduleExports = exports;
+            }
+        }, loadModules(program, analysis.document.uri));
     } catch (error) {
         if (!(error instanceof SplSyntaxError) && !(error instanceof Failure)) throw error;
         // The original analysis reports diagnostics; a partial member can still have a known receiver.
     }
     const editRange = { start: range.start, end: analysis.document.positionAt(at + suffix.length) };
-    return memberItems(receiver).map(item => ({ ...item, textEdit: { range: editRange, newText: item.label } }));
+    const items: CompletionItem[] = moduleExports
+        ? moduleExports.map(label => ({ label, kind: CompletionItemKind.Field, detail: 'module export' }))
+        : memberItems(receiver);
+    return items.map(item => ({ ...item, textEdit: { range: editRange, newText: item.label } }));
 }
 
 export function completions(analysis: Analysis, position: Position): CompletionItem[] {

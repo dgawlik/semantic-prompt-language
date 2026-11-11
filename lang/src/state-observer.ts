@@ -1,7 +1,7 @@
 import { types } from 'node:util';
 import type { Logger } from './logger.js';
 import type { BindingDelta, BindingReference, ObservedValue, ScopeKind, ScopeReference } from './log-events.js';
-import type { Env, Value } from './values.js';
+import { bindingValue, type Env, type Value } from './values.js';
 
 function data(object: object, key: string): unknown {
     const descriptor = Object.getOwnPropertyDescriptor(object, key);
@@ -93,7 +93,8 @@ export class StateObserver {
         if (!emit || !this.logger.observesState || types.isProxy(target)) return perform();
         const bindings: { env: Env; name: string; value: Value; previous: ObservedValue }[] = [];
         for (const scope of this.discover(env)) {
-            for (const [name, value] of scope.vars) {
+            for (const name of scope.vars.keys()) {
+                const value = bindingValue(scope, name)!;
                 if (this.contains(value, target)) bindings.push({ env: scope, name, value, previous: this.snapshot(value) });
             }
         }
@@ -183,7 +184,7 @@ export class StateObserver {
             scopes.push(env);
             const parent = data(env, 'parent');
             if (environment(parent)) walkScope(parent);
-            for (const value of env.vars.values()) walkValue(value);
+            for (const name of env.vars.keys()) walkValue(bindingValue(env, name));
         };
         walkScope(this.globals);
         for (const env of this.active.keys()) walkScope(env);

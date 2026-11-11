@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { fork, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import {
@@ -35,6 +37,33 @@ const after = (source: string, text: string, occurrence = 0) => {
     position.character += text.length;
     return position;
 };
+
+test('local module imports provide bindings, completions and typed diagnostics without execution', t => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'spl-editor-imports-'));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    writeFileSync(path.join(directory, 'helpers.spl'), `def add(value: int) -> int:
+    return value + 1`);
+    const uri = pathToFileURL(path.join(directory, 'main.md')).href;
+    const source = markdownSource("```spl\nimport { add as increment } from './helpers.spl'\nimport * as helpers from './helpers.spl'\nsuccess increment(2)\n```");
+    const result = analyze(TextDocument.create(uri, 'markdown', 1, source));
+    assert.deepEqual(result.diagnostics, []);
+    assert.ok(result.bindings.some(binding => binding.name === 'increment'));
+    assert.ok(result.bindings.some(binding => binding.name === 'helpers'));
+    assert.ok(completions(result, at(source, 'success')).some(item => item.label === 'increment'));
+    const partial = source.replace('success increment(2)', 'helpers.');
+    const member = analyze(TextDocument.create(uri, 'markdown', 2, partial));
+    assert.ok(completions(member, member.document.positionAt(partial.lastIndexOf('helpers.') + 'helpers.'.length))
+        .some(item => item.label === 'add'));
+    const cell = analyze(TextDocument.create(uri.replace(/^file:/, 'vscode-notebook-cell:'), 'markdown', 1, source));
+    assert.deepEqual(cell.diagnostics, []);
+    const invalid = source.replace('increment(2)', "helpers.add('wrong')");
+    assert.match(analyze(TextDocument.create(uri, 'markdown', 2, invalid)).diagnostics[0].message, /expected int/);
+    writeFileSync(path.join(directory, 'helpers.spl'), "let count: int = 'wrong'");
+    const external = analyze(TextDocument.create(uri, 'markdown', 3,
+        markdownSource("```spl\nimport * as helpers from './helpers.spl'\n```"))).diagnostics[0];
+    assert.match(external.message, /helpers\.spl:1:.*expected int/);
+    assert.equal(external.range.start.line, 6);
+});
 
 test('Markdown keeps ordinary documents quiet and gates features on frontmatter', () => {
     const plain = markdownAnalysis('# Ordinary Markdown\n\n> @success\n\n```spl\ninvalid !\n```');

@@ -36,6 +36,12 @@ The result goes to stdout and logs to stderr. Exit codes: `0` success, `1` scrip
 `2` syntax or usage error, `70` internal error.
 See [CLI & runtime](../docs-template/CLI.md).
 
+Reusable `.spl` modules can be imported from fenced workflow code with
+`import { helper as alias } from './helpers.spl'` or `import * as helpers from './helpers.spl'`.
+Paths resolve next to the importing file; top-level declarations are exported automatically.
+Bindings are live and read-only, and modules initialize once per run or notebook session.
+See [Modules](../docs-template/Language.md#modules).
+
 `--trace run.jsonl` appends durable execution history. Reusing the same path automatically resumes
 recorded work or replays a completed success/failure without model/MCP calls, explicit external effects
 or repeated human prompts. Existing trace bytes never change. Choose another JSONL file to restart.

@@ -285,7 +285,7 @@ const logger = new Logger('silent');
 const backend = new AiBackend({ logger, cwd: process.cwd(), timeoutMs: 300_000 });
 try {
   const program = parseMarkdown(fs.readFileSync('flow.md', 'utf8'));
-  const result = await run(program, { backend, logger, cwd: process.cwd(), args: ['first'] });
+  const result = await run(program, { backend, logger, source: 'flow.md', cwd: process.cwd(), args: ['first'] });
   if (result.status === 'success') console.log(result.value);
   else console.error(result.failure);
 } finally {
@@ -295,7 +295,13 @@ try {
 
 `run` returns `success` (with `value`) or `failure` (with `failure`).
 Options include `backend`, `logger`, `cwd`, `args` (default `[]`, never `process.argv`),
-`store` (embedding-only bindings/snapshots), `model`, `human` and `trace`. A `human(question, line)` handler returns a string or
+`store` (embedding-only bindings/snapshots), `source`, `model`, `human` and `trace`.
+For [local module imports](Language.md#modules), `source` is the importing file path or file URL;
+without a file source, imports resolve from `cwd`. `loadModules(program, source, cwd)` links and
+validates imports without executing them; pass its graph as the fourth argument of `checkProgram`
+to include module contracts in embedding preflight. The CLI's `--check` validates dependency
+syntax and named exports without executing module code.
+A `human(question, line)` handler returns a string or
 `Promise<string>` for both human expressions and blockquote `ask_human` calls. Embedded runs never
 read stdin themselves; provide this handler when requesting new human input.
 Use `Trace.open(file, { source: program.lines.join('\n'), runtime: 'your-runtime-id', cwd, args, configuration })`

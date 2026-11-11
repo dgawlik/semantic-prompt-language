@@ -39,6 +39,25 @@ def f():
 });
 
 describe('parser: accepted syntax', () => {
+    it('parses named import aliases, namespace imports and contextual as/from names', () => {
+        const program = parse(`import { helper, value as alias, } from './utils.spl'
+import * as utils from './utils.spl'
+let from = 1
+let as = 2`);
+        expect(program.body[0]).toMatchObject({ t: 'import', specifier: './utils.spl',
+            bindings: [{ imported: 'helper', local: 'helper' }, { imported: 'value', local: 'alias' }] });
+        expect(program.body[1]).toMatchObject({ t: 'import', namespace: 'utils', bindings: [] });
+    });
+
+    it.each([
+        ["if True:\n    import { value } from './utils.spl'", /top level/],
+        ["def f():\n    import * as utils from './utils.spl'", /top level/],
+        ["import { a, b as a } from './utils.spl'", /duplicate imported binding/],
+        ["import { value } from './{name}.spl'", /cannot contain interpolation/],
+        ["import utils from './utils.spl'", /expected/],
+        ["import './utils.spl'", /expected/],
+    ])('rejects unsupported or malformed imports: %s', (source, reason) => bad(source, reason));
+
     it('parses slice bounds and steps independently and preserves postfix chaining', () => {
         const program = parse(`let a = items[1:4:2]
 let b = items[::]

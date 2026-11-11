@@ -14,6 +14,7 @@ export interface FieldDecl {
 }
 
 export type DefStmt = Extract<Stmt, { t: 'def' }>;
+export type ImportStmt = Extract<Stmt, { t: 'import' }>;
 
 export type Expr =
     | { t: 'num'; v: number; raw?: string }
@@ -69,6 +70,7 @@ interface Base {
 
 export type Stmt = Base &
     (
+        | { t: 'import'; specifier: string; bindings: { imported: string; local: string }[]; namespace?: string }
         | { t: 'let'; name: string; annotation?: TypeExpr; value: Expr }
         | { t: 'assign'; target: AssignTarget; op: '=' | '+=' | '-=' | '*=' | '/=' | '//=' | '%='; value: Expr }
         | { t: 'block'; body: Stmt[] }

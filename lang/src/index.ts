@@ -14,6 +14,7 @@ export { MemoryStore, type VariableStore } from './store.js';
 export type { LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, RuntimeAction, RuntimeTool } from './llm.js';
 export type { Program } from './ast.js';
 export { checkProgram } from './type-check.js';
+export { loadModules, type ModuleGraph } from './modules.js';
 export { decodeTypedJson, schemaForType } from './typed-json.js';
 export { validateType, validateValue, testValue, project, primitives, type TypeDescriptor } from './types.js';
 export { encodeJson, type Value } from './values.js';

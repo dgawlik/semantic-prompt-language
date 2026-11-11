@@ -47,6 +47,7 @@ export const builtins: Record<string, Help> = {
 };
 
 export const keywords: Record<string, string> = {
+    import: "Import named bindings with import { helper as alias } from './utils.spl', or a namespace with import * as utils from './utils.spl'. Local modules automatically export top-level declarations.",
     let: 'Declare or redeclare a binding in the current block scope, shadowing enclosing declarations.',
     type: "Declare a transparent read-only type alias: type Money = int [minimum=0, desc='Amount in cents']. Bracket metadata is model advice, not a validation constraint.",
     def: 'Define a function with positional parameters and lexical access to enclosing bindings.',

@@ -8,7 +8,7 @@ import markdown from 'highlight.js/lib/languages/markdown';
 
 hljs.registerLanguage('spl', (engine) => {
     const keywords = {
-        keyword: 'let def lambda enum struct class hydratable fn if elif else for in while return try except assert fail success enforce forbid restrict ask think agent human break continue pass and or not',
+        keyword: 'let def lambda enum struct class hydratable fn import from as if elif else for in while return try except assert fail success enforce forbid restrict ask think agent human break continue pass and or not',
         literal: 'True False None',
         built_in: 'len str char int float bool object type list isinstance validate range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log read_file write_file web_fetch web_search shell',
     };
