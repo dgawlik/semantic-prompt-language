@@ -121,13 +121,14 @@ test('blockquote completion offers CTL and references instead of SPL statement k
     const source = markdownSource('```spl\nlet notes = "draft"\ndef review():\n    pass\n```\n\n> @');
     const result = markdownAnalysis(source);
     const items = completions(result, result.document.positionAt(source.length));
-    for (const name of ['CTL', 'notes', 'review', 'validate', 'success', 'fail']) {
+    for (const name of ['CTL', 'CODEGEN', 'notes', 'review', 'validate', 'success', 'fail']) {
         assert.ok(items.some(item => item.label === name), name);
     }
     for (const name of ['let', 'if', 'restrict', 'enforce', 'forbid', 'human']) {
         assert.ok(!items.some(item => item.label === name), name);
     }
     assert.equal(items.find(item => item.label === 'CTL')?.textEdit?.newText, 'CTL($0)');
+    assert.equal(items.find(item => item.label === 'CODEGEN')?.textEdit?.newText, "CODEGEN '${1:Function description}'$0");
     const existing = markdownSource('> @CTL()');
     const existingAnalysis = markdownAnalysis(existing);
     const marker = completions(existingAnalysis, after(existing, '@CT')).find(item => item.label === 'CTL');
@@ -135,6 +136,21 @@ test('blockquote completion offers CTL and references instead of SPL statement k
     assert.equal(TextDocument.applyEdits(existingAnalysis.document, [marker.textEdit]), existing);
     const prose = markdownSource('> Write a review');
     assert.deepEqual(completions(markdownAnalysis(prose), TextDocument.create('', 'markdown', 1, prose).positionAt(prose.length)), []);
+});
+
+test('CODEGEN descriptions are literal strings, not variable references or inferred outputs', () => {
+    const source = markdownSource("> @CTL(reasoning='high')\n> @CODEGEN '''Define answer() using @notes, save to @hidden.'''");
+    const result = markdownAnalysis(source);
+    assert.deepEqual(result.diagnostics, []);
+    assert.ok(!result.names.some(token => ['CODEGEN', 'notes', 'hidden'].includes(token.value)));
+    assert.ok(!result.bindings.some(binding => binding.name === 'hidden'));
+    const tokens = decodedTokens(source, result);
+    assert.equal(tokens.find(token => token.text === '@CODEGEN')?.type, 'keyword');
+    assert.ok(tokens.some(token => token.type === 'string' && token.text.includes('@notes')));
+    assert.deepEqual(completions(result, after(source, '@notes')), []);
+    const partial = markdownSource("> @CTL() @CODE");
+    assert.ok(completions(markdownAnalysis(partial), after(partial, '@CODE')).some(item => item.label === 'CODEGEN'));
+    assert.match(markdownAnalysis(markdownSource('> @CODEGEN missing_quotes')).diagnostics[0].message, /literal string/);
 });
 
 test('CTL completion handles incomplete groups, used settings and restriction keys', () => {

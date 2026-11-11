@@ -6,7 +6,7 @@ import { Logger } from '../src/logger.js';
 import { parse } from '../src/parser.js';
 import { NoLlm } from './helpers.js';
 import type { LogEvent, ModelStreamEvent } from '../src/log-events.js';
-import { formatEvent, formatSegments } from '../src/log-format.js';
+import { formatEvent, formatSegments, prettySpl } from '../src/log-format.js';
 import { parseMarkdown } from '../src/markdown.js';
 import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from '../src/preamble.js';
 
@@ -19,6 +19,26 @@ const tagged = (tag: string, text: string) =>
     `${({ error: 'x error', warn: '! warning', info: 'i info', debug: '. debug', llm: '- message', deterministic: '- message' })[tag] ?? tag} ${text}`;
 
 describe('structured logging foundation', () => {
+    it('keeps codegen source in one immutable code segment instead of folding JSON-like SPL literals', () => {
+        const history: LogEvent[] = [];
+        const logger = new Logger('error', undefined, { eventSink: event => history.push(event) });
+        const source = 'def values():\n    return [1,2,{"not":"SPL"}]';
+        logger.modelOutput({ kind: 'codegen', requestId: 'generated' }, source);
+        expect(history[0].segments).toEqual([{ type: 'code', language: 'spl', source }]);
+        expect(Object.isFrozen(history[0].segments[0])).toBe(true);
+        expect(formatSegments(history[0].segments, true)).toBe(source);
+        expect(formatEvent(history[0])).toBe('<- output codegen ' + source);
+        logger.modelOutput({ kind: 'ask', requestId: 'ordinary' }, '[1,2]');
+        expect(history[1].segments[0].type).toBe('json');
+    });
+
+    it('sanitizes codegen source before structured or plain delivery', () => {
+        const history: LogEvent[] = [];
+        new Logger('error', undefined, { eventSink: event => history.push(event) })
+            .modelOutput({ kind: 'codegen', requestId: 'controls' }, '\u001b[31mdef answer():\r\n    return 42\u0007');
+        expect(history[0].segments).toEqual([{ type: 'code', language: 'spl', source: 'def answer():\n    return 42' }]);
+    });
+
     it('allocates contiguous visible order after successful or reentrant serialization', () => {
         const history: LogEvent[] = [];
         const logger = new Logger('info', undefined, { eventSink: event => history.push(event) });
@@ -27,6 +47,48 @@ describe('structured logging foundation', () => {
         expect(history.map(event => event.sequence)).toEqual([1, 2]);
         expect(new Set(history.map(event => event.id)).size).toBe(2);
         expect(history[0].segments).toEqual([{ type: 'text', text: 'inner' }]);
+    });
+
+    describe('SPL code display', () => {
+        it('adds a label and line numbers without changing indentation, literals or numeric spelling', () => {
+            const source = 'def values():\n    return [1,2,1.20e+03]\n';
+            expect(prettySpl(source)).toBe('SPL\n1 | def values():\n2 |     return [1,2,1.20e+03]');
+            expect(stripVTControlCharacters(prettySpl(source, true))).toBe(prettySpl(source));
+            expect(prettySpl(source, true)).toContain('\u001b[35mdef\u001b[0m');
+            expect(prettySpl(source, true)).toContain('\u001b[36mvalues\u001b[0m');
+            expect(prettySpl(source, true)).toContain('\u001b[33m1.20e+03\u001b[0m');
+        });
+
+        it('highlights comments, raw and multiline strings without styling string contents as code', () => {
+            const source = [
+                '# def comment',
+                'def answer():',
+                "    let path = r'C:\\work\\'",
+                "    return '''return 42",
+                "def string'''",
+            ].join('\n');
+            const formatted = prettySpl(source, true);
+            expect(formatted).toContain('\u001b[90m# def comment\u001b[0m');
+            expect(formatted).toContain("\u001b[32mr'C:\\work\\'\u001b[0m");
+            expect(formatted).toContain("\u001b[32m'''return 42\u001b[0m");
+            expect(formatted).toContain("\u001b[32mdef string'''\u001b[0m");
+            expect(formatted).not.toContain('\u001b[35mdef\u001b[0m string');
+            expect(stripVTControlCharacters(formatted)).toBe(prettySpl(source));
+        });
+
+        it.each(["def answer(value", "def answer():\n    return 'part", 'def answer():\n    return """part\nnext'])(
+            'supports incomplete streaming source: %s', source => {
+                const expected = 'SPL\n' + source.split('\n').map((line, i) => `${i + 1} | ${line}`).join('\n');
+                expect(stripVTControlCharacters(prettySpl(source, true))).toBe(expected);
+            },
+        );
+
+        it('aligns double-digit line numbers and strips embedded terminal controls', () => {
+            expect(prettySpl(Array.from({ length: 10 }, (_, i) => `# ${i + 1}`).join('\n')).split('\n').slice(1))
+                .toEqual(Array.from({ length: 10 }, (_, i) => `${String(i + 1).padStart(2)} | # ${i + 1}`));
+            expect(prettySpl('\u001b[31mdef answer():\u0007\n    return 42'))
+                .toBe('SPL\n1 | def answer():\n2 |     return 42');
+        });
     });
 
     it('filters before serializers, state factories and event allocation', () => {

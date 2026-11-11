@@ -60,7 +60,7 @@ hljs.registerLanguage('spl', (engine) => {
 hljs.registerLanguage('markdown', (engine) => {
     const language = markdown(engine);
     const reference = { scope: 'variable', match: /(?<![\w@])@[A-Za-z_]\w*/ };
-    const marker = { scope: 'keyword', match: /(?<![\w@])@(?:CTL|SUCCESS|fail|validate)\b/i };
+    const marker = { scope: 'keyword', match: /(?<![\w@])@(?:CTL|CODEGEN|SUCCESS|fail|validate)\b/i };
     const control = { scope: 'attr', match: /\b(?:restrict|enforce|forbid|model|reasoning)\b(?=\s*=)/ };
     const quote = language.contains.find((mode) => mode.className === 'quote');
     quote.begin = /^ {0,3}>[ \t]?/;

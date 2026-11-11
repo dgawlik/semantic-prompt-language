@@ -3,6 +3,7 @@ import { callMethod, hasBuiltinMethod, isListCallbackMethod, isMutatingMethod, i
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
 import { LlmError, buildPromptParts, parseJsonResponse, validateRandomness, validateTokens, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import { AGENT_TOOLS, actionArguments } from './agent.js';
+import { codegenHeader, codegenSignature, isCodegenSource, parseCodegen, readCodegenCache, saveCodegenCache, type CodegenSource } from './codegen.js';
 import { compileSchema } from './schema.js';
 import { checkProgram } from './type-check.js';
 import { aliasType, assertComplete, checkedInt, contractOf, contractRead, convertFloat, convertInt, descriptor, equivalent, mutateContract, primitives, project, resolveFields, resolveType, signatureOf, testValue, typedFloat, validateType, validateValue, type TypeDescriptor } from './types.js';
@@ -15,7 +16,7 @@ import { TraceError, type Trace } from './trace.js';
 import { isResponse, isToolValue, traceRequest } from './recording.js';
 import { Pin, PinError } from './pin.js';
 import { usesHuman } from './parser.js';
-import { NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
+import { CODEGEN_PREAMBLE, NATURAL_PREAMBLE, RUNTIME_PREAMBLE } from './preamble.js';
 import { randomUUID } from 'node:crypto';
 import { setImmediate as yieldExecution } from 'node:timers/promises';
 import { ObservationIdentities, StateObserver } from './state-observer.js';
@@ -1094,7 +1095,7 @@ class Interpreter {
 
     private async callLlmResponse(req: LlmRequest, interaction: ModelInteraction = {
         requestId: randomUUID(), kind: req.naturalLanguage ? 'blockquote' : req.kind,
-    }, preface = ''): Promise<LlmResponse> {
+    }, preface = '', record = true): Promise<LlmResponse> {
         const { logger, backend } = this.opts;
         if (this.program.markdown) {
             preface = [RUNTIME_PREAMBLE, this.program.markdown.preamble, preface].filter(Boolean).join('\n\n');
@@ -1124,7 +1125,7 @@ class Interpreter {
                 }
             };
             const journal = this.opts.trace ?? this.opts.pin;
-            const res = journal && !req.naturalLanguage
+            const res = journal && !req.naturalLanguage && record
                 ? await journal.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
                 : await perform();
             if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response; blockquotes require runtime actions, not submitted SPL');
@@ -1148,7 +1149,69 @@ class Interpreter {
         }
     }
 
-    private async execNatural({ text, line, controls }: Extract<Stmt, { t: 'natural' }>, env: Env): Promise<Completion> {
+    private async execCodegen(
+        { text, line, controls }: Extract<Stmt, { t: 'natural' }>, env: Env, bindings: Record<string, unknown>,
+    ): Promise<void> {
+        const signature = codegenSignature(text);
+        const trace = this.opts.trace;
+        const cacheSource = trace ? this.opts.source ?? trace.file : undefined;
+        let parsed: Program | undefined;
+        const validate = (source: CodegenSource): Program => {
+            const program = parseCodegen(source.text);
+            checkProgram(program, env);
+            return program;
+        };
+        const perform = async (): Promise<CodegenSource> => {
+            if (cacheSource) {
+                const cached = readCodegenCache(cacheSource, signature, this.cwd);
+                if (cached) {
+                    parsed = validate(cached);
+                    this.opts.logger.info(`@CODEGEN reusing ${cached.file}`);
+                    this.opts.logger.modelOutput({ requestId: randomUUID(), kind: 'codegen', role: 'response' }, cached.text);
+                    return cached;
+                }
+            }
+            const context = `${CODEGEN_PREAMBLE}\n\nAvailable builtin names: ${[...this.builtins.keys()].join(', ')}\n\nShared bindings:\n${JSON.stringify(bindings)}`;
+            const built = buildPromptParts({
+                prompt: `${context}\n\nFunction description:\n${text}`,
+                constraints: this.constraints, restrictions: this.restrictions,
+            });
+            const response = await this.callLlmResponse({
+                kind: 'ask', prompt: built.prompt,
+                model: this.opts.pin?.data.context.model ?? this.opts.model ?? controls?.model ?? this.model,
+                reasoningEffort: controls?.reasoning ?? 'medium', showReasoning: true,
+                restrictions: this.restrictions, tools: new ToolHost(this.restrictions, this.cwd),
+            }, { requestId: randomUUID(), kind: 'codegen' }, [built.preface, context].filter(Boolean).join('\n\n'), false);
+            const source: CodegenSource = { text: `${codegenHeader(signature)}\n${response.text.trim()}\n` };
+            parsed = validate(source);
+            if (cacheSource) {
+                const first = parsed.body[0];
+                if (first.t !== 'def') throw runtimeError('@CODEGEN requires a function definition');
+                source.file = saveCodegenCache(cacheSource, signature, first.name, source.text, this.cwd);
+                this.opts.logger.info(`@CODEGEN saved ${source.file}`);
+            }
+            return source;
+        };
+        const journal = trace ?? this.opts.pin;
+        const source = journal
+            ? await journal.effect({ kind: 'codegen', text, line, ...(controls ? { controls } : {}) }, perform, isCodegenSource)
+            : await perform();
+        const program = parsed ?? validate(source);
+        const saved = { lines: this.sourceLines, uri: this.sourceUri, version: this.sourceVersion };
+        this.sourceLines = program.lines;
+        this.sourceUri = source.file ?? this.sourceUri;
+        this.sourceVersion = undefined;
+        try {
+            await this.execBlock(program.body, env);
+        } finally {
+            this.sourceLines = saved.lines;
+            this.sourceUri = saved.uri;
+            this.sourceVersion = saved.version;
+        }
+    }
+
+    private async execNatural(stmt: Extract<Stmt, { t: 'natural' }>, env: Env): Promise<Completion> {
+        const { text, line, controls } = stmt;
         const bindings: Record<string, unknown> = Object.create(null);
         for (let scope: Env | undefined = env; scope; scope = scope.parent) {
             for (const name of scope.vars.keys()) {
@@ -1170,6 +1233,10 @@ class Interpreter {
                 if (value !== undefined) {
                     this.constraints = [...this.constraints, ...[value].flat().map(text => ({ kind, text }))];
                 }
+            }
+            if (stmt.codegen) {
+                await this.execCodegen(stmt, env, bindings);
+                return;
             }
             const trace = this.opts.trace;
             const journal = trace ?? this.opts.pin;

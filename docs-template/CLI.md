@@ -56,7 +56,7 @@ Each event has one header, without repeated continuation badges, panels or times
 
 | Icon | Category | Color |
 | --- | --- | --- |
-| `->` | Model input: ask, think, agent or blockquote | Magenta |
+| `->` | Model input: ask, think, agent, blockquote or codegen | Magenta |
 | `<-` | Model output or runtime action | Cyan |
 | `x` | Error | Red |
 | `!` | Warning | Yellow |
@@ -93,6 +93,12 @@ Partial JSON is shown as text until the authoritative response arrives, when nor
 and folding apply. Streaming previews are separate from immutable log events, so the final
 transcript contains each complete response once. Redirected logs remain expanded and append-only.
 `--silent` also suppresses streaming previews.
+
+`@CODEGEN` responses appear as expanded SPL code with line numbers, preserved indentation and
+syntax colors when terminal color is enabled. The same display handles incomplete streaming
+code and definitions reused from cache; reasoning remains ordinary text. Generated codegen
+instructions and binding context start folded, leaving the requested function description visible.
+Plain logs and the final transcript retain the original SPL source without line-number gutters.
 
 Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
 stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
@@ -157,7 +163,7 @@ prints the same result and leaves the trace unchanged. To restart, choose a diff
 
 The version 2 JSONL journal records model requests, raw responses and failures (including repairs,
 reasoning, sampling and token budgets), blockquote decisions, explicit file/shell/web tool outcomes,
-human answers and the terminal result. Completed effects are not executed again: replay never
+human answers, `@CODEGEN` definitions and the terminal result. Completed effects are not executed again: replay never
 contacts model providers or MCP, re-reads files, repeats writes/commands/network calls, or prompts
 for recorded answers. It does not recreate side effects if their files have been removed or changed.
 
@@ -171,6 +177,11 @@ If a write, shell command or agent was interrupted between its durable intent an
 side effects may already have occurred: SPL reports an unresolved effect instead of repeating it.
 Truncated final records likewise require manual recovery; SPL never truncates the log to guess.
 Only one process can write a trace at a time; a lock from a terminated process is reclaimed.
+
+For [`@CODEGEN` blockquotes](LLM-commands.md#code-generation), traced runs also save friendly
+`<workflow>.<function>.spl` sibling files with a top-level description hash. New traced runs
+reuse matching definitions automatically, without imports or generation calls. Existing JSONL
+replay uses recorded definitions regardless of later cache edits or removal.
 
 Human input still uses stdin or repeatable `--human` flags; there are no suspension envelopes,
 answer IDs or waiting exit codes. The former `--store`, `--store-module`, `--record`, `--replay`,

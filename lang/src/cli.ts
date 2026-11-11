@@ -324,7 +324,8 @@ async function main(): Promise<number> {
     try {
         try {
             result = await run(program, {
-                backend, logger, trace, source: program.body.some(stmt => stmt.t === 'import') ? path.resolve(file) : undefined,
+                backend, logger, trace,
+                source: program.body.some(stmt => stmt.t === 'import' || stmt.t === 'natural' && stmt.codegen) ? path.resolve(file) : undefined,
                 cwd: locked && values.cwd === undefined ? undefined : cwd,
                 model: values.model, args: values.arg, human, pin,
             });

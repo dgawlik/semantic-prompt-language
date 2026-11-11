@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { CliRenderer } from '@bettertui/core';
 import { RendererProtocol, type ChildMessage, type LogEvent, type ModelStreamEvent } from './log-events.js';
-import { eventHeader, formatSegments, paint, prettyJson, sanitize } from './log-format.js';
+import { eventHeader, formatSegments, paint, prettyJson, prettySpl, sanitize } from './log-format.js';
 
 interface ProbeInput {
     setRawMode(mode: boolean): void;
@@ -149,6 +149,10 @@ export async function createEventView(renderer: CliRenderer, color: boolean,
                     let content = `${eventHeader(event, color)} `;
                     const offsets = new Map<string, number>();
                     for (const part of event.segments) {
+                        if (part.type === 'code') {
+                            content += '\n' + prettySpl(part.source, color);
+                            continue;
+                        }
                         if (part.type !== 'json' && part.type !== 'preface') { content += part.text; continue; }
                         if (!content.endsWith('\n')) content += '\n';
                         offsets.set(part.payloadId, wrap(content, this.width).length - 1);
@@ -177,7 +181,9 @@ export async function createEventView(renderer: CliRenderer, color: boolean,
                 const header = stream.channel === 'response'
                     ? paint(`<- output ${stream.interaction.kind} [streaming]`, 36, color, true)
                     : paint(`i info reasoning ${stream.interaction.kind} [streaming]`, 34, color, true);
-                this.rows.push(...wrap(`${header} ${stream.text}`, this.width));
+                const body = stream.channel === 'response' && stream.interaction.kind === 'codegen'
+                    ? '\n' + prettySpl(stream.text, color) : ' ' + stream.text;
+                this.rows.push(...wrap(header + body, this.width));
             }
             this.rows.push(paint(spinnerFrames[spinnerFrame], 90, color));
             const hintRows = wrap(hint, this.width).slice(0, Math.max(1, this.height - 1));

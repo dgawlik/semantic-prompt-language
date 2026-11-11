@@ -38,9 +38,12 @@ markdown_block = spl_fence | blockquote | commentary ;
 spl_fence      = fence , "spl" , NL , program , fence ;
 fence          = 3 * "`" , { "`" } | 3 * "~" , { "~" } ;
                  (* matching fences; each is a complete program without directives *)
-blockquote     = ">" , [ controls ] , text , { NL , ">" , text } ;
+blockquote     = ">" , [ controls ] , ( codegen | text , { NL , ">" , text } ) ;
                  (* natural language; the agent acts through shared-scope tools,
-                    not by submitting generated SPL; quote prefixes may continue controls *)
+                    except explicit codegen; quote prefixes may continue controls and strings *)
+codegen        = "@CODEGEN" , plain_string ;
+                 (* case-insensitive; exactly one nonempty literal description, no interpolation;
+                    generates only def declarations and registers them in the shared scope *)
 controls       = "@CTL" , "(" , [ control , { "," , control } , [ "," ] ] , ")" ;
 control        = "restrict" , "=" , restriction_map
                | ( "enforce" | "forbid" ) , "=" , control_strings

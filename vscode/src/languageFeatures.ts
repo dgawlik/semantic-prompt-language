@@ -8,7 +8,7 @@ import type { Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, MODIFIER_NAMES } from '../../lang/src/parser.js';
 import { builtins, keywords, modifiers, specialVariables } from './catalog';
 import { expressionTokens, nameAt, resolveBinding, tokenRange, type Analysis, type Binding, type NamedToken } from './features';
-import { blockquoteText, scanControls } from './blockquoteFeatures';
+import { blockquoteText, scanCodegen, scanControls } from './blockquoteFeatures';
 
 export const semanticTokenLegend = {
     tokenTypes: ['variable', 'parameter', 'function', 'class', 'struct', 'enum', 'type', 'keyword', 'property', 'string', 'operator'],
@@ -264,7 +264,7 @@ export function semanticTokens(analysis: Analysis): SemanticTokens {
     for (const block of analysis.blocks ?? []) {
         if (block.kind !== 'natural') continue;
         const quote = blockquoteText(analysis.document, block);
-        const tokens = scanControls(quote.text)?.tokens ?? [];
+        const tokens = [...scanControls(quote.text)?.tokens ?? [], ...scanCodegen(quote.text) ?? []];
         for (const [index, token] of tokens.entries()) {
             const next = tokens[index + 1];
             const type = token.kind === 'marker' ? 'keyword' :

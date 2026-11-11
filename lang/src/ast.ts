@@ -81,7 +81,7 @@ export type Stmt = Base &
         | { t: 'break' }
         | { t: 'continue' }
         | { t: 'pass' }
-        | { t: 'natural'; text: string; controls?: NaturalControls }
+        | { t: 'natural'; text: string; controls?: NaturalControls; codegen?: true }
         | { t: 'def'; name: string; params: string[]; paramTypes?: (TypeExpr | undefined)[]; returnType?: TypeExpr; body: Stmt[] }
         | { t: 'enum'; name: string; values: string[] }
         | { t: 'type-alias'; name: string; type: TypeExpr; advice: Record<string, unknown> }

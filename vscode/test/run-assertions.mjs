@@ -39,6 +39,11 @@ const markers = quoteTokens
     .map(token => quote.slice(token.startIndex, token.endIndex));
 assert.deepEqual(markers, ['@count', '@success']);
 const controlledQuote = "> @CTL(restrict={fs: ['./src']}, enforce='Be concise', reasoning='high') Use @count.";
+const codegenQuote = "> @CODEGEN 'Define answer() using @literal'";
+const codegenTokens = markdown.tokenizeLine(codegenQuote, vsctm.INITIAL).tokens;
+assert.ok(codegenTokens.some(token => codegenQuote.slice(token.startIndex, token.endIndex) === '@CODEGEN' &&
+    token.scopes.includes('keyword.control.spl')), 'CODEGEN is a control marker');
+assert.ok(!codegenTokens.some(token => token.scopes.includes('variable.other.reference.spl')), 'codegen descriptions are literal strings');
 const controlTokens = markdown.tokenizeLine(controlledQuote, vsctm.INITIAL).tokens;
 assert.ok(controlTokens.some(token => controlledQuote.slice(token.startIndex, token.endIndex) === '@CTL' &&
     token.scopes.includes('keyword.control.spl')), 'CTL is a control marker');

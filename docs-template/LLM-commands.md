@@ -5,7 +5,7 @@ This page covers both, and how to check what comes back.
 
 ## Blockquotes
 
-A blockquote is an agent command, not code to compile into SPL. The model sees the instruction,
+A normal blockquote is an agent command, not code to compile into SPL. The model sees the instruction,
 visible bindings and function signatures, active guidance and restrictions, and the available tools.
 It acts directly on the shared document scope through tool calls.
 
@@ -126,6 +126,60 @@ Repeat `--human <answer>` to answer questions in order without prompting. With `
 completed decisions, effects and human answers replay from the same file, then the agent continues
 with any new answers. Supplied answers are consumed only for questions not already recorded.
 See [Human input](Safety.md#human-in-the-loop).
+
+## Code generation
+
+`@CODEGEN` explicitly generates reusable SPL functions instead of running an agent command:
+
+````markdown
+> @CODEGEN 'Define double(value), returning value multiplied by two'
+
+```spl
+let result = double(21)
+```
+
+> @CTL(model='gpt-6-luna', reasoning='high')
+> @CODEGEN '''
+> Define add_one(value), returning the input plus one.
+> '''
+
+```spl
+success add_one(result)
+```
+````
+
+The case-insensitive marker must start the blockquote, after optional `@CTL(...)` settings.
+Its input is exactly one nonempty literal SPL string, including raw or triple-quoted strings.
+Interpolation is not evaluated; use raw strings or doubled braces for literal braces.
+Description syntax is checked even with `--check`; generation happens only when executing.
+
+The model receives the description, visible bindings, builtin names, SPL syntax guidance and
+active controls, with no runtime or MCP tools. Its response must contain only SPL `def`
+declarations: the requested function first, followed by any helper functions. Imports, directives,
+Markdown wrappers and top-level actions are rejected. Parsing and static contract checks must
+succeed before definitions are registered or saved. The functions are not called during generation.
+They capture the shared lexical scope and are available to subsequent fences, blockquotes and
+interactive cells until the session ends. Their calls retain normal runtime guards.
+
+With `--trace`, successful definitions are saved beside the workflow in
+`<workflow>.<first-function>.spl`, such as `flow.double.spl`. Each file starts with
+`# @CODEGEN sha256:<64 hex digits>`, the SHA-256 hash of the decoded literal description.
+Multiple codegen blocks have separate cache files. If a friendly filename already exists,
+the new file includes its full input hash rather than overwriting it.
+
+Every new traced run checks these workflow-specific sibling files for a matching top-level
+signature. A match is parsed, type-checked and registered automatically without any import or
+model call. A matching but invalid definition fails explicitly; it is not silently regenerated.
+Files without a matching signature are not used or overwritten. These files are editable SPL:
+review generated code before trusting it. The signature identifies the input, not code integrity.
+Only the description is hashed, not bindings, model or preamble. To regenerate, change the
+description or remove its cached file, then choose a new JSONL trace.
+
+Replaying the same JSONL trace uses its recorded definitions, not current cache contents, and
+does not recreate missing cache files. Without `--trace`, no cache is read or written.
+`--pin` embeds the definitions for self-contained replay without sidecars. Embedded traced
+callers should provide `source` for workflow-relative cache names; otherwise the trace filename
+is used as the cache base.
 
 ## Generation: ask and think
 

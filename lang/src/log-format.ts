@@ -1,5 +1,6 @@
 import { inspect, stripVTControlCharacters } from 'node:util';
 import type { BodySegment, LogEvent, StateChange } from './log-events.js';
+import { isReservedName } from './parser.js';
 
 const JSON_TOKENS = /"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null|[{}[\],:]/g;
 
@@ -50,6 +51,43 @@ export function prettyJson(source: string, color = false): string | undefined {
         }
     });
     return result;
+}
+
+export function prettySpl(source: string, color = false): string {
+    const text = sanitize(source).replace(/\n$/, '');
+    const tokens = /#[^\n]*|\br(?:'''|"""|'|")|'''|"""|'|"|\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\$?[A-Za-z_]\w*/g;
+    let formatted = '';
+    let consumed = 0;
+    let previous = '';
+    for (let match = tokens.exec(text); match; match = tokens.exec(text)) {
+        let token = match[0];
+        let shade: number | undefined;
+        if (/^(?:r?['"])/.test(token)) {
+            const raw = token.startsWith('r');
+            const quote = raw ? token.slice(1) : token;
+            let end = match.index + token.length;
+            while (end < text.length) {
+                if (text.startsWith(quote, end)) { end += quote.length; break; }
+                if (quote.length === 1 && text[end] === '\n') break;
+                end += !raw && text[end] === '\\' ? Math.min(2, text.length - end) : 1;
+            }
+            token = text.slice(match.index, end);
+            tokens.lastIndex = end;
+            shade = 32;
+        } else if (token.startsWith('#')) shade = 90;
+        else if (/^\d/.test(token)) shade = 33;
+        else if (isReservedName(token) || token === 'from' || token === 'as') shade = 35;
+        else if (previous === 'def' && !text.slice(consumed, match.index).trim()) shade = 36;
+        formatted += text.slice(consumed, match.index) + token.split('\n').map(line =>
+            shade === undefined ? line : paint(line, shade, color)).join('\n');
+        consumed = match.index + token.length;
+        previous = token;
+    }
+    formatted += text.slice(consumed);
+    const lines = formatted.split('\n');
+    const digits = String(lines.length).length;
+    return paint('SPL', 90, color, true) + '\n' + lines.map((line, index) =>
+        `${paint(String(index + 1).padStart(digits), 90, color)} ${paint('|', 90, color)} ${line}`).join('\n');
 }
 
 export function textSegments(text: string, eventId: string, identity: string): BodySegment[] {
@@ -124,6 +162,7 @@ export function stateSegments(change: StateChange, eventId: string): BodySegment
 export function formatSegments(segments: readonly BodySegment[], color = false): string {
     return segments.map(segment => segment.type === 'json' ? prettyJson(segment.source, color)!
         : segment.type === 'preface' ? formatSegments(textSegments(segment.source, segment.payloadId, 'expanded'), color)
+        : segment.type === 'code' ? segment.source
         : segment.text).join('');
 }
 

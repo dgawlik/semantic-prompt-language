@@ -38,6 +38,15 @@ export function parseNatural(text: string, line: number): Extract<Stmt, { t: 'na
         bodyLine += text.slice(0, end + 1).split('\n').length - 1;
         text = text.slice(end + 1);
     }
+    const codegen = /^\s*@CODEGEN\b/i.exec(text);
+    if (codegen) {
+        const prefix = codegen[0];
+        const description = new ControlParser(tokenize(text.slice(prefix.length), {
+            inExpr: true, line: bodyLine + prefix.split('\n').length - 1,
+            col: prefix.length - prefix.lastIndexOf('\n'),
+        }), '@CODEGEN').description();
+        return { t: 'natural', text: description, line, codegen: true, ...(controls ? { controls } : {}) };
+    }
     const removed = /(?<![\w@\\])@(restrict|enforce|forbid|human)\b/i.exec(text);
     if (removed) {
         const message = removed[1].toLowerCase() === 'human'
@@ -48,18 +57,21 @@ export function parseNatural(text: string, line: number): Extract<Stmt, { t: 'na
     if (/(?<![\w@\\])@CTL\b/i.test(text)) {
         throw new SplSyntaxError('@CTL must appear once at the start of a blockquote', line, 1);
     }
+    if (/(?<![\w@\\])@CODEGEN\b/i.test(text)) {
+        throw new SplSyntaxError('@CODEGEN must appear at the start of a blockquote, after optional @CTL settings', line, 1);
+    }
     return { t: 'natural', text: controls ? text.trimStart() : text, line, ...(controls ? { controls } : {}) };
 }
 
 class ControlParser {
     private pos = 0;
 
-    constructor(private readonly tokens: Token[]) {}
+    constructor(private readonly tokens: Token[], private readonly marker = '@CTL') {}
 
     private get token(): Token { return this.tokens[this.pos]; }
 
     private fail(message: string): never {
-        throw new SplSyntaxError(`@CTL: ${message}`, this.token.line, this.token.col);
+        throw new SplSyntaxError(`${this.marker}: ${message}`, this.token.line, this.token.col);
     }
 
     private at(value: string): boolean {
@@ -110,6 +122,13 @@ class ControlParser {
         }
         this.pos++;
         return restrictions;
+    }
+
+    description(): string {
+        const text = this.string();
+        if (!text.trim()) this.fail('description must be a non-empty string');
+        if (this.token.type !== 'eof') this.fail('expected a single literal string description');
+        return text;
     }
 
     parse(): NaturalControls {

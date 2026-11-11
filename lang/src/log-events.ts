@@ -3,6 +3,7 @@ import type { LlmStreamUpdate } from './llm.js';
 
 export type BodySegment =
     | { readonly type: 'text' | 'inspection'; readonly text: string }
+    | { readonly type: 'code'; readonly language: 'spl'; readonly source: string }
     | {
         readonly type: 'preface';
         readonly payloadId: string;
@@ -55,7 +56,7 @@ export interface StateChange {
 
 export interface ModelInteraction {
     readonly requestId: string;
-    readonly kind: 'ask' | 'think' | 'agent' | 'blockquote';
+    readonly kind: 'ask' | 'think' | 'agent' | 'blockquote' | 'codegen';
     readonly role?: 'response' | 'action';
 }
 
@@ -141,7 +142,7 @@ export function isModelStreamEvent(value: unknown): value is ModelStreamEvent {
     if (!record(value) || !record(value.interaction)) return false;
     const interaction = value.interaction;
     if (!fields(interaction, ['requestId', 'kind', 'role']) || !nonempty(interaction.requestId) ||
-        !['ask', 'think', 'agent', 'blockquote'].includes(String(interaction.kind)) ||
+        !['ask', 'think', 'agent', 'blockquote', 'codegen'].includes(String(interaction.kind)) ||
         (interaction.role !== undefined && interaction.role !== 'response' && interaction.role !== 'action')) return false;
     if (value.type === 'update') {
         return fields(value, ['type', 'interaction', 'update']) && record(value.update) &&
@@ -180,6 +181,7 @@ function stateChange(value: unknown): boolean {
 function segment(value: unknown, eventId: string): value is BodySegment {
     if (!record(value)) return false;
     if (value.type === 'text' || value.type === 'inspection') return fields(value, ['type', 'text']) && safeText(value.text);
+    if (value.type === 'code') return fields(value, ['type', 'language', 'source']) && value.language === 'spl' && safeText(value.source);
     if (value.type === 'preface') return fields(value, ['type', 'payloadId', 'source', 'summary']) &&
         nonempty(value.payloadId) && value.payloadId.startsWith(`${eventId}:`) && safeText(value.source) &&
         nonempty(value.source) && safeText(value.summary) && nonempty(value.summary) && !/[\r\n]/.test(value.summary);
@@ -206,7 +208,7 @@ export function isLogEvent(value: unknown): value is LogEvent {
         case 'model-input': case 'model-output':
             return fields(value, [...base, 'interaction']) && value.origin === 'model' && record(value.interaction) &&
                 fields(value.interaction, ['requestId', 'kind', 'role']) && nonempty(value.interaction.requestId) &&
-                ['ask', 'think', 'agent', 'blockquote'].includes(String(value.interaction.kind)) &&
+                ['ask', 'think', 'agent', 'blockquote', 'codegen'].includes(String(value.interaction.kind)) &&
                 (value.interaction.role === undefined || value.interaction.role === 'response' || value.interaction.role === 'action');
         case 'state': return fields(value, [...base, 'change']) && value.origin === 'state' && stateChange(value.change);
         default: return false;

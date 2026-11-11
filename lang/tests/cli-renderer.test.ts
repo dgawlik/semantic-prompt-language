@@ -55,6 +55,24 @@ function session(child = new FakeChild()) {
 }
 
 describe('renderer protocol', () => {
+    it('accepts codegen source and stream metadata, rejecting unsafe or unsupported code segments', () => {
+        const history: LogEvent[] = [];
+        const logger = new Logger('error', undefined, { eventSink: event => history.push(event) });
+        const interaction = { kind: 'codegen', requestId: 'generated' } as const;
+        logger.modelOutput(interaction, 'def answer():\n    return 42');
+        const message = { version: 1, sessionId: 'codegen', type: 'event', sequence: 1, event: history[0] };
+        expect(parseParentMessage(message)).toEqual(message);
+        expect(parseParentMessage({ version: 1, sessionId: 'codegen', type: 'stream', event: {
+            type: 'update', interaction, update: { channel: 'response', messageId: 'code', mode: 'append', text: 'def answer(' },
+        } })).toMatchObject({ type: 'stream' });
+        for (const segment of [
+            { type: 'code', language: 'python', source: 'pass' },
+            { type: 'code', language: 'spl', source: '\u001b[31munsafe' },
+            { type: 'code', language: 'spl', source: 'pass', unexpected: true },
+            { type: 'code', language: 'spl', source: 42 },
+        ]) expect(() => parseParentMessage({ ...message, event: { ...history[0], segments: [segment] } })).toThrow(/protocol/);
+    });
+
     it('validates stream messages independently of persistent event ordering and rejects late updates', () => {
         const interaction = { kind: 'ask', requestId: 'stream' };
         const event = { type: 'update', interaction, update: { channel: 'response', messageId: 'message', mode: 'append', text: 'Partial' } };
@@ -851,6 +869,42 @@ describe('presentation ownership', () => {
                 test.mockInput.pressEnter();
                 expect(capture()).toContain('"answer": 42');
                 expect(view.history.map(event => event.kind)).toEqual(['model-input', 'model-output']);
+            } finally { await cleanup(); }
+        });
+
+        it.each([false, true])('pretty prints streamed and completed codegen as expanded SPL with color=%s', async color => {
+            const { test, view, cleanup } = await setup(color);
+            try {
+                const logger = new Logger('error', undefined, { eventSink: event => view.append(event), streamSink: event => view.stream(event) });
+                const interaction = { kind: 'codegen', requestId: 'generated' } as const;
+                const emit = (messageId: string, text: string, channel: 'response' | 'reasoning' = 'response', mode: 'append' | 'replace' = 'append') =>
+                    logger.modelStream({ type: 'update', interaction, update: { channel, messageId, text, mode } });
+                emit('draft', 'def unused(');
+                emit('answer', 'def values():\n    return [1,');
+                emit('reason', 'Working on it', 'reasoning');
+                let display = stripVTControlCharacters(view.rows.join('\n'));
+                expect(display).toContain('<- output codegen [streaming]\nSPL\n1 | def values():\n2 |     return [1,');
+                expect(display).not.toContain('unused');
+                expect(display).toContain('i info reasoning codegen [streaming] Working on it');
+                emit('answer', 'def values():\n    return [1,2]', 'response', 'replace');
+                const source = 'def values():\n    return [1,2]';
+                logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: source });
+                logger.modelOutput(interaction, source);
+                display = stripVTControlCharacters(view.rows.join('\n'));
+                expect(display).toContain('<- output codegen \nSPL\n1 | def values():\n2 |     return [1,2]');
+                expect(display).not.toContain('[streaming]');
+                expect(display).not.toContain('[folded]');
+                expect(view.collapsedByPayload.size).toBe(0);
+                expect(view.history).toHaveLength(1);
+                if (color) expect(view.rows.join('\n')).toContain('\u001b[35mdef\u001b[0m');
+                test.renderOnce();
+                expect(stripVTControlCharacters(test.captureFrame())).toContain('2 |     return [1,2]');
+                test.resize(12, 12);
+                test.renderer.emit('resize', 12, 12);
+                expect(view.rows.every(row => stripVTControlCharacters(row).length <= 12)).toBe(true);
+                test.resize(100, 24);
+                test.renderer.emit('resize', 100, 24);
+                expect(stripVTControlCharacters(view.rows.join('\n'))).toContain('2 |     return [1,2]');
             } finally { await cleanup(); }
         });
 

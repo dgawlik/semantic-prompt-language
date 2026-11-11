@@ -12,7 +12,7 @@ available in other Markdown files.
 * **Diagnostics** from the interpreter's own parser and static type checker, updated as you type.
 * **Completions** for keywords, built-ins, tools, modifiers, `$env`/`$args`, visible bindings, and
   `@name` references in blockquotes.
-  Blockquotes offer `@CTL(...)` settings, restriction keys and reasoning values, rather than SPL
+  Blockquotes offer `@CODEGEN 'Function description'`, `@CTL(...)` settings, restriction keys and reasoning values, rather than SPL
   statement keywords. Completion works while groups and strings are incomplete, omits settings
   already supplied, and preserves existing quotes and separators. `model=` offers the document's
   frontmatter model when present; `@validate[...]` offers visible declared and primitive types.

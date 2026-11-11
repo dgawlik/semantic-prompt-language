@@ -57,6 +57,26 @@ see [Gradual typing](Language.md#gradual-typing)
 * `restrict` limits scope's file access to particular location
 * `success` returns json 
 
+## Generate reusable functions
+
+Use `@CODEGEN` with a literal string description to generate SPL functions. Once validated,
+they are available to later code and blockquotes in the same session, without imports:
+
+````markdown
+> @CODEGEN 'Define double(value), returning value multiplied by two'
+
+```spl
+success double(21)
+```
+````
+
+With `spl flow.md --trace run.jsonl`, the definition is also saved beside the workflow as
+`flow.double.spl`. Its top-level `# @CODEGEN sha256:...` comment hashes the description.
+Later traced runs reuse matching definitions without contacting the model, even with a new
+trace file. Multiple codegen blockquotes can generate separate functions. Without `--trace`,
+functions remain session-local and no files are saved.
+See [Code generation](LLM-commands.md#code-generation) for cache and validation details.
+
 
 ## Opt-in Types 
 
@@ -127,7 +147,7 @@ success person.toString()
 2. Fences and blockquotes execute in document order in one shared scope.
 3. A blockquote sends its text, visible bindings and runtime tools to an agent. The model calls
    tools to invoke functions, read environment values, request human input and load/save shared variables.
-   It never submits generated SPL.
+   The explicit `@CODEGEN` form instead generates and validates SPL function definitions.
 4. `ask`, `think` and `agent` use the official OpenAI, Anthropic and Google clients, one fresh conversation per call.
 5. `success` prints the result on stdout. Logs go to stderr.
 

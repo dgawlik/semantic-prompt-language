@@ -83,6 +83,20 @@ export function scanControls(text: string): { tokens: ControlToken[]; end: numbe
     return { tokens, end: at, closed: false };
 }
 
+export function scanCodegen(text: string): ControlToken[] | undefined {
+    const controls = scanControls(text);
+    if (controls && !controls.closed) return undefined;
+    const start = controls?.end ?? 0;
+    const header = /^\s*(@CODEGEN)\b/i.exec(text.slice(start));
+    if (!header) return undefined;
+    const from = start + header[0].indexOf('@');
+    const to = from + header[1].length;
+    return [
+        { kind: 'marker', value: header[1], from, to },
+        { kind: 'string', value: text.slice(to), from: to, to: text.length, quote: '', contentFrom: to, closed: true },
+    ];
+}
+
 export function controlCompletions(
     text: string, at: number, range: (from: number, to: number) => Range, model?: string,
 ): CompletionItem[] | undefined {

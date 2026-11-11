@@ -5,6 +5,8 @@ SPL is a small Python-like language with colon-and-indentation blocks. This page
 Markdown blockquotes use a single optional `@CTL(restrict=..., enforce=..., forbid=..., model=..., reasoning=...)`
 header for [agent controls](LLM-commands.md#blockquotes). These controls are separate from SPL syntax;
 human input in blockquotes is requested in plain language, without a special marker.
+Use [`@CODEGEN 'Function description'`](LLM-commands.md#code-generation) to generate reusable SPL
+functions into the shared scope; traced runs save and automatically reuse matching definitions.
 
 ## Values and strings
 

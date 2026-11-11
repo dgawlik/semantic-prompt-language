@@ -112,6 +112,11 @@ success True`;
         }
     });
 
+    it('highlights the explicit codegen marker in blockquotes', () => {
+        expect(highlight("> @CODEGEN 'Define double(value)'", 'markdown'))
+            .toContain('<span class="hljs-keyword">@CODEGEN</span>');
+    });
+
     it('highlights embedded SPL in all supported Markdown fence styles', () => {
         for (const fence of ['```', '````', '~~~', '~~~~']) {
             for (const indent of ['', '   ']) {

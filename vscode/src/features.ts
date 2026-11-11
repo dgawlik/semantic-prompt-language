@@ -12,7 +12,7 @@ import { tokenize, type Token } from '../../lang/src/lexer.js';
 import { ASK_MODIFIER_NAMES, LOG_MODIFIER_NAMES, MODIFIER_NAMES, parse } from '../../lang/src/parser.js';
 import { extractMarkdown, isWorkflowMarkdown, parseMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
 import { builtins, keywords, listCallbacks, modifiers, specialVariables, type Help } from './catalog';
-import { blockquoteText, controlCompletions, scanControls } from './blockquoteFeatures';
+import { blockquoteText, controlCompletions, scanCodegen, scanControls } from './blockquoteFeatures';
 
 export type NamedToken = Extract<Token, { type: 'name' }>;
 
@@ -168,6 +168,7 @@ export function analyze(document: TextDocument): Analysis {
         const end = { line: block.endLine, character: 0 };
         const quote = blockquoteText(document, block);
         const from = quote.from;
+        if (scanCodegen(quote.text)) continue;
         const controls = scanControls(quote.text);
         const text = controls
             ? quote.text.slice(0, controls.end).replace(/[^\r\n]/g, ' ') + quote.text.slice(controls.end)
@@ -600,6 +601,8 @@ function naturalCompletions(analysis: Analysis, block: MarkdownBlock, position: 
     });
     const controls = controlCompletions(quote.text, at, range, analysis.model);
     if (controls) return controls;
+    const codegen = scanCodegen(quote.text);
+    if (codegen && at > codegen[0].to) return [];
     const before = quote.text.slice(0, at);
     const suffix = /^\w*/.exec(quote.text.slice(at))![0];
     const schema = /(?<![\w@\\])@validate\s*\[\s*([A-Za-z_]\w*)?$/.exec(before);
@@ -619,6 +622,16 @@ function naturalCompletions(analysis: Analysis, block: MarkdownBlock, position: 
     if (!reference && !empty) return [];
     const edit = range(at - (reference?.[1]?.length ?? 0), at + suffix.length);
     const items = new Map<string, CompletionItem>();
+    const header = scanControls(quote.text);
+    const prefix = quote.text.slice(header?.closed ? header.end : 0, reference?.index ?? at);
+    if (!prefix.trim()) {
+        items.set('CODEGEN', {
+            label: 'CODEGEN', kind: CompletionItemKind.Snippet, detail: "@CODEGEN 'Function description'",
+            documentation: 'Generate SPL functions in shared scope; --trace saves and reuses matching definitions.',
+            insertTextFormat: InsertTextFormat.Snippet,
+            textEdit: { range: edit, newText: `${empty ? '@' : ''}CODEGEN '\${1:Function description}'$0` },
+        });
+    }
     if (!quote.text.slice(0, reference?.index ?? at).trim()) {
         const hasArguments = /^\s*\(/.test(quote.text.slice(at + suffix.length));
         items.set('CTL', {

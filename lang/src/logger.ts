@@ -57,7 +57,10 @@ export class Logger {
             segments.push({ type: 'preface', payloadId: `${id}:preface`, source: sanitize(preface), summary: 'Generated preface [folded]' });
         }
         [msg, ...values].forEach((value, index) => {
-            const parts = valueSegments(value, id, String(index), raw);
+            const parts: BodySegment[] = detail.kind === 'model-output' && detail.interaction.kind === 'codegen'
+                && detail.interaction.role !== 'action' && typeof value === 'string'
+                ? [{ type: 'code', language: 'spl', source: sanitize(value) }]
+                : valueSegments(value, id, String(index), raw);
             if (index) segments.push({ type: 'text', text: detail.kind === 'generic' || formatSegments(parts).includes('\n') ? '\n' : ' ' });
             segments.push(...parts);
         });

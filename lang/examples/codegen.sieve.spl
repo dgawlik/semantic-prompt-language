@@ -1,0 +1,16 @@
+# @CODEGEN sha256:0bf6d0586753d772a87e4af0b9177236e64e481f18c5345569e6a82e3ff35427
+def sieve(number):
+    if number < 2:
+        return []
+    let flags = list(range(0, number + 1)).map(lambda index: True)
+    flags[0] = False
+    flags[1] = False
+    let divisor = 2
+    while divisor * divisor <= number:
+        if flags[divisor]:
+            let multiple = divisor * divisor
+            while multiple <= number:
+                flags[multiple] = False
+                multiple = multiple + divisor
+        divisor = divisor + 1
+    return list(range(2, number + 1)).filter(lambda candidate: flags[candidate])
