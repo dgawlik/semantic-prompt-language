@@ -7,11 +7,11 @@
 the outcome through its exit code. Requires Node.js &gt;=24.15.0.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=e44ec157a3ab">
-<link rel="stylesheet" href="assets/style.css?v=e44ec157a3ab">
+<link rel="icon" type="image/png" href="assets/icon.png?v=a78fc642997d">
+<link rel="stylesheet" href="assets/style.css?v=a78fc642997d">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=e44ec157a3ab"></script>
-<script defer src="assets/site.js?v=e44ec157a3ab"></script>
+<script defer src="assets/search-index.js?v=a78fc642997d"></script>
+<script defer src="assets/site.js?v=a78fc642997d"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -377,6 +377,8 @@ without a file source, imports resolve from <code>cwd</code>. <code>loadModules(
 validates imports without executing them; pass its graph as the fourth argument of <code>checkProgram</code>
 to include module contracts in embedding preflight. The CLI&#39;s <code>--check</code> validates dependency
 syntax and named exports without executing module code.
+Bundled standard library imports such as <code>import { Document } from &#39;markdown&#39;</code> are available
+regardless of <code>source</code> or <code>cwd</code>, and their SPL source is included in traces and pinned workflows.
 A <code>human(question, line)</code> handler returns a string or
 <code>Promise&lt;string&gt;</code> for both human expressions and blockquote <code>ask_human</code> calls. Embedded runs never
 read stdin themselves; provide this handler when requesting new human input.

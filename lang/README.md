@@ -42,6 +42,20 @@ Paths resolve next to the importing file; top-level declarations are exported au
 Bindings are live and read-only, and modules initialize once per run or notebook session.
 See [Modules](../docs-template/Language.md#modules).
 
+The bundled `markdown` standard library is written in SPL and imports from any SPL file or workflow
+code fence. Build a document dynamically and serialize it to a string:
+
+```spl
+import * as markdown from 'markdown'
+let doc = markdown.Document().heading('Report', 1)
+for name in ['parser', 'runtime']:
+    doc.paragraph(markdown.bold(name) + ': passed')
+success doc.to_string()
+```
+
+It includes lists, quotes, fenced code, tables, links/images, inline formatting, escaping and raw
+Markdown. See the [Markdown library reference](../docs-template/Language.md#markdown-standard-library).
+
 `--trace run.jsonl` appends durable execution history. Reusing the same path automatically resumes
 recorded work or replays a completed success/failure without model/MCP calls, explicit external effects
 or repeated human prompts. Existing trace bytes never change. Choose another JSONL file to restart.

@@ -65,6 +65,19 @@ test('local module imports provide bindings, completions and typed diagnostics w
     assert.equal(external.range.start.line, 6);
 });
 
+test('bundled Markdown standard library imports work in SPL and fenced Markdown', () => {
+    const source = "import { Document } from 'markdown'\nimport * as markdown from 'markdown'\nlet doc = Document().heading('Report', 1)\nsuccess doc.to_string()";
+    const uri = pathToFileURL(path.join(root, 'markdown-library.spl')).href;
+    const inspect = (text: string) => analyze(TextDocument.create(uri, 'spl', 1, text));
+    assert.deepEqual(inspect(source).diagnostics, []);
+    assert.deepEqual(analyze(TextDocument.create(uri.replace(/\.spl$/, '.md'), 'markdown', 1,
+        markdownSource('```spl\n' + source + '\n```'))).diagnostics, []);
+    const partial = source + '\nmarkdown.';
+    const member = inspect(partial);
+    assert.ok(completions(member, member.document.positionAt(partial.length)).some(item => item.label === 'Document'));
+    assert.match(inspect(source.replace("heading('Report', 1)", "heading('Report', 'one')")).diagnostics[0].message, /expected int/);
+});
+
 test('Markdown keeps ordinary documents quiet and gates features on frontmatter', () => {
     const plain = markdownAnalysis('# Ordinary Markdown\n\n> @success\n\n```spl\ninvalid !\n```');
     assert.deepEqual(plain.diagnostics, []);

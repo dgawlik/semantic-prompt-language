@@ -11,6 +11,7 @@ export interface ModuleFile {
     path: string;
     id: string;
     source: string;
+    standard?: string;
 }
 
 export interface ModuleSources {
@@ -37,6 +38,9 @@ export interface RuntimeModule {
 }
 
 const key = (file: string): string => process.platform === 'win32' ? file.toLowerCase() : file;
+const standardModules = new Map([
+    ['markdown', path.join(import.meta.dirname, 'stdlib', 'markdown.spl')],
+]);
 const namespaces = new WeakMap<object, { env: Env; names: string[] }>();
 
 export function namespaceBindings(value: object): { env: Env; names: string[] } | undefined {
@@ -80,9 +84,11 @@ function exportedNames(program: Program): string[] {
     });
 }
 
-function importPath(stmt: ImportStmt, directory: string): string {
+function importPath(stmt: ImportStmt, directory: string, known: readonly ModuleFile[]): string {
+    const standard = standardModules.get(stmt.specifier);
+    if (standard) return known.find(file => file.standard === stmt.specifier)?.path ?? standard;
     if (!/^\.\.?[\\/]/.test(stmt.specifier) || !/\.spl$/i.test(stmt.specifier) || stmt.specifier.includes('\0')) {
-        throw new Failure('runtime_error', `import path '${stmt.specifier}' must be a relative .spl file path`);
+        throw new Failure('runtime_error', `import path '${stmt.specifier}' must name a standard library module or be a relative .spl file path`);
     }
     return path.resolve(directory, stmt.specifier);
 }
@@ -122,10 +128,11 @@ export function readModuleSources(
         for (const stmt of program.body) {
             if (stmt.t !== 'import') continue;
             try {
-                const requested = importPath(stmt, directory);
+                const requested = importPath(stmt, directory, known);
                 let file = cached.get(key(requested));
                 if (!file) {
-                    const id = restrictions.checkPath(requested);
+                    const standard = standardModules.has(stmt.specifier) ? stmt.specifier : undefined;
+                    const id = standard ? requested : restrictions.checkPath(requested);
                     let text = identities.get(key(id));
                     if (text === undefined) {
                         try { text = fs.readFileSync(id, 'utf8'); }
@@ -135,7 +142,7 @@ export function readModuleSources(
                         }
                         identities.set(key(id), text);
                     }
-                    file = { path: requested, id, source: text };
+                    file = { path: requested, id, source: text, ...(standard ? { standard } : {}) };
                 }
                 files.set(key(requested), file);
                 if (visited.has(key(file.id))) continue;
@@ -155,7 +162,8 @@ export function isModuleSources(value: unknown): value is ModuleSources {
         typeof file === 'object' && file !== null
         && typeof file.path === 'string' && path.isAbsolute(file.path)
         && typeof file.id === 'string' && path.isAbsolute(file.id)
-        && typeof file.source === 'string');
+        && typeof file.source === 'string'
+        && (file.standard === undefined || typeof file.standard === 'string' && standardModules.has(file.standard)));
 }
 
 /** Links only recorded sources when replaying; no filesystem access is needed. */
@@ -167,7 +175,7 @@ export function linkModules(program: Program, sources: ModuleSources, source?: s
         for (const stmt of program.body) {
             if (stmt.t !== 'import') continue;
             try {
-                const requested = importPath(stmt, directory);
+                const requested = importPath(stmt, directory, sources.files);
                 const file = files.get(key(requested));
                 if (!file) throw new Failure('runtime_error', `missing module source for '${stmt.specifier}'`);
                 const id = key(file.id);

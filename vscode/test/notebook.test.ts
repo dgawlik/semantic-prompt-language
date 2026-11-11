@@ -341,4 +341,8 @@ def next():
         { id: 1, kind: 'result', text: '1' });
     assert.deepEqual(await execute(2, "import * as helpers from './helpers.spl'\n[next(), count, helpers.count]"),
         { id: 2, kind: 'result', text: '[\n  2,\n  2,\n  2\n]' });
+    assert.deepEqual(await execute(3, "import { Document } from 'markdown'\nlet doc = Document().heading('Report', 1)\ndoc.to_string()"),
+        { id: 3, kind: 'result', text: '# Report\n' });
+    assert.deepEqual(await execute(4, "import * as markdown from 'markdown'\ndoc.paragraph(markdown.bold('Ready')).to_string()"),
+        { id: 4, kind: 'result', text: '# Report\n\n**Ready**\n' });
 });

@@ -301,6 +301,8 @@ without a file source, imports resolve from `cwd`. `loadModules(program, source,
 validates imports without executing them; pass its graph as the fourth argument of `checkProgram`
 to include module contracts in embedding preflight. The CLI's `--check` validates dependency
 syntax and named exports without executing module code.
+Bundled standard library imports such as `import { Document } from 'markdown'` are available
+regardless of `source` or `cwd`, and their SPL source is included in traces and pinned workflows.
 A `human(question, line)` handler returns a string or
 `Promise<string>` for both human expressions and blockquote `ask_human` calls. Embedded runs never
 read stdin themselves; provide this handler when requesting new human input.

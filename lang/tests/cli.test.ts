@@ -37,6 +37,12 @@ function run(args: string[], env: NodeJS.ProcessEnv = {}, input?: string) {
 }
 
 describe('module import CLI', () => {
+    it('runs and checks the bundled Markdown library outside the installation directory', () => {
+        const source = "import { Document } from 'markdown'\nsuccess Document().heading('Report', 1).to_string()";
+        expect(spl(source, '--silent')).toEqual({ code: 0, out: '# Report\n\n', err: '' });
+        expect(spl(source, '--check')).toEqual({ code: 0, out: '', err: '' });
+    });
+
     it('resolves modules next to the Markdown file even with a different --cwd', () => {
         const workflows = path.join(dir, 'workflows');
         fs.mkdirSync(workflows);

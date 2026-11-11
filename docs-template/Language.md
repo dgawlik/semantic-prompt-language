@@ -285,9 +285,11 @@ Every top-level declaration is exported automatically: variables, functions, enu
 structs, classes, and imported bindings. Block-local declarations are not exported. No `export`
 keyword is required. Named imports can also bring type declarations into scope for annotations.
 
-Imports are top-level statements. Paths must start with `./` or `../` and explicitly end in `.spl`;
-they resolve relative to the importing file, not `--cwd`. Package names, remote URLs, Markdown
-modules, default imports and bare side-effect imports are not supported.
+Imports are top-level statements. Local paths must start with `./` or `../` and explicitly end in
+`.spl`; they resolve relative to the importing file, not `--cwd`. Bundled standard library modules
+use a bare name, such as `'markdown'`, from any SPL file or workflow code fence, without installation
+or a local helper file. Other package names, remote URLs, Markdown modules, default imports and
+bare side-effect imports are not supported.
 
 The complete dependency graph is linked and type-checked before execution. Dependencies initialize
 before the importing file's statements, once per workflow run or notebook session. Module variables
@@ -301,6 +303,55 @@ directives are not supported, and `return`/`success` cannot terminate module ini
 Imported functions run under the caller's active restrictions. Resetting a notebook session
 clears its module cache. Traces and pinned workflows capture module source so replay does not
 need the original `.spl` files.
+
+### Markdown standard library
+
+The bundled `markdown` module is written in SPL. Build a document dynamically, then call
+`to_string()` to get a normal string suitable for `success`, prompts, or `write_file`:
+
+```spl
+import * as markdown from 'markdown'
+
+let doc = markdown.Document()
+doc.heading('Build report', 1)
+doc.paragraph(markdown.bold('Results') + ' from ' + markdown.link('CI', 'https://example.com/build'))
+for name in ['parser', 'runtime']:
+    doc.bullet_list([markdown.escape(name) + ': passed'])
+doc.code_block('spl workflow.md --check', 'sh')
+doc.table(['Suite', 'Status'], [['parser', 'passed'], ['runtime', 'passed']])
+success doc.to_string()
+```
+
+Named imports also work: `import { Document, bold } from 'markdown'`.
+Each `Document()` owns its own block list. Builder methods return the same document, so calls
+can be chained. All arguments shown below are required; SPL functions do not have default arguments.
+
+| Method | Output |
+| --- | --- |
+| `heading(text, level)` | Heading with level `1` through `6` |
+| `paragraph(text)` | Paragraph containing inline Markdown |
+| `bullet_list(items)` | Bullet list of strings; multiline items are indented |
+| `ordered_list(items, start)` | Numbered list; `start` and subsequent markers must have at most nine digits |
+| `quote(text)` | Blockquote, including multiline text |
+| `code_block(text, language)` | Fenced code block; use `''` for no language |
+| `table(headers, rows)` | GFM table; string cells, nonempty headers, matching row widths |
+| `thematic_break()` | Horizontal rule |
+| `raw(text)` | Unmodified Markdown block, apart from line-ending normalization |
+| `to_string()` | Blocks joined with blank lines and a final newline; `''` for an empty document |
+
+`to_string()` is repeatable and does not consume the document. Empty raw blocks and empty lists
+add nothing. Raw text and paragraphs preserve whitespace, including any supplied trailing newlines.
+Line endings are normalized to `\n`. Tables escape pipe delimiters and replace cell newlines with
+`<br>`. Code fences grow to accommodate embedded backticks and preserve code whitespace.
+
+Inline helpers return strings: `bold(text)`, `italic(text)`, `code(text)`, `link(label, url)`,
+`image(alt, url)`, and `escape(text)`. Paragraphs, headings, lists, quotes, table cells, and formatting
+helpers accept Markdown, so use `escape(text)` for literal dynamic text. Link labels and image
+alt text are escaped automatically; whitespace, backslashes and angle brackets in destinations
+are percent-encoded. Inline code handles embedded backticks and padding, normalizes newlines to
+spaces, and requires nonempty text. Headings, link labels, image alt text, bold/italic text, and code
+language labels must be single-line; code language labels must not contain backticks.
+These helpers generate Markdown, not sanitized HTML or validated URL schemes.
 
 ## Gradual typing
 

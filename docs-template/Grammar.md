@@ -78,7 +78,8 @@ declaration    = "let" , NAME , [ ":" , type_expr ] , "=" , expr ;
 import_stmt    = "import" , ( named_imports | "*" , "as" , NAME ) , "from" , plain_string ;
 named_imports  = "{" , [ import_binding , { "," , import_binding } , [ "," ] ] , "}" ;
 import_binding = NAME , [ "as" , NAME ] ;
-                 (* imports occur only at program top level; paths are relative .spl files;
+                 (* imports occur only at program top level; sources are relative .spl paths
+                    or bundled standard library names such as 'markdown';
                     all top-level declarations are exported automatically *)
 assignment     = target , ( "=" | "+=" | "-=" | "*=" | "/=" | "//=" | "%=" ) , expr ;
 target         = NAME | postfix , "." , NAME | postfix , "[" , expr , "]" ;

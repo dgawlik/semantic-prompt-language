@@ -7,11 +7,11 @@
 checked while parsing; modifier values and schemas are checked at runtime.">
 <meta name="color-scheme" content="light dark">
 <title>Grammar - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=e44ec157a3ab">
-<link rel="stylesheet" href="assets/style.css?v=e44ec157a3ab">
+<link rel="icon" type="image/png" href="assets/icon.png?v=a78fc642997d">
+<link rel="stylesheet" href="assets/style.css?v=a78fc642997d">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=e44ec157a3ab"></script>
-<script defer src="assets/site.js?v=e44ec157a3ab"></script>
+<script defer src="assets/search-index.js?v=a78fc642997d"></script>
+<script defer src="assets/site.js?v=a78fc642997d"></script>
 </head>
 <body data-page="grammar">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -98,7 +98,8 @@ with a block can end there without another physical newline.</p>
 <span class="hljs-attribute">import_stmt</span>    = <span class="hljs-string">&quot;import&quot;</span> , ( named_imports | <span class="hljs-string">&quot;*&quot;</span> , <span class="hljs-string">&quot;as&quot;</span> , NAME ) , <span class="hljs-string">&quot;from&quot;</span> , plain_string ;
 <span class="hljs-attribute">named_imports</span>  = <span class="hljs-string">&quot;{&quot;</span> , [ import_binding , { <span class="hljs-string">&quot;,&quot;</span> , import_binding } , [ <span class="hljs-string">&quot;,&quot;</span> ] ] , <span class="hljs-string">&quot;}&quot;</span> ;
 <span class="hljs-attribute">import_binding</span> = NAME , [ <span class="hljs-string">&quot;as&quot;</span> , NAME ] ;
-                 <span class="hljs-comment">(* imports occur only at program top level; paths are relative .spl files;
+                 <span class="hljs-comment">(* imports occur only at program top level; sources are relative .spl paths
+                    or bundled standard library names such as &#x27;markdown&#x27;;
                     all top-level declarations are exported automatically *)</span>
 <span class="hljs-attribute">assignment</span>     = target , ( <span class="hljs-string">&quot;=&quot;</span> | <span class="hljs-string">&quot;+=&quot;</span> | <span class="hljs-string">&quot;-=&quot;</span> | <span class="hljs-string">&quot;*=&quot;</span> | <span class="hljs-string">&quot;/=&quot;</span> | <span class="hljs-string">&quot;//=&quot;</span> | <span class="hljs-string">&quot;%=&quot;</span> ) , expr ;
 <span class="hljs-attribute">target</span>         = NAME | postfix , <span class="hljs-string">&quot;.&quot;</span> , NAME | postfix , <span class="hljs-string">&quot;[&quot;</span> , expr , <span class="hljs-string">&quot;]&quot;</span> ;
