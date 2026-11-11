@@ -10,24 +10,32 @@ preamble: 'Be concise.'
 Prose like this is commentary. Only `spl` fences and blockquotes run, top to bottom, in one shared scope.
 
 ```spl
-let topics = ['recursion', 'closures', 'regular expressions']
 
-hydratable class Card:
-    term: str
-    definition: str
+enum Topic = 'recursion' | 'closures' | 'regular expressions'
 
-let cards = object()
-for topic in topics:
-    cards[topic] = ask(schema=Card, repairs=1) 'A one-sentence flashcard about {topic}'
+let topics: list[Topic] = ['recursion', 'closures', 'regular expressions']
+
+struct Card:
+    term: Topic
+    definition: str [desc = 'One line about']
+    description: str [desc='A paragraph about']
+
+let cards = topics.map(
+            lambda topic: ask(schema=Card, repairs=1) 
+                'A one-sentence flashcard about {topic}'
+)
 ```
 
-> Pick the key of @cards whose card a beginner would find hardest. Save that exact key to @hardest
+> Pick the item of @cards whose card a beginner would find hardest. Save that item to @hardest
 
 ```spl
-assert hardest in topics "unexpected topic '{hardest}'"
-restrict './out':
-    write_file('./out/cards.json', json_stringify(object(cards), 2))
-success object:
-    'cards': len(cards)
-    'hardest': hardest
+import * as markdown from 'markdown'
+
+let m = markdown.Document()
+
+m.heading(hardest.term, 3)
+m.paragraph(markdown.bold(hardest.definition))
+m.paragraph(hardest.description)
+
+write_file('./out/hardest-card.md', m.to_string())
 ```
