@@ -6,11 +6,11 @@
 <meta name="description" content="Turn Markdown into runnable AI workflows — natural-language steps alongside deterministic code, validation, and human approval.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=cab41498a8d8">
-<link rel="stylesheet" href="assets/style.css?v=cab41498a8d8">
+<link rel="icon" type="image/png" href="assets/icon.png?v=b61fb509a804">
+<link rel="stylesheet" href="assets/style.css?v=b61fb509a804">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=cab41498a8d8"></script>
-<script defer src="assets/site.js?v=cab41498a8d8"></script>
+<script defer src="assets/search-index.js?v=b61fb509a804"></script>
+<script defer src="assets/site.js?v=b61fb509a804"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -83,11 +83,30 @@ see <a href="language.html#gradual-typing">Gradual typing</a></li>
 <h2 id="generate-reusable-functions">Generate reusable functions<a class="heading-anchor" href="#generate-reusable-functions" aria-label="Link to Generate reusable functions">#</a></h2>
 <p>Use <code>@CODEGEN</code> with a literal string description to generate SPL functions. Once validated,
 they are available to later code and blockquotes in the same session, without imports:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-2"><span class="hljs-quote">&gt; <span class="hljs-keyword">@CODEGEN</span> &#x27;Define double(value), returning value multiplied by two&#x27;</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-2">
+<span class="hljs-quote">&gt; <span class="hljs-keyword">@CODEGEN</span> &#x27;Generate sieve(number) sieve of eratosthenes function that returns primes until given number&#x27;</span>
 
-<span class="hljs-meta">```spl</span><span class="language-spl">
-<span class="hljs-keyword">success</span> double(<span class="hljs-number">21</span>)
+<span class="hljs-meta">```spl </span><span class="language-spl">
+<span class="hljs-built_in">log</span>(sieve(<span class="hljs-number">100</span>))
 </span><span class="hljs-meta">```</span>
+</code></pre></figure>
+<p><em>generated.spl</em></p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-comment"># @CODEGEN sha256:0bf6d0586753d772a87e4af0b9177236e64e481f18c5345569e6a82e3ff35427</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">sieve</span>(number):
+    <span class="hljs-keyword">if</span> number <span class="hljs-operator">&lt;</span> <span class="hljs-number">2</span>:
+        <span class="hljs-keyword">return</span> []
+    <span class="hljs-keyword">let</span> flags <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>(<span class="hljs-built_in">range</span>(<span class="hljs-number">0</span>, number <span class="hljs-operator">+</span> <span class="hljs-number">1</span>)).map(<span class="hljs-keyword">lambda</span> index: <span class="hljs-literal">True</span>)
+    flags[<span class="hljs-number">0</span>] <span class="hljs-operator">=</span> <span class="hljs-literal">False</span>
+    flags[<span class="hljs-number">1</span>] <span class="hljs-operator">=</span> <span class="hljs-literal">False</span>
+    <span class="hljs-keyword">let</span> divisor <span class="hljs-operator">=</span> <span class="hljs-number">2</span>
+    <span class="hljs-keyword">while</span> divisor <span class="hljs-operator">*</span> divisor <span class="hljs-operator">&lt;=</span> number:
+        <span class="hljs-keyword">if</span> flags[divisor]:
+            <span class="hljs-keyword">let</span> multiple <span class="hljs-operator">=</span> divisor <span class="hljs-operator">*</span> divisor
+            <span class="hljs-keyword">while</span> multiple <span class="hljs-operator">&lt;=</span> number:
+                flags[multiple] <span class="hljs-operator">=</span> <span class="hljs-literal">False</span>
+                multiple <span class="hljs-operator">=</span> multiple <span class="hljs-operator">+</span> divisor
+        divisor <span class="hljs-operator">=</span> divisor <span class="hljs-operator">+</span> <span class="hljs-number">1</span>
+    <span class="hljs-keyword">return</span> <span class="hljs-built_in">list</span>(<span class="hljs-built_in">range</span>(<span class="hljs-number">2</span>, number <span class="hljs-operator">+</span> <span class="hljs-number">1</span>)).filter(<span class="hljs-keyword">lambda</span> candidate: flags[candidate])
 </code></pre></figure>
 <p>With <code>spl flow.md --trace run.jsonl</code>, the definition is also saved beside the workflow as
 <code>flow.double.spl</code>. Its top-level <code># @CODEGEN sha256:...</code> comment hashes the description.
@@ -98,7 +117,7 @@ See <a href="llm-commands.html#code-generation">Code generation</a> for cache an
 <h2 id="opt-in-types">Opt-in Types<a class="heading-anchor" href="#opt-in-types" aria-label="Link to Opt-in Types">#</a></h2>
 <p>Language is dynamic but has full support for opt-in static type checker. There are supported 
 primitive types, structs, classes and dynamic catch-all objects. Functions are first class citizens.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-3">
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-4">
 ---
 extension: &#x27;semantic-prompt-language&#x27;
 version: 1

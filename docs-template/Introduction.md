@@ -63,12 +63,34 @@ Use `@CODEGEN` with a literal string description to generate SPL functions. Once
 they are available to later code and blockquotes in the same session, without imports:
 
 ````markdown
-> @CODEGEN 'Define double(value), returning value multiplied by two'
 
-```spl
-success double(21)
+> @CODEGEN 'Generate sieve(number) sieve of eratosthenes function that returns primes until given number'
+
+```spl 
+log(sieve(100))
 ```
 ````
+
+*generated.spl*
+
+```spl
+# @CODEGEN sha256:0bf6d0586753d772a87e4af0b9177236e64e481f18c5345569e6a82e3ff35427
+def sieve(number):
+    if number < 2:
+        return []
+    let flags = list(range(0, number + 1)).map(lambda index: True)
+    flags[0] = False
+    flags[1] = False
+    let divisor = 2
+    while divisor * divisor <= number:
+        if flags[divisor]:
+            let multiple = divisor * divisor
+            while multiple <= number:
+                flags[multiple] = False
+                multiple = multiple + divisor
+        divisor = divisor + 1
+    return list(range(2, number + 1)).filter(lambda candidate: flags[candidate])
+```
 
 With `spl flow.md --trace run.jsonl`, the definition is also saved beside the workflow as
 `flow.double.spl`. Its top-level `# @CODEGEN sha256:...` comment hashes the description.
