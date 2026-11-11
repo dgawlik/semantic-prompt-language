@@ -7,11 +7,11 @@
 the outcome through its exit code. Requires Node.js &gt;=24.15.0.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=b61fb509a804">
-<link rel="stylesheet" href="assets/style.css?v=b61fb509a804">
+<link rel="icon" type="image/png" href="assets/icon.png?v=f87de69cf3fa">
+<link rel="stylesheet" href="assets/style.css?v=f87de69cf3fa">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=b61fb509a804"></script>
-<script defer src="assets/site.js?v=b61fb509a804"></script>
+<script defer src="assets/search-index.js?v=f87de69cf3fa"></script>
+<script defer src="assets/site.js?v=f87de69cf3fa"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -191,7 +191,8 @@ transcript contains each complete response once. Redirected logs remain expanded
 syntax colors when terminal color is enabled. The same display handles incomplete streaming
 code and definitions reused from cache; reasoning remains ordinary text. Generated codegen
 instructions and binding context start folded, leaving the requested function description visible.
-Plain logs and the final transcript retain the original SPL source without line-number gutters.</p>
+Plain logs and the final transcript retain the original SPL source without line-number gutters,
+with syntax colors when terminal color is enabled.</p>
 <p>Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
 stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
 append-only output without changing workflow results. Non-terminal stdin/stderr, <code>TERM=dumb</code>,

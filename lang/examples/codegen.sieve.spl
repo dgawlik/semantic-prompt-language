@@ -2,15 +2,19 @@
 def sieve(number):
     if number < 2:
         return []
-    let flags = list(range(0, number + 1)).map(lambda index: True)
-    flags[0] = False
-    flags[1] = False
-    let divisor = 2
-    while divisor * divisor <= number:
-        if flags[divisor]:
-            let multiple = divisor * divisor
+    let is_prime = range(number + 1).map(lambda value: True)
+    is_prime[0] = False
+    is_prime[1] = False
+    let candidate = 2
+    while candidate * candidate <= number:
+        if is_prime[candidate]:
+            let multiple = candidate * candidate
             while multiple <= number:
-                flags[multiple] = False
-                multiple = multiple + divisor
-        divisor = divisor + 1
-    return list(range(2, number + 1)).filter(lambda candidate: flags[candidate])
+                is_prime[multiple] = False
+                multiple = multiple + candidate
+        candidate = candidate + 1
+    let primes = []
+    for value in range(2, number + 1):
+        if is_prime[value]:
+            primes = primes + [value]
+    return primes

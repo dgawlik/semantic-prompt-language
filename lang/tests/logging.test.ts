@@ -26,7 +26,11 @@ describe('structured logging foundation', () => {
         logger.modelOutput({ kind: 'codegen', requestId: 'generated' }, source);
         expect(history[0].segments).toEqual([{ type: 'code', language: 'spl', source }]);
         expect(Object.isFrozen(history[0].segments[0])).toBe(true);
-        expect(formatSegments(history[0].segments, true)).toBe(source);
+        expect(formatSegments(history[0].segments)).toBe(source);
+        const colored = formatSegments(history[0].segments, true);
+        expect(colored).toContain('\u001b[35mdef\u001b[0m');
+        expect(colored).toContain('\u001b[36mvalues\u001b[0m');
+        expect(stripVTControlCharacters(colored)).toBe(source);
         expect(formatEvent(history[0])).toBe('<- output codegen ' + source);
         logger.modelOutput({ kind: 'ask', requestId: 'ordinary' }, '[1,2]');
         expect(history[1].segments[0].type).toBe('json');
@@ -50,6 +54,21 @@ describe('structured logging foundation', () => {
     });
 
     describe('SPL code display', () => {
+        it.each([false, true])('preserves transcript source whitespace without gutters with color=%s', color => {
+            const source = "\n# Generated function\ndef answer():\n    return '''return 42\ndef string'''\n\n";
+            const history: LogEvent[] = [];
+            new Logger('error', undefined, { eventSink: event => history.push(event) })
+                .modelOutput({ kind: 'codegen', requestId: 'whitespace' }, source);
+            const formatted = formatEvent(history[0], color);
+            expect(stripVTControlCharacters(formatted)).toBe('<- output codegen ' + source);
+            if (color) {
+                expect(formatted).toContain('\u001b[90m# Generated function\u001b[0m');
+                expect(formatted).toContain('\u001b[35mdef\u001b[0m');
+                expect(formatted).toContain("\u001b[32m'''return 42\u001b[0m");
+                expect(formatted).toContain("\u001b[32mdef string'''\u001b[0m");
+            } else expect(formatted).toBe('<- output codegen ' + source);
+        });
+
         it('adds a label and line numbers without changing indentation, literals or numeric spelling', () => {
             const source = 'def values():\n    return [1,2,1.20e+03]\n';
             expect(prettySpl(source)).toBe('SPL\n1 | def values():\n2 |     return [1,2,1.20e+03]');

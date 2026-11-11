@@ -53,8 +53,7 @@ export function prettyJson(source: string, color = false): string | undefined {
     return result;
 }
 
-export function prettySpl(source: string, color = false): string {
-    const text = sanitize(source).replace(/\n$/, '');
+function highlightSpl(text: string, color: boolean): string {
     const tokens = /#[^\n]*|\br(?:'''|"""|'|")|'''|"""|'|"|\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\$?[A-Za-z_]\w*/g;
     let formatted = '';
     let consumed = 0;
@@ -83,8 +82,12 @@ export function prettySpl(source: string, color = false): string {
         consumed = match.index + token.length;
         previous = token;
     }
-    formatted += text.slice(consumed);
-    const lines = formatted.split('\n');
+    return formatted + text.slice(consumed);
+}
+
+export function prettySpl(source: string, color = false): string {
+    const text = sanitize(source).replace(/\n$/, '');
+    const lines = highlightSpl(text, color).split('\n');
     const digits = String(lines.length).length;
     return paint('SPL', 90, color, true) + '\n' + lines.map((line, index) =>
         `${paint(String(index + 1).padStart(digits), 90, color)} ${paint('|', 90, color)} ${line}`).join('\n');
@@ -162,7 +165,7 @@ export function stateSegments(change: StateChange, eventId: string): BodySegment
 export function formatSegments(segments: readonly BodySegment[], color = false): string {
     return segments.map(segment => segment.type === 'json' ? prettyJson(segment.source, color)!
         : segment.type === 'preface' ? formatSegments(textSegments(segment.source, segment.payloadId, 'expanded'), color)
-        : segment.type === 'code' ? segment.source
+        : segment.type === 'code' ? highlightSpl(segment.source, color)
         : segment.text).join('');
 }
 

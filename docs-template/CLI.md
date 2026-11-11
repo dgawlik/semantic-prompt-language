@@ -98,7 +98,8 @@ transcript contains each complete response once. Redirected logs remain expanded
 syntax colors when terminal color is enabled. The same display handles incomplete streaming
 code and definitions reused from cache; reasoning remains ordinary text. Generated codegen
 instructions and binding context start folded, leaving the requested function description visible.
-Plain logs and the final transcript retain the original SPL source without line-number gutters.
+Plain logs and the final transcript retain the original SPL source without line-number gutters,
+with syntax colors when terminal color is enabled.
 
 Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
 stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain

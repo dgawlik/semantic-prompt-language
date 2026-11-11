@@ -386,6 +386,31 @@ try {
 }, 60_000);
 
 describe('presentation ownership', () => {
+    it.each(['completed', 'fallback', 'plain'] as const)('retains codegen syntax colors in the %s transcript', async mode => {
+        const child = new FakeChild();
+        const lines: string[] = [];
+        const logging = new CliLogging({ interactive: mode !== 'plain', color: true,
+            write: line => lines.push(line), spawn: () => child, restore: vi.fn() });
+        await logging.start();
+        const logger = new Logger('error', undefined, { eventSink: logging.sink, streamSink: logging.streamSink });
+        const interaction = { kind: 'codegen', requestId: 'generated' } as const;
+        const source = 'def answer():\n    return 42\n';
+        logger.modelStream({ type: 'update', interaction,
+            update: { channel: 'response', messageId: 'code', mode: 'append', text: 'def answer(' } });
+        logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: source });
+        logger.modelOutput(interaction, source);
+        if (mode === 'fallback') child.emit('error', new Error('renderer failed'));
+        await logging.close('completed');
+        const outputs = lines.filter(line => line.includes('<- output codegen'));
+        expect(outputs).toHaveLength(1);
+        expect(outputs[0]).toContain('\u001b[35mdef\u001b[0m');
+        expect(outputs[0]).toContain('\u001b[36manswer\u001b[0m');
+        expect(outputs[0]).toContain('\u001b[35mreturn\u001b[0m');
+        expect(outputs[0]).toContain('\u001b[33m42\u001b[0m');
+        expect(stripVTControlCharacters(outputs[0])).toBe('<- output codegen ' + source);
+        expect(lines.join('\n')).not.toContain('[streaming]');
+    });
+
     it('releases terminal ownership for human prompts and continues append-only without duplicates', async () => {
         const { logging, child, lines, restore } = session();
         await logging.start();
