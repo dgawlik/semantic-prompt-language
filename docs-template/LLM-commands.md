@@ -5,9 +5,9 @@ This page covers both, and how to check what comes back.
 
 ## Blockquotes
 
-A normal blockquote is an agent command, not code to compile into SPL. The model sees the instruction,
-visible bindings and function signatures, active guidance and restrictions, and the available tools.
-It acts directly on the shared document scope through tool calls.
+A blockquote is an agent command, not text that is compiled into code. The model receives the
+instruction, a JSON overview of the shared bindings, the active guidance and restrictions, and a
+set of tools. It acts directly on the shared scope through tool calls.
 
 ```markdown
 > Summarize @notes in one sentence and save it to @summary
@@ -15,49 +15,64 @@ It acts directly on the shared document scope through tool calls.
 
 For a simple generation task, the comparable code is:
 
-```spl
-let summary = ask(len='sentence') 'Summarize: {notes}'
+```js
+const summary = await ask(`Summarize: ${notes}`, { len: 'sentence' });
 ```
 
 Blockquotes have these tools in addition to configured MCP tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `load_variable(name)` | Read a shared variable or read-only `$args`; declared types return their complete JSON Schema |
-| `save_variable(name, value, schema?)` | Create or update a shared value; optionally use a declared type/schema name or inline JSON Schema |
-| `call_function(name, args)` | Invoke an existing SPL function or builtin with positional JSON arguments |
-| `get_env(name)` | Read one read-only environment value; missing values return `null` |
-| `ask_human(question)` | Ask for human input and return the answer directly |
-| `read_file`, `write_file`, `web_fetch`, `web_search`, `shell` | Use the existing exact runtime tools |
+| `load_variable(name)` | Read a shared variable, a library value, or the script arguments with the name `args`; a type returns its complete JSON Schema |
+| `save_variable(name, value, schema?)` | Create or update a shared variable; `schema` is the name of a type or schema binding, or an inline JSON Schema |
+| `call_function(name, args)` | Call a shared function or library function with positional JSON arguments and return its result |
+| `get_env(name)` | Read one environment variable; missing variables return `null` |
+| `ask_human(question)` | Ask a person and return the answer |
+| `read_file`, `write_file`, `web_fetch`, `web_search`, `shell` | The exact runtime tools |
 | `restrict(kind, value)` | Narrow restrictions for the rest of the command, including function and MCP calls |
 | `set_guidance(kind, text)` | Add `enforce`/`forbid` guidance for this command and its nested model calls |
 | `success(value)`, `fail(reason)` | End the whole document |
 
-These shared-scope tools are specific to blockquotes. Explicit `agent` expressions retain their
-existing runtime/MCP tool set; `ask` and `think` still have no tools.
+These shared-scope tools are specific to blockquotes. `agent(...)` calls in code have the runtime
+tools and MCP tools only; `ask` and `think` have no tools.
 
-`call_function` decodes JSON arguments against parameter annotations, including nested lists
-and records. For example, JSON `15` becomes an SPL `int` for a parameter declared `n: int`;
-unannotated parameters keep ordinary dynamic values. `save_variable` also decodes against
-an existing binding's type annotation. This does not relax validation of ordinary SPL values:
-numeric strings, fractional integers, invalid shapes, and ambiguous decoding targets still fail.
-Tool arguments are already parsed JSON, so integer values outside JavaScript's safe integer
-range are rejected when decoding to `int`, rather than risking a rounded value. Numeric unions
-interpret integral parsed numbers as `int` and fractional numbers or negative zero as `float`;
-the original decimal/exponent spelling is no longer available at this boundary.
+The overview sent with every blockquote contains the current value of each top-level binding:
+data as JSON, functions as signatures such as `function add(a, b)`, types as labels such as
+`<type Review>`. Keep secrets and very large values out of top-level variables, or read them
+inside a function.
 
-For `@validate[Review]`, the agent can inspect `Review` with `load_variable("Review")`.
-The returned schema includes nested fields, lists, and enums; `<type Review>` in the shared
-bindings overview is only a display label. The agent then saves with
-`save_variable(name="review", value=..., schema="Review")`. The runtime resolves the declared
-type, validates and decodes the JSON, and hydrates any opted-in classes, including nested ones.
-Structs and typed containers retain their contracts; constructor-only classes are rejected.
-An inline JSON Schema object or boolean, or the name of a binding holding one, keeps the
-existing validation-only behavior without class hydration. Invalid values fail before saving.
+`@name` marks a binding or operation; it is a reference for the agent, not text substitution.
+Plain language works too.
 
-`@name` marks a binding or operation (`@notes`, `@success`, `@read_file`), not text substitution.
-Plain language works too. Put optional controls in one `@CTL(...)` block at the start of the
-blockquote; omit any settings you do not need:
+| Marker | Agent behavior |
+| --- | --- |
+| `@notes`, `@summarize` | Load or save the shared variable; call the shared function |
+| `@validate[Schema]` | Inspect the type `Schema`, then pass its name to `save_variable`; an invalid value stops the command |
+| `@success`, `@fail` | End the document with a result or an explicit failure |
+| `@env.NAME` | Read one environment variable with `get_env` |
+| `@args` | Read the script arguments |
+
+With `@validate[Review]`, the runtime resolves `Review`, validates the JSON value and saves what
+`Review.parse` returns: plain objects for structs, instances for [class types](Language.md#classes).
+An inline JSON Schema, or the name of a binding holding one, only validates. Name composite
+types first, for example `const Reviews = typedef('Reviews', list(Review))`, then write
+`@validate[Reviews]`: the tool resolves binding names, not expressions such as `list(Review)`.
+A rejected value reports the path from the variable being saved, for example
+`invoice.tax: expected Money, got 3312.5`.
+
+`save_variable` refuses to replace a function, a type, an imported name or a library name, and
+`call_function` passes JSON values as they are. Each tool call executes immediately and returns its real result
+to the same agent session. Any tool error stops the command at once, keeping its own status
+code; the model cannot retry, and completed actions are not repeated. A prose reply does not
+create variables, so follow important steps with a check:
+
+```js
+assert(typeof summary === 'string' && summary.length < 300, 'summary is missing or too long');
+```
+
+### Controls
+
+Put optional controls in one `@CTL(...)` block at the start of the blockquote:
 
 ```markdown
 > @CTL(
@@ -73,193 +88,158 @@ blockquote; omit any settings you do not need:
 
 | Setting | Values | Effect |
 | --- | --- | --- |
-| `restrict` | A map with `fs`, `exec`, `net`, or `mcp` keys; each value is a string or list of strings | Narrow runtime permissions before the first tool call, using the same validation as SPL `restrict` |
-| `enforce`, `forbid` | A literal string or list of literal strings | Add prompt guidance for this command and its nested model calls, not runtime validation |
-| `model` | A nonempty literal string | Override the document model for this blockquote; CLI `--model` still takes precedence |
-| `reasoning` | `'low'`, `'medium'`, or `'high'` | Select this blockquote agent's reasoning effort; defaults to `'medium'` |
+| `restrict` | A map with `fs`, `exec`, `net` or `mcp` keys; each value is a string or list of strings | Narrow runtime permissions before the first tool call, like [`restrict`](Safety.md#restrictions) in code |
+| `enforce`, `forbid` | A string or list of strings | Add prompt guidance for this command and its nested model calls; not validation |
+| `model` | A nonempty string | Model for this blockquote; CLI `--model` still takes precedence |
+| `reasoning` | `'low'`, `'medium'` or `'high'` | Reasoning effort of this blockquote's agent; defaults to `'medium'` |
 
-Controls are parsed and applied by the runtime, not interpreted by the model. Names and restriction
-kinds must be unique; unknown settings, wrong value types and multiple or misplaced `@CTL` blocks are
-syntax errors, including with `--check`. Settings accept literals, not SPL expressions or interpolation.
-Strings use SPL quoting and escapes; use raw strings or doubled braces for literal braces.
-The restriction map's braces are control syntax, not SPL dictionary literals.
-Multiline settings and trailing commas are supported. The marker is case-insensitive.
-Each specified restriction requires at least one nonblank entry; restriction values and paths
-are checked at runtime before contacting the model.
+Controls are parsed and applied by the runtime, not interpreted by the model. Settings are
+literals, never JavaScript expressions: strings use single, double, backtick or triple quotes,
+`r'...'` is a raw string, and `${...}` interpolation is rejected. Setting names and restriction
+kinds must be unique. Unknown settings, wrong value types and a misplaced or repeated `@CTL` are
+syntax errors, also with `--check`. Multiline settings and trailing commas are supported, and the
+marker is case-insensitive.
 
-All settings expire at the end of the blockquote. Restrictions intersect with existing restrictions,
-and guidance is also inherited by invoked SPL functions and their model calls. Model and reasoning
-settings select only the blockquote agent; nested generation keeps its own modifiers and defaults.
-The separate `@Restrict`, `@Enforce`, `@Forbid` and `@Human` markers have been removed and are syntax
-errors. Request human input in plain language; the agent uses `ask_human`.
-
-Other conventions guide the agent's tool choices:
-
-| Marker | Agent behavior |
-| --- | --- |
-| `@validate[Schema]` | Inspect `Schema`, then pass its name to `save_variable` for validation and typed decoding; invalid values stop the command |
-| `@SUCCESS`, `@fail` | End the document |
-
-For a list or union schema, declare a named alias first, such as
-`type Reviews = list[Review]`, and use `@validate[Reviews]`. The tool resolves binding
-names, not type-expression strings such as `"list[Review]"`.
-
-Each runtime tool call executes immediately in the interpreter and returns its real result to the
-same agent session. Tools run sequentially, not through a deferred action queue. Saving a variable takes effect immediately;
-prose replies do not create bindings. Functions retain their normal lexical scope and runtime guards.
-Any runtime or MCP tool error stops the command immediately, preserving the original failure.
-The model cannot continue or retry after a failed action; completed external actions are not repeated.
-Follow important steps with an `spl` check:
-
-```spl
-assert len(summary) < 300 'summary is too long'
-```
+All settings expire at the end of the blockquote. Restrictions intersect with those already
+active; guidance is inherited by functions the agent calls and by their model calls. `model` and
+`reasoning` select only the blockquote's agent. The former `@Restrict`, `@Enforce`, `@Forbid` and
+`@Human` markers are syntax errors: use `@CTL`, and request human input in plain language.
 
 `--check` validates syntax only; it cannot validate a blockquote's intent. `--trace` records the
-agent's decisions and runtime tool results. Replay restores shared-variable changes and function
-execution without repeating external effects or contacting MCP. Reuse the same `--trace` path
-to resume or replay; choose another JSONL file to restart. Run only trusted documents.
-Old traces containing submitted SPL are incompatible with agent commands; record a new trace.
+agent's decisions and tool results, and replay restores shared-variable changes without
+contacting the model or MCP. Run only trusted documents.
 
-Human input prompts directly in the shell and returns the answer to the same agent session.
-Repeat `--human <answer>` to answer questions in order without prompting. With `--trace`,
-completed decisions, effects and human answers replay from the same file, then the agent continues
-with any new answers. Supplied answers are consumed only for questions not already recorded.
-See [Human input](Safety.md#human-in-the-loop).
+Human input prompts in the shell and returns the answer to the same agent session; repeat
+`--human <answer>` to answer questions in order without prompting.
+See [Human in the loop](Safety.md#human-in-the-loop).
 
 ## Code generation
 
-`@CODEGEN` explicitly generates reusable SPL functions instead of running an agent command:
+`@CODEGEN` generates reusable JavaScript functions instead of running an agent command. In code,
+`await codegen(description)` does the same and returns the function.
 
 ````markdown
+---
+extension: semantic-prompt-language
+version: 1
+---
+
 > @CODEGEN 'Define double(value), returning value multiplied by two'
 
-```spl
-let result = double(21)
+```js
+const result = double(21);
 ```
 
 > @CTL(model='gpt-6-luna', reasoning='high')
 > @CODEGEN '''
-> Define add_one(value), returning the input plus one.
+> Define addOne(value), returning the input plus one.
 > '''
 
-```spl
-success add_one(result)
+```js
+const slugify = await codegen('slugify(title): lowercase words joined with single dashes');
+success([addOne(result), slugify('Hello, World')]);
 ```
 ````
 
-The case-insensitive marker must start the blockquote, after optional `@CTL(...)` settings.
-Its input is exactly one nonempty literal SPL string, including raw or triple-quoted strings.
-Interpolation is not evaluated; use raw strings or doubled braces for literal braces.
-Description syntax is checked even with `--check`; generation happens only when executing.
+The marker must start the blockquote, after optional `@CTL(...)` settings, and takes exactly one
+nonempty literal string. `codegen(description, { model, reasoning })` accepts the same two
+controls. The description syntax is checked by `--check`; generation happens only when running.
 
-The model receives the description, visible bindings, builtin names, SPL syntax guidance and
-active controls, with no runtime or MCP tools. Its response must contain only SPL `def`
-declarations: the requested function first, followed by any helper functions. Imports, directives,
-Markdown wrappers and top-level actions are rejected. Parsing and static contract checks must
-succeed before definitions are registered or saved. The functions are not called during generation.
-They capture the shared lexical scope and are available to subsequent fences, blockquotes and
-interactive cells until the session ends. Their calls retain normal runtime guards.
+The model receives the description, the shared bindings overview, the library function names and
+active guidance, with no tools. Its response must contain only function declarations
+(`function name(...)` or `async function name(...)`): the requested function first, then any
+helpers. One enclosing code fence is unwrapped; imports, exports and other top-level statements
+are rejected with `invalid_format`. The functions are defined in the shared scope without being
+called, can use the library and shared bindings, and stay available to later fences, blockquotes
+and interactive cells.
 
-With `--trace`, successful definitions are saved beside the workflow in
-`<workflow>.<first-function>.spl`, such as `flow.double.spl`. Each file starts with
-`# @CODEGEN sha256:<64 hex digits>`, the SHA-256 hash of the decoded literal description.
-Multiple codegen blocks have separate cache files. If a friendly filename already exists,
-the new file includes its full input hash rather than overwriting it.
+With `--trace`, generated code is saved beside the workflow as `<workflow>.<function>.js`, such
+as `flow.double.js`. Each file starts with `// @CODEGEN sha256:<64 hex digits>`, the SHA-256
+hash of the description. If the friendly file name is taken, the hash is added to the name
+rather than overwriting the file.
 
-Every new traced run checks these workflow-specific sibling files for a matching top-level
-signature. A match is parsed, type-checked and registered automatically without any import or
-model call. A matching but invalid definition fails explicitly; it is not silently regenerated.
-Files without a matching signature are not used or overwritten. These files are editable SPL:
-review generated code before trusting it. The signature identifies the input, not code integrity.
-Only the description is hashed, not bindings, model or preamble. To regenerate, change the
-description or remove its cached file, then choose a new JSONL trace.
+Every new traced run looks for a sibling `<workflow>.*.js` file whose first line matches the
+description and uses it without a model call. A matching file that is not valid generated code
+fails; it is not silently regenerated. These files are editable JavaScript: review generated
+code before trusting it. The hash identifies the description, not the code, model or bindings.
+To regenerate, change the description or remove the cached file, then choose a new trace file.
 
-Replaying the same JSONL trace uses its recorded definitions, not current cache contents, and
-does not recreate missing cache files. Without `--trace`, no cache is read or written.
-`--pin` embeds the definitions for self-contained replay without sidecars. Embedded traced
-callers should provide `source` for workflow-relative cache names; otherwise the trace filename
-is used as the cache base.
+Replaying the same trace uses its recorded code, not the cache files. Without `--trace`, no
+cache is read or written. `--pin` embeds the generated code in the locked workflow, which then
+replays without the cache files.
 
 ## Generation: ask and think
 
-`ask prompt` returns the model's answer as a value. `think` is the same with medium reasoning by default.
-Neither has tools: they cannot read files, browse or run commands.
+`await ask(prompt)` returns the model's answer. `think` is the same with medium reasoning by
+default. Neither has tools: they cannot read files, browse or run commands.
 
-```spl
-let title = ask 'Suggest a title for: {draft}'
-let plan = think(reasoning='high') 'Plan the migration of {service}'
+```js
+const title = await ask(`Suggest a title for: ${draft}`);
+const plan = await think(`Plan the migration of ${service}`, { reasoning: 'high' });
+const tagline = await ask`A tagline for ${product}`;
 ```
 
-Each call starts a fresh session. Pass context explicitly, usually through interpolation.
+Each call starts a fresh conversation. Pass context explicitly, usually through a template
+literal. The tagged-template form takes no options; interpolated objects are rendered as JSON.
 
 Model responses stream into the interactive CLI view and notebook cell outputs while the model
-is working, including available reasoning by default. `hide=True` suppresses reasoning, not responses.
-These are previews: variables, JSON parsing,
-schema validation and repairs use the completed response, never partial chunks. Failures and cancelled
-turns do not turn partial output into a successful result. Traces and recordings retain complete
-responses rather than streaming chunks; replay does not manufacture token timing.
+is working, including available reasoning by default. `hide: true` suppresses reasoning, not
+responses. These are previews: JSON parsing, schema validation and repairs use the completed
+response, never partial chunks. Traces retain complete responses rather than streaming chunks.
 
 Embedded integrations can use `LoggerOptions.streamSink` for request-scoped `ModelStreamEvent`
-updates and completion/failure notifications. Backend callers can supply `LlmRequest.onStream`.
-Updates identify a response or reasoning channel and an SDK message ID: append chunks with
-`mode: 'append'`, replace content with `mode: 'replace'`, and reset the preview when the message
-ID changes. Ordinary event/string sinks still receive complete transcripts; `LlmResponse.text`
-is always the authoritative return value.
+updates. Backend callers can supply `LlmRequest.onStream`. Updates identify a response or
+reasoning channel and a message ID: append chunks with `mode: 'append'`, replace content with
+`mode: 'replace'`. `LlmResponse.text` is always the authoritative return value.
 
 ## Agents
 
-`agent prompt` lets the model act with the runtime tools (`read_file`, `write_file`, `web_fetch`,
-`web_search`, `shell`) and any configured MCP tools. Actions are checked against active restrictions.
-Agents default to medium reasoning and never use repairs, so a failed check never repeats their actions.
+`await agent(prompt)` lets the model act with the runtime tools (`read_file`, `write_file`,
+`web_fetch`, `web_search`, `shell`) and any configured MCP tools. Actions are checked against
+active restrictions. Agents default to medium reasoning and never use repairs, so a failed check
+never repeats their actions.
 
-```spl
-let report = ''
-restrict './src', exec 'npm':
-    report = agent 'Run the tests, fix the failing source file, and describe the fix'
+```js
+const report = await restrict({ fs: './src', exec: 'npm' }, () =>
+    agent('Run the tests, fix the failing source file, and describe the fix'));
 ```
 
-## Modifiers
+## Options
 
-All three commands take named modifiers in parentheses before the prompt. Values are expressions,
-evaluated once and validated before the call. Unknown or duplicate names are syntax errors.
+All three calls take an options object as the second argument. Values are validated before the
+call; an unknown name or invalid value is a `runtime_error` and no model is contacted.
 
-| Modifier | Values | Effect |
+| Option | Values | Effect |
 | --- | --- | --- |
-| `len` | `word` `sentence` `paragraph` `long` | Length hint (guidance only) |
+| `len` | `'word'` `'sentence'` `'paragraph'` `'long'` | Length hint (guidance only) |
 | `fmt` | see [Output formats](#output-formats) | Parse and check the answer |
-| `schema` | JSON Schema draft-07 | Validate the answer; implies JSON |
-| `repairs` | `0`–`5` | Extra attempts after a format or schema error |
-| `reasoning` | `low` `medium` `high` | Reasoning effort, if the model supports it |
-| `hide` | `True` `False` (default) | Suppress reasoning display when `True`; responses remain visible |
-| `model` | model id | Per-call model |
+| `schema` | A [type](Language.md#types) or JSON Schema draft-07 | Validate the answer; implies JSON |
+| `repairs` | `0` to `5` | Extra attempts after a format or schema error; not for `agent` |
+| `reasoning` | `'low'` `'medium'` `'high'` | Reasoning effort, if the model supports it |
+| `hide` | `true` or `false` (default) | Suppress reasoning display when `true`; responses remain visible |
+| `model` | Model ID | Per-call model |
 | `tokens` | Positive safe integer | Maximum generated tokens per model turn, including reasoning |
 | `seed` | Integer `0..2147483647` | `ask` only: request repeatable sampling where supported |
-| `temperature` | Finite number `0..2` | `ask` only: control sampling variability |
-| `top_p` | Finite number `0..1` | `ask` only: control nucleus sampling |
+| `temperature` | Number `0..2` | `ask` only: control sampling variability |
+| `topP` | Number `0..1` | `ask` only: control nucleus sampling (`top_p` is accepted as an alias) |
 
-The former `show` modifier is no longer accepted. Omit `show=True` (reasoning is now visible
-by default), and replace `show=False` with `hide=True`.
-
-```spl
-let score = ask(
-    fmt='integer',
-    repairs=1,
-    tokens=2048,
-) 'Rate this issue from 1 to 5: {issue}'
+```js
+const score = await ask(`Rate this issue from 1 to 5: ${issue}`, {
+    fmt: 'integer',
+    repairs: 1,
+    tokens: 2048,
+});
 ```
 
 `tokens` is a hard generation budget, not a length hint or a separate thinking budget.
 The same limit applies independently to every repair attempt and agent tool-continuation turn.
-Omitting it preserves existing provider defaults. It maps to OpenAI `max_output_tokens`
+Omitting it keeps provider defaults. It maps to OpenAI `max_output_tokens`
 (or `max_completion_tokens` for seeded calls), Anthropic `max_tokens`, and Google `maxOutputTokens`.
-Invalid values fail before the model call; provider/model limits still apply. Legacy Anthropic
-manual thinking requires `tokens` to exceed its reasoning budget (`low`: 1024, `medium`: 4096,
-`high`: 16384); conflicting settings fail rather than silently enlarging the generation budget.
-If the model hits its token limit, the call fails with `llm_error`, not a successful partial answer,
-and format/schema repairs do not retry the truncated turn.
-Explicit budgets are recorded in `effective.tokens` and participate in recording/trace request
-matching, so changing a budget cannot silently reuse an old answer.
+Legacy Anthropic manual thinking requires `tokens` to exceed its reasoning budget (`low`: 1024,
+`medium`: 4096, `high`: 16384); conflicting settings fail rather than silently enlarging the budget.
+If the model hits its token limit, the call fails with `llm_error`, not a successful partial
+answer, and repairs do not retry the truncated turn. Explicit budgets are part of the recorded
+request, so changing a budget cannot silently reuse an old answer during replay.
 
 Model precedence: CLI `--model`, then the per-call `model`, then frontmatter `model`, then the
 provider default. OpenAI, Anthropic and Google are supported through their official clients; use bare
@@ -267,146 +247,100 @@ model IDs or `provider/model`. See [Models and authentication](CLI.md#models-and
 
 ## Randomness controls
 
-Set sampling modifiers directly in `ask(...)`:
+Set sampling options directly on `ask`:
 
-```spl
-let answer = ask(seed=42, temperature=0, top_p=0.01) 'Answer precisely'
-let plan = ask(temperature=0, reasoning='high') 'Plan the migration'
+```js
+const answer = await ask('Answer precisely', { seed: 42, temperature: 0, topP: 0.01 });
+const plan = await ask('Plan the migration', { temperature: 0, reasoning: 'high' });
 ```
 
-Parameters are optional named expressions, evaluated once in source order alongside other modifiers
-and before the prompt. The same values are reused for every repair attempt.
-Omitted sampling controls use provider/model defaults; no seed, temperature or `top_p` is invented.
-Sampling controls apply only to that `ask` expression, not to surrounding code or Markdown blockquotes.
-`think` and `agent` do not accept them; their existing modifiers and reasoning defaults are unchanged.
+Omitted sampling controls use provider/model defaults; no seed, temperature or `topP` is
+invented. The same values are reused for every repair attempt. `think`, `agent` and blockquotes
+do not accept sampling options.
 
-`ask` has no implicit reasoning effort. An explicit
-`reasoning='low'`, `'medium'` or `'high'` always takes precedence. Models that cannot disable thinking
-use the SDK's lowest supported thinking setting with a compatibility warning.
-
-| Parameter | Accepted values | Meaning |
-| --- | --- | --- |
-| `seed` | Integer `0..2147483647` | Request repeatable sampling where the provider supports it |
-| `temperature` | Finite number `0..2` | Lower values reduce variability; `0` requests greedy sampling where supported |
-| `top_p` | Finite number `0..1` | Nucleus sampling; smaller values narrow token choices (`1` does not narrow them) |
-
-Unknown/duplicate names, or sampling modifiers on `think` or `agent`, are syntax errors.
-Out-of-range values, booleans, strings and `None` are runtime errors before the model call.
-The former `randomness(...)` prefix and `eval(...)` statement are no longer supported.
-Move sampling values into `ask(...)` and use `assert` and schemas for explicit output checks.
+`ask` has no implicit reasoning effort. An explicit `reasoning` always takes precedence. Models
+that cannot disable thinking use the lowest supported thinking setting with a compatibility warning.
 
 Provider limitations are diagnosed with warnings; the runtime keeps supported controls without
 changing the model, and preserves explicitly requested reasoning:
 
 * **OpenAI:** seeded calls use Chat Completions, which accepts `seed`; unseeded calls retain
   the Responses API. Chat Completions does not expose reasoning summaries, so requested
-  summaries warn and are omitted; reasoning effort and runtime/MCP tool continuations are retained.
-  Tool definitions and parallel-tool settings are omitted when no tools are enabled.
-  Seeds are best-effort and deprecated by the upstream API, not a guarantee of identical output.
-  Models must support Chat Completions; provider errors surface without retrying on a different API.
-  Compatible GPT-5.1+ and GPT-6 models accept sampling with reasoning effort `none`.
+  summaries warn and are omitted. Seeds are best-effort and deprecated by the upstream API.
   Models that require reasoning, or calls with explicit reasoning, may remove sampling controls.
-  The provider adapter diagnoses model-specific restrictions.
 * **Google:** the Generate Content API receives `seed`, `temperature` and `topP`. A fixed seed
   with low temperature and a small nucleus is best-effort repeatability, not a guarantee.
-  Gemini 2.5 Flash supports disabling thinking with a zero budget; Gemini 2.5 Pro and Gemini 3
-  models retain their lowest supported thinking setting with a warning.
 * **Anthropic:** seeds are unsupported. Temperature is capped at `1` with a warning. On compatible
-  non-thinking models, set either temperature or `top_p`; if both are supplied, temperature wins
-  and the adapter warns that `top_p` is ignored. Thinking and newer models may reject sampling
-  altogether; unsupported controls are removed with warnings.
+  non-thinking models, set either temperature or `topP`; if both are supplied, temperature wins.
+  Thinking and newer models may reject sampling altogether; unsupported controls are removed
+  with warnings.
 
-The response's `effective.randomness` records controls actually retained by the provider adapter.
-For sampling controls,
-`null` means the control was omitted/unsupported and provider defaults apply, not that a particular
-default numeric value was sent.
-`effective.reasoningEffort` is `none` when disabling thinking is honored, or `null` when the adapter
-cannot honor that setting; `null` does not mean thinking is disabled.
-Traces and pinned workflows include requested
-sampling controls in request identity; changing them cannot silently reuse an old response.
-Recreate pins and choose new trace files after editing source documents; legacy trace and
-generation-recording formats are not accepted by the append-only trace journal.
+The response's `effective.randomness` records the controls actually retained by the provider
+adapter; `null` means the control was omitted or unsupported and provider defaults apply.
+Traces and pinned workflows include requested sampling controls in the request identity.
 
 Even extreme settings cannot guarantee identical outputs from hosted models. Use
-[`--trace`](CLI.md#traces-and-replay) or [`--pin`](CLI.md#pinned-workflows) for deterministic offline replay.
-See the official [OpenAI](https://ai-sdk.dev/providers/ai-sdk-providers/openai),
-[Google](https://ai-sdk.dev/providers/ai-sdk-providers/google) and
-[Anthropic](https://ai-sdk.dev/providers/ai-sdk-providers/anthropic) adapter documentation.
+[`--trace`](CLI.md#traces-and-replay) or [`--pin`](CLI.md#pinned-workflows) for deterministic replay.
 
 ## Output formats
 
-| `fmt` | Accepts |
-| --- | --- |
-| `text` (default) | Trimmed text, no parsing |
-| `integer` | JSON number without a fraction |
-| `float` | Any finite JSON number |
-| `boolean` | JSON `true` or `false` |
-| `array` | JSON array (a list) |
-| `object` | JSON object (a dict, not an array) |
-| `json` | Any JSON value |
+| `fmt` | Accepts | JavaScript result |
+| --- | --- | --- |
+| `'text'` (default) | Trimmed text, no parsing | `string` |
+| `'integer'` | JSON number without a fraction | `number` |
+| `'float'` | Any finite JSON number | `number` |
+| `'boolean'` | JSON `true` or `false` | `boolean` |
+| `'array'` | JSON array | `Array` |
+| `'object'` | JSON object (not an array) | plain object |
+| `'json'` | Any JSON value | any JSON value |
 
 Parsing is strict: prose around JSON and Markdown code fences are rejected, and values are never
 coerced. A malformed or wrong-typed answer raises `invalid_format`.
 
 ## Schemas and repairs
 
-`schema` accepts SPL type descriptors or raw JSON Schema. Both reject invalid output without
-coercion, defaults or removal of extra fields. A mismatch raises `validation_failed` with field paths.
+`schema` accepts a [type](Language.md#types) or raw JSON Schema. Both reject invalid output
+without coercion, defaults or removal of extra fields. A mismatch raises `validation_failed`
+with the path of the offending field.
 
-Use enums, structs and aliases to describe typed output directly:
+```js
+const Label = enumOf('bug', 'feature', 'question');
+const Triage = struct('Triage', {
+    label: Label,
+    reason: str.annotate({ desc: 'One-sentence explanation' }),
+});
 
-```spl
-enum Label = 'bug' | 'feature' | 'question'
-struct Triage:
-    label: Label
-    reason: str [desc='One-sentence explanation']
-let triage: Triage = ask(schema=Triage, repairs=2) 'Classify: {issue}'
-assert triage.label != 'bug' or len(triage.reason) > 0 'bugs need a reason'
+const triage = await ask(`Classify: ${issue}`, { schema: Triage, repairs: 2 });
+assert(triage.label !== 'bug' || triage.reason.length > 0, 'bugs need a reason');
 
-type Batch = list[Triage]
-let batch: Batch = ask(schema=Batch) 'Classify each issue: {issues}'
+const batch = await ask(`Classify each issue: ${JSON.stringify(issues)}`, { schema: list(Triage) });
 ```
 
-Struct fields are exact and required, including nullable fields. Metadata in brackets
-is model advice only, not a data constraint. Raw JSON Schema still uses strict Ajv
-validation when constraints such as `minimum` or `minLength` must be enforced:
+With a type, the result is what `Type.parse` returns: plain objects for structs, instances for
+class types. Struct fields are exact and required, including nullable fields. Annotations are
+advice for the model only. Raw JSON Schema is validated strictly with Ajv and returns the JSON
+value, for when constraints such as `minimum` must be enforced:
 
-```spl
-let Rating = object:
-    'type': 'integer'
-    'minimum': 1
-    'maximum': 5
-let rating = ask(schema=Rating) 'Rate this issue from 1 to 5: {issue}'
+```js
+const rating = await ask(`Rate this issue from 1 to 5: ${issue}`, {
+    schema: { type: 'integer', minimum: 1, maximum: 5 },
+});
 ```
 
-Raw schemas validate dynamic JSON values; they do not install SPL type contracts or
-hydrate classes. Descriptor targets decode typed representations, including exact
-signed-64-bit integer tokens and distinct finite floats. Legacy `fmt='integer'` and
-`fmt='float'` alone still return dynamic numbers; use `schema=int` or `schema=float`
-when a typed numeric result is required.
-
-`repairs=n` allows up to `n` more attempts, each with the previous answer and the validation errors.
-Only `invalid_format` and `validation_failed` are repaired; transport and tool errors are not.
-The prompt is not re-evaluated. Put business rules in `assert`, after the call.
-
-Struct targets decode validated structural data;
-`schema=Person` hydrates a nominal instance only for a `hydratable class Person`.
-`schema=struct(Person)` instead returns structural field data, never a `Person` instance.
-A binding annotation checks the result and does not secretly configure the ask target.
-Typed JSON decoding preserves signed-64-bit tokens exactly; typed decoding or complete hydration
-failures use the same repair budget (zero by default, at most five extra attempts). Unsupported
-non-JSON schemas and ambiguous distinct targets fail before provider calls.
-See [class schemas and migration](Migration.md#class-schemas-versus-structural-data).
+`repairs: n` allows up to `n` more attempts. Each sends the original prompt again, followed by
+the previous answer and the validation error. Only `invalid_format` and `validation_failed` are
+repaired; transport and tool errors are not. Put business rules in `assert`, after the call.
+`schema` and `repairs` need JSON output: combining them with `fmt: 'text'`, or using `repairs`
+without `fmt` or `schema`, is a `runtime_error`.
 
 ## Guidance: enforce and forbid
 
-`enforce text:` and `forbid text:` introduce indented blocks and add instructions to every model
-call inside, including calls in functions they invoke. Nested guidance combines. Guidance shapes prompts;
-it does not check the answer.
+`enforce(text, body)` and `forbid(text, body)` add instructions to every model call made while
+`body` runs, including calls in functions it invokes and across `await`. They return what `body`
+returns. `text` is a string or a list of strings; nested guidance combines. Guidance shapes
+prompts; it does not check the answer.
 
-```spl
-let answer = None
-enforce 'Answer in English':
-    forbid 'jokes':
-        answer = ask(len='sentence') 'Explain recursion'
+```js
+const answer = await enforce('Answer in English', () =>
+    forbid('jokes', () => ask('Explain recursion', { len: 'sentence' })));
 ```

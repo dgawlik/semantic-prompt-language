@@ -5,80 +5,63 @@ version: 1
 
 # Typed data without a model
 
-Annotations opt into persistent contracts. This workflow uses no model calls or credentials:
+Types are built with library functions. This workflow uses no model calls or credentials:
 
     spl examples/typed-data.md
 
-It covers primitives, transparent aliases, enums, exact structs, nullable fields,
-unions, callable signatures, validation, persistent list contracts and deep projections.
-For schema decoding, `schema=Person` hydrates only an opted-in class, whereas
-`schema=struct(Person)` returns structural data, never a nominal instance.
-Field and alias metadata are model advice; use assertions for business rules.
+It covers primitives, named aliases, enums, exact structs, nullable fields, unions,
+annotations, classes with methods, validation and JSON Schema output.
+With a model, `ask(prompt, { schema: Person })` parses the answer into the same objects.
+Annotations are advice for the model; use assertions for business rules.
 
-```spl
-enum Color = 'red' | 'green' | 'blue'
-type Palette = list[Color]
-type Money = int [minimum=0, desc='Amount in cents']
-type MaybeMoney = Money | None
+```js
+const Color = enumOf('red', 'green', 'blue');
+const Palette = typedef('Palette', list(Color));
+const Money = typedef('Money', int, { minimum: 0, desc: 'Amount in cents' });
 
-struct Address:
-    city: str
-    postalCode: str | None
+const Address = struct('Address', {
+    city: str,
+    postalCode: nullable(str),
+});
 
-hydratable class Person:
-    name: str
-    favorite: Color
-    address: Address
+const Person = struct('Person', {
+    name: str.describe('Full name'),
+    favorite: Color,
+    address: Address,
+}).methods({
+    greeting() { return `Hello ${this.name}`; },
+});
 
-    def Person(name: str, favorite: Color, address: Address):
-        self.name = name
-        self.favorite = favorite
-        self.address = address
+// Plain JSON in, checked JavaScript objects out: nothing is coerced or filled in.
+const colors = Palette.parse(['blue', 'green']);
+const address = validate(JSON.parse('{"city":"London","postalCode":null}'), Address);
+const person = Person.parse({ name: 'Ada', favorite: colors[0], address });
 
-    def greeting() -> str:
-        return 'Hello {self.name}'
+assert(person.greeting() === 'Hello Ada', 'parsed objects carry their methods');
+assert(Person.is(person) && !Person.is({ name: 'Ada' }), 'is() tests without throwing');
+assert(Money.parse(1250) * 2 === 2500, 'aliases are transparent');
+assert(Money.parse(-1) === -1, 'annotations such as minimum are advice, not validation');
 
-def repeat(text: str, count: int) -> str:
-    return text * count
+const Id = union(int, str);
+assert(Id.is(7) && Id.is('seven') && !Id.is(null), 'unions accept any member');
 
-struct Handler:
-    callback: fn(str, int) -> str
+let problem = '';
+try {
+    Person.parse({ name: 'Ada', favorite: 'purple', address });
+} catch (error) {
+    problem = error.reason;
+}
+assert(problem === '$.favorite: expected "red" | "green" | "blue", got "purple"', 'errors name the field');
 
-let count: int = 2
-let ratio: float = 1.0
-let initial: char = 'A'
-let enabled: bool = True
-let colors: Palette = ['blue']
-let alias = colors
-alias.append('green')
-assert len(colors) == 2 'untyped aliases share the same guarded list'
+// The JSON Schema a model would receive, including the annotations.
+const schema = Person.schema();
+assert(schema.properties.name.description === 'Full name', 'descriptions reach the schema');
 
-let subtotal: Money = 1250
-let total: Money = subtotal * count
-let discount: MaybeMoney = None
-assert total >= 0 'amounts must not be negative'
-let typed_length: int = int(len(colors))
-let scaled: float = float(count) * ratio
-assert typed_length == count and scaled == float(count) 'convert dynamic or mixed numbers explicitly'
-assert json_stringify([count, ratio]) == '[2,1.0]' 'typed numeric JSON preserves representations'
+// Class instances serialize like plain data; the plain view drops the methods again.
+const snapshot = Person.data.parse(JSON.parse(JSON.stringify(person)));
+snapshot.address.city = 'Paris';
+assert(person.address.city === 'London', 'parsing copies its input');
 
-let raw_address = json_parse(r'{"city":"London","postalCode":null}')
-let address: Address = validate(raw_address, Address)
-let person = Person('Ada', colors[0], address)
-let handler: Handler = object:
-    'callback': repeat
-let choice: int | str = count
-if isinstance(choice, int):
-    assert choice == count 'the union currently contains an integer'
-choice = 'blue'
-if isinstance(choice, str):
-    assert choice.upper() == 'BLUE' 'narrow unions before string operations'
-assert initial == 'A' and enabled and discount == None 'primitive and nullable values'
-assert handler.callback('Hi ', count) == 'Hi Hi ' 'callable fields check arguments and results'
-
-let snapshot = object(person)
-snapshot.address.city = 'Paris'
-assert person.address.city == 'London' 'deep projections must not mutate the source'
-log(person.greeting(), handler.callback('Hi ', count))
-success object(person)
+log(person.greeting(), Money.name, Money.annotations);
+success(person);
 ```

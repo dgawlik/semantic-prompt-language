@@ -1,190 +1,170 @@
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { run } from '../src/interpreter.js';
-import type { LlmRequest, LlmResponse } from '../src/llm.js';
-import { Logger } from '../src/logger.js';
+import { afterEach, describe, expect, it } from 'vitest';
 import { parseMarkdown } from '../src/markdown.js';
-import { isReservedName, parse } from '../src/parser.js';
 import { Pin } from '../src/pin.js';
-import { NoLlm } from './helpers.js';
+import { run } from '../src/workflow.js';
+import { NoLlm, cleanTemp, document, exec, execMarkdown, fence, scripted, silent, tempDir } from './helpers.js';
 
-const logger = new Logger('silent');
-let cwd: string;
-beforeEach(() => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-randomness-'));
-});
-afterEach(() => {
-    fs.rmSync(cwd, { recursive: true, force: true });
-});
-const markdown = (source: string) =>
-    `---\nextension: semantic-prompt-language\nversion: 1\n---\n\n\`\`\`spl\n${source}\n\`\`\`\n`;
-const scripted = (...answers: string[]) => ({
-    call: vi.fn(async (_req: LlmRequest): Promise<LlmResponse> => {
-        const text = answers.shift();
-        if (text === undefined) throw new Error('unexpected model call');
-        return { text, effective: {} };
-    }),
-    async close() {},
-});
+afterEach(cleanTemp);
 
-describe('ask sampling modifiers', () => {
-    it('runs the shipped example with two sampled asks and no evaluation call', async () => {
-        const source = fs.readFileSync(new URL('../examples/randomness.md', import.meta.url), 'utf8');
-        const backend = scripted('first recipe', 'second recipe');
-        expect(await run(parseMarkdown(source), { backend, logger, cwd })).toMatchObject({
-            status: 'success', value: ['first recipe', 'second recipe'],
-        });
-        expect(backend.call).toHaveBeenCalledTimes(2);
-        for (const [request] of backend.call.mock.calls) {
-            expect(request).toMatchObject({
-                kind: 'ask', tokens: 1024, randomness: { seed: 13, temperature: 0, top_p: 0.0001 },
-            });
+const SAMPLING_ERROR = 'sampling requires seed=integer in 0..2147483647, temperature=number in 0..2, and top_p=number in 0..1; parameters are optional';
+
+describe('ask sampling options', () => {
+    it('sends the same sampling controls with every sampled ask of a document', async () => {
+        const model = scripted('first recipe', 'second recipe');
+        const result = await execMarkdown(`# Randomness Controls
+
+Sampling is best-effort and does not guarantee identical responses.
+
+${fence(`const sampling = { seed: 13, temperature: 0.0, topP: 0.0001, tokens: 1024 };
+const recipe1 = await ask('<most-frequent>give a recipe for an apple pie</most-frequent>', sampling);
+const recipe2 = await ask('<most-frequent>give a recipe for an apple pie</most-frequent>', sampling);
+success([recipe1, recipe2]);`)}`, { backend: model }, "model: 'gpt-6-luna'\n");
+        expect(result).toMatchObject({ status: 'success', value: ['first recipe', 'second recipe'] });
+        expect(model.calls).toHaveLength(2);
+        for (const call of model.calls) {
+            expect(call).toMatchObject({ kind: 'ask', model: 'gpt-6-luna', tokens: 1024, randomness: { seed: 13, temperature: 0, top_p: 0.0001 } });
         }
     });
 
-    it('parses and executes expression-valued sampling with existing modifiers', async () => {
-        const backend = scripted('7');
-        const source = `let seed = 21
-let value = ask(
-    seed=seed * 2,
-    temperature=0,
-    top_p=0.01,
-    fmt='integer',
-    model='chosen',
-) 'Number?'
-success value`;
-        const program = parse(source);
-        expect(program.body[1]).toMatchObject({
-            t: 'let', value: { t: 'ask', mods: {
-                seed: { t: 'binary' }, temperature: { t: 'num', v: 0 }, top_p: { t: 'num', v: 0.01 },
-                fmt: { t: 'str' }, model: { t: 'str' },
-            } },
-        });
-        expect(await run(program, { backend, logger, cwd })).toMatchObject({ status: 'success', value: 7 });
-        expect(backend.call).toHaveBeenCalledOnce();
-        expect(backend.call.mock.calls[0][0]).toMatchObject({
-            kind: 'ask', model: 'chosen', randomness: { seed: 42, temperature: 0, top_p: 0.01 },
-        });
+    it('combines computed sampling values with other options', async () => {
+        const model = scripted('7');
+        const result = await exec(`
+const seed = 21;
+const value = await ask('Number?', {
+    seed: seed * 2,
+    temperature: 0,
+    top_p: 0.01,
+    fmt: 'integer',
+    model: 'chosen',
+});
+success(value);`, { backend: model });
+        expect(result).toMatchObject({ status: 'success', value: 7 });
+        expect(model.calls).toHaveLength(1);
+        expect(model.calls[0]).toMatchObject({ kind: 'ask', model: 'chosen', randomness: { seed: 42, temperature: 0, top_p: 0.01 } });
     });
 
-    it('evaluates modifiers once in source order before the prompt, reusing sampling for repairs', async () => {
-        const backend = scripted('bad JSON', '3');
-        const source = `let order = []
-def option(name, value):
-    order.append(name)
-    return value
-let value = ask(
-    fmt=option('fmt', 'integer'),
-    seed=option('seed', 42),
-    repairs=option('repairs', 1),
-    top_p=option('top_p', 0.1),
-    temperature=option('temperature', 0),
-) option('prompt', 'Number?')
-success [value, order]`;
-        expect(await run(parse(source), { backend, logger, cwd })).toMatchObject({
-            status: 'success', value: [3, ['fmt', 'seed', 'repairs', 'top_p', 'temperature', 'prompt']],
-        });
-        expect(backend.call.mock.calls.map(([req]) => req.randomness)).toEqual([
-            { seed: 42, temperature: 0, top_p: 0.1 }, { seed: 42, temperature: 0, top_p: 0.1 },
-        ]);
-        expect(backend.call.mock.calls.map(([req]) => req.reasoningEffort)).toEqual([undefined, undefined]);
-        expect(backend.call.mock.calls[1][0].prompt).toContain('Previous response:\nbad JSON');
+    it('reuses sampling for repairs, giving each attempt its own copy', async () => {
+        const model = scripted(request => { request.randomness!.seed = 1; return 'bad JSON'; }, '3');
+        expect(await exec("success(await ask('Number?', { fmt: 'integer', seed: 42, repairs: 1, topP: 0.1, temperature: 0 }));", { backend: model }))
+            .toMatchObject({ status: 'success', value: 3 });
+        expect(model.calls.map(call => call.randomness)).toEqual([{ seed: 1, temperature: 0, top_p: 0.1 }, { seed: 42, temperature: 0, top_p: 0.1 }]);
+        expect(model.calls.map(call => call.reasoningEffort)).toEqual([undefined, undefined]);
+        expect(model.calls[1].prompt).toContain('Previous response:\nbad JSON');
     });
 
     it('preserves explicit reasoning and the defaults of ask, think and agent', async () => {
-        const backend = scripted('sampled', 'explicit', 'ordinary', 'empty', 'think', 'agent');
-        expect(await run(parse(`success [
-    ask(temperature=0) 'Sampled',
-    ask(temperature=0, reasoning='high') 'Explicit',
-    ask 'Ordinary',
-    ask() 'Empty',
-    think 'Think',
-    agent 'Agent',
-]`), { backend, logger, cwd })).toMatchObject({ status: 'success' });
-        expect(backend.call.mock.calls.map(([req]) => req.reasoningEffort)).toEqual([
-            undefined, 'high', undefined, undefined, 'medium', 'medium',
-        ]);
-        expect(backend.call.mock.calls.map(([req]) => req.prompt.includes('Think carefully'))).toEqual([
-            false, true, false, false, true, true,
-        ]);
-        expect(backend.call.mock.calls.map(([req]) => req.randomness)).toEqual([
-            { temperature: 0 }, { temperature: 0 }, undefined, undefined, undefined, undefined,
-        ]);
-        for (const [req] of backend.call.mock.calls.slice(2)) expect(req).not.toHaveProperty('randomness');
+        const model = scripted('sampled', 'explicit', 'ordinary', 'empty', 'think', 'agent');
+        expect(await exec(`success([
+    await ask('Sampled', { temperature: 0 }),
+    await ask('Explicit', { temperature: 0, reasoning: 'high' }),
+    await ask('Ordinary'),
+    await ask('Empty', {}),
+    await think('Think'),
+    await agent('Agent'),
+]);`, { backend: model })).toMatchObject({ status: 'success' });
+        expect(model.calls.map(call => call.reasoningEffort)).toEqual([undefined, 'high', undefined, undefined, 'medium', 'medium']);
+        expect(model.calls.map(call => call.prompt.includes('Think carefully'))).toEqual([false, true, false, false, true, true]);
+        expect(model.calls.map(call => call.randomness)).toEqual([{ temperature: 0 }, { temperature: 0 }, undefined, undefined, undefined, undefined]);
+        for (const call of model.calls.slice(2)) expect(call).not.toHaveProperty('randomness');
     });
 
     it('composes with interpolation, short-circuiting, arithmetic, function arguments and prompts', async () => {
-        const backend = scripted('2', '3', '4', '5', '6', '7', 'inner', 'outer');
-        const source = `let skipped = False and ask(seed=42) 'Skipped'
-def identity(value):
-    return value
-let a = '{ask(temperature=0) "Two"}'
-let b = identity(ask(top_p=0) 'Three')
-let c = int(ask(seed=1) 'Four') + 1
-let d = 10 + int(ask() 'Five')
-let e = [ask(temperature=0) 'Six'][0]
-let f = ask(seed=1) 'Seven' if True else ask 'Skipped'
-let g = ask() (ask(seed=1) 'Inner')
-success [skipped, a, b, c, d, e, f, g]`;
-        expect(await run(parse(source), { backend, logger, cwd })).toMatchObject({
-            status: 'success', value: [false, '2', '3', 5n, 15n, '6', '7', 'outer'],
-        });
-        expect(backend.call).toHaveBeenCalledTimes(8);
-        expect(backend.call.mock.calls[7][0].prompt).toBe('inner');
+        const model = scripted('2', '3', '4', '5', '6', '7', 'inner', 'outer');
+        const result = await exec(`
+const skipped = false && await ask('Skipped', { seed: 42 });
+const identity = value => value;
+const a = \`\${await ask('Two', { temperature: 0 })}\`;
+const b = identity(await ask('Three', { topP: 0 }));
+const c = Number(await ask('Four', { seed: 1 })) + 1;
+const d = 10 + await ask('Five', { fmt: 'integer' });
+const e = [await ask('Six', { temperature: 0 })][0];
+const f = true ? await ask('Seven', { seed: 1 }) : await ask('Skipped');
+const g = await ask(await ask('Inner', { seed: 1 }), {});
+success([skipped, a, b, c, d, e, f, g]);`, { backend: model });
+        expect(result).toMatchObject({ status: 'success', value: [false, '2', '3', 5, 15, '6', '7', 'outer'] });
+        expect(model.calls).toHaveLength(8);
+        expect(model.calls[7].prompt).toBe('inner');
+        expect(model.calls.map(call => call.randomness)).toEqual([
+            { temperature: 0 }, { top_p: 0 }, { seed: 1 }, undefined, { temperature: 0 }, { seed: 1 }, { seed: 1 }, undefined,
+        ]);
     });
 
     it.each([
-        'seed=-1', 'seed=2147483648', 'seed=0.5', 'seed=True', "seed='42'", 'seed=None', 'seed=1e400',
-        'temperature=-0.01', 'temperature=2.01', 'temperature=True', "temperature='0'", 'temperature=None', 'temperature=1e400',
-        'top_p=-0.01', 'top_p=1.01', 'top_p=False', "top_p='1'", 'top_p=None', 'top_p=1e400',
-    ])('rejects invalid %s without evaluating the prompt or calling the model', async parameters => {
-        const backend = scripted('unexpected');
-        const source = `def prompt():
-    fail 'prompt should not run'
-success ask(${parameters}) prompt()`;
-        expect(await run(parse(source), { backend, logger, cwd })).toMatchObject({
-            status: 'failure', failure: { status_code: 'runtime_error', reason: expect.stringContaining('sampling requires') },
+        'seed: -1', 'seed: 2147483648', 'seed: 0.5', 'seed: true', "seed: '42'", 'seed: null', 'seed: 1e400', 'seed: NaN', 'seed: 42n',
+        'temperature: -0.01', 'temperature: 2.01', 'temperature: true', "temperature: '0'", 'temperature: null', 'temperature: 1e400', 'temperature: NaN',
+        'topP: -0.01', 'topP: 1.01', 'topP: false', "topP: '1'", 'topP: null', 'topP: 1e400', 'topP: NaN',
+        'top_p: 1.01', "top_p: '1'", 'top_p: null',
+    ])('rejects invalid { %s } without calling the model', async options => {
+        const model = scripted('unexpected');
+        expect(await exec(`success(await ask('Prompt', { ${options} }));`, { backend: model })).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', reason: SAMPLING_ERROR, line: 1 },
         });
-        expect(backend.call).not.toHaveBeenCalled();
+        expect(model.calls).toHaveLength(0);
     });
 
     it.each([
         { seed: 0, temperature: 0, top_p: 0 }, { seed: 2147483647, temperature: 2, top_p: 1 },
     ])('preserves boundary values %j without replacing zeroes with defaults', async values => {
-        const backend = scripted('answer');
-        const parameters = Object.entries(values).map(([name, value]) => `${name}=${value}`).join(', ');
-        expect(await run(parse(`success ask(${parameters}) 'Prompt'`), { backend, logger, cwd })).toMatchObject({ status: 'success' });
-        expect(backend.call.mock.calls[0][0].randomness).toEqual(values);
+        const model = scripted('answer', 'answer');
+        const { top_p: topP, ...rest } = values;
+        expect(await exec(`await ask('Prompt', ${JSON.stringify(values)});\nawait ask('Prompt', ${JSON.stringify({ ...rest, topP })});`, { backend: model }))
+            .toMatchObject({ status: 'success' });
+        expect(model.calls.map(call => call.randomness)).toEqual([values, values]);
     });
+
+    it.each(['think', 'agent'].flatMap(kind => ['seed', 'temperature', 'topP', 'top_p'].map(name => [kind, name])))(
+        'rejects %s with %s: sampling is exclusive to ask', async (kind, name) => {
+            const model = scripted('unexpected');
+            expect(await exec(`await ${kind}('Prompt', { ${name}: 0 });`, { backend: model })).toMatchObject({
+                status: 'failure', failure: {
+                    status_code: 'runtime_error', reason: `seed, temperature and topP are exclusive to ask(); ${kind}() does not accept them`,
+                },
+            });
+            expect(model.calls).toHaveLength(0);
+        });
 
     it.each([
-        "ask(42) 'Prompt'", "ask(unknown=1) 'Prompt'", "ask(seed=1, seed=2) 'Prompt'",
-        "ask(temperature=0, temperature=1) 'Prompt'", "ask(top_p=0, top_p=1) 'Prompt'",
-        "randomness(seed=42) ask 'Prompt'", "randomness() ask 'Prompt'",
-        ...['think', 'agent'].flatMap(command => ['seed', 'temperature', 'top_p'].map(name => `${command}(${name}=0) 'Prompt'`)),
-    ])('rejects invalid or removed syntax %s', source => {
-        expect(() => parse(source)).toThrow();
+        ['{ randomness: { seed: 42 } }', "unknown ask() option 'randomness'"],
+        ['{ Seed: 1 }', "unknown ask() option 'Seed'"],
+        ['{ topp: 1 }', "unknown ask() option 'topp'"],
+        ['{ topP: 0, top_p: 1 }', 'use either topP or top_p, not both'],
+        ['42', 'ask() options must be an object such as { schema: Invoice, repairs: 1 }'],
+    ])('rejects the removed or misspelled form ask(prompt, %s)', async (options, reason) => {
+        const model = scripted('unexpected');
+        expect(await exec(`await ask('Prompt', ${options});`, { backend: model })).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', reason },
+        });
+        expect(model.calls).toHaveLength(0);
     });
 
-    it('no longer reserves randomness as a keyword', async () => {
-        expect(isReservedName('randomness')).toBe(false);
-        expect(await run(parse('let randomness = 2\nsuccess randomness ** 3'), { backend: new NoLlm(), logger, cwd }))
-            .toMatchObject({ status: 'success', value: 8 });
+    it('leaves randomness as an ordinary identifier', async () => {
+        expect(await exec('const before = typeof randomness;\nconst randomness = 2;\nsuccess([before, randomness ** 3]);'))
+            .toMatchObject({ status: 'success', value: ['undefined', 8] });
     });
 });
 
 describe('sampling journal identity', () => {
-
-    it('pins and replays sampled expressions without calling the backend', async () => {
-        const source = markdown("success ask(seed=42, temperature=0, top_p=0) 'Prompt'");
-        const backend = scripted('answer');
+    it('pins and replays sampled asks without calling the backend', async () => {
+        const cwd = tempDir();
+        const source = document(fence("success(await ask('Prompt', { seed: 42, temperature: 0, topP: 0, tokens: 64 }));"));
+        const model = scripted('answer');
         const pin = Pin.capture(source, { cwd, args: [] });
-        const expected = await run(parseMarkdown(source), { backend, logger, cwd, pin });
-        expect(JSON.parse(pin.data.entries[1].request).request.randomness).toEqual({ seed: 42, temperature: 0, top_p: 0 });
-        expect(await run(parseMarkdown(pin.toMarkdown(source)), { backend: new NoLlm(), logger })).toEqual(expected);
-        expect(backend.call).toHaveBeenCalledOnce();
+        const expected = await run(parseMarkdown(source), { backend: model, logger: silent, cwd, pin });
+        expect(expected).toEqual({ status: 'success', value: 'answer', hasValue: true });
+        expect(JSON.parse(pin.data.entries[1].request).request).toMatchObject({ kind: 'ask', randomness: { seed: 42, temperature: 0, top_p: 0 }, tokens: 64 });
+        expect(await run(parseMarkdown(pin.toMarkdown(source)), { backend: new NoLlm(), logger: silent })).toEqual(expected);
+        expect(model.calls).toHaveLength(1);
     });
 
+    it('refuses to replay a pinned ask with different sampling', async () => {
+        const cwd = tempDir();
+        const workflow = parseMarkdown(document(fence("success(await ask('Prompt', { seed: Number(args[0]) }));")));
+        const pin = Pin.capture(workflow.lines.join('\n'), { cwd, args: ['42'] });
+        await run(workflow, { backend: scripted('answer'), logger: silent, cwd, args: ['42'], pin });
+        expect(await run(workflow, { backend: new NoLlm(), logger: silent, pin: Pin.replay(pin.data) })).toMatchObject({ status: 'success', value: 'answer' });
+        const changed = Pin.replay({ ...pin.data, context: { ...pin.data.context, args: ['43'] } });
+        expect(await run(workflow, { backend: new NoLlm(), logger: silent, pin: changed })).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', reason: 'locked workflow request mismatch at entry 2' },
+        });
+    });
 });

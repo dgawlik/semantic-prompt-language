@@ -1,649 +1,458 @@
-# Language
+# Workflow code
 
-SPL is a small Python-like language with colon-and-indentation blocks. This page covers the code inside
-`spl` fences: values, bindings, control flow, functions, built-ins and exact tools.
-Markdown blockquotes use a single optional `@CTL(restrict=..., enforce=..., forbid=..., model=..., reasoning=...)`
-header for [agent controls](LLM-commands.md#blockquotes). These controls are separate from SPL syntax;
-human input in blockquotes is requested in plain language, without a special marker.
-Use [`@CODEGEN 'Function description'`](LLM-commands.md#code-generation) to generate reusable SPL
-functions into the shared scope; traced runs save and automatically reuse matching definitions.
+Workflow code is native JavaScript running on Node.js, with the `spl-lang` library already in
+scope. This page covers what is specific to workflows: fences, the shared scope, imports, the
+library, types, the Markdown builder, inputs, logging, tools and errors.
 
-## Values and strings
+## Fences
 
-Values include `None`, `True`/`False`, numbers, strings, lists, dictionaries with string keys,
-functions, immutable type descriptors and nominal class instances.
-Simple statements end at a newline or `;`. `#` starts a comment, and a trailing `\` continues a line.
+A fence whose language is `js`, `javascript` or `mjs` runs as JavaScript. A `ts`, `typescript` or
+`mts` fence runs the same way after its type annotations are erased.
 
-```spl 
-assert int(1.0) == 1
-assert str(float(1)) == '1.0'
-assert bool(1) == True 
-assert bool(0.0) == False
-
-assert any([0, 0.0, '', [], object()]) == False
-assert all([1, 1.0, 'hello', [1], object:
-    'x': 1
-]) == True
-
-let lst = []
-for i in range(0, 10, 2):
-    lst.append(i)
-assert lst == [0, 2, 4, 6, 8]
-
-let name = 'Ada'
-let greeting = "Hello, {name.upper()}!"     # {expr} interpolates in every quote style
-let literal = 'Use {{name}} as a placeholder' # doubled braces are literal
-let raw = r'C:\temp\{not interpolated}'     # raw strings: no escapes or interpolation
-let block = '''
-Triple-quoted strings span lines.
-'''
-
-assert name[0:1] == 'A'
-
-let split1 = 'hello world'
-assert split1.split() == ['hello', 'world']
-assert split1.split('e') == ['h', 'llo world']
-
-let fruits = ['apple', 'orange', 'grape']
-assert ','.join(fruits) == 'apple,orange,grape'
-
-let speech = '''Hello!
-
-Today is a new day. 
-
-My recent work shows... 
-
-What I would like to propose'''
-
-assert speech.splitlines() == ["Hello!","","Today is a new day. ","",
-  "My recent work shows... ","", "What I would like to propose"]
-
-let hello = "Hello world"
-assert hello.replace('world', "WORLD!!!") == 'Hello WORLD!!!'
-assert hello.find('world') == 6
-assert len(hello) == 11
-
-let word = 'Word'
-assert word.lower() == 'word'
-assert word.upper() == 'WORD'
-
-let totrim = '  word '
-assert totrim.strip() == 'word'
+```js
+const numbers = [3, 1, 2];
+const sorted = numbers.toSorted((a, b) => a - b);
+log(sorted);
 ```
 
-Escapes: `\n` `\t` `\r` `\0` `\\` `\'` `\"` `\{` `\}`. Python-style operators work as expected:
-`+ - * / // % **`, comparisons, `in`/`not in`, `and`/`or`/`not`, `a if cond else b`, indexing,
-slicing with negative indexes, and `d.key` as a shorthand for `d['key']`.
+* **Module-style code.** Fences run in strict mode with top-level `await`, static `import`,
+  dynamic `import()` and `import.meta`. `import.meta.url`, `.filename` and `.dirname` describe
+  the workflow file, even though imports and relative tool paths resolve against the working
+  directory.
+  Top-level `return` is a syntax error; `require`, `module` and `__dirname` do not exist.
+  There is nothing to export: `export default` and `export { ... }` are syntax errors.
+* **Node.js globals** such as `process`, `fetch`, `URL` and `structuredClone` are available.
+  Prefer `log` over `console.log`: stdout is reserved for the result.
+* **Everything is compiled first.** A syntax error in any fence, or in a blockquote's `@CTL`
+  settings, stops the run with exit code 2 before the first step executes.
+* **Type erasure only.** `ts` fences accept syntax that can be removed without changing the
+  code: annotations, `interface`, `type`, `import type`. Enums, namespaces and parameter
+  properties are syntax errors. Types are not checked at run time; the
+  [VS Code extension](../vscode/README.md) reports type errors while you edit.
+* **Skipping a fence.** Add `ignore` or `no-run` after the language to show code without running
+  it. Fences in other languages are commentary.
+* **Results.** The CLI prints only the value passed to [`success`](Safety.md#assertions-fail-and-success).
+  The value of a fence's last expression is shown by notebooks and
+  [interactive sessions](CLI.md#interactive-sessions), not by the CLI.
 
-Lists and strings support `value[start:stop:step]`. The stop is exclusive; omitted bounds
-select the sequence ends in the direction of the step, which defaults to `1`.
-Negative indexes count from the end, and out-of-range bounds are clipped.
-Bounds and steps must be integers or `None` (`None` uses the omitted default); a zero step
-is a runtime error. List slices are new shallow copies; string slices use Unicode code points.
-Slices are read-only expressions, not assignment targets.
+## One shared scope
 
-```spl
-let numbers = [0, 1, 2, 3, 4]
-assert numbers[1:4] == [1, 2, 3]
-assert numbers[::2] == [0, 2, 4]
-assert numbers[::-1] == [4, 3, 2, 1, 0]
-assert numbers[4:0:-2] == [4, 2]
-assert 'hello'[::-1] == 'olleh'
-assert 'hello'[1::2] == 'el'
+All fences and blockquotes of a document share one top-level scope.
+
+````markdown
+---
+extension: semantic-prompt-language
+version: 1
+---
+
+```js
+const limit = 3;
+let seen = [];
+
+function remember(item) {
+    seen.push(item);
+    return seen.length;
+}
 ```
 
+> Call @remember with the name of each primary color, then save the number of colors to @count
 
-## Lists 
+```js
+assert(count === limit, `expected ${limit} colors, got ${count}`);
+success(`${count} colors: ${seen.join(', ')}`);
+```
+````
 
-```spl
-let lst = [1,2,3,4];
+* **Top-level declarations are shared.** `const`, `let`, `var`, `function`, `class` and imported
+  names declared at the top level of a fence are visible in every later fence and to blockquote agents.
+* **Agents use the same bindings.** A blockquote can load a variable, call a function and save
+  a value; a variable saved by an agent is a plain identifier in later fences.
+* **Bindings are live.** A function declared in one fence sees later changes to shared variables,
+  including changes made by an agent.
+* **`const` is not enforced at the top level.** As in a REPL, a top-level `const` can be assigned
+  again, and declaring an existing name in a later fence rebinds it. Inside functions and blocks,
+  `const` and `let` behave as usual.
+* **No temporal dead zone at the top level.** Reading a top-level name before its declaration
+  runs yields `undefined`, or the value left by an earlier fence. Assigning to a name that was
+  never declared is a `ReferenceError`.
+* **Functions are hoisted** within their fence, so a fence can call a function declared further down.
+* **Imports are read-only.** As in an ES module, named, default and namespace imports are live
+  bindings of their module, and assigning to one is a `TypeError`. A later fence may declare
+  the name again, which replaces the import.
+* **Nested declarations stay local.** Names declared inside functions, blocks and loops are not shared.
+* **Your names shadow the library.** After `const list = [1, 2]`, the library's `list` type
+  builder is hidden from later fences. Avoid short library names such as `list`, `object`, `any`,
+  `str`, `int`, `t`, `fn`, `env`, `args` and `log` for your own variables.
 
-# Indexing and searching for index
-let secondElement = lst[1];
-let thirdIndex = lst.index(3);
-log('Second element: {secondElement}');
-log('Threes index: {thirdIndex}')
+## Await model calls and tools
 
-# List concatenation
-let l2 = [5,6];
-let combined = lst + l2
-log('Extend list {combined}')
+`ask`, `think`, `agent`, `human`, `codegen`, `restrict` and the tools return promises. Use `await`
+whenever you need the result or the effect to have happened.
 
-# Clone list and pop second element
-let removedSecond = combined.copy()
-removedSecond.pop(1)
-log('Removed second: {removedSecond}')
-
-# Remove elements from the end
-let removedLast = combined.copy()
-removedLast.pop(-1)
-log('Removed last: {removedLast}')
-
-# Remove by value
-let remove3 = combined.copy()
-remove3.remove(3)
-log('Removed 3: {remove3}')
-
-# Remove by nonexisting throws exception
-try:
-    let remove7 = combined.copy()
-    remove7.remove(7)
-except e:
-    log(e.reason)
-
-# Insert value at index
-let ins = [1,10]
-ins.insert(1, 100)
-log('Inserted: {ins}')
-
-# Clear list
-ins.clear()
-log('Cleared: {ins}')
-
-let numbers = [1,2,3,4,5]
-
-let f = numbers.filter(lambda i: i % 2 ==0)
-assert f == [2, 4]
-
-let m = f.map(lambda i: i*2)
-assert m == [4, 8]
-
-let r = m.reduce(lambda acc, i: acc + i)
-assert r == 12
-
-assert numbers[0:2] == [1,2]
+```js
+const report = await readFile('./report.txt');
+const [title, summary] = await Promise.all([
+    ask(`Suggest a title for: ${report}`, { len: 'sentence' }),
+    ask(`Summarize: ${report}`, { len: 'paragraph' }),
+]);
 ```
 
-## Objects 
+A call without `await` keeps running in the background: its result may arrive after the document
+has ended, and its failure cannot be caught by the workflow and crashes the process. With `--trace`
+or `--pin`, recorded calls run one at a time in call order, so `Promise.all` stays replayable.
 
-```spl 
-# Create object
-let test = object:
-    'a': 1
-    'b': 2
-log('Test object {test}')
+Fences run as ordinary JavaScript on the main thread. A long synchronous loop blocks log
+rendering, timers and Ctrl+C handling until it yields; give long loops an `await` point, or
+move heavy work to a worker thread or child process.
 
-# Assign values to keys
-test['c'] = 3
-test.d = 4
-log('Addition: {test}')
+## Imports
 
+Imports work as in any ES module, with one rule: **specifiers resolve against the working
+directory** (`--cwd`, by default the folder where `spl` runs), not the folder of the workflow file.
 
-# Remove by key
-test.pop('c')
-test.pop('d')
-log('Removal: {test}')
+```js
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { double, title } from './lib/helpers.js';
 
-# Iterate by values
-for v in test.values():
-    log("Test value: {v}")
-
-# Iterate by keys
-for k in test.keys():
-    log('Test key: {k}')
-
-# Iterate by key, value pairs
-for k, v in test.items():
-    log('Test -> k = {k}, v = {v}')
-
-
-# Copy and clear
-let cpy = test.copy()
-cpy.clear()
-log('Cleared: {cpy}')
+log(path.basename(import.meta.filename), double(21));
+log(createHash('sha256').update('spl').digest('hex').slice(0, 8));
 ```
 
+| Import | Resolves to |
+| --- | --- |
+| `node:fs`, `node:path`, `node:child_process`, ... | The whole Node.js standard library |
+| `./helper.js`, `../lib/util.mjs`, `./legacy.cjs` | Your own modules, relative to the working directory |
+| `./helper.ts` | TypeScript modules with erasable types |
+| `./data.json` with `with { type: 'json' }` | JSON modules |
+| `lodash`, `@scope/pkg` | Packages in the working directory's `node_modules` |
+| `await import(specifier)` | Any of the above, loaded on demand |
 
-## Bindings and scopes
+Imported names join the shared scope, so later fences and blockquote agents can use them. To load a module that sits beside
+the workflow regardless of the working directory, build the path from `import.meta`:
+`await import(new URL('./helper.js', import.meta.url).href)`.
 
-`let` declares a name in the current block; plain assignment updates the nearest existing declaration.
-Every block is a child scope, so inner `let` shadows outer names and does not leak out.
-Each loop iteration gets fresh variables.
+A helper module is ordinary JavaScript. It imports the library explicitly, and its calls take
+part in the running workflow: same model, restrictions, guidance, logs and trace.
+`spl-lang` and `spl-lang/markdown` always resolve to the running copy of the package, in fences
+and in helper modules, on the CLI and in VS Code notebooks. Helpers therefore need no local
+install and share the workflow's runtime and `Failure` class. Node.js loads
+it by its usual rules; to mark a helper as an ES module without relying on syntax detection,
+name it `.mjs` or set `"type": "module"` in the nearest `package.json`.
 
-```spl
-let count = 0
-for i in range(3):
-    count += i
-let result = :
-    let count = 10
-    count + 1
-success [count, result]  # [3, 11]
+`lib/helpers.js`
+
+```js
+import { ask, assert } from 'spl-lang';
+
+export function double(value) {
+    assert(typeof value === 'number', 'double needs a number');
+    return value * 2;
+}
+
+export async function title(text) {
+    return ask(`Suggest a title for: ${text}`, { len: 'sentence' });
+}
 ```
 
-Declare a result before a block when the block should set it:
-`let answer = None` and then `answer = ...` inside.
+`--check` verifies that static relative `import` declarations point at existing files; dynamic
+`import('./x.js')` calls are not checked. Modules are loaded natively by Node.js: they are
+cached for the lifetime of the process and their source is not recorded in traces or pins, so
+a replay imports them from disk again. [imports/run.md](../lang/examples/imports/run.md) is a
+runnable example.
 
-## Control flow and expressions
+## The library
 
-`if`/`elif`/`else`, `for`, `while`, `break`, `continue` and `pass` use Python-like layout,
-but keep SPL's lexical scopes.
-`for k, v in items(d)` unpacks pairs. Blocks and `if` are expressions that yield their last
-expression, or `None`. Anonymous value-producing blocks begin with a bare `:`, as in `result`
-above. `object()` is an empty dictionary; a block containing only `pass` yields `None`.
+Every fence can use these names without importing them. Outside a workflow, import them from
+`spl-lang`. [API reference](Reference.md) lists every signature and option.
 
-```spl 
-let i = 0
-while True:
-    let msg = if not i % 2:
-        '{i} is Even'
-    elif i == 5:
-        i += 1
-        continue
-    elif i == 11:
-        break
-    else:
-        '{i} is Odd'
-    log(level='debug')(msg)
-    i += 1
+| Group | Names |
+| --- | --- |
+| Model calls | `ask` `think` `agent` |
+| People | `human` |
+| Guidance and restrictions | `enforce` `forbid` `restrict` |
+| Control | `success` `fail` `assert` `Failure` |
+| Exact tools | `readFile` `writeFile` `webFetch` `webSearch` `shell` |
+| Code generation | `codegen` |
+| Inputs and logging | `args` `env` `log` |
+| Types | `str` `int` `float` `bool` `char` `nil` `any` `object` `fn` `list` `union` `nullable` `enumOf` `struct` `typedef` `jsonSchema` `validate` `t` |
+| Markdown | `markdown` |
 
-let numbers = list(range(0,10,2))
-for i, n in enumerate(numbers):
-    log('{i} = {n}')
+Model calls and guidance are described in [Natural language & models](LLM-commands.md);
+restrictions, failures and human input in [Guards & failures](Safety.md).
+
+## Types
+
+A type is a JavaScript value that describes data. It validates values, turns JSON into JavaScript
+objects and renders the JSON Schema a model receives. Pass one as `schema` to a model call, name
+it in a blockquote with `@validate[Type]`, or use it directly.
+
+```js
+const Color = enumOf('red', 'green', 'blue');
+const Money = typedef('Money', int, { minimum: 0, desc: 'Amount in cents' });
+
+const LineItem = struct('LineItem', {
+    description: str,
+    quantity: int.annotate({ minimum: 1 }),
+    unitPrice: Money,
+});
+
+const Invoice = struct('Invoice', {
+    vendor: str.annotate({ minLength: 1 }),
+    date: str.describe('ISO date YYYY-MM-DD'),
+    note: nullable(str),
+    lines: list(LineItem),
+    total: Money,
+});
+
+const invoice = Invoice.parse({
+    vendor: 'Acme', date: '2026-01-31', note: null, total: 2500,
+    lines: [{ description: 'Widget', quantity: 2, unitPrice: 1250 }],
+});
+assert(Invoice.is(invoice) && !Invoice.is({ vendor: 'Acme' }));
+log(Invoice.schema());
 ```
 
-## Functions
+| Builder | Accepts |
+| --- | --- |
+| `str` | Strings |
+| `int` | Safe integers (`Number.isSafeInteger`) |
+| `float` | Finite numbers, including integers |
+| `bool` | `true` or `false` |
+| `char` | Strings of exactly one Unicode character |
+| `nil` | `null` |
+| `any` | Any JSON value |
+| `object` | Any plain object, without a declared shape |
+| `fn` | Functions; cannot be described as JSON |
+| `list(T)` | Arrays whose items satisfy `T` |
+| `union(A, B, ...)` | Values satisfying any member |
+| `nullable(T)` | `T` or `null`; a nullable field must still be present |
+| `enumOf('a', 'b')` | One of the listed strings |
+| `struct(name, fields)` | Exact records: every field required, extra fields rejected |
+| `typedef(name, type, annotations?)` | The same values as `type`, under a name |
+| `jsonSchema(schema, name?)` | Values valid against raw JSON Schema, constraints enforced |
 
-`def` defines a function with lexical closures and recursion. Functions return `None`
-unless they use an explicit `return`. Functions are first class citizens and can be passed around. `lambda` defines lambda function defined inline.
+Every type has the same methods:
 
-```spl 
-def fib(n):
-    return if n < 2:
-        1
-    else:
-        fib(n-1) + fib(n-2)
+| Method | Result |
+| --- | --- |
+| `Type.parse(value)` | The validated value, or a `validation_failed` failure such as `$.lines[0].quantity: expected int, got 1.5` |
+| `Type.parseJson(text)` | Like `parse`, from strict JSON text; malformed text is `invalid_format` |
+| `Type.is(value)` | `true` or `false`, without throwing |
+| `Type.schema()` | JSON Schema, with annotations in `description` |
+| `validate(value, Type)` | Same as `Type.parse(value)`; with raw JSON Schema it checks and returns the value |
 
-log(fib(10))
+Parsing never coerces, fills defaults or drops fields: `int.parse('1')` fails, and a missing
+nullable field is an error. `parse` returns a copy for structs and lists.
 
-def iterate(from, to, f):
-    for n in range(from, to):
-        log(f(n))
+Error paths start at `$` for `Type.parse`. When an agent saves a variable through a schema, the
+variable name is the root instead: `invoice.tax: expected Money, got 3312.5`. A type named
+with `typedef` appears under its own name, as `Money` does here.
 
-iterate(9,10,fib)
+### Annotations are advice
 
-iterate(1, 10, lambda x: x*2 + 3)
+`.annotate({...})`, `.describe(text)` and the third argument of `typedef` attach arbitrary
+metadata for the model. `desc` or `description` becomes the schema description; every other key
+is appended as `Model advice (not validation constraints): {"minimum":0}`. Annotations never
+reject a value: `Money.parse(-1)` succeeds. Check business rules with `assert`, or use
+`jsonSchema({ type: 'integer', minimum: 0 })` when a constraint must be enforced.
+
+Types are immutable: `annotate`, `describe`, `as`, `nullable()`, `list()` and `or(other)` return
+new types. `struct('Point').field('x', float, { desc: 'Horizontal' }).field('y', float)` is the
+fluent form of a struct.
+
+### Classes
+
+`.methods({...})` gives parsed objects methods; `.class(Constructor)` makes them instances of an
+existing class, using its static `fromJSON(data)` when present.
+
+```js
+const Person = struct('Person', { firstName: str, age: int }).methods({
+    label() { return `${this.firstName} (${this.age})`; },
+});
+const person = Person.parse({ firstName: 'Ada', age: 36 });
+log(person.label());                    // Ada (36)
+
+class Point {
+    constructor(x, y) { this.x = x; this.y = y; }
+    static fromJSON(data) { return new Point(data.x, data.y); }
+    norm() { return Math.hypot(this.x, this.y); }
+}
+const PointType = struct('Point', { x: float, y: float }).class(Point);
+log(PointType.parse({ x: 3, y: 4 }).norm());    // 5
 ```
 
-## Modules
+For a class type, `is` requires an instance, `parse` accepts plain data or an existing instance,
+and `Person.data` is the plain-struct view with the same fields. Instances serialize like plain
+objects with `JSON.stringify`.
 
-Import reusable raw `.spl` files from a Markdown workflow's fenced SPL blocks, or from another
-`.spl` module, using JavaScript-style named or namespace imports:
+### TypeScript
 
-```spl
-import { double, label as helperLabel } from './helpers.spl'
-import * as helpers from './helpers.spl'
-success [double(21), helpers.double(3), helperLabel]
+In a `ts` fence, `Infer` gives the JavaScript type a builder parses to. Model calls are typed by
+their options, so `invoice` below is known to have a numeric `total`.
+
+```ts
+import type { Infer } from 'spl-lang';
+
+const Invoice = struct('Invoice', { vendor: str, total: int });
+type Invoice = Infer<typeof Invoice>;
+
+function describe(invoice: Invoice): string {
+    return `${invoice.vendor}: ${invoice.total}`;
+}
+
+const invoice = await ask('Extract the invoice: Acme, 25.00 EUR', { schema: Invoice });
+log(describe(invoice));
 ```
 
-The corresponding `helpers.spl` contains plain SPL, without Markdown frontmatter or fences:
+[TYPES.md](../TYPES.md) records the full contract of the type builder.
 
-```spl
-let label = 'helpers'
-def double(value):
-    return value * 2
+## Markdown builder
+
+`markdown` builds Markdown text without string concatenation. Every method returns the document,
+so calls chain; `toString()` returns the result.
+
+```js
+const doc = markdown.document()
+    .heading('Build report', 1)
+    .paragraph(`${markdown.bold('Results')} from ${markdown.link('CI', 'https://example.com/build')}`)
+    .bulletList(['parser', 'runtime'].map(name => `${markdown.escape(name)}: passed`))
+    .codeBlock('spl workflow.md --check', 'bash')
+    .table(['Suite', 'Status'], [['parser', 'passed'], ['runtime', 'passed']]);
+success(doc.toString());
 ```
-
-Every top-level declaration is exported automatically: variables, functions, enums, type aliases,
-structs, classes, and imported bindings. Block-local declarations are not exported. No `export`
-keyword is required. Named imports can also bring type declarations into scope for annotations.
-
-Imports are top-level statements. Local paths must start with `./` or `../` and explicitly end in
-`.spl`; they resolve relative to the importing file, not `--cwd`. Bundled standard library modules
-use a bare name, such as `'markdown'`, from any SPL file or workflow code fence, without installation
-or a local helper file. Other package names, remote URLs, Markdown modules, default imports and
-bare side-effect imports are not supported.
-
-The complete dependency graph is linked and type-checked before execution. Dependencies initialize
-before the importing file's statements, once per workflow run or notebook session. Module variables
-are isolated from the caller; functions retain their module's lexical scope. Imported bindings
-are live and cannot be reassigned, and namespace properties are read-only. Exported lists and
-objects remain mutable. Circular imports, missing files/exports, and invalid module source report
-explicit errors.
-
-Modules use the caller's model, arguments, environment and tool working directory. Module model
-directives are not supported, and `return`/`success` cannot terminate module initialization.
-Imported functions run under the caller's active restrictions. Resetting a notebook session
-clears its module cache. Traces and pinned workflows capture module source so replay does not
-need the original `.spl` files.
-
-### Markdown standard library
-
-The bundled `markdown` module is written in SPL. Build a document dynamically, then call
-`to_string()` to get a normal string suitable for `success`, prompts, or `write_file`:
-
-```spl
-import * as markdown from 'markdown'
-
-let doc = markdown.Document()
-doc.heading('Build report', 1)
-doc.paragraph(markdown.bold('Results') + ' from ' + markdown.link('CI', 'https://example.com/build'))
-for name in ['parser', 'runtime']:
-    doc.bullet_list([markdown.escape(name) + ': passed'])
-doc.code_block('spl workflow.md --check', 'sh')
-doc.table(['Suite', 'Status'], [['parser', 'passed'], ['runtime', 'passed']])
-success doc.to_string()
-```
-
-Named imports also work: `import { Document, bold } from 'markdown'`.
-Each `Document()` owns its own block list. Builder methods return the same document, so calls
-can be chained. All arguments shown below are required; SPL functions do not have default arguments.
 
 | Method | Output |
 | --- | --- |
-| `heading(text, level)` | Heading with level `1` through `6` |
+| `heading(text, level = 1)` | Heading with level `1` through `6` |
 | `paragraph(text)` | Paragraph containing inline Markdown |
-| `bullet_list(items)` | Bullet list of strings; multiline items are indented |
-| `ordered_list(items, start)` | Numbered list; `start` and subsequent markers must have at most nine digits |
+| `bulletList(items)` | Bullet list of strings; multiline items are indented |
+| `orderedList(items, start = 1)` | Numbered list |
 | `quote(text)` | Blockquote, including multiline text |
-| `code_block(text, language)` | Fenced code block; use `''` for no language |
-| `table(headers, rows)` | GFM table; string cells, nonempty headers, matching row widths |
-| `thematic_break()` | Horizontal rule |
-| `raw(text)` | Unmodified Markdown block, apart from line-ending normalization |
-| `to_string()` | Blocks joined with blank lines and a final newline; `''` for an empty document |
+| `codeBlock(text, language = '')` | Fenced code block; the fence grows to fit backticks in the text |
+| `table(headers, rows)` | GFM table; rows must match the header width |
+| `thematicBreak()` | Horizontal rule |
+| `raw(text)` | Markdown as written |
+| `toString()` | Blocks joined with blank lines and a final newline; `''` for an empty document |
 
-`to_string()` is repeatable and does not consume the document. Empty raw blocks and empty lists
-add nothing. Raw text and paragraphs preserve whitespace, including any supplied trailing newlines.
-Line endings are normalized to `\n`. Tables escape pipe delimiters and replace cell newlines with
-`<br>`. Code fences grow to accommodate embedded backticks and preserve code whitespace.
+Inline helpers return strings: `markdown.bold(text)`, `italic(text)`, `code(text)`,
+`link(label, url)`, `image(alt, url)` and `escape(text)`. Block methods accept Markdown, so use
+`escape` for literal dynamic text. Link labels and image alt text are escaped automatically, and
+table cells escape `|`. Invalid input, such as a heading level of 7 or a multiline heading,
+raises `assertion_failed`. Other modules import the builder from `spl-lang/markdown`;
+`new markdown.Document()` is equivalent to `markdown.document()`.
 
-Inline helpers return strings: `bold(text)`, `italic(text)`, `code(text)`, `link(label, url)`,
-`image(alt, url)`, and `escape(text)`. Paragraphs, headings, lists, quotes, table cells, and formatting
-helpers accept Markdown, so use `escape(text)` for literal dynamic text. Link labels and image
-alt text are escaped automatically; whitespace, backslashes and angle brackets in destinations
-are percent-encoded. Inline code handles embedded backticks and padding, normalizes newlines to
-spaces, and requires nonempty text. Headings, link labels, image alt text, bold/italic text, and code
-language labels must be single-line; code language labels must not contain backticks.
-These helpers generate Markdown, not sanitized HTML or validated URL schemes.
+## Inputs: args and env
 
-## Gradual typing
+`args` is the read-only list of `--arg` values. `env` is the read-only process environment.
+Missing entries are `undefined`.
 
-Annotations are optional enforced contracts, not advisory lint hints. Untyped bindings remain
-dynamic. Known typed violations block execution before model calls; unknown values are validated
-at typed boundaries without coercion, defaults or field removal.
-
-Built-in types and existing type declarations remain available after `if`, loops, and
-`try`/`except` blocks. An untyped alias used as an annotation must still identify the same
-type on every possible control-flow path.
-
-### Types at a glance
-
-| Type | Accepted values |
-| --- | --- |
-| `int` | Signed 64-bit integers; checked arithmetic, no overflow wrapping |
-| `float` | Finite binary64 numbers, distinct from `int` |
-| `str` | Strings |
-| `char` | Strings containing exactly one Unicode scalar value |
-| `bool` | `True` or `False`, not integers |
-| `None` | The null value, not an absent field |
-| `object` | Dynamic string-keyed dictionaries, not nominal class instances |
-| `list[T]` | Lists whose elements satisfy `T` |
-| `A \| B` | Values satisfying either member; narrow before member-specific operations |
-| `fn(T1, T2) -> R` | Callables with the declared parameter and return contracts |
-
-Typed literals select the representation: `let count: int = 2`, but
-`let ratio: float = 2.0`. Neither `let count: int = 2.0` nor
-`let ratio: float = 2` is valid. Untyped numbers keep their existing representation;
-use `int(value)` or `float(value)` explicitly to enter typed numeric code.
-`int(...)` rejects fractions, booleans and out-of-range values; conversion to `float`
-can lose integer precision. Mixed `int`/`float` arithmetic requires explicit conversion.
-Integer `/` produces a float. Counts from `len` and `range` remain untyped numbers.
-
-### Transparent type aliases
-
-Declare read-only, transparent aliases with optional semantic advice:
-
-```spl 
-let a = 10
-let b: int = int(a)
-let c: float = float(b)
-
-
-type Money = int [minimum=0, desc='Amount in cents']
-type Prices = list[Money]
-type MaybeMoney = Money | None
-let subtotal: Money = 1250
-let computed: Money = 0
-computed += subtotal
-let prices: Prices = [subtotal, computed]
-let discount: MaybeMoney = None
-
-def computeDiscount(total: Money, 
-                    discount: MaybeMoney) -> Money:
-    let discountWithDefault = if isinstance(discount, None):
-        int(10)
-    else:
-        validate(discount, Money)
-    return int(total * (100-discountWithDefault)/100)
-
-
-log(computeDiscount(1000, None))
-
+```js
+const [target = 'world', mode] = args;
+const home = env.HOME ?? env.USERPROFILE;
+log(`Hello ${target}`, { mode, home });
 ```
 
-Aliases accept the same values and operations as their underlying types, without implicit
-conversion. Advice is included in generated schemas' descriptions, including when an alias
-is used as a field or list element; it does not enforce extra constraints. Aliasing an alias
-inherits its advice, with newly supplied keys overriding inherited keys. Field advice is
-appended separately. `type(value)` remains the type-name builtin.
-
-### Enums, structs and functions
-
-```spl 
-enum Greeting = 'hello' | 'world'
-
-# let g: Greeting = 'hi' // error
-let g: Greeting = 'hello'
-log(g)
-
-struct Test:
-    num: int 
-    desc: str 
-
-let t: Test = object:
-    'num': 1
-    'desc': 'hi'
-
-log(t)
-
-let o1 = object:
-    'a': 1
-    'b': [2,3]
-let o2 = object:
-    'a': 1
-    'b': [2,3]
-
-assert o1 == o2
-   
-```
-
-Enums accept matching strings directly and are subtypes of `str`. Structs are structural:
-equivalent field contracts are interchangeable. Fields are exact and required; nullable does
-not mean absent, so `note` above must be present even when it is `None`.
-Metadata such as `str [min=2, desc='Name']` is model advice, not a validity constraint.
-Use `assert` for business rules, or explicit JSON Schema for strict data constraints.
-Function parameters, results and callable fields are checked at their typed boundaries.
-A union value can be assigned or passed to another union, including a list element contract,
-when every source alternative is accepted by the destination. Member order does not matter;
-an alternative missing from the destination must be narrowed first.
-
-### Validation, narrowing and mutation
-
-`validate(value, Type)` checks values and returns a typed view, or fails. For a class
-target it explicitly converts structural field data into a nominal instance.
-`isinstance(value, Type)` tests without converting and narrows within a branch:
-
-```spl
-def describe(value: int | str) -> str:
-    if isinstance(value, str):
-        return value.upper()
-    return 'Integer: {value}'
-
-let data = json_parse(r'{"color":"blue","note":null}')
-struct Selection:
-    color: Color
-    note: str | None
-let selection = validate(data, Selection)
-```
-
-Neither operation converts untyped numbers. `isinstance` never converts structural data
-into a class. `validate(data, Class)` checks all declared fields and creates a complete
-instance without running the constructor, including for ordinary classes. Missing or extra
-fields fail; no defaults or numeric conversions are inserted. Class conversion also applies
-to nested fields, lists and union members; distinct ambiguous conversions fail.
-Converted field dictionaries and containers are copied rather than rewriting the source.
-
-Successful tests and validation install persistent contracts on mutable values.
-These survive untyped aliases, index/member writes and bulk mutators. For example, an
-untyped alias cannot append an integer to a `list[str]`. Mutable contracts are invariant:
-`list[Color]` cannot be used as `list[str]`. Failed bulk mutations leave the whole value
-unchanged. Narrowing expires after relevant assignment or potentially mutating calls.
-
-### Classes and structural projections
-
-Classes have nominal identity, declared fields, and implicitly bound `self` in methods.
-Normal construction calls the constructor named after the class and must initialize every field.
-Use `hydratable class` only when constructor-free JSON hydration is safe:
-
-```spl
-hydratable class Person:
-    name: str
-
-    def Person(name: str):
-        self.name = name
-
-    def greeting() -> str:
-        return 'Hello {self.name}'
-
-let person: Person = Person('Ada')
-let fields = validate(object(person), struct(Person))
-let snapshot = object(person)
-success snapshot
-```
-
-`struct(Person)` describes structural field data, not a `Person` instance.
-To explicitly turn that data into an instance, use `validate(data, Person)`:
-
-```spl
-class GeneratedPerson:
-    name: str
-    age: int
-    def label() -> str:
-        return '{self.name} at age {self.age}'
-let data = ask(schema=struct(GeneratedPerson)) 'Generate person data'
-let person: GeneratedPerson = validate(data, GeneratedPerson)
-log(person.label())
-```
-
-This conversion bypasses constructor normalization and side effects. Direct
-`schema=GeneratedPerson` still requires a `hydratable class` declaration.
-
-`object(person)` makes a deep snapshot and drops named function properties.
-Validate that snapshot against `struct(Person)` when a checked field view is needed;
-validation rejects missing required fields, including callable fields dropped by projection.
-Use explicit projection before serializing class instances.
-See [Schemas and repairs](LLM-commands.md#schemas-and-repairs) for typed model output,
-[typed-data.md](../lang/examples/typed-data.md) for an offline workflow, and
-[Typing migration](Migration.md) for the full migration rules.
-
-## Runtime inputs: $env and $args
-
-`$env.NAME` or `$env['NAME']` reads a process environment variable as a string.
-`$args[0]`, `$args[1]`, … read the CLI's repeated `--arg` values. Missing variables and
-out-of-range indexes return `None`. Both are read-only snapshots and are never persisted by stores.
-
-```spl
-let target = $args[0]
-if target == None:
-    target = $env.USER
-```
+With `--trace` or `--pin`, the first use of `env` records the environment so that replay sees
+the same values; `process.env` is not recorded. Blockquote agents read `@args` and one
+environment variable at a time with `@env.NAME`.
 
 ## Logging
 
-`log(value, ...)` writes to stderr at info level. `log(level=debug)(value)` selects `error`, `info` or
-`debug`. Debug output appears only with `--log-level debug`; `--silent` hides all logs.
-Objects and lists are logged as indented JSON, including when mixed with text arguments.
-Every continuation line carries the same log tag. Terminal output colors JSON tokens;
-redirected logs are plain text by default. See [console formatting](CLI.md#output-and-exit-codes).
+`log(...values)` writes to the run log on stderr at info level; `log.error(...)` and
+`log.debug(...)` select other levels. Debug output appears only with `--log-level debug`, and
+`--silent` hides all logs. Objects and arrays are logged as indented JSON:
 
-## Built-in functions
-
-| Function | Description |
-| --- | --- |
-| `len(x)` `type(x)` | Length; type name |
-| `str(x)` `int(x)` `float(x)` `bool(x)` `list(x)` | Conversions |
-| `object()` `object(x)` | Empty dictionary; deep dynamic-data snapshot |
-| `validate(x, T)` `isinstance(x, T)` | Validation with explicit struct-to-class conversion; non-converting type testing |
-| `struct(Class)` | Structural descriptor for declared class fields, not nominal hydration |
-| `range(stop)` `range(start, stop[, step])` | List of integers |
-| `abs(x)` `round(x[, digits])` `min(...)` `max(...)` `sum(list)` | Numbers |
-| `sorted(list[, reverse])` `reversed(list)` `enumerate(list)` `zip(a, b, ...)` | Sequences |
-| `any(list)` `all(list)` | Truthiness checks |
-| `keys(d)` `values(d)` `items(d)` | Dict views as lists |
-| `json_parse(text)` `json_stringify(value[, indent])` | Strict JSON |
-| `log(...)` | Logging, see above |
-
-Methods:
-
-| Type | Methods |
-| --- | --- |
-| String | `upper` `lower` `strip` `lstrip` `rstrip` `title` `capitalize` `isdigit` `split` `splitlines` `join` `replace` `startswith` `endswith` `find` `count` |
-| List | `append` `extend` `insert` `pop` `remove` `index` `count` `reverse` `sort` `copy` `clear` `map` `filter` `reduce` |
-| Dict | `keys` `values` `items` `get` `pop` `update` `copy` `clear` |
-
-### List callbacks and lambdas
-
-`lambda x: expression` creates an anonymous function that implicitly returns its
-expression. Use `lambda: expression` for no parameters, or comma-separated names
-for multiple parameters. Lambdas capture lexical bindings like `def`, can be stored
-or returned, and accept a checked `fn(...) -> ...` contract. Parameter annotations
-and default arguments are not supported in lambda syntax. Parenthesize a lambda
-to call it immediately: `(lambda x: x + 1)(2)`.
-
-These methods are available **only on lists**, not strings or dictionaries:
-
-| Method | Behavior |
-| --- | --- |
-| `xs.map(callback)` | Return a new list containing `callback(item)` for each item |
-| `xs.filter(callback)` | Return a new list of original items whose callback result is truthy |
-| `xs.reduce(callback[, initial])` | Fold left with `callback(accumulator, item)` and return the final accumulator |
-
-Callbacks can be lambdas, named functions, or built-ins. Map and filter pass only
-the item, not an index. Reduce uses the initial value when supplied; otherwise it
-starts with the first item. An empty list reduces to its initial value, including
-`None`; without one it raises a runtime error. A singleton without an initial value
-returns its item without calling the callback.
-
-Callbacks run sequentially, including asynchronous operations, and failures propagate
-normally. Each operation takes a shallow snapshot of the list before invoking callbacks;
-it does not mutate the source itself. Changes a callback makes to the source do not
-add or remove work from that snapshot. Filter preserves the original item references.
-
-```spl
-let xs = [1, 2, 3, 4]
-let doubled = xs.map(lambda x: x * 2)
-let evens = xs.filter(lambda x: x % 2 == 0)
-let total = xs.reduce(lambda acc, x: acc + x, 0)
-success [doubled, evens, total]  # [[2, 4, 6, 8], [2, 4], 10]
+```text
+[info] log: review:
+{
+  "findings": [],
+  "count": 0
+}
 ```
+
+See [console formatting](CLI.md#output-and-exit-codes).
 
 ## Exact tools
 
-Tools are ordinary functions that never call a model. Paths are relative to `--cwd`, and every
-call is checked against active [restrictions](Safety.md#restrictions).
+Tools are ordinary async functions that never call a model. Paths are relative to the working
+directory, and every call is checked against active [restrictions](Safety.md#restrictions).
 
 | Function | Result |
 | --- | --- |
-| `read_file(path)` | File contents as UTF-8 text |
-| `write_file(path, content)` | Writes the file and returns a confirmation |
-| `web_fetch(url)` | Response body as text (30 s timeout, up to 5 redirects) |
-| `web_search(query)` | Search results as text |
-| `shell(command)` | Combined stdout/stderr; a nonzero exit raises `tool_error` (120 s timeout) |
+| `await readFile(path)` | File contents as UTF-8 text |
+| `await writeFile(path, content)` | Writes the file, creating parent folders, and returns a confirmation |
+| `await webFetch(url)` | Response body as text (30 s timeout, up to 5 redirects) |
+| `await webSearch(query)` | Search results as text |
+| `await shell(command)` | Combined stdout/stderr; a nonzero exit raises `tool_error` (120 s timeout) |
 
-```spl
-let diff = ''
-restrict exec 'git':
-    diff = shell('git diff --cached')
+```js
+const diff = await restrict({ exec: 'git' }, () => shell('git diff --cached'));
 ```
 
 `shell` runs through the platform shell (`cmd.exe` on Windows, `/bin/sh` elsewhere).
-External state can still change between runs; "exact" means no model is involved.
+Agents see the same tools under the names `read_file`, `write_file`, `web_fetch`, `web_search`
+and `shell`.
+
+## Errors
+
+Library failures are `Failure` objects: `error.statusCode` (also `error.status_code`) and
+`error.reason` say what happened. Catch them with `try`/`catch` and rethrow anything else.
+
+```js
+let notes = '';
+try {
+    notes = await readFile('./optional-notes.txt');
+} catch (error) {
+    if (!(error instanceof Failure)) throw error;
+    log(`${error.statusCode}: ${error.reason}`);
+}
+```
+
+Any other uncaught exception, such as a `TypeError` in your code or an error thrown by an
+imported module, ends the document as a `runtime_error` whose reason is `Name: message` and
+whose `line` is the document line that threw. `success(value)` ends the run by throwing a
+signal that is not an `Error`; a catch-all must rethrow it. See
+[Guards & failures](Safety.md#try--catch).
+
+## What the runtime does not see
+
+The runtime records, replays and restricts **library calls**. Code that reaches the outside
+world directly is your own responsibility:
+
+| | Library (`readFile`, `shell`, `webFetch`, `agent`, MCP) | Node.js APIs (`node:fs`, `fetch`, `child_process`) |
+| --- | --- | --- |
+| Checked by `restrict` | Yes | No |
+| Recorded by `--trace` and `--pin` | Yes | No |
+| On replay | Recorded result is returned | Runs again |
+
+Values from `Date.now()`, `Math.random()` or a direct file read can differ between a recording
+and its replay. If such a value reaches a prompt or a tool argument, the replayed request no
+longer matches the recording and the run stops with a mismatch. Use the library tools for
+anything a replay must reproduce.
+
+Helper modules are in the same position: they are imported from disk again on every replay, so
+a trace or a locked workflow that imports local helpers depends on those files staying as they were.
+
+## The library in Node.js programs
+
+Outside Markdown, the library is a regular package. Calls use a default runtime: provider keys
+from the environment or `spl login`, info-level logs on stderr (override with `SPL_LOG_LEVEL`),
+the process working directory and stdin for `human`.
+
+```js
+import { ask, configure, enumOf, restrict, str, struct, writeFile } from 'spl-lang';
+
+const runtime = configure({ model: 'gpt-6-luna', logLevel: 'error' });
+
+const Triage = struct('Triage', { label: enumOf('bug', 'feature', 'question'), reason: str });
+const triage = await ask('Classify: the export button does nothing', { schema: Triage, repairs: 1 });
+await restrict('./out', () => writeFile('./out/triage.json', JSON.stringify(triage)));
+
+await runtime.backend.close();
+```
+
+`configure(options)` is optional and replaces the default runtime. Options: `model`, `provider`,
+`cwd`, `args`, `logLevel` (`silent`, `error`, `info`, `debug`), `logger`, `backend`, `timeoutMs`,
+`mcpServers`, `trace` and `human`. Running whole documents from a program is described under
+[Embedding](CLI.md#embedding).

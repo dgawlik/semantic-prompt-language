@@ -1,15 +1,18 @@
 ---
 extension: 'semantic-prompt-language'
 version: 1
-model: 'gpt-6-luna'
 ---
 
+# Build Markdown without a model
 
-```spl 
-import * as markdown from 'markdown'
+The `markdown` builder is part of the library, so this workflow needs no model or login.
 
-let doc = markdown.Document()
-doc.heading('Report', 1)
-doc.paragraph(markdown.bold('Ready'))
-success doc.to_string()
+```js
+const doc = markdown.document()
+    .heading('Report', 1)
+    .paragraph(markdown.bold('Ready'))
+    .bulletList(['parser', 'runtime'].map(name => `${markdown.code(name)}: passed`))
+    .table(['Check', 'Result'], [['build', 'ok'], ['tests', 'ok']]);
+
+success(doc.toString());
 ```

@@ -1,551 +1,285 @@
 # Types in SPL
 
-This document records the contract for SPL's breaking language
-revision with opt-in gradual typing and schema-directed decoding. For a practical
-introduction, see [Language](docs-template/Language.md#gradual-typing), the
-[migration guide](docs-template/Migration.md), and the runnable
-[typed-data example](lang/examples/typed-data.md).
+This document is the contract of the SPL type builder: what a type guarantees, what it
+deliberately does not, and how types reach a model. For a practical introduction see
+[Workflow code](docs-template/Language.md#types), the [API reference](docs-template/Reference.md#types)
+and the runnable [typed-data example](lang/examples/typed-data.md).
+
+Types are JavaScript values created with library functions. In a workflow fence the builders are
+already in scope; elsewhere, import them from `spl-lang`.
+
+```js
+const Color = enumOf('red', 'green', 'blue');
+const Money = typedef('Money', int, { minimum: 0, desc: 'Amount in cents' });
+const Item = struct('Item', { name: str, color: Color, price: Money, note: nullable(str) });
+```
 
 ## Scope and guarantees
 
-SPL remains dynamic where no typed contract participates. Type annotations,
-type descriptors, validation, and operations on typed values opt into checking.
+A type describes data. It does three things:
 
-A well-typed program guarantees statically knowable consistency in its typed
-operations. At runtime, accepted typed values conform to their declared types
-and retain their contracts through mutation. Neither guarantee proves that
-generated content is factually correct or satisfies its intended meaning.
+1. **Validates** a value (`parse`, `is`, `validate`).
+2. **Parses** JSON-shaped data into JavaScript values, including class instances.
+3. **Renders JSON Schema** (`schema`) for the model, including annotations.
 
-- Known violations of typed contracts block execution before any model calls.
-- Unknown values from dynamic code may enter typed code through runtime
-  validation, without numeric coercion or repair. Explicit class-target validation
-  can convert structural field data into a nominal instance.
-- Untyped expressions may be analyzed to inform typed checks. Untyped bindings
-  remain dynamically assignable; purely untyped code does not become subject to
-  blanket static type checking.
-- Annotations are enforced contracts, not advisory lint warnings.
-- Validation does not insert defaults, remove fields, or silently convert values.
-  `validate(data, Class)` explicitly requests structural-to-class conversion.
+What a successful `parse` guarantees:
 
-```spl
-let count: int = 1
-let ratio: float = 1.0
-let title: str = 'Example'
-```
+- The returned value conforms to the type at that moment: every struct field is present with a
+  conforming value, no undeclared field exists, and list items and union members conform.
+- Nothing was coerced, defaulted or dropped. `int.parse('1')` fails; a missing field fails.
+- Structs and lists are returned as new objects and arrays; the input is not modified.
 
-Both `let count: int = 1.0` and `let title: str = 2.0` are static errors.
+What it does not guarantee:
 
-## Breaking grammar revision
+- **No static checking.** JavaScript variables and parameters carry no enforced types. A type
+  checks data only where it is applied: `schema` on a model call, `@validate[Type]` in a
+  blockquote, or an explicit `parse`, `is` or `validate`.
+- **No persistent contracts.** A parsed value is an ordinary JavaScript value and can be changed
+  afterwards. Parse again when it matters.
+- **No semantic truth.** A value of the right shape can still be wrong. Use `assert` for
+  business rules.
 
-There is one indentation-only block grammar, not a legacy mode or a grammar
-accepting both brace and indentation blocks.
+Failures are `Failure` exceptions with the status code `validation_failed` and a reason that
+names the path: `$.items[0].price: expected Money, got "12.50"`.
 
-- All statement blocks use a colon and an indented body, including functions,
-  constructors, methods, control flow, structs, and classes.
-- Each block level adds four spaces. Indentation tabs and inconsistent dedents
-  are errors.
-- Blank and comment-only lines do not change block nesting.
-- Indentation is suspended for ordinary multiline expression continuations
-  inside parentheses and list brackets.
-- Brace-delimited blocks and SPL dictionary literals are removed.
-- Lists retain bracket syntax. JSON wire syntax is unchanged.
+## Types are immutable values
 
-### Dictionary expressions
+Every builder returns a frozen `Type`. Methods that modify a type (`annotate`, `describe`, `as`,
+`nullable`, `list`, `or`, `field`, `methods`, `class`) return a new type and leave the original
+unchanged. Types can therefore be shared between fences, modules and blockquotes freely.
 
-`object:` introduces an indented dictionary expression. Entries use
-`key: value`, with string or computed keys and ordinary lexical evaluation of
-values. `object()` creates an empty dynamic dictionary.
-
-```spl
-let address = object:
-    'city': 'London'
-    'postalCode': 'SW1A 1AA'
-
-let person = object:
-    'name': 'Ada'
-    'address': object:
-        'city': 'London'
-        'postalCode': 'SW1A 1AA'
-
-let empty = object()
-let names = ['Ada', 'Grace']
-```
-
-An `object:` is a block-valued expression, not an implicit statement scope made
-from its keys. It supports nesting and use as a value in larger expressions.
-Explicit object blocks delimit their entries; indentation used only to continue
-a parenthesized or bracketed expression does not open a statement block.
+A type has a `kind`, a display `name` and `annotations`. The name appears in error messages and
+in the label an agent sees for a binding (`<type Money>`). `String(type)` is the name.
 
 ## Primitive types
 
-| Type | Contract |
+| Builder | Accepts | Rejects |
+| --- | --- | --- |
+| `str` | Strings | Everything else; numbers are not converted |
+| `int` | Safe integers: `Number.isSafeInteger(value)` | Fractions, numeric strings, `NaN`, values beyond 2^53 - 1 |
+| `float` | Finite numbers, including integers | `NaN`, `Infinity`, numeric strings |
+| `bool` | `true`, `false` | `0`, `1`, `'true'` |
+| `char` | Strings of exactly one Unicode code point | Empty and longer strings, lone surrogates |
+| `nil` | `null` | `undefined` |
+| `any` | Any JSON value | `undefined`, functions, symbols |
+| `object` | Plain objects of any shape | Arrays, `null`, class instances, `Map` |
+| `fn` | Functions | Everything else; has no JSON Schema |
+
+Numbers are JavaScript numbers. There is one numeric representation, so `int` and `float` differ
+only in the values they accept: `float.parse(2)` returns `2`, and `union(float, int)` accepts
+every finite number. Integers beyond the safe range cannot be represented exactly and are rejected
+by `int`.
+
+`char` counts code points, not UTF-16 units or grapheme clusters: an emoji outside the Basic
+Multilingual Plane is one `char`; a letter followed by a combining accent is two.
+
+## Enums and lists
+
+`enumOf('a', 'b')` or `enumOf(['a', 'b'])` accepts exactly the listed strings. The values are
+ordinary strings, so `Color.parse('red') === 'red'`.
+
+`list(T)`, also written `T.list()`, accepts arrays whose every item satisfies `T`. Errors name
+the index: `$[1]: expected int, got "a"`.
+
+## Structs are exact
+
+`struct(name, fields)` describes a record with exactly the declared fields.
+
+```js
+const Address = struct('Address', { city: str, postalCode: nullable(str) });
+
+assert(Address.is({ city: 'London', postalCode: null }));
+assert(!Address.is({ city: 'London' }), 'a nullable field must still be present');
+assert(!Address.is({ city: 'London', postalCode: null, country: 'UK' }), 'extra fields are rejected');
+assert(!Address.is({ city: 1, postalCode: null }), 'values are not converted');
+```
+
+- Every field is required. Nullable means the value may be `null`, not that the field may be absent.
+- Fields that are not declared are rejected.
+- The value must be a plain object; arrays and class instances are not structs.
+- Two struct types with the same fields accept the same values. The name is a label, not an identity.
+- Fields are fixed when the type is created. A type cannot refer to itself, so recursive data
+  has no struct type; use `any` or `jsonSchema` for it.
+
+`struct('Point').field('x', float, { desc: 'Horizontal' }).field('y', float)` builds the same
+kind of type one field at a time. `Type.fields` exposes the field types by name.
+
+## Unions
+
+`union(A, B, ...)`, also `A.or(B)`, accepts a value that satisfies any member; `nullable(T)` and
+`T.nullable()` are `union(T, nil)`.
+
+- Members are tried in declaration order and the first match provides the parsed value, except
+  that a matching [class type](#classes) takes precedence over a plain struct.
+- Duplicate members are removed, and a union of one type is that type.
+- For `T | null`, a rejected value reports the error of `T`, which says more than the union would.
+- If plain data matches more than one class type, `parse` fails with
+  `ambiguous: matches A and B` rather than choosing by order. An existing instance is never ambiguous.
+
+## Annotations are advice
+
+Annotations are arbitrary JSON-compatible metadata written for the model.
+
+```js
+const Rating = int.annotate({ minimum: 1, maximum: 5, desc: 'Stars' });
+const Price = typedef('Price', Money, { currency: 'EUR' });
+
+assert(Rating.parse(9) === 9, 'annotations never reject a value');
+log(Rating.schema());
+// { type: 'integer', description: 'Stars\nModel advice (not validation constraints): {"minimum":1,"maximum":5}' }
+```
+
+- `type.annotate({...})` merges annotations into a copy; later keys override earlier ones.
+  `type.describe(text)` is `annotate({ description: text })`.
+- `typedef(name, type, annotations)` and `type.as(name, annotations)` name a type and add
+  annotations. A named alias accepts exactly the values of its underlying type, and inherits
+  its annotations.
+- Annotating a field means annotating the type given for that field:
+  `struct('Item', { price: Money.annotate({ desc: 'Net price' }) })`. The shared `Money` is unchanged.
+- In JSON Schema, `description` and `desc` become the schema's `description`. All other keys
+  are appended to it as `Model advice (not validation constraints): {...}`, so a model reads
+  them but a schema validator does not enforce them.
+- Annotations never take part in `parse`, `is` or `validate`.
+
+To enforce a constraint, state it in code or use raw JSON Schema:
+
+```js
+const rating = Rating.parse(4);
+assert(rating >= 1 && rating <= 5, 'rating out of range');
+
+const Strict = jsonSchema({ type: 'integer', minimum: 1, maximum: 5 }, 'StrictRating');
+assert(!Strict.is(9));
+```
+
+## Classes
+
+A struct becomes a class type when it gets behavior.
+
+```js
+const Person = struct('Person', { name: str, age: int }).methods({
+    greeting() { return `Hello ${this.name}`; },
+});
+
+class Point {
+    constructor(x, y) { this.x = x; this.y = y; }
+    static fromJSON(data) { return new Point(data.x, data.y); }
+    norm() { return Math.hypot(this.x, this.y); }
+}
+const PointType = struct('Point', { x: float, y: float }).class(Point);
+
+const person = Person.parse({ name: 'Ada', age: 36 });
+assert(person.greeting() === 'Hello Ada');
+assert(PointType.parse({ x: 3, y: 4 }) instanceof Point);
+```
+
+- `.methods({...})` creates a prototype with the given methods; `this` is the parsed object.
+  A method may not have the name of a field.
+- `.class(Constructor)` uses an existing class. When the class has a static `fromJSON(data)`,
+  `parse` calls it with the validated fields and requires an instance in return. Otherwise the
+  instance is created with the class's prototype and the validated fields, **without running
+  the constructor**.
+- Fields must be declared before `.methods` or `.class`.
+- `parse` accepts plain data, which it validates exactly and hydrates, or an existing instance,
+  whose declared fields it validates and which it returns unchanged.
+- `is` is true only for instances. Plain data that would hydrate successfully is not an instance.
+- `Type.data` is the plain-struct view: same fields, no methods. `JSON.stringify(instance)`
+  yields the fields, so `Person.data.parse(JSON.parse(JSON.stringify(person)))` is a plain copy.
+- Class types nest: a struct field, list item or union member of a class type is hydrated too.
+
+## Raw JSON Schema
+
+`jsonSchema(schema, name?)` wraps a JSON Schema (draft-07, compiled strictly with Ajv) as a type.
+Unlike annotations, its keywords are enforced. The value is returned as it is, without copying
+or hydration. `validate(value, schema)` and the `schema` option of model calls accept a raw
+schema object or boolean directly. An invalid schema is a `runtime_error`.
+
+## JSON Schema output
+
+`type.schema()` returns the JSON Schema sent to a model.
+
+| Type | Schema |
 | --- | --- |
-| `int` | Distinct signed 64-bit integer representation. |
-| `float` | Distinct finite IEEE-754 binary64 representation. |
-| `str` | String. |
-| `char` | String containing exactly one Unicode scalar value; a subtype of `str`. |
-| `bool` | Boolean, distinct from numeric types. |
-| `None` | Singleton null type; not an absent field. |
+| `str`, `int`, `float`, `bool`, `nil` | `{ "type": "string" }`, `"integer"`, `"number"`, `"boolean"`, `"null"` |
+| `char` | `{ "type": "string", "minLength": 1, "maxLength": 1 }` with a description |
+| `any`, `object` | `{}`, `{ "type": "object" }` |
+| `enumOf('a', 'b')` | `{ "type": "string", "enum": ["a", "b"] }` |
+| `list(T)` | `{ "type": "array", "items": T }` |
+| `union(A, B)` | `{ "anyOf": [A, B] }` |
+| `struct` and class types | `{ "type": "object", "properties": {...}, "required": [every field], "additionalProperties": false }` |
+| `jsonSchema(schema)` | A copy of `schema` |
+| `fn` | None: `schema()` raises `runtime_error` |
 
-`char` does not mean one UTF-16 code unit or one grapheme cluster. No Unicode
-normalization is performed. A combining sequence containing multiple scalar
-values is not one `char`; an isolated surrogate is not a Unicode scalar value.
+Named aliases are transparent in the output: their schema is the underlying schema plus their
+annotations. Nested types are written inline; there are no `$ref` references.
 
-### Numeric representation and operations
+The built-in schema is a description for the model. The runtime validates with the type itself,
+which is stricter than the schema in two places: `int` requires a safe integer and `char` a
+single code point.
 
-`int` and `float` are disjoint runtime types. In typed literal contexts, `1`
-constructs an `int`, whereas `1.0` constructs a `float`. Existing untyped
-numeric behavior remains unchanged; legacy numeric values require explicit
-`int(...)` or `float(...)` conversion to enter these new representations.
+## Types and model output
 
-- The integer range is `-9223372036854775808` through `9223372036854775807`,
-  inclusive.
-- Integer arithmetic is checked. Overflow is an error, never wrapping or
-  saturation.
-- `float` rejects NaN and infinities.
-- Mixed `int`/`float` arithmetic requires explicit conversion.
-- Integer `/` produces a `float`. Integer-preserving division is an explicit
-  operation, not implicit truncation.
-- Numeric comparisons compare mathematical values without first rounding an
-  integer through binary64.
-
-Integer conversion must be exact and range-checked. Fractional, nonfinite, and
-out-of-range inputs fail; integer strings must parse exactly. Explicit
-integer-to-float conversion may round to binary64 and is documented as
-potentially lossy.
-
-### Enums
-
-Enums are named unions of string literals, not nominal runtime objects.
-Matching strings are accepted directly, and an enum is a subtype of `str`.
-
-```spl
-enum Color = 'red' | 'green' | 'blue'
-
-let color: Color = 'red'
+```js
+const item = await ask('Describe a red pen that costs 2.50', { schema: Item, repairs: 1 });
 ```
 
-## Containers, structs, and unions
+- `schema: Type` implies JSON output. The prompt ends with the type's JSON Schema; the answer
+  is parsed as strict JSON and then with `Type.parse`. The call resolves to the parsed value:
+  plain objects for structs, instances for class types.
+- `invalid_format` (not JSON) and `validation_failed` (wrong shape) can be repaired: with
+  `repairs: n`, the model gets up to `n` more attempts, each with its previous answer and the error.
+- A variable's declared TypeScript type never selects a schema. Only the `schema` option does.
+- In a blockquote, `@validate[Item]` makes the agent save through the type: `save_variable`
+  with the schema name `Item` stores `Item.parse(value)`. The name is the JavaScript binding, so
+  give composite types a binding first: `const Items = list(Item);`. Loading a type binding
+  returns its JSON Schema to the agent. A rejected value is reported with the variable as the
+  root of the path, such as `invoice.tax: expected Money, got 3312.5`, where `Type.parse`
+  itself uses `$`.
 
-### Lists and dynamic objects
+## TypeScript inference
 
-`list[T]` is a homogeneous iterable container whose elements satisfy `T`.
-Mutable list contracts are invariant: `list[Color]` is not interchangeable
-with `list[str]`, even though individual `Color` values satisfy `str`.
+Types carry their parsed JavaScript type. `Infer` extracts it, and model calls are typed by
+their options.
 
-`object` is a dynamic string-keyed dictionary. It is neither an unchecked
-`any` nor a superclass of nominal instances. Extracted field values remain
-unknown until validated or narrowed into a concrete type.
+```ts
+import type { Infer } from 'spl-lang';
 
-### Structs
+const Color = enumOf('red', 'green', 'blue');
+const Item = struct('Item', { name: str, color: Color, tags: list(str), note: nullable(str) });
+type Item = Infer<typeof Item>;
+// { name: string; color: 'red' | 'green' | 'blue'; tags: string[]; note: string | null }
 
-Structs are structural record types and schema descriptions, without nominal
-instance identity or methods.
-
-```spl
-struct Address:
-    line1: str
-    line2: str | None
-    postalCode: str
-
-struct PersonData:
-    firstName: str [min=1, max=10, desc='First Name']
-    lastName: str [min=2, max=10, desc='Family Name']
-    age: int
-    address: Address
+const item = await ask('Describe a pen', { schema: Item });   // Item
+const count = await ask('How many?', { fmt: 'integer' });      // number
+const text = await ask('Say hi');                               // string
 ```
 
-Separately named structs with equivalent field contracts are interchangeable.
-At validation boundaries, the declared shape is exact: missing and extra fields
-fail rather than being inserted or removed. Mutable field contracts still obey
-the aliasing rules below.
-
-Every declared field is required. For example, `line2: str | None` requires the
-`line2` field to be present, but permits its value to be `None`.
-
-### General unions
-
-`|` is a general union operator, not special nullable-only syntax.
-
-```spl
-let choice: int | str = 1
-let optional: PersonData | None = None
-```
-
-A value satisfies a union if it satisfies a member. Operations not valid for
-every possible member require explicit narrowing.
-
-Union membership and decoding target selection are different questions:
-
-- Equivalent decoding interpretations are collapsed.
-- Distinct, ambiguous runtime representations, hydrated classes, or mutable
-  contracts are rejected rather than selected by declaration order.
-- Multiple membership matches are acceptable when no distinct representation
-  or contract must be selected.
-- Numeric union decoding follows the JSON token rule described below.
-
-For example, identical field shapes cannot choose between two distinct nominal
-classes. An untyped empty list cannot arbitrarily acquire either a `list[int]`
-or a `list[str]` contract; the caller must supply an unambiguous target.
-
-## Field metadata is model advice
-
-The brackets after a field type contain advisory metadata, not additional
-data-validity constraints.
-
-The same metadata is permitted on transparent, read-only type aliases:
-
-```spl
-type Money = int [minimum=0, desc='Monetary amount in cents']
-let total: Money = 1250
-```
-
-Aliases preserve the underlying representation, assignability and operations, including
-nominal class identity. They can be used in annotations, containers and schema targets.
-Alias advice propagates into schema descriptions; it is not enforced as validation.
-Aliases of aliases inherit advice, with newly declared keys overriding inherited keys.
-Field-specific advice is appended separately. `type(value)` remains available.
-
-- Metadata consists of compile-time JSON-compatible literal values, not
-  executed expressions or function calls.
-- Arbitrary named advice keys are allowed.
-- `desc` must be a string; `min` and `max` must be numbers.
-- Malformed metadata is a declaration error. Violating valid advice is not a
-  data-validation error.
-- Advice is supplied through descriptions or prompt guidance. It is not
-  lowered into enforced keywords such as `minLength`, `maximum`, or
-  `minItems`.
-
-A one-character string can satisfy `str [min=2]`. This does not weaken
-constraints inherent in a type, such as the one-scalar requirement of `char`
-or the range of `int`.
-
-Explicit constraints in a user-written JSON Schema retain their existing
-strict validation behavior. Advisory type metadata does not reinterpret them.
-
-## Runtime contracts, aliases, and narrowing
-
-### Persistent mutable contracts
-
-Validation at initialization alone is insufficient for mutable data.
-Typed lists, records, and instances retain their contracts for their lifetime.
-
-- Reassignment of typed bindings and every mutation route are checked.
-- Checks cover member/index assignment, built-in mutators, captured bindings,
-  and mutations through untyped aliases.
-- An incompatible typed alias is rejected even if current contents, such as
-  an empty list, happen to match both candidate element types.
-- Bulk operations validate the complete operation before committing.
-- Failure leaves values and installed contracts unchanged; no partial writes
-  or partial contract installation are allowed.
-
-For example, an untyped alias cannot append a string to a list protected by
-`list[int]`. An `extend` operation with one invalid element cannot append its
-valid prefix and then fail.
-
-### Type tests and validation
-
-`isinstance(value, Type)` performs a non-converting type test and supports
-branch narrowing. `validate(value, Type)` checks unknown data and returns a
-typed view or raises an explicit error.
-
-```spl
-def describe(value: int | str) -> str:
-    if isinstance(value, str):
-        return value
-    return 'An integer'
-```
-
-Neither operation converts a legacy number into a new numeric representation.
-`isinstance` never converts structural data into a nominal class. Explicit
-`validate(data, Class)` validates all declared fields and returns a complete instance,
-including for ordinary classes, without running the constructor. Missing and extra
-fields fail. This applies recursively through class fields, structs, lists and unions;
-distinct ambiguous conversions fail rather than selecting a class arbitrarily.
-Converted field dictionaries and containers are copied; input values are not rewritten.
-Unchanged mutable children retain compatible contracts. Failed validation installs no
-contracts and publishes no partially converted result. Existing instances of the
-requested class keep their identity; instances of other classes are not reclassified.
-
-A successful test of a mutable shape atomically installs compatible invariant
-contracts, just as validation does. This does not change the data or identity,
-but does change permitted future mutations. Failed tests have no such effect;
-an incompatible established container contract makes a test false.
-
-Narrowing is not permanent:
-
-- Assignment invalidates the affected binding's narrowing.
-- Potentially mutating calls invalidate affected captured-binding and
-  member-path narrowing.
-- Stable local snapshots can retain their narrowing.
-
-A previous test is not proof that a mutable union binding still contains the
-same member after arbitrary code executes.
-
-## Functions and methods
-
-Functions remain first-class values. Parameters and returns may be annotated;
-callable fields use `fn(T1, T2) -> R`.
-
-```spl
-def repeat(text: str, count: int) -> str:
-    return text * count
-
-struct Handler:
-    callback: fn(str, int) -> str
-```
-
-Callable compatibility uses contravariant parameter types, covariant return
-types, and explicit arity. Bound instance method signatures omit the
-implicitly supplied `self`.
-
-Known incompatible signatures are static errors. Arguments and return values
-are guarded at annotated-function and typed-callable boundaries, including
-when the underlying implementation is untyped.
-
-Signature-aware `isinstance` succeeds only for a known compatible signature.
-It returns false for an unannotated function, whose return behavior cannot be
-proven by observation. `validate(function, CallableType)` may instead create
-a guarded callable view; it does not claim to statically verify that function.
-
-### Function-valued dictionary properties
-
-Inline `def` entries in an `object:` are shorthand for function-valued
-properties. They capture the ordinary lexical environment, not an implicit
-scope of dictionary keys, and receive no implicit dictionary `self`.
-
-```spl
-def printHello() -> None:
-    log('Hello World')
-
-let greeting = object:
-    'x': 'Hello'
-    'print': printHello
-    def printWorld() -> None:
-        log('{greeting.x} World')
-
-greeting.print()
-greeting.printWorld()
-```
-
-`x` alone inside `printWorld` would be a lexical name, not an implicit field
-reference. Access fields through an explicit argument or captured dictionary
-variable.
-
-Dictionary built-in methods retain precedence in member calls. A
-non-built-in name falls back to invoking a callable property, with exactly
-the explicit arguments. A noncallable property produces an error.
-
-`o.pop()` calls the dictionary built-in; `(o.pop)()` invokes a stored function
-at the colliding key. Ordinary member reads still return stored property
-values. Nominal class methods use separate, implicitly bound instance dispatch.
-
-## Classes and construction
-
-Classes are nominal runtime instances with identity, declared typed fields,
-instance methods, and explicit normal construction. A structurally matching
-dictionary is not automatically an instance of a class.
-
-A constructor is named after its class. `self` is implicitly bound in
-constructors and instance methods.
-
-Construction is staged. Initialized fields can be accessed internally, but
-an incomplete instance cannot escape or be published as a normal instance.
-Before completion, every declared field must be initialized and valid.
-No inheritance is included in this revision.
-
-### Explicit opt-in to schema hydration
-
-`hydratable class` declares that constructor-free field hydration is allowed.
-Ordinary `class` declarations require constructors for normal construction and cannot
-be direct schema hydration targets. Explicit `validate(data, Class)` is a separate,
-caller-requested field conversion and may populate ordinary classes without constructors.
-
-```spl
-hydratable class Person:
-    firstName: str [min=1, max=10, desc='First Name']
-    lastName: str [min=2, max=10, desc='Family Name']
-    age: int
-    address: Address
-
-    def Person(firstName: str, lastName: str, age: int, address: Address):
-        self.firstName = firstName
-        self.lastName = lastName
-        self.age = age
-        self.address = address
-
-    def fullName() -> str:
-        return '{self.firstName} {self.lastName}'
-
-let result: Person = ask(schema=Person) 'Generate a random person'
-success object(result)
-```
-
-Normal construction invokes the constructor. Hydration validates every
-declared field before publishing the instance and deliberately skips the
-constructor.
-
-Opting in does not establish constructor-specific normalization, side effects,
-or semantic invariants. Methods on hydrated instances must not assume those
-constructor effects occurred.
-
-## Type descriptors and schemas
-
-Types have immutable runtime descriptors in the existing lexical namespace.
-Class descriptors are also callable constructors. Conflicting declarations
-in the same scope are errors.
-
-Types must be declared before use. The enclosing class name is available in
-its method signatures, but forward declarations and recursive data schemas
-are out of scope.
-
-### Explicit `ask` output targets
-
-An `ask` call explicitly requests its decoding target through `schema=`.
-A binding annotation validates the resulting value; it does not secretly
-configure the call's format, schema, or hydration.
-
-| Request | Result |
+| Builder | Inferred type |
 | --- | --- |
-| `schema=PersonData` | Validated structural data. |
-| `schema=Person` | A hydrated instance, only if `Person` opts in. |
-| `schema=struct(Person)` | Validated structural data containing the class's declared fields, not a `Person` instance. |
-| A raw JSON Schema | Existing strict schema-validation behavior. |
+| `str`, `char` | `string` |
+| `int`, `float` | `number` |
+| `bool`, `nil` | `boolean`, `null` |
+| `any`, `object` | `unknown`, `Record<string, unknown>` |
+| `enumOf('a', 'b')` | `'a' \| 'b'` |
+| `list(T)`, `nullable(T)`, `union(A, B)` | `T[]`, `T \| null`, `A \| B` |
+| `struct(name, fields)` | An object type with one property per field |
+| `.methods(M)` | The fields and the methods |
+| `.class(C)` | `InstanceType<typeof C>` |
+| `jsonSchema<T>(schema)` | `T`, `unknown` by default |
 
-```spl
-let data = ask(schema=struct(Person)) 'Generate a random person'
-let person: Person = ask(schema=Person) 'Generate a random person'
-```
+Inference is compile-time help only. `ts` fences are erased before running, so the guarantees
+above come from `parse`, not from annotations in the source.
 
-Consequently, the original form
-`let result: Person = ask(schema=struct(Person)) 'Random Person'` is not a
-hydration request and cannot satisfy the nominal class annotation.
+## Non-goals
 
-`struct(Class)` produces a structural descriptor for the declared fields.
-Methods are excluded. A schema target containing required callable fields
-or other non-JSON/unsupported data structures is rejected before a model
-call; those fields are not silently omitted. Such types remain usable in
-ordinary SPL code.
+- Optional fields, default values and coercion.
+- Recursive types, inheritance between struct types and callable signatures.
+- Exact integers beyond the JavaScript safe range.
+- Static checking of JavaScript code, or contracts that persist after parsing.
+- Enforcing annotations.
 
-Providing a schema retains the existing JSON format default. Explicit raw
-schemas and format options retain their existing strict behavior, including
-restrictions on text formatting and repair support.
+## Acceptance
 
-### Lossless typed numeric decoding
-
-Typed JSON decoding interprets wire tokens according to the explicitly
-requested descriptor. This is parsing into a requested representation, not
-coercion of an already existing SPL value.
-
-- Signed 64-bit integers are decoded without first passing through JavaScript
-  `number`.
-- A concrete numeric target determines the requested representation, subject
-  to its validity rules.
-- For `int | float`, integer tokens select `int`; decimal or exponent tokens
-  select `float`.
-- Invalid ranges, nonfinite results, and ambiguous distinct union decoding
-  targets fail explicitly.
-
-JSON does not carry nominal numeric type tags. SPL does not promise that its
-type distinctions survive arbitrary external JSON normalization or rewriting.
-
-### Errors and model repairs
-
-Parsing, schema validation, typed decoding, and complete hydration validation
-belong to one `ask` validation/repair pipeline.
-
-- Preserve zero repairs by default, the existing maximum of five additional
-  attempts, and existing restrictions on repair support.
-- A typed decoding failure, including integer overflow, uses the configured
-  repair budget just like another output-validation failure.
-- Publish no partially validated or partially hydrated result.
-- Assignment, call, mutation, and ordinary validation type errors do not
-  trigger model retries.
-- Diagnostics identify the source location and nested value path where
-  applicable.
-
-## Data projection and serialization
-
-Class-to-data conversion is explicit. Classes must be projected before JSON
-output; serializing an instance does not implicitly run its constructor,
-hydrate it, or silently choose a schema.
-
-`object(value)` creates a deep dynamic-data snapshot. Class-to-struct data
-projection likewise produces a deep field snapshot for a schema-compatible
-shape; required non-JSON fields cannot be silently discarded to satisfy a
-struct contract.
-
-- Projections never mutate the source or share mutable children with it.
-- Named function-valued properties, including methods, are dropped by
-  dynamic object projection.
-- Functions at the root or inside arrays are rejected rather than removed
-  or replaced, so array indices do not change.
-- Cyclic data graphs are rejected explicitly, not encoded as references.
-
-Function-valued properties are not globally ignored by the ordinary serializer.
-Existing untyped function serialization remains unchanged.
-
-Typed numeric JSON output is lossless:
-
-- Integers are emitted as exact decimal integer tokens.
-- Floats use decimal or exponent spelling, including `1.0` for an integral
-  float, preserving SPL's numeric-union token distinction.
-- Legacy numeric serialization remains unchanged.
-
-The round-trip guarantee applies to SPL's own typed encoder/decoder, not to
-arbitrary external JSON transformations.
-
-## Migration and non-goals
-
-This revision explicitly withdraws source compatibility with brace-based
-programs, including programs without annotations. It does not otherwise turn
-untyped bindings into statically typed ones or replace legacy number and
-function serialization behavior.
-
-Implementation must include:
-
-- A manual migration guide covering blocks, dictionary expressions, and the
-  distinction between class schemas and struct schemas.
-- Clear diagnostics for removed syntax.
-- Migration of maintained examples, tests, and editor snippets.
-
-Deferred features:
-
-- A general-purpose automatic source converter.
-- Inheritance, overloads, generics, and advanced higher-order inference.
-- Forward declarations and recursive data schemas.
-- Unchecked casts, implicit numeric promotion, automatic validation repair,
-  and semantic-correctness guarantees.
-
-## Acceptance criteria
-
-The eventual implementation is complete only when tests establish these
-contracts, including:
-
-1. Known typed errors stop execution before any provider call, while untyped
-   bindings remain dynamically assignable.
-2. Typed `1` and `1.0` have distinct representations; incompatible numeric
-   assignment and implicit mixed arithmetic fail.
-3. Both signed-64-bit limits round-trip exactly through typed JSON; overflow,
-   fractional integer conversion, and nonfinite floats fail.
-4. Unicode-scalar `char` checks differ correctly from UTF-16 length and
-   grapheme count; booleans are not integers.
-5. Struct fields are exact and required, including nullable fields. Advisory
-   `min`/`max` violations alone do not reject data; raw schema constraints do.
-6. Every mutation path, including untyped aliases and bulk mutators, preserves
-   typed contracts without partial updates.
-7. Mutable type tests install contracts atomically; failed tests leave values
-   unchanged; narrowing expires after relevant assignments and calls.
-8. Callable compatibility, argument/result guards, and dictionary method-name
-   precedence follow the specified rules.
-9. Hydration skips constructors only for opted-in classes, validates all fields
-   before publication, and is distinct from `schema=struct(Class)`.
-10. Ambiguous distinct union decoding and unsupported schema targets fail
-    explicitly; unsupported targets fail before provider calls.
-11. Typed decoding failures use the existing repair budget, without extending
-    model retries to ordinary type errors.
-12. Projections are deep snapshots; function properties, array/root functions,
-    cycles, and typed numeric output follow their distinct serialization rules.
-13. Indentation and object-expression syntax work across maintained language
-    surfaces; removed syntax has migration diagnostics, while preserved
-    untyped runtime behavior has regression coverage.
+The behavior described here is covered by `lang/tests/types.test.ts` and exercised without a
+model by [typed-data.md](lang/examples/typed-data.md),
+[deterministic/types.md](lang/examples/deterministic/types.md) and
+[deterministic/enumsStructs.md](lang/examples/deterministic/enumsStructs.md).

@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Everything a workflow can use on one page: the document format, every library global with its
+signature and options, the type builder, blockquote tools and controls, and failure codes.">
+<meta name="color-scheme" content="light dark">
+<title>API reference - SPL docs</title>
+<link rel="icon" type="image/png" href="assets/icon.png?v=6bad2bd86bcd">
+<link rel="stylesheet" href="assets/style.css?v=6bad2bd86bcd">
+<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
+<script defer src="assets/search-index.js?v=6bad2bd86bcd"></script>
+<script defer src="assets/site.js?v=6bad2bd86bcd"></script>
+</head>
+<body data-page="reference">
+<a class="skip-link" href="#page">Skip to content</a>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>API reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
+  <main id="page" tabindex="-1">
+    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>API reference</span><span class="reading-time">11 min read</span></div>
+    <header class="page-heading"><h1>API reference</h1><div class="lead"><p>Everything a workflow can use on one page: the document format, every library global with its
+signature and options, the type builder, blockquote tools and controls, and failure codes.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#document-format">Document format</a></li><li class="toc-level-2"><a href="#model-calls">Model calls</a></li><li class="toc-level-2"><a href="#guidance-and-restrictions">Guidance and restrictions</a></li><li class="toc-level-2"><a href="#control-people-and-logging">Control, people and logging</a></li><li class="toc-level-2"><a href="#tools">Tools</a></li><li class="toc-level-2"><a href="#inputs-and-code-generation">Inputs and code generation</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-2"><a href="#markdown-builder">Markdown builder</a></li><li class="toc-level-2"><a href="#blockquote-tools">Blockquote tools</a></li><li class="toc-level-2"><a href="#blockquote-markers-and-controls">Blockquote markers and controls</a></li><li class="toc-level-2"><a href="#failure-codes">Failure codes</a></li><li class="toc-level-2"><a href="#package-entry-points">Package entry points</a></li><li class="toc-level-2"><a href="#maintaining-this-page">Maintaining this page</a></li></ul></nav></details>
+    <article class="prose"><h2 id="document-format">Document format<a class="heading-anchor" href="#document-format" aria-label="Link to Document format">#</a></h2>
+<p>A workflow is a Markdown file that starts with YAML frontmatter.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Document format reference table"><table>
+<thead>
+<tr>
+<th scope="col">Frontmatter field</th>
+<th scope="col">Required</th>
+<th scope="col">Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>extension</code></td>
+<td>Yes</td>
+<td><code>semantic-prompt-language</code></td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td>Yes</td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>No</td>
+<td>Default model ID for the document</td>
+</tr>
+<tr>
+<td><code>preamble</code></td>
+<td>No</td>
+<td>Text added to every model request</td>
+</tr>
+</tbody></table>
+</div>
+<p>Unknown fields are syntax errors. After the frontmatter, blocks run in document order:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Document format reference table"><table>
+<thead>
+<tr>
+<th scope="col">Block</th>
+<th scope="col">Treatment</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Fence <code>js</code>, <code>javascript</code>, <code>mjs</code></td>
+<td>Runs as JavaScript</td>
+</tr>
+<tr>
+<td>Fence <code>ts</code>, <code>typescript</code>, <code>mts</code></td>
+<td>Types are erased, then it runs as JavaScript</td>
+</tr>
+<tr>
+<td>Fence with <code>ignore</code> or <code>no-run</code> after the language</td>
+<td>Not run</td>
+</tr>
+<tr>
+<td>Fence <code>spl</code></td>
+<td>Syntax error with a migration hint</td>
+</tr>
+<tr>
+<td>Any other fence, headings, prose</td>
+<td>Commentary</td>
+</tr>
+<tr>
+<td>Top-level blockquote</td>
+<td>Agent command; <code>@CODEGEN</code> generates functions instead</td>
+</tr>
+<tr>
+<td>Double blockquote with a <code>spl-lock</code> fence</td>
+<td>The journal of a <a href="cli.html#pinned-workflows">pinned workflow</a></td>
+</tr>
+</tbody></table>
+</div>
+<p>Fences are compiled as ES-module code in strict mode: top-level <code>await</code>, <code>import</code>, <code>import()</code>
+and <code>import.meta.url</code>, <code>.filename</code>, <code>.dirname</code> are available; top-level <code>return</code>,
+<code>export default</code> and <code>export { ... }</code> are not. <code>import.meta</code> describes the workflow file, while
+imports and relative tool paths resolve against the working directory. Imported names are
+live, read-only bindings. All blocks share one top-level scope; see
+<a href="language.html#one-shared-scope">One shared scope</a>.</p>
+<h2 id="model-calls">Model calls<a class="heading-anchor" href="#model-calls" aria-label="Link to Model calls">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Model calls reference table"><table>
+<thead>
+<tr>
+<th scope="col">Call</th>
+<th scope="col">Resolves to</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ask(prompt, options?)</code></td>
+<td>The answer; no tools</td>
+</tr>
+<tr>
+<td><code>think(prompt, options?)</code></td>
+<td>Like <code>ask</code>, with <code>reasoning: &#39;medium&#39;</code> by default</td>
+</tr>
+<tr>
+<td><code>agent(prompt, options?)</code></td>
+<td>The answer after the model acted with runtime and MCP tools</td>
+</tr>
+<tr>
+<td><code>ask`Text ${value}`</code></td>
+<td>Tagged-template form of all three calls, without options</td>
+</tr>
+</tbody></table>
+</div>
+<p>A prompt that is not a string is converted to text: objects and arrays as JSON, types by name.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Model calls reference table"><table>
+<thead>
+<tr>
+<th scope="col">Option</th>
+<th scope="col">Type</th>
+<th scope="col">Default</th>
+<th scope="col">Calls</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>len</code></td>
+<td><code>&#39;word&#39;</code>, <code>&#39;sentence&#39;</code>, <code>&#39;paragraph&#39;</code>, <code>&#39;long&#39;</code></td>
+<td>none</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>fmt</code></td>
+<td><code>&#39;text&#39;</code>, <code>&#39;integer&#39;</code>, <code>&#39;float&#39;</code>, <code>&#39;boolean&#39;</code>, <code>&#39;array&#39;</code>, <code>&#39;object&#39;</code>, <code>&#39;json&#39;</code></td>
+<td><code>&#39;text&#39;</code>, or <code>&#39;json&#39;</code> with <code>schema</code></td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>schema</code></td>
+<td>A type or JSON Schema (object or boolean)</td>
+<td>none</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>repairs</code></td>
+<td>Integer <code>0</code> to <code>5</code></td>
+<td><code>0</code></td>
+<td><code>ask</code>, <code>think</code></td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td><code>&#39;low&#39;</code>, <code>&#39;medium&#39;</code>, <code>&#39;high&#39;</code></td>
+<td>none for <code>ask</code>, <code>&#39;medium&#39;</code> otherwise</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>hide</code></td>
+<td>Boolean</td>
+<td><code>false</code></td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>Nonempty string</td>
+<td>document or provider default</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>tokens</code></td>
+<td>Positive safe integer</td>
+<td>provider default</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td>Integer <code>0</code> to <code>2147483647</code></td>
+<td>provider default</td>
+<td><code>ask</code></td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td>Number <code>0</code> to <code>2</code></td>
+<td>provider default</td>
+<td><code>ask</code></td>
+</tr>
+<tr>
+<td><code>topP</code> (alias <code>top_p</code>)</td>
+<td>Number <code>0</code> to <code>1</code></td>
+<td>provider default</td>
+<td><code>ask</code></td>
+</tr>
+</tbody></table>
+</div>
+<p>The result is a string for text output, the parsed JSON value for <code>fmt</code>, and the parsed value of
+the type for <code>schema</code>. In TypeScript the return type follows the options. Invalid options are a
+<code>runtime_error</code> raised before any model call. See <a href="llm-commands.html#options">Options</a>.</p>
+<h2 id="guidance-and-restrictions">Guidance and restrictions<a class="heading-anchor" href="#guidance-and-restrictions" aria-label="Link to Guidance and restrictions">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Guidance and restrictions reference table"><table>
+<thead>
+<tr>
+<th scope="col">Call</th>
+<th scope="col">Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enforce(text, body)</code></td>
+<td>Runs <code>body</code> with positive guidance added to every model call inside; returns its result</td>
+</tr>
+<tr>
+<td><code>forbid(text, body)</code></td>
+<td>Runs <code>body</code> with guidance about what to avoid; returns its result</td>
+</tr>
+<tr>
+<td><code>restrict(spec, body)</code></td>
+<td>Runs <code>body</code> with narrowed permissions; resolves to its result</td>
+</tr>
+</tbody></table>
+</div>
+<p><code>text</code> is a nonempty string or a list of them. <code>body</code> is a function, usually an arrow function.
+<code>spec</code> is a folder, a list of folders, or an object:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Guidance and restrictions reference table"><table>
+<thead>
+<tr>
+<th scope="col"><code>spec</code> key</th>
+<th scope="col">Limits</th>
+<th scope="col">Values</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fs</code></td>
+<td>Files read and written by tools and agents</td>
+<td>Folders or files, relative to the working directory</td>
+</tr>
+<tr>
+<td><code>exec</code></td>
+<td>Executables run by <code>shell</code></td>
+<td>Names without a path, such as <code>git</code></td>
+</tr>
+<tr>
+<td><code>net</code></td>
+<td>Hosts reached by <code>webFetch</code>, <code>webSearch</code> and agents</td>
+<td>Host names; <code>*.example.com</code> matches subdomains</td>
+</tr>
+<tr>
+<td><code>mcp</code></td>
+<td>MCP tools offered to agents</td>
+<td><code>server</code>, <code>server/*</code> or <code>server/tool</code></td>
+</tr>
+</tbody></table>
+</div>
+<p>Each value is a comma-separated string or a list of strings. See <a href="safety.html#restrictions">Restrictions</a>.</p>
+<h2 id="control-people-and-logging">Control, people and logging<a class="heading-anchor" href="#control-people-and-logging" aria-label="Link to Control, people and logging">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Control, people and logging reference table"><table>
+<thead>
+<tr>
+<th scope="col">Call</th>
+<th scope="col">Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>success(value?)</code></td>
+<td>Ends the document with a result (<code>null</code> when omitted)</td>
+</tr>
+<tr>
+<td><code>fail(reason?)</code></td>
+<td>Raises <code>explicit_failure</code>; the default reason is <code>failed</code></td>
+</tr>
+<tr>
+<td><code>assert(condition, message?)</code></td>
+<td>Raises <code>assertion_failed</code> when <code>condition</code> is falsy</td>
+</tr>
+<tr>
+<td><code>human(question)</code></td>
+<td>Resolves to a person&#39;s answer as a string</td>
+</tr>
+<tr>
+<td><code>log(...values)</code>, <code>log.info(...)</code></td>
+<td>Writes to the run log at info level</td>
+</tr>
+<tr>
+<td><code>log.error(...values)</code>, <code>log.debug(...values)</code></td>
+<td>Writes at error or debug level</td>
+</tr>
+<tr>
+<td><code>Failure</code></td>
+<td>The class of failures: <code>error instanceof Failure</code>, <code>statusCode</code>, <code>status_code</code>, <code>reason</code>, <code>payload()</code></td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="tools">Tools<a class="heading-anchor" href="#tools" aria-label="Link to Tools">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Tools reference table"><table>
+<thead>
+<tr>
+<th scope="col">Call</th>
+<th scope="col">Resolves to</th>
+<th scope="col">Agent tool name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>readFile(path)</code></td>
+<td>The file&#39;s UTF-8 text</td>
+<td><code>read_file</code></td>
+</tr>
+<tr>
+<td><code>writeFile(path, content)</code></td>
+<td>A confirmation; parent folders are created</td>
+<td><code>write_file</code></td>
+</tr>
+<tr>
+<td><code>webFetch(url)</code></td>
+<td>The body of an http(s) GET</td>
+<td><code>web_fetch</code></td>
+</tr>
+<tr>
+<td><code>webSearch(query)</code></td>
+<td>The top results as text</td>
+<td><code>web_search</code></td>
+</tr>
+<tr>
+<td><code>shell(command)</code></td>
+<td>Combined stdout and stderr</td>
+<td><code>shell</code></td>
+</tr>
+</tbody></table>
+</div>
+<p>Arguments are strings. Failures are <code>tool_error</code>; blocked calls are <code>restriction_violation</code>.</p>
+<h2 id="inputs-and-code-generation">Inputs and code generation<a class="heading-anchor" href="#inputs-and-code-generation" aria-label="Link to Inputs and code generation">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Inputs and code generation reference table"><table>
+<thead>
+<tr>
+<th scope="col">Name</th>
+<th scope="col">Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>args</code></td>
+<td>Read-only array of <code>--arg</code> values</td>
+</tr>
+<tr>
+<td><code>env</code></td>
+<td>Read-only environment variables; access is recorded for replay</td>
+</tr>
+<tr>
+<td><code>codegen(description, options?)</code></td>
+<td>Resolves to a generated function, also defined in the shared scope; options are <code>model</code> and <code>reasoning</code></td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="types">Types<a class="heading-anchor" href="#types" aria-label="Link to Types">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Types reference table"><table>
+<thead>
+<tr>
+<th scope="col">Builder</th>
+<th scope="col">Kind</th>
+<th scope="col">JSON Schema</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>str</code></td>
+<td><code>str</code></td>
+<td><code>{ &quot;type&quot;: &quot;string&quot; }</code></td>
+</tr>
+<tr>
+<td><code>int</code></td>
+<td><code>int</code></td>
+<td><code>{ &quot;type&quot;: &quot;integer&quot; }</code></td>
+</tr>
+<tr>
+<td><code>float</code></td>
+<td><code>float</code></td>
+<td><code>{ &quot;type&quot;: &quot;number&quot; }</code></td>
+</tr>
+<tr>
+<td><code>bool</code></td>
+<td><code>bool</code></td>
+<td><code>{ &quot;type&quot;: &quot;boolean&quot; }</code></td>
+</tr>
+<tr>
+<td><code>char</code></td>
+<td><code>char</code></td>
+<td>String with <code>minLength</code> and <code>maxLength</code> of 1</td>
+</tr>
+<tr>
+<td><code>nil</code></td>
+<td><code>null</code></td>
+<td><code>{ &quot;type&quot;: &quot;null&quot; }</code></td>
+</tr>
+<tr>
+<td><code>any</code></td>
+<td><code>any</code></td>
+<td><code>{}</code></td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td><code>object</code></td>
+<td><code>{ &quot;type&quot;: &quot;object&quot; }</code></td>
+</tr>
+<tr>
+<td><code>fn</code></td>
+<td><code>fn</code></td>
+<td>None: describing it is a <code>runtime_error</code></td>
+</tr>
+<tr>
+<td><code>list(T)</code></td>
+<td><code>list</code></td>
+<td><code>{ &quot;type&quot;: &quot;array&quot;, &quot;items&quot;: T }</code></td>
+</tr>
+<tr>
+<td><code>union(A, B, ...)</code></td>
+<td><code>union</code></td>
+<td><code>{ &quot;anyOf&quot;: [A, B, ...] }</code></td>
+</tr>
+<tr>
+<td><code>nullable(T)</code></td>
+<td><code>union</code></td>
+<td><code>{ &quot;anyOf&quot;: [T, { &quot;type&quot;: &quot;null&quot; }] }</code></td>
+</tr>
+<tr>
+<td><code>enumOf(&#39;a&#39;, &#39;b&#39;)</code>, <code>enumOf([&#39;a&#39;, &#39;b&#39;])</code></td>
+<td><code>enum</code></td>
+<td><code>{ &quot;type&quot;: &quot;string&quot;, &quot;enum&quot;: [&quot;a&quot;, &quot;b&quot;] }</code></td>
+</tr>
+<tr>
+<td><code>struct(name, fields?)</code></td>
+<td><code>struct</code></td>
+<td>Object with every field in <code>required</code> and <code>additionalProperties: false</code></td>
+</tr>
+<tr>
+<td><code>typedef(name, type, annotations?)</code></td>
+<td>Kind of <code>type</code></td>
+<td>Schema of <code>type</code> plus annotations</td>
+</tr>
+<tr>
+<td><code>jsonSchema(schema, name?)</code></td>
+<td><code>schema</code></td>
+<td>The given schema</td>
+</tr>
+</tbody></table>
+</div>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Types reference table"><table>
+<thead>
+<tr>
+<th scope="col">Member of every type</th>
+<th scope="col">Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>kind</code>, <code>name</code>, <code>annotations</code></td>
+<td>The kind above, the display name and the attached annotations</td>
+</tr>
+<tr>
+<td><code>annotate(annotations)</code></td>
+<td>A copy with the annotations merged in</td>
+</tr>
+<tr>
+<td><code>describe(text)</code></td>
+<td>Shorthand for <code>annotate({ description: text })</code></td>
+</tr>
+<tr>
+<td><code>as(name, annotations?)</code></td>
+<td>A named copy; <code>typedef</code> is the function form</td>
+</tr>
+<tr>
+<td><code>nullable()</code>, <code>list()</code>, <code>or(other)</code></td>
+<td><code>union(T, nil)</code>, <code>list(T)</code>, <code>union(T, other)</code></td>
+</tr>
+<tr>
+<td><code>parse(value)</code></td>
+<td>The validated value; throws <code>validation_failed</code> with a path such as <code>$.lines[0].total</code> (the variable name replaces <code>$</code> when an agent saves with a schema)</td>
+</tr>
+<tr>
+<td><code>parseJson(text)</code></td>
+<td><code>parse</code> of strict JSON text; throws <code>invalid_format</code> for malformed JSON</td>
+</tr>
+<tr>
+<td><code>is(value)</code></td>
+<td>Boolean</td>
+</tr>
+<tr>
+<td><code>schema()</code></td>
+<td>JSON Schema with annotations in <code>description</code></td>
+</tr>
+</tbody></table>
+</div>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Types reference table"><table>
+<thead>
+<tr>
+<th scope="col">Member of a struct</th>
+<th scope="col">Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fields</code></td>
+<td>The field types by name</td>
+</tr>
+<tr>
+<td><code>field(name, type, annotations?)</code></td>
+<td>A copy with one more field</td>
+</tr>
+<tr>
+<td><code>methods({ ... })</code></td>
+<td>A class type whose parsed values have these methods</td>
+</tr>
+<tr>
+<td><code>class(Constructor)</code></td>
+<td>A class type whose parsed values are instances; a static <code>fromJSON(data)</code> builds them when present</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>The plain-struct view of a class type</td>
+</tr>
+</tbody></table>
+</div>
+<p><code>validate(value, type)</code> equals <code>type.parse(value)</code>; <code>validate(value, schema)</code> checks raw JSON
+Schema and returns the value. <code>t</code> holds every builder under one name: <code>t.str</code>, <code>t.list</code>,
+<code>t.struct</code>, with <code>t.enum</code>, <code>t.null</code> and <code>t.schema</code> as aliases of <code>enumOf</code>, <code>nil</code> and
+<code>jsonSchema</code>. TypeScript code gets the parsed type with <code>Infer&lt;typeof Type&gt;</code>, imported from
+<code>spl-lang</code>. See <a href="language.html#types">Types</a> and <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/TYPES.md">TYPES.md</a>.</p>
+<h2 id="markdown-builder">Markdown builder<a class="heading-anchor" href="#markdown-builder" aria-label="Link to Markdown builder">#</a></h2>
+<p><code>markdown.document()</code> (or <code>new markdown.Document()</code>) has the chainable methods <code>heading</code>,
+<code>paragraph</code>, <code>bulletList</code>, <code>orderedList</code>, <code>quote</code>, <code>codeBlock</code>, <code>table</code>, <code>thematicBreak</code>, <code>raw</code>
+and <code>toString</code>. <code>markdown.bold</code>, <code>italic</code>, <code>code</code>, <code>link</code>, <code>image</code> and <code>escape</code> return inline
+strings. See <a href="language.html#markdown-builder">Markdown builder</a>.</p>
+<h2 id="blockquote-tools">Blockquote tools<a class="heading-anchor" href="#blockquote-tools" aria-label="Link to Blockquote tools">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquote tools reference table"><table>
+<thead>
+<tr>
+<th scope="col">Tool</th>
+<th scope="col">Arguments</th>
+<th scope="col">Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>load_variable</code></td>
+<td><code>name</code></td>
+<td>The value; a type&#39;s JSON Schema; the script arguments for <code>args</code></td>
+</tr>
+<tr>
+<td><code>save_variable</code></td>
+<td><code>name</code>, <code>value</code>, optional <code>schema</code></td>
+<td>The saved value</td>
+</tr>
+<tr>
+<td><code>call_function</code></td>
+<td><code>name</code>, <code>args</code> (list)</td>
+<td>The function&#39;s result</td>
+</tr>
+<tr>
+<td><code>get_env</code></td>
+<td><code>name</code></td>
+<td>The value, or <code>null</code></td>
+</tr>
+<tr>
+<td><code>ask_human</code></td>
+<td><code>question</code></td>
+<td>The answer</td>
+</tr>
+<tr>
+<td><code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>, <code>shell</code></td>
+<td>As the tools above</td>
+<td>As the tools above</td>
+</tr>
+<tr>
+<td><code>restrict</code></td>
+<td><code>kind</code>, <code>value</code></td>
+<td>Narrows permissions for the rest of the command</td>
+</tr>
+<tr>
+<td><code>set_guidance</code></td>
+<td><code>kind</code> (<code>enforce</code> or <code>forbid</code>), <code>text</code></td>
+<td>Adds guidance for the rest of the command</td>
+</tr>
+<tr>
+<td><code>success</code></td>
+<td><code>value</code></td>
+<td>Ends the document</td>
+</tr>
+<tr>
+<td><code>fail</code></td>
+<td><code>reason</code></td>
+<td>Ends the document with <code>explicit_failure</code></td>
+</tr>
+</tbody></table>
+</div>
+<p>Names must be JavaScript identifiers that are not reserved words. <code>load_variable</code> refuses <code>env</code>;
+<code>save_variable</code> refuses to replace functions, types, imported names and library names.</p>
+<h2 id="blockquote-markers-and-controls">Blockquote markers and controls<a class="heading-anchor" href="#blockquote-markers-and-controls" aria-label="Link to Blockquote markers and controls">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquote markers and controls reference table"><table>
+<thead>
+<tr>
+<th scope="col">Marker</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>@name</code></td>
+<td>A shared variable or function, or a library function such as <code>@readFile</code></td>
+</tr>
+<tr>
+<td><code>@validate[Type]</code></td>
+<td>Validate the value being saved against a declared type or schema</td>
+</tr>
+<tr>
+<td><code>@success</code>, <code>@fail</code></td>
+<td>End the document</td>
+</tr>
+<tr>
+<td><code>@env.NAME</code></td>
+<td>One environment variable</td>
+</tr>
+<tr>
+<td><code>@args</code></td>
+<td>The script arguments</td>
+</tr>
+<tr>
+<td><code>@CTL(...)</code></td>
+<td>Runtime settings; must open the blockquote</td>
+</tr>
+<tr>
+<td><code>@CODEGEN &#39;description&#39;</code></td>
+<td>Generate functions; must open the blockquote, after optional <code>@CTL</code></td>
+</tr>
+</tbody></table>
+</div>
+<p><code>@CTL</code> and <code>@CODEGEN</code> are case-insensitive and parsed by the runtime; the other markers are
+conventions the agent follows. <code>@restrict</code>, <code>@enforce</code>, <code>@forbid</code> and <code>@human</code> are rejected.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-1">blockquote = [ controls ] ( codegen | instruction )
+controls   = &quot;@CTL&quot; &quot;(&quot; [ setting { &quot;,&quot; setting } [ &quot;,&quot; ] ] &quot;)&quot;
+setting    = &quot;restrict&quot; &quot;=&quot; &quot;{&quot; [ entry { &quot;,&quot; entry } [ &quot;,&quot; ] ] &quot;}&quot;
+           | ( &quot;enforce&quot; | &quot;forbid&quot; ) &quot;=&quot; strings
+           | &quot;model&quot; &quot;=&quot; string
+           | &quot;reasoning&quot; &quot;=&quot; string            (low, medium or high)
+entry      = ( &quot;fs&quot; | &quot;exec&quot; | &quot;net&quot; | &quot;mcp&quot; ) &quot;:&quot; strings
+strings    = string | &quot;[&quot; [ string { &quot;,&quot; string } [ &quot;,&quot; ] ] &quot;]&quot;
+codegen    = &quot;@CODEGEN&quot; string
+string     = &#39;text&#39; | &quot;text&quot; | `text` | &#39;&#39;&#39;text&#39;&#39;&#39; | &quot;&quot;&quot;text&quot;&quot;&quot; | r&#39;text&#39; | r&quot;text&quot;
+</code></pre></figure>
+<p>Strings are literals. Escapes are <code>\n</code>, <code>\t</code>, <code>\r</code>, <code>\0</code>, <code>\b</code>, <code>\f</code>, <code>\v</code>, <code>\xHH</code>, <code>\uHHHH</code>
+and <code>\u{H...}</code>; any other escaped character stands for itself, and raw strings (<code>r&#39;...&#39;</code>) have
+no escapes. Single- and double-quoted strings end on their line; backtick and triple-quoted
+strings may span lines. <code>${...}</code> inside backticks is rejected. Each setting and each restriction
+kind may appear once.</p>
+<h2 id="failure-codes">Failure codes<a class="heading-anchor" href="#failure-codes" aria-label="Link to Failure codes">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Failure codes reference table"><table>
+<thead>
+<tr>
+<th scope="col"><code>status_code</code></th>
+<th scope="col">Raised by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>invalid_format</code></td>
+<td><code>fmt</code> parsing, <code>parseJson</code>, invalid generated code</td>
+</tr>
+<tr>
+<td><code>validation_failed</code></td>
+<td>Types, raw JSON Schema, <code>@validate</code></td>
+</tr>
+<tr>
+<td><code>assertion_failed</code></td>
+<td><code>assert</code>, the Markdown builder</td>
+</tr>
+<tr>
+<td><code>explicit_failure</code></td>
+<td><code>fail</code>, the agent&#39;s <code>fail</code> tool</td>
+</tr>
+<tr>
+<td><code>restriction_violation</code></td>
+<td>Tools, agents and MCP inside <code>restrict</code></td>
+</tr>
+<tr>
+<td><code>tool_error</code></td>
+<td><code>readFile</code>, <code>writeFile</code>, <code>webFetch</code>, <code>webSearch</code>, <code>shell</code></td>
+</tr>
+<tr>
+<td><code>llm_error</code></td>
+<td>Providers: credentials, access, timeouts, token limits</td>
+</tr>
+<tr>
+<td><code>runtime_error</code></td>
+<td>Uncaught JavaScript exceptions, invalid options and arguments, misuse of the library</td>
+</tr>
+</tbody></table>
+</div>
+<p>See <a href="safety.html#failure-payload">Failure payload</a> for the JSON shape and exit codes.</p>
+<h2 id="package-entry-points">Package entry points<a class="heading-anchor" href="#package-entry-points" aria-label="Link to Package entry points">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Package entry points reference table"><table>
+<thead>
+<tr>
+<th scope="col">Import</th>
+<th scope="col">Contents</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>spl-lang</code></td>
+<td>The library globals, <code>configure</code>, the type classes and <code>Infer</code>, plus the embedding API: <code>parseMarkdown</code>, <code>parse</code>, <code>parseInstruction</code>, <code>run</code>, <code>ExecutionSession</code>, <code>checkWorkflow</code>, <code>Logger</code>, <code>AiBackend</code>, <code>Trace</code>, <code>Pin</code>, <code>loadMcpConfig</code> and their types</td>
+</tr>
+<tr>
+<td><code>spl-lang/markdown</code></td>
+<td>The Markdown builder: <code>Document</code>, <code>document</code>, <code>bold</code>, <code>italic</code>, <code>code</code>, <code>link</code>, <code>image</code>, <code>escape</code></td>
+</tr>
+<tr>
+<td><code>spl-lang/globals</code></td>
+<td>Types only: the fence globals as ambient declarations</td>
+</tr>
+</tbody></table>
+</div>
+<p>Inside a workflow, in fences and in the helper modules they import, <code>spl-lang</code> and
+<code>spl-lang/markdown</code> always resolve to the running copy of the package: no local install is
+needed, and helpers share the runtime and the <code>Failure</code> class.</p>
+<p>To type-check your own helper modules as if they were fences, add the globals to a
+<code>jsconfig.json</code> or <code>tsconfig.json</code>:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-2"><span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;compilerOptions&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;types&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;spl-lang/globals&quot;</span><span class="hljs-punctuation">]</span> <span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span>
+</code></pre></figure>
+<h2 id="maintaining-this-page">Maintaining this page<a class="heading-anchor" href="#maintaining-this-page" aria-label="Link to Maintaining this page">#</a></h2>
+<p>The globals listed here are the keys of <code>library()</code> in <code>lang/src/library.ts</code>, which
+<code>lang/globals.d.ts</code> and the VS Code catalog mirror. When the library changes, update this page
+with them and run <code>npm run docs:build</code> from the repository root. The documentation tests compile
+every <code>js</code> and <code>ts</code> example and keep embedded example files in sync.</p>
+</article>
+    <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Reference.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="cli.html"><span>Previous</span><strong>CLI & runtime</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="examples.html"><span>Next</span><strong>Examples</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+  </main>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#document-format">Document format</a></li><li class="toc-level-2"><a href="#model-calls">Model calls</a></li><li class="toc-level-2"><a href="#guidance-and-restrictions">Guidance and restrictions</a></li><li class="toc-level-2"><a href="#control-people-and-logging">Control, people and logging</a></li><li class="toc-level-2"><a href="#tools">Tools</a></li><li class="toc-level-2"><a href="#inputs-and-code-generation">Inputs and code generation</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-2"><a href="#markdown-builder">Markdown builder</a></li><li class="toc-level-2"><a href="#blockquote-tools">Blockquote tools</a></li><li class="toc-level-2"><a href="#blockquote-markers-and-controls">Blockquote markers and controls</a></li><li class="toc-level-2"><a href="#failure-codes">Failure codes</a></li><li class="toc-level-2"><a href="#package-entry-points">Package entry points</a></li><li class="toc-level-2"><a href="#maintaining-this-page">Maintaining this page</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+</div>
+<dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
+<p class="visually-hidden" id="announcement" role="status"></p>
+<noscript><p class="noscript-note">Search, code copying, and the theme switch need JavaScript. All documentation and navigation work without it.</p></noscript>
+</body>
+</html>

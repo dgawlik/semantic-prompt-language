@@ -1,8 +1,11 @@
-import type { AskMods } from './ast.js';
 import { Failure } from './errors.js';
 import type { Restrictions } from './restrict.js';
 import type { ToolHost } from './tools.js';
-import { fromJson, isDict, isList, type Value } from './values.js';
+
+export interface AskMods {
+    len?: 'word' | 'sentence' | 'paragraph' | 'long';
+    fmt?: 'integer' | 'float' | 'array' | 'object' | 'text' | 'boolean' | 'json';
+}
 
 export type ReasoningLevel = 'low' | 'medium' | 'high';
 
@@ -118,11 +121,11 @@ const JSON_HINT = 'Respond with ONLY valid JSON. No prose, no markdown, no code 
 
 type JsonFormat = Exclude<NonNullable<AskMods['fmt']>, 'text'>;
 
-const FORMAT_CONTRACTS: Record<Exclude<JsonFormat, 'json'>, { description: string; accepts: (value: Value) => boolean }> = {
+const FORMAT_CONTRACTS: Record<Exclude<JsonFormat, 'json'>, { description: string; accepts: (value: unknown) => boolean }> = {
     integer: { description: 'a JSON integer', accepts: (value) => typeof value === 'number' && Number.isInteger(value) },
     float: { description: 'a finite JSON number', accepts: (value) => typeof value === 'number' && Number.isFinite(value) },
-    array: { description: 'a JSON array', accepts: isList },
-    object: { description: 'a JSON object', accepts: isDict },
+    array: { description: 'a JSON array', accepts: Array.isArray },
+    object: { description: 'a JSON object', accepts: (value) => typeof value === 'object' && value !== null && !Array.isArray(value) },
     boolean: { description: 'a JSON boolean (true or false)', accepts: (value) => typeof value === 'boolean' },
 };
 
@@ -156,10 +159,10 @@ export function buildPromptParts(opts: Parameters<typeof buildPrompt>[0]): { pre
     return { preface, prompt: sections.join('\n\n') };
 }
 
-export function parseJsonResponse(text: string, format: JsonFormat = 'json'): Value {
-    let value: Value;
+export function parseJsonResponse(text: string, format: JsonFormat = 'json'): unknown {
+    let value: unknown;
     try {
-        value = fromJson(JSON.parse(text));
+        value = JSON.parse(text);
     } catch (e) {
         if (!(e instanceof SyntaxError)) throw e;
         throw new Failure('invalid_format', `LLM response is not valid JSON: ${e.message}`);

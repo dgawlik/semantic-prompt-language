@@ -2,26 +2,32 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import type { Program } from './ast.js';
+import { compileCell, type CompiledCell } from './cell.js';
 import { Failure, SplSyntaxError } from './errors.js';
-import { parse } from './parser.js';
 
 export const codegenSignature = (description: string): string =>
     createHash('sha256').update(description).digest('hex');
-export const codegenHeader = (signature: string): string => `# @CODEGEN sha256:${signature}`;
+export const codegenHeader = (signature: string): string => `// @CODEGEN sha256:${signature}`;
 
-export function parseCodegen(text: string): Program {
-    let program: Program;
+/** Models often wrap code in a fence despite instructions; one enclosing fence is unwrapped. */
+export function unwrapCode(text: string): string {
+    const fenced = /^\s*(`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n\1\s*$/.exec(text);
+    return (fenced ? fenced[2] : text).trim();
+}
+
+/** Generated code may only declare functions: nothing runs until the workflow calls them. */
+export function compileCodegen(text: string): CompiledCell {
+    let cell: CompiledCell;
     try {
-        program = parse(text);
+        cell = compileCell(text);
     } catch (error) {
         if (!(error instanceof SplSyntaxError)) throw error;
-        throw new Failure('invalid_format', `@CODEGEN returned invalid SPL: ${error.message}`);
+        throw new Failure('invalid_format', `@CODEGEN returned invalid JavaScript: ${error.message} (line ${error.line})`);
     }
-    if (program.directives.model !== undefined || !program.body.length || program.body.some(stmt => stmt.t !== 'def')) {
-        throw new Failure('invalid_format', '@CODEGEN requires only SPL function definitions, without imports, directives or top-level actions');
+    if (!cell.statements.length || cell.statements.some(type => type !== 'FunctionDeclaration')) {
+        throw new Failure('invalid_format', '@CODEGEN requires only JavaScript function declarations, without imports, exports or top-level statements');
     }
-    return program;
+    return cell;
 }
 
 export interface CodegenSource {
@@ -43,7 +49,7 @@ export function readCodegenCache(source: string, signature: string, cwd: string)
     try {
         const { directory, prefix } = cacheLocation(source, cwd);
         for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-            if (!entry.isFile() || !entry.name.startsWith(prefix) || !entry.name.endsWith('.spl')) continue;
+            if (!entry.isFile() || !entry.name.startsWith(prefix) || !entry.name.endsWith('.js')) continue;
             const file = path.join(directory, entry.name);
             const text = fs.readFileSync(file, 'utf8');
             if (text.replace(/\r\n/g, '\n').split('\n', 1)[0] === codegenHeader(signature)) return { text, file };
@@ -58,8 +64,8 @@ export function readCodegenCache(source: string, signature: string, cwd: string)
 export function saveCodegenCache(source: string, signature: string, name: string, text: string, cwd: string): string {
     try {
         const { directory, prefix } = cacheLocation(source, cwd);
-        const friendly = path.join(directory, `${prefix}${name}.spl`);
-        const file = fs.existsSync(friendly) ? path.join(directory, `${prefix}${name}.${signature}.spl`) : friendly;
+        const friendly = path.join(directory, `${prefix}${name}.js`);
+        const file = fs.existsSync(friendly) ? path.join(directory, `${prefix}${name}.${signature}.js`) : friendly;
         fs.writeFileSync(file, text, { flag: 'wx', mode: 0o600 });
         return file;
     } catch (error) {

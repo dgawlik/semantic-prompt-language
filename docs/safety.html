@@ -7,11 +7,11 @@
 check data, failures can be caught, and human hands decisions to a person.">
 <meta name="color-scheme" content="light dark">
 <title>Guards &amp; failures - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=f87de69cf3fa">
-<link rel="stylesheet" href="assets/style.css?v=f87de69cf3fa">
+<link rel="icon" type="image/png" href="assets/icon.png?v=6bad2bd86bcd">
+<link rel="stylesheet" href="assets/style.css?v=6bad2bd86bcd">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=f87de69cf3fa"></script>
-<script defer src="assets/site.js?v=f87de69cf3fa"></script>
+<script defer src="assets/search-index.js?v=6bad2bd86bcd"></script>
+<script defer src="assets/site.js?v=6bad2bd86bcd"></script>
 </head>
 <body data-page="safety">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -23,51 +23,54 @@ check data, failures can be caught, and human hands decisions to a person.">
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.17.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Guards &amp; failures</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Guards &amp; failures</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Guards &amp; failures</span><span class="reading-time">5 min read</span></div>
+    <div class="page-meta"><span>Writing workflows</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Guards &amp; failures</span><span class="reading-time">6 min read</span></div>
     <header class="page-heading"><h1>Guards &amp; failures</h1><div class="lead"><p>Model output varies, so SPL makes checks explicit: <code>restrict</code> limits actions, <code>assert</code> and schemas
 check data, failures can be caught, and <code>human</code> hands decisions to a person.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#restrictions">Restrictions</a></li><li class="toc-level-2"><a href="#assertions-fail-and-success">Assertions, fail and success</a></li><li class="toc-level-2"><a href="#failure-payload">Failure payload</a></li><li class="toc-level-2"><a href="#try--except">try / except</a></li><li class="toc-level-2"><a href="#human-in-the-loop">Human in the loop</a></li><li class="toc-level-3"><a href="#resuming-with-a-trace">Resuming with a trace</a></li></ul></nav></details>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#restrictions">Restrictions</a></li><li class="toc-level-2"><a href="#assertions-fail-and-success">Assertions, fail and success</a></li><li class="toc-level-2"><a href="#failure-payload">Failure payload</a></li><li class="toc-level-2"><a href="#try--catch">try / catch</a></li><li class="toc-level-2"><a href="#human-in-the-loop">Human in the loop</a></li><li class="toc-level-3"><a href="#resuming-with-a-trace">Resuming with a trace</a></li></ul></nav></details>
     <article class="prose"><h2 id="restrictions">Restrictions<a class="heading-anchor" href="#restrictions" aria-label="Link to Restrictions">#</a></h2>
-<p><code>restrict</code> limits what tools and agents may touch inside its block. Outside any restriction,
-tools and agents are allowed by default. A blocked action raises <code>restriction_violation</code>.</p>
+<p><code>await restrict(spec, body)</code> limits what tools and agents may touch while <code>body</code> runs, and
+resolves to what <code>body</code> returns. Outside any restriction, tools and agents are allowed by
+default. A blocked action raises <code>restriction_violation</code>.</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Restrictions reference table"><table>
 <thead>
 <tr>
-<th scope="col">Clause</th>
+<th scope="col">Spec</th>
 <th scope="col">Allows</th>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>restrict &#39;./out&#39;</code> or <code>restrict fs &#39;./out&#39;</code></td>
+<td><code>restrict(&#39;./out&#39;, body)</code> or <code>restrict({ fs: &#39;./out&#39; }, body)</code></td>
 <td>Files inside the folder only</td>
 </tr>
 <tr>
-<td><code>restrict net &#39;api.example.com&#39;</code></td>
+<td><code>restrict({ net: &#39;api.example.com&#39; }, body)</code></td>
 <td>Only these hosts (<code>*.example.com</code> matches subdomains)</td>
 </tr>
 <tr>
-<td><code>restrict exec &#39;npm,git&#39;</code></td>
+<td><code>restrict({ exec: &#39;npm,git&#39; }, body)</code></td>
 <td>Only these executables</td>
 </tr>
 <tr>
-<td><code>restrict mcp &#39;docs/search&#39;</code></td>
+<td><code>restrict({ mcp: &#39;docs/search&#39; }, body)</code></td>
 <td>Only these MCP servers (<code>docs</code>, <code>docs/*</code>) or tools (<code>docs/search</code>)</td>
 </tr>
 </tbody></table>
 </div>
-<p>Values are a comma-separated string or a list of strings. Combine clauses with commas;
-nested or repeated clauses of the same kind intersect, so a scope can only narrow.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span>, exec <span class="hljs-string">&#x27;git&#x27;</span>, net <span class="hljs-string">&#x27;docs.example.com&#x27;</span>:
-    <span class="hljs-keyword">let</span> review <span class="hljs-operator">=</span> <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Review the changes in git diff and check them against the docs&#x27;</span>
+<p>Each value is a comma-separated string or a list of strings. One object can combine several
+kinds. Nested restrictions of the same kind intersect, so a scope can only narrow.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-1"><span class="hljs-keyword">const</span> review = <span class="hljs-keyword">await</span> <span class="hljs-title function_">restrict</span>({ <span class="hljs-attr">fs</span>: <span class="hljs-string">&#x27;./src&#x27;</span>, <span class="hljs-attr">exec</span>: <span class="hljs-string">&#x27;git&#x27;</span>, <span class="hljs-attr">net</span>: <span class="hljs-string">&#x27;docs.example.com&#x27;</span> }, <span class="hljs-function">() =&gt;</span>
+    <span class="hljs-title function_">agent</span>(<span class="hljs-string">&#x27;Review the changes in git diff and check them against the docs&#x27;</span>));
 </code></pre></figure>
+<p>The restriction follows the call: it applies to everything <code>body</code> does, including functions it
+calls and code after an <code>await</code>, and ends when <code>body</code> settles.</p>
 <p>What is checked:</p>
 <ul>
 <li><strong>Files</strong>: paths are resolved against <code>--cwd</code>, including <code>..</code> and symbolic links, before checking.</li>
-<li><strong>Network</strong>: every redirect hop is checked. <code>web_search</code> uses <code>html.duckduckgo.com</code>, so list that
-host to search inside <code>restrict net</code>.</li>
+<li><strong>Network</strong>: every redirect hop is checked. <code>webSearch</code> uses <code>html.duckduckgo.com</code>, so list that
+host to search inside a <code>net</code> restriction.</li>
 <li><strong>Commands</strong>: every executable in pipelines and chains, plus path-like arguments, URLs and
 redirections. Programs with their own I/O (build tools, package managers) are limited by name
 only; this is not an OS sandbox.</li>
@@ -76,33 +79,43 @@ MCP servers themselves are trusted and not sandboxed.</li>
 </ul>
 <p>Models are told the active restrictions, and the runtime enforces them on every call.
 <code>ask</code> and <code>think</code> have no tools at all.</p>
-<p>For a Markdown blockquote, use <code>@CTL(restrict={fs: [&#39;./src&#39;], exec: [&#39;git&#39;]})</code> at its start.
-The runtime applies these restrictions before the agent runs, including to invoked functions
-and MCP tools, then restores the previous scope afterward. See <a href="llm-commands.html#blockquotes">blockquote controls</a>.</p>
+<p><strong>Restrictions govern the library, not Node.js.</strong> <code>readFile</code>, <code>writeFile</code>, <code>webFetch</code>,
+<code>webSearch</code>, <code>shell</code>, agents and MCP tools are checked. Code that calls <code>node:fs</code>, <code>fetch</code> or
+<code>child_process</code> directly is not: inside <code>restrict(&#39;./out&#39;, ...)</code>, <code>fs.writeFileSync(&#39;/etc/x&#39;)</code>
+still runs. Use the library tools wherever a restriction should apply.</p>
+<p>For a blockquote, use <code>@CTL(restrict={fs: [&#39;./src&#39;], exec: [&#39;git&#39;]})</code> at its start.
+The runtime applies these restrictions before the agent runs, including to functions it calls
+and MCP tools, then restores the previous scope. See <a href="llm-commands.html#controls">controls</a>.</p>
 <h2 id="assertions-fail-and-success">Assertions, fail and success<a class="heading-anchor" href="#assertions-fail-and-success" aria-label="Link to Assertions, fail and success">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> subtotal <span class="hljs-operator">=</span> <span class="hljs-number">10</span>
-<span class="hljs-keyword">let</span> total <span class="hljs-operator">=</span> <span class="hljs-number">12</span>
-<span class="hljs-keyword">assert</span> total <span class="hljs-operator">&gt;=</span> subtotal <span class="hljs-string">&#x27;total is smaller than subtotal&#x27;</span>
-<span class="hljs-keyword">if</span> total <span class="hljs-operator">&gt;</span> <span class="hljs-number">1000</span>:
-    <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;needs manual approval&#x27;</span>
-<span class="hljs-keyword">success</span> total
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-2"><span class="hljs-keyword">const</span> subtotal = <span class="hljs-number">10</span>;
+<span class="hljs-keyword">const</span> total = <span class="hljs-number">12</span>;
+<span class="hljs-title function_">assert</span>(total &gt;= subtotal, <span class="hljs-string">&#x27;total is smaller than subtotal&#x27;</span>);
+<span class="hljs-keyword">if</span> (total &gt; <span class="hljs-number">1000</span>) <span class="hljs-title function_">fail</span>(<span class="hljs-string">&#x27;needs manual approval&#x27;</span>);
+<span class="hljs-title function_">success</span>(total);
 </code></pre></figure>
 <ul>
-<li><code>assert condition &#39;message&#39;</code> raises <code>assertion_failed</code> when the condition is false.</li>
-<li><code>fail reason</code> raises <code>explicit_failure</code>.</li>
-<li><code>success value</code> ends the document immediately, even from inside a function.
-<code>return</code> exits a function, or the document at top level.</li>
+<li><code>assert(condition, message?)</code> raises <code>assertion_failed</code> when the condition is falsy.</li>
+<li><code>fail(reason)</code> raises <code>explicit_failure</code>.</li>
+<li><code>success(value?)</code> ends the document immediately, even from inside a function. The CLI prints
+the value on stdout: strings as they are, everything else as JSON. A document that finishes
+without <code>success</code> succeeds and prints nothing.</li>
 </ul>
+<p>All three work by throwing, so the statements after <code>fail</code> or <code>success</code> do not run.</p>
 <h2 id="failure-payload">Failure payload<a class="heading-anchor" href="#failure-payload" aria-label="Link to Failure payload">#</a></h2>
 <p>Every failure has the same shape. Uncaught failures are printed to stdout and exit with code 1.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-3"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">&quot;status&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;failure&quot;</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">&quot;reason&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;lines[2].quantity: must be number&quot;</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">&quot;command&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;let invoice = ask(schema=Invoice) prompt&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;reason&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;$.lines[2].quantity: expected int, got \&quot;two\&quot;&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;command&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;const invoice = await ask(prompt, { schema: Invoice });&quot;</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">&quot;line&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">12</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">&quot;status_code&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;validation_failed&quot;</span>
 <span class="hljs-punctuation">}</span>
 </code></pre></figure>
+<p><code>line</code> is the document line that caused the failure and <code>command</code> is that line, trimmed. The
+line is read from the stack trace: the innermost frame that lies in workflow code. A failure
+inside an imported module therefore points at the workflow line that called into it. When no
+workflow frame is available, as for an agent&#39;s own tool call, the first line of the running
+fence or blockquote is reported.</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Failure payload reference table"><table>
 <thead>
 <tr>
@@ -112,23 +125,19 @@ and MCP tools, then restores the previous scope afterward. See <a href="llm-comm
 </thead>
 <tbody><tr>
 <td><code>invalid_format</code></td>
-<td>Answer is not valid JSON of the requested <code>fmt</code></td>
+<td>Answer is not valid JSON of the requested <code>fmt</code>; generated code is not function declarations</td>
 </tr>
 <tr>
 <td><code>validation_failed</code></td>
-<td>Answer does not match the schema</td>
-</tr>
-<tr>
-<td><code>type_error</code></td>
-<td>Known typed violation before execution, or a runtime contract violation</td>
+<td>A value does not match its type or schema</td>
 </tr>
 <tr>
 <td><code>assertion_failed</code></td>
-<td>An <code>assert</code> was false</td>
+<td>An <code>assert</code> was false; invalid input to the Markdown builder</td>
 </tr>
 <tr>
 <td><code>explicit_failure</code></td>
-<td><code>fail</code> was executed</td>
+<td><code>fail</code> was called</td>
 </tr>
 <tr>
 <td><code>restriction_violation</code></td>
@@ -140,51 +149,91 @@ and MCP tools, then restores the previous scope afterward. See <a href="llm-comm
 </tr>
 <tr>
 <td><code>llm_error</code></td>
-<td>Authentication, timeout, transport or replay mismatch</td>
+<td>Authentication, timeout, transport, token limit or model access problem</td>
 </tr>
 <tr>
 <td><code>runtime_error</code></td>
-<td>Undefined name, wrong type, invalid modifier and similar bugs</td>
+<td>An uncaught JavaScript exception, an invalid option or argument, a missing human handler, a replay mismatch of a pinned workflow</td>
 </tr>
 </tbody></table>
 </div>
-<h2 id="try--except">try / except<a class="heading-anchor" href="#try--except" aria-label="Link to try / except">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
-<span class="hljs-keyword">try</span>:
-    data <span class="hljs-operator">=</span> <span class="hljs-built_in">read_file</span>(<span class="hljs-string">&#x27;optional.txt&#x27;</span>)
-<span class="hljs-keyword">except</span> err:
-    <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;<span class="hljs-subst">{err.status_code}</span> on line <span class="hljs-subst">{err.line}</span>: <span class="hljs-subst">{err.reason}</span>&quot;</span>)
-<span class="hljs-keyword">success</span> data
+<p>Syntax errors are different: they are found before anything runs, cannot be caught, and exit
+with code 2.</p>
+<h2 id="try--catch">try / catch<a class="heading-anchor" href="#try--catch" aria-label="Link to try / catch">#</a></h2>
+<p>Failures are <code>Failure</code> objects and can be caught like any exception.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-4"><span class="hljs-keyword">let</span> data = <span class="hljs-string">&#x27;&#x27;</span>;
+<span class="hljs-keyword">try</span> {
+    data = <span class="hljs-keyword">await</span> <span class="hljs-title function_">readFile</span>(<span class="hljs-string">&#x27;optional.txt&#x27;</span>);
+} <span class="hljs-keyword">catch</span> (error) {
+    <span class="hljs-keyword">if</span> (!(error <span class="hljs-keyword">instanceof</span> <span class="hljs-title class_">Failure</span>)) <span class="hljs-keyword">throw</span> error;
+    <span class="hljs-title function_">log</span>(<span class="hljs-string">`<span class="hljs-subst">${error.statusCode}</span>: <span class="hljs-subst">${error.reason}</span>`</span>);
+}
+<span class="hljs-title function_">success</span>(data);
 </code></pre></figure>
-<p>The handler gets the failure payload as a dict. Failures do not roll back earlier writes.
-Syntax errors and statically known typed violations are reported before anything runs,
-so they cannot be caught. Runtime contract violations can be caught; failed typed bulk
-mutations leave the affected value unchanged.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="try / catch reference table"><table>
+<thead>
+<tr>
+<th scope="col">Property</th>
+<th scope="col">Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>error.statusCode</code>, <code>error.status_code</code></td>
+<td>One of the codes above</td>
+</tr>
+<tr>
+<td><code>error.reason</code>, <code>error.message</code></td>
+<td>The explanation</td>
+</tr>
+<tr>
+<td><code>error.payload()</code></td>
+<td>The JSON payload</td>
+</tr>
+<tr>
+<td><code>error.line</code>, <code>error.command</code></td>
+<td>The workflow line that raised the failure and its source text; <code>0</code> and <code>&#39;&#39;</code> when the line is unknown</td>
+</tr>
+</tbody></table>
+</div>
+<p>Three rules keep error handling safe:</p>
+<ul>
+<li><strong>Rethrow what you do not handle.</strong> <code>success(value)</code> ends the run by throwing a signal that is
+not an <code>Error</code> and not a <code>Failure</code>. A catch-all such as <code>catch { }</code> around code that calls
+<code>success</code> swallows it and the document continues. Test <code>error instanceof Failure</code>, as above,
+and rethrow everything else.</li>
+<li><strong>Uncaught exceptions become failures.</strong> A <code>TypeError</code>, a rejected promise or an error thrown
+by an imported module ends the document as <code>runtime_error</code> with the reason <code>Name: message</code>
+and the document line that threw.</li>
+<li><strong>Nothing is rolled back.</strong> Variables assigned and files written before the failure stay as
+they are.</li>
+</ul>
 <h2 id="human-in-the-loop">Human in the loop<a class="heading-anchor" href="#human-in-the-loop" aria-label="Link to Human in the loop">#</a></h2>
-<p><code>human &#39;question&#39;</code> asks a person and returns their answer as a string. In normal CLI runs, the shell
-prints the question on stderr and reads one line from stdin, preserving whitespace except the line
-ending. Execution continues immediately without a suspension or repeating completed tool/model calls.
-Use repeatable <code>--human &lt;answer&gt;</code> flags to supply exact answers in question order and skip prompting.
-Remaining questions prompt normally, including with <code>--silent</code>; EOF without an answer fails the script.</p>
-<p>Blockquote agents use the <code>ask_human</code> tool for the same workflow when asked in plain language.
-There is no special human marker. The answer is returned to the
-same agent session, which may then make new model calls and save it to a shared variable. Runtime
-actions completed before the question are not repeated, including actions inside invoked functions.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> feedback <span class="hljs-operator">=</span> <span class="hljs-keyword">human</span> <span class="hljs-string">&#x27;What should change in the release notes?&#x27;</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(feedback.strip()) <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span> <span class="hljs-string">&#x27;feedback must not be blank&#x27;</span>
+<p><code>await human(question)</code> asks a person and resolves to their answer as a string. In normal CLI
+runs, the shell prints the question on stderr and reads one line from stdin, preserving
+whitespace except the line ending. Execution continues immediately, without a suspension or
+repeating completed tool and model calls. Use repeatable <code>--human &lt;answer&gt;</code> flags to supply exact
+answers in question order and skip prompting. Remaining questions prompt normally, including with
+<code>--silent</code>; EOF without an answer fails the run.</p>
+<p>Blockquote agents use the <code>ask_human</code> tool when asked in plain language. There is no special
+human marker. The answer is returned to the same agent session, which may then make new model
+calls and save it to a shared variable.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-5"><span class="hljs-keyword">const</span> feedback = <span class="hljs-keyword">await</span> <span class="hljs-title function_">human</span>(<span class="hljs-string">&#x27;What should change in the release notes?&#x27;</span>);
+<span class="hljs-title function_">assert</span>(feedback.<span class="hljs-title function_">trim</span>().<span class="hljs-property">length</span> &gt; <span class="hljs-number">0</span>, <span class="hljs-string">&#x27;feedback must not be blank&#x27;</span>);
 </code></pre></figure>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-6">spl review.md                                      <span class="hljs-comment"># asks directly and continues</span>
 spl review.md --human <span class="hljs-string">&quot;Make the wording clearer&quot;</span>    <span class="hljs-comment"># supplies the answer without prompting</span>
 </code></pre></figure>
+<p>Embedding hosts pass a <code>human(question, line)</code> handler to <code>run</code>; without one, <code>human</code> fails with
+<code>runtime_error</code>. Plain Node.js programs that use the library read stdin by default, or call the
+<code>human</code> option given to <code>configure</code>.</p>
 <h3 id="resuming-with-a-trace">Resuming with a trace<a class="heading-anchor" href="#resuming-with-a-trace" aria-label="Link to Resuming with a trace">#</a></h3>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-7">spl review.md --trace run.jsonl
 spl review.md --trace run.jsonl --human <span class="hljs-string">&quot;Make the wording clearer&quot;</span>
 </code></pre></figure>
-<p>The same <code>--trace</code> path automatically replays recorded decisions, external effects and answers,
+<p>The same <code>--trace</code> path automatically replays recorded decisions, tool results and answers,
 then continues interrupted work. <code>--human</code> answers only questions not yet recorded; other new
-questions read stdin. Completed runs replay the same result without prompts or side effects.
-Choose another JSONL file to restart. There are no separate checkpoint, resume or answer-ID flags,
-JSON suspension envelopes, or waiting exit codes.</p>
+questions read stdin. Completed runs replay the same result without prompts or repeating
+recorded effects. Choose another JSONL file to restart.</p>
 <p>The workspace, source, runtime and model/provider/MCP configuration must match. Arguments and accessed
 environment values are retained. External files are not restored: changes made between runs stay changed.
 An interrupted side effect with no recorded outcome requires manual recovery rather than an unsafe retry.
@@ -194,7 +243,7 @@ See <a href="cli.html#traces-and-replay">Traces and replay</a> for corruption ha
     <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="llm-commands.html"><span>Previous</span><strong>Natural language & models</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="cli.html"><span>Next</span><strong>CLI & runtime</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#restrictions">Restrictions</a></li><li class="toc-level-2"><a href="#assertions-fail-and-success">Assertions, fail and success</a></li><li class="toc-level-2"><a href="#failure-payload">Failure payload</a></li><li class="toc-level-2"><a href="#try--except">try / except</a></li><li class="toc-level-2"><a href="#human-in-the-loop">Human in the loop</a></li><li class="toc-level-3"><a href="#resuming-with-a-trace">Resuming with a trace</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#restrictions">Restrictions</a></li><li class="toc-level-2"><a href="#assertions-fail-and-success">Assertions, fail and success</a></li><li class="toc-level-2"><a href="#failure-payload">Failure payload</a></li><li class="toc-level-2"><a href="#try--catch">try / catch</a></li><li class="toc-level-2"><a href="#human-in-the-loop">Human in the loop</a></li><li class="toc-level-3"><a href="#resuming-with-a-trace">Resuming with a trace</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

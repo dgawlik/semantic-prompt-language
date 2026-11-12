@@ -13,35 +13,25 @@ Reads and writes its state explicitly in `journal.json`. Initialize the file onc
 
 Reuse that trace to resume or replay the same run; use a different trace for the next journal entry.
 
-```spl
-let previous = json_parse(read_file('./journal.json'))
-let runs = previous.runs + 1
-let history = previous.history
-let notes = read_file('./examples/data/notes.txt')
+```js
+const previous = JSON.parse(await readFile('./journal.json'));
+const runs = previous.runs + 1;
+let history = previous.history;
+const notes = await readFile('./examples/data/notes.txt');
 ```
 
 > Summarize @notes in one sentence and save it to @today
 
-```spl
-history.append(object:
-    'run': runs
-    'summary': today
-)
-if len(history) > 5:
-    history = history[1:]
-let trend = ''
+```js
+history.push({ run: runs, summary: today });
+history = history.slice(-5);
+let trend = '';
 ```
 
 > If @history has more than one entry, describe in one paragraph what changes from run to run
 > and save it to @trend. Otherwise leave @trend unchanged.
 
-```spl
-write_file('./journal.json', json_stringify(object:
-    'runs': runs
-    'history': history
-))
-success object:
-    'run': runs
-    'today': today
-    'trend': trend
+```js
+await writeFile('./journal.json', JSON.stringify({ runs, history }));
+success({ run: runs, today, trend });
 ```

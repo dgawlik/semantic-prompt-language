@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { keywords } from './catalog';
+import { library } from './catalog';
 import { NOTEBOOK_TYPE } from './notebookFormat';
 
 interface Trait {
@@ -29,37 +29,28 @@ interface CopilotExports extends CopilotApi {
     getAPI?(version: 1): CopilotApi;
 }
 
-const syntax = [
-    'This is Semantic Prompt Language (language id: spl), not Python or Splunk SPL.',
-    'Complete native SPL code only. Blocks use a colon followed by a newline and a space-indented body, like Python. Never use brace-delimited blocks.',
-    'Declare variables with let name = expression. Reassign existing variables with name = expression.',
-    'Functions use def name(args):. Branches use if condition:, elif condition:, and else: with indented bodies.',
-    'Loops use for item in items: or while condition:. Catch failures with try: and except err:. Use pass for empty bodies.',
-    'Use exactly four spaces per indentation level, not tabs. Dictionaries use object: with indented key: value entries; object() is empty. Braces are only for string interpolation and JSON wire text. Anonymous blocks use a bare colon and an indented body.',
-    "Optional contracts: let count: int = 1; def repeat(text: str, count: int) -> str:. Types include char, list[T], T | U, fn(T) -> R, enum, struct, class and hydratable class.",
-    "Declare transparent aliases with type Money = int [minimum=0, desc='Amount in cents']. Metadata is model advice; typed arithmetic requires explicit numeric conversions.",
-    'Class constructors use def ClassName(args): and implicitly bound self. Only hydratable classes permit schema=Class hydration; schema=struct(Class) returns structural data. Project instances with object(value) before JSON output.',
-    'Use True, False, None, and/or/not, # comments, and {name} interpolation inside strings.',
-    'Use log(value), not print(value). Use success value to end the workflow successfully.',
-    'Do not generate Python imports, f-strings, or @name references in SPL code cells.',
-    ...['ask', 'think', 'agent', 'human'].map(name => `${name}: ${keywords[name]}`),
+const CELL_LANGUAGES = ['javascript', 'typescript'];
+
+const guide = [
+    'This cell is a JavaScript step of a Semantic Prompt Language (SPL) workflow notebook. It runs as native JavaScript on Node.js.',
+    'All cells share one scope: top-level const, let, function and class declarations are visible in later cells and to natural-language instruction cells.',
+    'Top-level await and static imports work. Imports resolve against the working directory; node: built-ins and local .js files are importable.',
+    'The spl-lang library is already in scope. Do not import it and do not redeclare these names:',
+    ...Object.values(library).map(help => `${help.signature}: ${help.description}`),
+    'Model calls and tools return promises: always await ask, think, agent, human, readFile, writeFile, webFetch, webSearch, shell, restrict and codegen.',
+    'Use log(value) for run logs and success(value) to end the workflow with a result. Use assert(condition, message) for checks.',
 ].join('\n');
 
 const example = [
-    "let isFriday = ask(fmt='boolean') 'Is today Friday?'",
-    'if isFriday:',
-    "    success 'Today is Friday!'",
-    'else:',
-    "    success ask 'Complain in an original way'",
-    '',
-    'def double(value):',
-    '    return value * 2',
-    'for item in range(3):',
-    '    log(double(item))',
-    '',
-    'let data = object:',
-    "    'name': 'Ada'",
-    'let empty = object()',
+    "const Topic = enumOf('bug', 'feature', 'question');",
+    "const Triage = struct('Triage', {",
+    '    label: Topic,',
+    "    reason: str.annotate({ desc: 'One-sentence explanation' }),",
+    '});',
+    'const triage = await ask(`Classify: ${issue}`, { schema: Triage, repairs: 2 });',
+    "assert(triage.reason.length > 0, 'a reason is required');",
+    "await restrict({ fs: './out' }, () => writeFile('./out/triage.json', JSON.stringify(triage)));",
+    'success(triage);',
 ].join('\n');
 
 export async function registerCopilotContext(
@@ -84,22 +75,22 @@ export async function registerCopilotContext(
                 continue;
             }
             context.subscriptions.push(api.registerContextProvider({
-                id: 'spl-notebook-syntax',
-                selector: [{ language: 'spl', scheme: 'vscode-notebook-cell' }],
+                id: 'spl-notebook-library',
+                selector: CELL_LANGUAGES.map(language => ({ language, scheme: 'vscode-notebook-cell' })),
                 resolver: {
                     async resolve({ documentContext }, token) {
-                        if (token.isCancellationRequested || documentContext.languageId !== 'spl') return [];
-                        const isSplCell = vscode.workspace.notebookDocuments.some(notebook =>
+                        if (token.isCancellationRequested || !CELL_LANGUAGES.includes(documentContext.languageId)) return [];
+                        const isWorkflowCell = vscode.workspace.notebookDocuments.some(notebook =>
                             notebook.notebookType === NOTEBOOK_TYPE && notebook.getCells().some(cell =>
                                 cell.kind === vscode.NotebookCellKind.Code &&
-                                cell.document.languageId === 'spl' &&
+                                CELL_LANGUAGES.includes(cell.document.languageId) &&
                                 cell.document.uri.toString() === documentContext.uri,
                             ),
                         );
-                        if (!isSplCell) return [];
+                        if (!isWorkflowCell) return [];
                         return [
-                            { name: 'SPL syntax', value: syntax, importance: 100 },
-                            { name: 'SPL example', value: example, importance: 100 },
+                            { name: 'SPL workflow library', value: guide, importance: 100 },
+                            { name: 'SPL workflow example', value: example, importance: 100 },
                         ];
                     },
                 },
@@ -110,5 +101,5 @@ export async function registerCopilotContext(
             output.appendLine(`Failed to register SPL inline context with ${id}: ${String(error)}`);
         }
     }
-    output.appendLine('SPL AI inline context is unavailable. Native SPL language-server completions remain available.');
+    output.appendLine('SPL AI inline context is unavailable. Library completions remain available.');
 }

@@ -3,20 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="SPL is a small Python-like language with colon-and-indentation blocks. This page covers the code inside
-spl fences: values, bindings, control flow, functions, built-ins and exact tools.
-Markdown blockquotes use a single optional @CTL(restrict=..., enforce=..., forbid=..., model=..., reasoning=...)
-header for agent controls. These controls are separate from SPL syntax;
-human input in blockquotes is requested in plain language, without a special marker.
-Use @CODEGEN &#39;Function description&#39; to generate reusable SPL
-functions into the shared scope; traced runs save and automatically reuse matching definitions.">
+<meta name="description" content="Workflow code is native JavaScript running on Node.js, with the spl-lang library already in
+scope. This page covers what is specific to workflows: fences, the shared scope, imports, the
+library, types, the Markdown builder, inputs, logging, tools and errors.">
 <meta name="color-scheme" content="light dark">
-<title>Language - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=f87de69cf3fa">
-<link rel="stylesheet" href="assets/style.css?v=f87de69cf3fa">
+<title>Workflow code - SPL docs</title>
+<link rel="icon" type="image/png" href="assets/icon.png?v=6bad2bd86bcd">
+<link rel="stylesheet" href="assets/style.css?v=6bad2bd86bcd">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=f87de69cf3fa"></script>
-<script defer src="assets/site.js?v=f87de69cf3fa"></script>
+<script defer src="assets/search-index.js?v=6bad2bd86bcd"></script>
+<script defer src="assets/site.js?v=6bad2bd86bcd"></script>
 </head>
 <body data-page="language">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -28,294 +24,415 @@ functions into the shared scope; traced runs save and automatically reuse matchi
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.17.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Workflow code</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Language</span><span class="reading-time">16 min read</span></div>
-    <header class="page-heading"><h1>Language</h1><div class="lead"><p>SPL is a small Python-like language with colon-and-indentation blocks. This page covers the code inside
-<code>spl</code> fences: values, bindings, control flow, functions, built-ins and exact tools.
-Markdown blockquotes use a single optional <code>@CTL(restrict=..., enforce=..., forbid=..., model=..., reasoning=...)</code>
-header for <a href="llm-commands.html#blockquotes">agent controls</a>. These controls are separate from SPL syntax;
-human input in blockquotes is requested in plain language, without a special marker.
-Use <a href="llm-commands.html#code-generation"><code>@CODEGEN &#39;Function description&#39;</code></a> to generate reusable SPL
-functions into the shared scope; traced runs save and automatically reuse matching definitions.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#values-and-strings">Values and strings</a></li><li class="toc-level-2"><a href="#lists">Lists</a></li><li class="toc-level-2"><a href="#objects">Objects</a></li><li class="toc-level-2"><a href="#bindings-and-scopes">Bindings and scopes</a></li><li class="toc-level-2"><a href="#control-flow-and-expressions">Control flow and expressions</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#modules">Modules</a></li><li class="toc-level-3"><a href="#markdown-standard-library">Markdown standard library</a></li><li class="toc-level-2"><a href="#gradual-typing">Gradual typing</a></li><li class="toc-level-3"><a href="#types-at-a-glance">Types at a glance</a></li><li class="toc-level-3"><a href="#transparent-type-aliases">Transparent type aliases</a></li><li class="toc-level-3"><a href="#enums-structs-and-functions">Enums, structs and functions</a></li><li class="toc-level-3"><a href="#validation-narrowing-and-mutation">Validation, narrowing and mutation</a></li><li class="toc-level-3"><a href="#classes-and-structural-projections">Classes and structural projections</a></li><li class="toc-level-2"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#built-in-functions">Built-in functions</a></li><li class="toc-level-3"><a href="#list-callbacks-and-lambdas">List callbacks and lambdas</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li></ul></nav></details>
-    <article class="prose"><h2 id="values-and-strings">Values and strings<a class="heading-anchor" href="#values-and-strings" aria-label="Link to Values and strings">#</a></h2>
-<p>Values include <code>None</code>, <code>True</code>/<code>False</code>, numbers, strings, lists, dictionaries with string keys,
-functions, immutable type descriptors and nominal class instances.
-Simple statements end at a newline or <code>;</code>. <code>#</code> starts a comment, and a trailing <code>\</code> continues a line.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">assert</span> <span class="hljs-built_in">int</span>(<span class="hljs-number">1.0</span>) <span class="hljs-operator">==</span> <span class="hljs-number">1</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">str</span>(<span class="hljs-built_in">float</span>(<span class="hljs-number">1</span>)) <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;1.0&#x27;</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">bool</span>(<span class="hljs-number">1</span>) <span class="hljs-operator">==</span> <span class="hljs-literal">True</span> 
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">bool</span>(<span class="hljs-number">0.0</span>) <span class="hljs-operator">==</span> <span class="hljs-literal">False</span>
-
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">any</span>([<span class="hljs-number">0</span>, <span class="hljs-number">0.0</span>, <span class="hljs-string">&#x27;&#x27;</span>, [], <span class="hljs-built_in">object</span>()]) <span class="hljs-operator">==</span> <span class="hljs-literal">False</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">all</span>([<span class="hljs-number">1</span>, <span class="hljs-number">1.0</span>, <span class="hljs-string">&#x27;hello&#x27;</span>, [<span class="hljs-number">1</span>], <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;x&#x27;</span>: <span class="hljs-number">1</span>
-]) <span class="hljs-operator">==</span> <span class="hljs-literal">True</span>
-
-<span class="hljs-keyword">let</span> lst <span class="hljs-operator">=</span> []
-<span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">0</span>, <span class="hljs-number">10</span>, <span class="hljs-number">2</span>):
-    lst.append(i)
-<span class="hljs-keyword">assert</span> lst <span class="hljs-operator">==</span> [<span class="hljs-number">0</span>, <span class="hljs-number">2</span>, <span class="hljs-number">4</span>, <span class="hljs-number">6</span>, <span class="hljs-number">8</span>]
-
-<span class="hljs-keyword">let</span> name <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Ada&#x27;</span>
-<span class="hljs-keyword">let</span> greeting <span class="hljs-operator">=</span> <span class="hljs-string">&quot;Hello, <span class="hljs-subst">{name.upper()}</span>!&quot;</span>     <span class="hljs-comment"># {expr} interpolates in every quote style</span>
-<span class="hljs-keyword">let</span> literal <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Use {{name}} as a placeholder&#x27;</span> <span class="hljs-comment"># doubled braces are literal</span>
-<span class="hljs-keyword">let</span> raw <span class="hljs-operator">=</span> <span class="hljs-string">r&#x27;C:\temp\{not interpolated}&#x27;</span>     <span class="hljs-comment"># raw strings: no escapes or interpolation</span>
-<span class="hljs-keyword">let</span> block <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;&#x27;
-Triple-quoted strings span lines.
-&#x27;&#x27;&#x27;</span>
-
-<span class="hljs-keyword">assert</span> name[<span class="hljs-number">0</span>:<span class="hljs-number">1</span>] <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;A&#x27;</span>
-
-<span class="hljs-keyword">let</span> split1 <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;hello world&#x27;</span>
-<span class="hljs-keyword">assert</span> split1.split() <span class="hljs-operator">==</span> [<span class="hljs-string">&#x27;hello&#x27;</span>, <span class="hljs-string">&#x27;world&#x27;</span>]
-<span class="hljs-keyword">assert</span> split1.split(<span class="hljs-string">&#x27;e&#x27;</span>) <span class="hljs-operator">==</span> [<span class="hljs-string">&#x27;h&#x27;</span>, <span class="hljs-string">&#x27;llo world&#x27;</span>]
-
-<span class="hljs-keyword">let</span> fruits <span class="hljs-operator">=</span> [<span class="hljs-string">&#x27;apple&#x27;</span>, <span class="hljs-string">&#x27;orange&#x27;</span>, <span class="hljs-string">&#x27;grape&#x27;</span>]
-<span class="hljs-keyword">assert</span> <span class="hljs-string">&#x27;,&#x27;</span>.join(fruits) <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;apple,orange,grape&#x27;</span>
-
-<span class="hljs-keyword">let</span> speech <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;&#x27;Hello!
-
-Today is a new day. 
-
-My recent work shows... 
-
-What I would like to propose&#x27;&#x27;&#x27;</span>
-
-<span class="hljs-keyword">assert</span> speech.splitlines() <span class="hljs-operator">==</span> [<span class="hljs-string">&quot;Hello!&quot;</span>,<span class="hljs-string">&quot;&quot;</span>,<span class="hljs-string">&quot;Today is a new day. &quot;</span>,<span class="hljs-string">&quot;&quot;</span>,
-  <span class="hljs-string">&quot;My recent work shows... &quot;</span>,<span class="hljs-string">&quot;&quot;</span>, <span class="hljs-string">&quot;What I would like to propose&quot;</span>]
-
-<span class="hljs-keyword">let</span> hello <span class="hljs-operator">=</span> <span class="hljs-string">&quot;Hello world&quot;</span>
-<span class="hljs-keyword">assert</span> hello.replace(<span class="hljs-string">&#x27;world&#x27;</span>, <span class="hljs-string">&quot;WORLD!!!&quot;</span>) <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;Hello WORLD!!!&#x27;</span>
-<span class="hljs-keyword">assert</span> hello.find(<span class="hljs-string">&#x27;world&#x27;</span>) <span class="hljs-operator">==</span> <span class="hljs-number">6</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(hello) <span class="hljs-operator">==</span> <span class="hljs-number">11</span>
-
-<span class="hljs-keyword">let</span> word <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Word&#x27;</span>
-<span class="hljs-keyword">assert</span> word.lower() <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;word&#x27;</span>
-<span class="hljs-keyword">assert</span> word.upper() <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;WORD&#x27;</span>
-
-<span class="hljs-keyword">let</span> totrim <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;  word &#x27;</span>
-<span class="hljs-keyword">assert</span> totrim.strip() <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;word&#x27;</span>
+    <div class="page-meta"><span>Writing workflows</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Workflow code</span><span class="reading-time">14 min read</span></div>
+    <header class="page-heading"><h1>Workflow code</h1><div class="lead"><p>Workflow code is native JavaScript running on Node.js, with the <code>spl-lang</code> library already in
+scope. This page covers what is specific to workflows: fences, the shared scope, imports, the
+library, types, the Markdown builder, inputs, logging, tools and errors.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#fences">Fences</a></li><li class="toc-level-2"><a href="#one-shared-scope">One shared scope</a></li><li class="toc-level-2"><a href="#await-model-calls-and-tools">Await model calls and tools</a></li><li class="toc-level-2"><a href="#imports">Imports</a></li><li class="toc-level-2"><a href="#the-library">The library</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-3"><a href="#annotations-are-advice">Annotations are advice</a></li><li class="toc-level-3"><a href="#classes">Classes</a></li><li class="toc-level-3"><a href="#typescript">TypeScript</a></li><li class="toc-level-2"><a href="#markdown-builder">Markdown builder</a></li><li class="toc-level-2"><a href="#inputs-args-and-env">Inputs: args and env</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li><li class="toc-level-2"><a href="#errors">Errors</a></li><li class="toc-level-2"><a href="#what-the-runtime-does-not-see">What the runtime does not see</a></li><li class="toc-level-2"><a href="#the-library-in-nodejs-programs">The library in Node.js programs</a></li></ul></nav></details>
+    <article class="prose"><h2 id="fences">Fences<a class="heading-anchor" href="#fences" aria-label="Link to Fences">#</a></h2>
+<p>A fence whose language is <code>js</code>, <code>javascript</code> or <code>mjs</code> runs as JavaScript. A <code>ts</code>, <code>typescript</code> or
+<code>mts</code> fence runs the same way after its type annotations are erased.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-1"><span class="hljs-keyword">const</span> numbers = [<span class="hljs-number">3</span>, <span class="hljs-number">1</span>, <span class="hljs-number">2</span>];
+<span class="hljs-keyword">const</span> sorted = numbers.<span class="hljs-title function_">toSorted</span>(<span class="hljs-function">(<span class="hljs-params">a, b</span>) =&gt;</span> a - b);
+<span class="hljs-title function_">log</span>(sorted);
 </code></pre></figure>
-<p>Escapes: <code>\n</code> <code>\t</code> <code>\r</code> <code>\0</code> <code>\\</code> <code>\&#39;</code> <code>\&quot;</code> <code>\{</code> <code>\}</code>. Python-style operators work as expected:
-<code>+ - * / // % **</code>, comparisons, <code>in</code>/<code>not in</code>, <code>and</code>/<code>or</code>/<code>not</code>, <code>a if cond else b</code>, indexing,
-slicing with negative indexes, and <code>d.key</code> as a shorthand for <code>d[&#39;key&#39;]</code>.</p>
-<p>Lists and strings support <code>value[start:stop:step]</code>. The stop is exclusive; omitted bounds
-select the sequence ends in the direction of the step, which defaults to <code>1</code>.
-Negative indexes count from the end, and out-of-range bounds are clipped.
-Bounds and steps must be integers or <code>None</code> (<code>None</code> uses the omitted default); a zero step
-is a runtime error. List slices are new shallow copies; string slices use Unicode code points.
-Slices are read-only expressions, not assignment targets.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> numbers <span class="hljs-operator">=</span> [<span class="hljs-number">0</span>, <span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>, <span class="hljs-number">4</span>]
-<span class="hljs-keyword">assert</span> numbers[<span class="hljs-number">1</span>:<span class="hljs-number">4</span>] <span class="hljs-operator">==</span> [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>]
-<span class="hljs-keyword">assert</span> numbers[::<span class="hljs-number">2</span>] <span class="hljs-operator">==</span> [<span class="hljs-number">0</span>, <span class="hljs-number">2</span>, <span class="hljs-number">4</span>]
-<span class="hljs-keyword">assert</span> numbers[::<span class="hljs-operator">-</span><span class="hljs-number">1</span>] <span class="hljs-operator">==</span> [<span class="hljs-number">4</span>, <span class="hljs-number">3</span>, <span class="hljs-number">2</span>, <span class="hljs-number">1</span>, <span class="hljs-number">0</span>]
-<span class="hljs-keyword">assert</span> numbers[<span class="hljs-number">4</span>:<span class="hljs-number">0</span>:<span class="hljs-operator">-</span><span class="hljs-number">2</span>] <span class="hljs-operator">==</span> [<span class="hljs-number">4</span>, <span class="hljs-number">2</span>]
-<span class="hljs-keyword">assert</span> <span class="hljs-string">&#x27;hello&#x27;</span>[::<span class="hljs-operator">-</span><span class="hljs-number">1</span>] <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;olleh&#x27;</span>
-<span class="hljs-keyword">assert</span> <span class="hljs-string">&#x27;hello&#x27;</span>[<span class="hljs-number">1</span>::<span class="hljs-number">2</span>] <span class="hljs-operator">==</span> <span class="hljs-string">&#x27;el&#x27;</span>
+<ul>
+<li><strong>Module-style code.</strong> Fences run in strict mode with top-level <code>await</code>, static <code>import</code>,
+dynamic <code>import()</code> and <code>import.meta</code>. <code>import.meta.url</code>, <code>.filename</code> and <code>.dirname</code> describe
+the workflow file, even though imports and relative tool paths resolve against the working
+directory.
+Top-level <code>return</code> is a syntax error; <code>require</code>, <code>module</code> and <code>__dirname</code> do not exist.
+There is nothing to export: <code>export default</code> and <code>export { ... }</code> are syntax errors.</li>
+<li><strong>Node.js globals</strong> such as <code>process</code>, <code>fetch</code>, <code>URL</code> and <code>structuredClone</code> are available.
+Prefer <code>log</code> over <code>console.log</code>: stdout is reserved for the result.</li>
+<li><strong>Everything is compiled first.</strong> A syntax error in any fence, or in a blockquote&#39;s <code>@CTL</code>
+settings, stops the run with exit code 2 before the first step executes.</li>
+<li><strong>Type erasure only.</strong> <code>ts</code> fences accept syntax that can be removed without changing the
+code: annotations, <code>interface</code>, <code>type</code>, <code>import type</code>. Enums, namespaces and parameter
+properties are syntax errors. Types are not checked at run time; the
+<a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/vscode/README.md">VS Code extension</a> reports type errors while you edit.</li>
+<li><strong>Skipping a fence.</strong> Add <code>ignore</code> or <code>no-run</code> after the language to show code without running
+it. Fences in other languages are commentary.</li>
+<li><strong>Results.</strong> The CLI prints only the value passed to <a href="safety.html#assertions-fail-and-success"><code>success</code></a>.
+The value of a fence&#39;s last expression is shown by notebooks and
+<a href="cli.html#interactive-sessions">interactive sessions</a>, not by the CLI.</li>
+</ul>
+<h2 id="one-shared-scope">One shared scope<a class="heading-anchor" href="#one-shared-scope" aria-label="Link to One shared scope">#</a></h2>
+<p>All fences and blockquotes of a document share one top-level scope.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-2">---
+extension: semantic-prompt-language
+<span class="hljs-section">version: 1
+---</span>
+
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">const</span> limit = <span class="hljs-number">3</span>;
+<span class="hljs-keyword">let</span> seen = [];
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">remember</span>(<span class="hljs-params">item</span>) {
+    seen.<span class="hljs-title function_">push</span>(item);
+    <span class="hljs-keyword">return</span> seen.<span class="hljs-property">length</span>;
+}
+</span><span class="hljs-meta">```</span>
+
+<span class="hljs-quote">&gt; Call <span class="hljs-variable">@remember</span> with the name of each primary color, then save the number of colors to <span class="hljs-variable">@count</span></span>
+
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-title function_">assert</span>(count === limit, <span class="hljs-string">`expected <span class="hljs-subst">${limit}</span> colors, got <span class="hljs-subst">${count}</span>`</span>);
+<span class="hljs-title function_">success</span>(<span class="hljs-string">`<span class="hljs-subst">${count}</span> colors: <span class="hljs-subst">${seen.join(<span class="hljs-string">&#x27;, &#x27;</span>)}</span>`</span>);
+</span><span class="hljs-meta">```</span>
 </code></pre></figure>
-<h2 id="lists">Lists<a class="heading-anchor" href="#lists" aria-label="Link to Lists">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">let</span> lst <span class="hljs-operator">=</span> [<span class="hljs-number">1</span>,<span class="hljs-number">2</span>,<span class="hljs-number">3</span>,<span class="hljs-number">4</span>];
-
-<span class="hljs-comment"># Indexing and searching for index</span>
-<span class="hljs-keyword">let</span> secondElement <span class="hljs-operator">=</span> lst[<span class="hljs-number">1</span>];
-<span class="hljs-keyword">let</span> thirdIndex <span class="hljs-operator">=</span> lst.index(<span class="hljs-number">3</span>);
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Second element: <span class="hljs-subst">{secondElement}</span>&#x27;</span>);
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Threes index: <span class="hljs-subst">{thirdIndex}</span>&#x27;</span>)
-
-<span class="hljs-comment"># List concatenation</span>
-<span class="hljs-keyword">let</span> l2 <span class="hljs-operator">=</span> [<span class="hljs-number">5</span>,<span class="hljs-number">6</span>];
-<span class="hljs-keyword">let</span> combined <span class="hljs-operator">=</span> lst <span class="hljs-operator">+</span> l2
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Extend list <span class="hljs-subst">{combined}</span>&#x27;</span>)
-
-<span class="hljs-comment"># Clone list and pop second element</span>
-<span class="hljs-keyword">let</span> removedSecond <span class="hljs-operator">=</span> combined.copy()
-removedSecond.pop(<span class="hljs-number">1</span>)
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Removed second: <span class="hljs-subst">{removedSecond}</span>&#x27;</span>)
-
-<span class="hljs-comment"># Remove elements from the end</span>
-<span class="hljs-keyword">let</span> removedLast <span class="hljs-operator">=</span> combined.copy()
-removedLast.pop(<span class="hljs-operator">-</span><span class="hljs-number">1</span>)
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Removed last: <span class="hljs-subst">{removedLast}</span>&#x27;</span>)
-
-<span class="hljs-comment"># Remove by value</span>
-<span class="hljs-keyword">let</span> remove3 <span class="hljs-operator">=</span> combined.copy()
-remove3.remove(<span class="hljs-number">3</span>)
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Removed 3: <span class="hljs-subst">{remove3}</span>&#x27;</span>)
-
-<span class="hljs-comment"># Remove by nonexisting throws exception</span>
-<span class="hljs-keyword">try</span>:
-    <span class="hljs-keyword">let</span> remove7 <span class="hljs-operator">=</span> combined.copy()
-    remove7.remove(<span class="hljs-number">7</span>)
-<span class="hljs-keyword">except</span> e:
-    <span class="hljs-built_in">log</span>(e.reason)
-
-<span class="hljs-comment"># Insert value at index</span>
-<span class="hljs-keyword">let</span> ins <span class="hljs-operator">=</span> [<span class="hljs-number">1</span>,<span class="hljs-number">10</span>]
-ins.insert(<span class="hljs-number">1</span>, <span class="hljs-number">100</span>)
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Inserted: <span class="hljs-subst">{ins}</span>&#x27;</span>)
-
-<span class="hljs-comment"># Clear list</span>
-ins.clear()
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Cleared: <span class="hljs-subst">{ins}</span>&#x27;</span>)
-
-<span class="hljs-keyword">let</span> numbers <span class="hljs-operator">=</span> [<span class="hljs-number">1</span>,<span class="hljs-number">2</span>,<span class="hljs-number">3</span>,<span class="hljs-number">4</span>,<span class="hljs-number">5</span>]
-
-<span class="hljs-keyword">let</span> f <span class="hljs-operator">=</span> numbers.filter(<span class="hljs-keyword">lambda</span> i: i <span class="hljs-operator">%</span> <span class="hljs-number">2</span> <span class="hljs-operator">==</span><span class="hljs-number">0</span>)
-<span class="hljs-keyword">assert</span> f <span class="hljs-operator">==</span> [<span class="hljs-number">2</span>, <span class="hljs-number">4</span>]
-
-<span class="hljs-keyword">let</span> m <span class="hljs-operator">=</span> f.map(<span class="hljs-keyword">lambda</span> i: i<span class="hljs-operator">*</span><span class="hljs-number">2</span>)
-<span class="hljs-keyword">assert</span> m <span class="hljs-operator">==</span> [<span class="hljs-number">4</span>, <span class="hljs-number">8</span>]
-
-<span class="hljs-keyword">let</span> r <span class="hljs-operator">=</span> m.reduce(<span class="hljs-keyword">lambda</span> acc, i: acc <span class="hljs-operator">+</span> i)
-<span class="hljs-keyword">assert</span> r <span class="hljs-operator">==</span> <span class="hljs-number">12</span>
-
-<span class="hljs-keyword">assert</span> numbers[<span class="hljs-number">0</span>:<span class="hljs-number">2</span>] <span class="hljs-operator">==</span> [<span class="hljs-number">1</span>,<span class="hljs-number">2</span>]
+<ul>
+<li><strong>Top-level declarations are shared.</strong> <code>const</code>, <code>let</code>, <code>var</code>, <code>function</code>, <code>class</code> and imported
+names declared at the top level of a fence are visible in every later fence and to blockquote agents.</li>
+<li><strong>Agents use the same bindings.</strong> A blockquote can load a variable, call a function and save
+a value; a variable saved by an agent is a plain identifier in later fences.</li>
+<li><strong>Bindings are live.</strong> A function declared in one fence sees later changes to shared variables,
+including changes made by an agent.</li>
+<li><strong><code>const</code> is not enforced at the top level.</strong> As in a REPL, a top-level <code>const</code> can be assigned
+again, and declaring an existing name in a later fence rebinds it. Inside functions and blocks,
+<code>const</code> and <code>let</code> behave as usual.</li>
+<li><strong>No temporal dead zone at the top level.</strong> Reading a top-level name before its declaration
+runs yields <code>undefined</code>, or the value left by an earlier fence. Assigning to a name that was
+never declared is a <code>ReferenceError</code>.</li>
+<li><strong>Functions are hoisted</strong> within their fence, so a fence can call a function declared further down.</li>
+<li><strong>Imports are read-only.</strong> As in an ES module, named, default and namespace imports are live
+bindings of their module, and assigning to one is a <code>TypeError</code>. A later fence may declare
+the name again, which replaces the import.</li>
+<li><strong>Nested declarations stay local.</strong> Names declared inside functions, blocks and loops are not shared.</li>
+<li><strong>Your names shadow the library.</strong> After <code>const list = [1, 2]</code>, the library&#39;s <code>list</code> type
+builder is hidden from later fences. Avoid short library names such as <code>list</code>, <code>object</code>, <code>any</code>,
+<code>str</code>, <code>int</code>, <code>t</code>, <code>fn</code>, <code>env</code>, <code>args</code> and <code>log</code> for your own variables.</li>
+</ul>
+<h2 id="await-model-calls-and-tools">Await model calls and tools<a class="heading-anchor" href="#await-model-calls-and-tools" aria-label="Link to Await model calls and tools">#</a></h2>
+<p><code>ask</code>, <code>think</code>, <code>agent</code>, <code>human</code>, <code>codegen</code>, <code>restrict</code> and the tools return promises. Use <code>await</code>
+whenever you need the result or the effect to have happened.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-3"><span class="hljs-keyword">const</span> report = <span class="hljs-keyword">await</span> <span class="hljs-title function_">readFile</span>(<span class="hljs-string">&#x27;./report.txt&#x27;</span>);
+<span class="hljs-keyword">const</span> [title, summary] = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">all</span>([
+    <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Suggest a title for: <span class="hljs-subst">${report}</span>`</span>, { <span class="hljs-attr">len</span>: <span class="hljs-string">&#x27;sentence&#x27;</span> }),
+    <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Summarize: <span class="hljs-subst">${report}</span>`</span>, { <span class="hljs-attr">len</span>: <span class="hljs-string">&#x27;paragraph&#x27;</span> }),
+]);
 </code></pre></figure>
-<h2 id="objects">Objects<a class="heading-anchor" href="#objects" aria-label="Link to Objects">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-comment"># Create object</span>
-<span class="hljs-keyword">let</span> test <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;a&#x27;</span>: <span class="hljs-number">1</span>
-    <span class="hljs-string">&#x27;b&#x27;</span>: <span class="hljs-number">2</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Test object <span class="hljs-subst">{test}</span>&#x27;</span>)
+<p>A call without <code>await</code> keeps running in the background: its result may arrive after the document
+has ended, and its failure cannot be caught by the workflow and crashes the process. With <code>--trace</code>
+or <code>--pin</code>, recorded calls run one at a time in call order, so <code>Promise.all</code> stays replayable.</p>
+<p>Fences run as ordinary JavaScript on the main thread. A long synchronous loop blocks log
+rendering, timers and Ctrl+C handling until it yields; give long loops an <code>await</code> point, or
+move heavy work to a worker thread or child process.</p>
+<h2 id="imports">Imports<a class="heading-anchor" href="#imports" aria-label="Link to Imports">#</a></h2>
+<p>Imports work as in any ES module, with one rule: <strong>specifiers resolve against the working
+directory</strong> (<code>--cwd</code>, by default the folder where <code>spl</code> runs), not the folder of the workflow file.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-4"><span class="hljs-keyword">import</span> path <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:path&#x27;</span>;
+<span class="hljs-keyword">import</span> { createHash } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:crypto&#x27;</span>;
+<span class="hljs-keyword">import</span> { double, title } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./lib/helpers.js&#x27;</span>;
 
-<span class="hljs-comment"># Assign values to keys</span>
-test[<span class="hljs-string">&#x27;c&#x27;</span>] <span class="hljs-operator">=</span> <span class="hljs-number">3</span>
-test.d <span class="hljs-operator">=</span> <span class="hljs-number">4</span>
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Addition: <span class="hljs-subst">{test}</span>&#x27;</span>)
-
-
-<span class="hljs-comment"># Remove by key</span>
-test.pop(<span class="hljs-string">&#x27;c&#x27;</span>)
-test.pop(<span class="hljs-string">&#x27;d&#x27;</span>)
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Removal: <span class="hljs-subst">{test}</span>&#x27;</span>)
-
-<span class="hljs-comment"># Iterate by values</span>
-<span class="hljs-keyword">for</span> v <span class="hljs-keyword">in</span> test.<span class="hljs-built_in">values</span>():
-    <span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;Test value: <span class="hljs-subst">{v}</span>&quot;</span>)
-
-<span class="hljs-comment"># Iterate by keys</span>
-<span class="hljs-keyword">for</span> k <span class="hljs-keyword">in</span> test.<span class="hljs-built_in">keys</span>():
-    <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Test key: <span class="hljs-subst">{k}</span>&#x27;</span>)
-
-<span class="hljs-comment"># Iterate by key, value pairs</span>
-<span class="hljs-keyword">for</span> k, v <span class="hljs-keyword">in</span> test.<span class="hljs-built_in">items</span>():
-    <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Test -&gt; k = <span class="hljs-subst">{k}</span>, v = <span class="hljs-subst">{v}</span>&#x27;</span>)
-
-
-<span class="hljs-comment"># Copy and clear</span>
-<span class="hljs-keyword">let</span> cpy <span class="hljs-operator">=</span> test.copy()
-cpy.clear()
-<span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;Cleared: <span class="hljs-subst">{cpy}</span>&#x27;</span>)
+<span class="hljs-title function_">log</span>(path.<span class="hljs-title function_">basename</span>(<span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">filename</span>), <span class="hljs-title function_">double</span>(<span class="hljs-number">21</span>));
+<span class="hljs-title function_">log</span>(<span class="hljs-title function_">createHash</span>(<span class="hljs-string">&#x27;sha256&#x27;</span>).<span class="hljs-title function_">update</span>(<span class="hljs-string">&#x27;spl&#x27;</span>).<span class="hljs-title function_">digest</span>(<span class="hljs-string">&#x27;hex&#x27;</span>).<span class="hljs-title function_">slice</span>(<span class="hljs-number">0</span>, <span class="hljs-number">8</span>));
 </code></pre></figure>
-<h2 id="bindings-and-scopes">Bindings and scopes<a class="heading-anchor" href="#bindings-and-scopes" aria-label="Link to Bindings and scopes">#</a></h2>
-<p><code>let</code> declares a name in the current block; plain assignment updates the nearest existing declaration.
-Every block is a child scope, so inner <code>let</code> shadows outer names and does not leak out.
-Each loop iteration gets fresh variables.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-5"><span class="hljs-keyword">let</span> count <span class="hljs-operator">=</span> <span class="hljs-number">0</span>
-<span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">3</span>):
-    count <span class="hljs-operator">+=</span> i
-<span class="hljs-keyword">let</span> result <span class="hljs-operator">=</span> :
-    <span class="hljs-keyword">let</span> count <span class="hljs-operator">=</span> <span class="hljs-number">10</span>
-    count <span class="hljs-operator">+</span> <span class="hljs-number">1</span>
-<span class="hljs-keyword">success</span> [count, result]  <span class="hljs-comment"># [3, 11]</span>
-</code></pre></figure>
-<p>Declare a result before a block when the block should set it:
-<code>let answer = None</code> and then <code>answer = ...</code> inside.</p>
-<h2 id="control-flow-and-expressions">Control flow and expressions<a class="heading-anchor" href="#control-flow-and-expressions" aria-label="Link to Control flow and expressions">#</a></h2>
-<p><code>if</code>/<code>elif</code>/<code>else</code>, <code>for</code>, <code>while</code>, <code>break</code>, <code>continue</code> and <code>pass</code> use Python-like layout,
-but keep SPL&#39;s lexical scopes.
-<code>for k, v in items(d)</code> unpacks pairs. Blocks and <code>if</code> are expressions that yield their last
-expression, or <code>None</code>. Anonymous value-producing blocks begin with a bare <code>:</code>, as in <code>result</code>
-above. <code>object()</code> is an empty dictionary; a block containing only <code>pass</code> yields <code>None</code>.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">let</span> i <span class="hljs-operator">=</span> <span class="hljs-number">0</span>
-<span class="hljs-keyword">while</span> <span class="hljs-literal">True</span>:
-    <span class="hljs-keyword">let</span> msg <span class="hljs-operator">=</span> <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> i <span class="hljs-operator">%</span> <span class="hljs-number">2</span>:
-        <span class="hljs-string">&#x27;<span class="hljs-subst">{i}</span> is Even&#x27;</span>
-    <span class="hljs-keyword">elif</span> i <span class="hljs-operator">==</span> <span class="hljs-number">5</span>:
-        i <span class="hljs-operator">+=</span> <span class="hljs-number">1</span>
-        <span class="hljs-keyword">continue</span>
-    <span class="hljs-keyword">elif</span> i <span class="hljs-operator">==</span> <span class="hljs-number">11</span>:
-        <span class="hljs-keyword">break</span>
-    <span class="hljs-keyword">else</span>:
-        <span class="hljs-string">&#x27;<span class="hljs-subst">{i}</span> is Odd&#x27;</span>
-    <span class="hljs-built_in">log</span>(<span class="hljs-attr">level</span><span class="hljs-operator">=</span><span class="hljs-string">&#x27;debug&#x27;</span>)(msg)
-    i <span class="hljs-operator">+=</span> <span class="hljs-number">1</span>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Imports reference table"><table>
+<thead>
+<tr>
+<th scope="col">Import</th>
+<th scope="col">Resolves to</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>node:fs</code>, <code>node:path</code>, <code>node:child_process</code>, ...</td>
+<td>The whole Node.js standard library</td>
+</tr>
+<tr>
+<td><code>./helper.js</code>, <code>../lib/util.mjs</code>, <code>./legacy.cjs</code></td>
+<td>Your own modules, relative to the working directory</td>
+</tr>
+<tr>
+<td><code>./helper.ts</code></td>
+<td>TypeScript modules with erasable types</td>
+</tr>
+<tr>
+<td><code>./data.json</code> with <code>with { type: &#39;json&#39; }</code></td>
+<td>JSON modules</td>
+</tr>
+<tr>
+<td><code>lodash</code>, <code>@scope/pkg</code></td>
+<td>Packages in the working directory&#39;s <code>node_modules</code></td>
+</tr>
+<tr>
+<td><code>await import(specifier)</code></td>
+<td>Any of the above, loaded on demand</td>
+</tr>
+</tbody></table>
+</div>
+<p>Imported names join the shared scope, so later fences and blockquote agents can use them. To load a module that sits beside
+the workflow regardless of the working directory, build the path from <code>import.meta</code>:
+<code>await import(new URL(&#39;./helper.js&#39;, import.meta.url).href)</code>.</p>
+<p>A helper module is ordinary JavaScript. It imports the library explicitly, and its calls take
+part in the running workflow: same model, restrictions, guidance, logs and trace.
+<code>spl-lang</code> and <code>spl-lang/markdown</code> always resolve to the running copy of the package, in fences
+and in helper modules, on the CLI and in VS Code notebooks. Helpers therefore need no local
+install and share the workflow&#39;s runtime and <code>Failure</code> class. Node.js loads
+it by its usual rules; to mark a helper as an ES module without relying on syntax detection,
+name it <code>.mjs</code> or set <code>&quot;type&quot;: &quot;module&quot;</code> in the nearest <code>package.json</code>.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">lib/helpers.js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy lib/helpers.js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="lib/helpers.js code example"><code class="language-js" id="code-5"><span class="hljs-keyword">import</span> { ask, assert } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;spl-lang&#x27;</span>;
 
-<span class="hljs-keyword">let</span> numbers <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>(<span class="hljs-built_in">range</span>(<span class="hljs-number">0</span>,<span class="hljs-number">10</span>,<span class="hljs-number">2</span>))
-<span class="hljs-keyword">for</span> i, n <span class="hljs-keyword">in</span> <span class="hljs-built_in">enumerate</span>(numbers):
-    <span class="hljs-built_in">log</span>(<span class="hljs-string">&#x27;<span class="hljs-subst">{i}</span> = <span class="hljs-subst">{n}</span>&#x27;</span>)
-</code></pre></figure>
-<h2 id="functions">Functions<a class="heading-anchor" href="#functions" aria-label="Link to Functions">#</a></h2>
-<p><code>def</code> defines a function with lexical closures and recursion. Functions return <code>None</code>
-unless they use an explicit <code>return</code>. Functions are first class citizens and can be passed around. <code>lambda</code> defines lambda function defined inline.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">def</span> <span class="hljs-title function_">fib</span>(n):
-    <span class="hljs-keyword">return</span> <span class="hljs-keyword">if</span> n <span class="hljs-operator">&lt;</span> <span class="hljs-number">2</span>:
-        <span class="hljs-number">1</span>
-    <span class="hljs-keyword">else</span>:
-        fib(n<span class="hljs-operator">-</span><span class="hljs-number">1</span>) <span class="hljs-operator">+</span> fib(n<span class="hljs-operator">-</span><span class="hljs-number">2</span>)
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">double</span>(<span class="hljs-params">value</span>) {
+    <span class="hljs-title function_">assert</span>(<span class="hljs-keyword">typeof</span> value === <span class="hljs-string">&#x27;number&#x27;</span>, <span class="hljs-string">&#x27;double needs a number&#x27;</span>);
+    <span class="hljs-keyword">return</span> value * <span class="hljs-number">2</span>;
+}
 
-<span class="hljs-built_in">log</span>(fib(<span class="hljs-number">10</span>))
-
-<span class="hljs-keyword">def</span> <span class="hljs-title function_">iterate</span>(<span class="hljs-keyword">from</span>, to, f):
-    <span class="hljs-keyword">for</span> n <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-keyword">from</span>, to):
-        <span class="hljs-built_in">log</span>(f(n))
-
-iterate(<span class="hljs-number">9</span>,<span class="hljs-number">10</span>,fib)
-
-iterate(<span class="hljs-number">1</span>, <span class="hljs-number">10</span>, <span class="hljs-keyword">lambda</span> x: x<span class="hljs-operator">*</span><span class="hljs-number">2</span> <span class="hljs-operator">+</span> <span class="hljs-number">3</span>)
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">async</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">title</span>(<span class="hljs-params">text</span>) {
+    <span class="hljs-keyword">return</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Suggest a title for: <span class="hljs-subst">${text}</span>`</span>, { <span class="hljs-attr">len</span>: <span class="hljs-string">&#x27;sentence&#x27;</span> });
+}
 </code></pre></figure>
-<h2 id="modules">Modules<a class="heading-anchor" href="#modules" aria-label="Link to Modules">#</a></h2>
-<p>Import reusable raw <code>.spl</code> files from a Markdown workflow&#39;s fenced SPL blocks, or from another
-<code>.spl</code> module, using JavaScript-style named or namespace imports:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">import</span> { double, label <span class="hljs-keyword">as</span> helperLabel } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./helpers.spl&#x27;</span>
-<span class="hljs-keyword">import</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">as</span> helpers <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./helpers.spl&#x27;</span>
-<span class="hljs-keyword">success</span> [double(<span class="hljs-number">21</span>), helpers.double(<span class="hljs-number">3</span>), helperLabel]
-</code></pre></figure>
-<p>The corresponding <code>helpers.spl</code> contains plain SPL, without Markdown frontmatter or fences:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-9"><span class="hljs-keyword">let</span> label <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;helpers&#x27;</span>
-<span class="hljs-keyword">def</span> <span class="hljs-title function_">double</span>(value):
-    <span class="hljs-keyword">return</span> value <span class="hljs-operator">*</span> <span class="hljs-number">2</span>
-</code></pre></figure>
-<p>Every top-level declaration is exported automatically: variables, functions, enums, type aliases,
-structs, classes, and imported bindings. Block-local declarations are not exported. No <code>export</code>
-keyword is required. Named imports can also bring type declarations into scope for annotations.</p>
-<p>Imports are top-level statements. Local paths must start with <code>./</code> or <code>../</code> and explicitly end in
-<code>.spl</code>; they resolve relative to the importing file, not <code>--cwd</code>. Bundled standard library modules
-use a bare name, such as <code>&#39;markdown&#39;</code>, from any SPL file or workflow code fence, without installation
-or a local helper file. Other package names, remote URLs, Markdown modules, default imports and
-bare side-effect imports are not supported.</p>
-<p>The complete dependency graph is linked and type-checked before execution. Dependencies initialize
-before the importing file&#39;s statements, once per workflow run or notebook session. Module variables
-are isolated from the caller; functions retain their module&#39;s lexical scope. Imported bindings
-are live and cannot be reassigned, and namespace properties are read-only. Exported lists and
-objects remain mutable. Circular imports, missing files/exports, and invalid module source report
-explicit errors.</p>
-<p>Modules use the caller&#39;s model, arguments, environment and tool working directory. Module model
-directives are not supported, and <code>return</code>/<code>success</code> cannot terminate module initialization.
-Imported functions run under the caller&#39;s active restrictions. Resetting a notebook session
-clears its module cache. Traces and pinned workflows capture module source so replay does not
-need the original <code>.spl</code> files.</p>
-<h3 id="markdown-standard-library">Markdown standard library<a class="heading-anchor" href="#markdown-standard-library" aria-label="Link to Markdown standard library">#</a></h3>
-<p>The bundled <code>markdown</code> module is written in SPL. Build a document dynamically, then call
-<code>to_string()</code> to get a normal string suitable for <code>success</code>, prompts, or <code>write_file</code>:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-10"><span class="hljs-keyword">import</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">as</span> markdown <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;markdown&#x27;</span>
+<p><code>--check</code> verifies that static relative <code>import</code> declarations point at existing files; dynamic
+<code>import(&#39;./x.js&#39;)</code> calls are not checked. Modules are loaded natively by Node.js: they are
+cached for the lifetime of the process and their source is not recorded in traces or pins, so
+a replay imports them from disk again. <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/imports/run.md">imports/run.md</a> is a
+runnable example.</p>
+<h2 id="the-library">The library<a class="heading-anchor" href="#the-library" aria-label="Link to The library">#</a></h2>
+<p>Every fence can use these names without importing them. Outside a workflow, import them from
+<code>spl-lang</code>. <a href="reference.html">API reference</a> lists every signature and option.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="The library reference table"><table>
+<thead>
+<tr>
+<th scope="col">Group</th>
+<th scope="col">Names</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Model calls</td>
+<td><code>ask</code> <code>think</code> <code>agent</code></td>
+</tr>
+<tr>
+<td>People</td>
+<td><code>human</code></td>
+</tr>
+<tr>
+<td>Guidance and restrictions</td>
+<td><code>enforce</code> <code>forbid</code> <code>restrict</code></td>
+</tr>
+<tr>
+<td>Control</td>
+<td><code>success</code> <code>fail</code> <code>assert</code> <code>Failure</code></td>
+</tr>
+<tr>
+<td>Exact tools</td>
+<td><code>readFile</code> <code>writeFile</code> <code>webFetch</code> <code>webSearch</code> <code>shell</code></td>
+</tr>
+<tr>
+<td>Code generation</td>
+<td><code>codegen</code></td>
+</tr>
+<tr>
+<td>Inputs and logging</td>
+<td><code>args</code> <code>env</code> <code>log</code></td>
+</tr>
+<tr>
+<td>Types</td>
+<td><code>str</code> <code>int</code> <code>float</code> <code>bool</code> <code>char</code> <code>nil</code> <code>any</code> <code>object</code> <code>fn</code> <code>list</code> <code>union</code> <code>nullable</code> <code>enumOf</code> <code>struct</code> <code>typedef</code> <code>jsonSchema</code> <code>validate</code> <code>t</code></td>
+</tr>
+<tr>
+<td>Markdown</td>
+<td><code>markdown</code></td>
+</tr>
+</tbody></table>
+</div>
+<p>Model calls and guidance are described in <a href="llm-commands.html">Natural language &amp; models</a>;
+restrictions, failures and human input in <a href="safety.html">Guards &amp; failures</a>.</p>
+<h2 id="types">Types<a class="heading-anchor" href="#types" aria-label="Link to Types">#</a></h2>
+<p>A type is a JavaScript value that describes data. It validates values, turns JSON into JavaScript
+objects and renders the JSON Schema a model receives. Pass one as <code>schema</code> to a model call, name
+it in a blockquote with <code>@validate[Type]</code>, or use it directly.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-6"><span class="hljs-keyword">const</span> <span class="hljs-title class_">Color</span> = <span class="hljs-title function_">enumOf</span>(<span class="hljs-string">&#x27;red&#x27;</span>, <span class="hljs-string">&#x27;green&#x27;</span>, <span class="hljs-string">&#x27;blue&#x27;</span>);
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Money</span> = <span class="hljs-title function_">typedef</span>(<span class="hljs-string">&#x27;Money&#x27;</span>, int, { <span class="hljs-attr">minimum</span>: <span class="hljs-number">0</span>, <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;Amount in cents&#x27;</span> });
 
-<span class="hljs-keyword">let</span> doc <span class="hljs-operator">=</span> markdown.Document()
-doc.heading(<span class="hljs-string">&#x27;Build report&#x27;</span>, <span class="hljs-number">1</span>)
-doc.paragraph(markdown.bold(<span class="hljs-string">&#x27;Results&#x27;</span>) <span class="hljs-operator">+</span> <span class="hljs-string">&#x27; from &#x27;</span> <span class="hljs-operator">+</span> markdown.link(<span class="hljs-string">&#x27;CI&#x27;</span>, <span class="hljs-string">&#x27;https://example.com/build&#x27;</span>))
-<span class="hljs-keyword">for</span> name <span class="hljs-keyword">in</span> [<span class="hljs-string">&#x27;parser&#x27;</span>, <span class="hljs-string">&#x27;runtime&#x27;</span>]:
-    doc.bullet_list([markdown.escape(name) <span class="hljs-operator">+</span> <span class="hljs-string">&#x27;: passed&#x27;</span>])
-doc.code_block(<span class="hljs-string">&#x27;spl workflow.md --check&#x27;</span>, <span class="hljs-string">&#x27;sh&#x27;</span>)
-doc.table([<span class="hljs-string">&#x27;Suite&#x27;</span>, <span class="hljs-string">&#x27;Status&#x27;</span>], [[<span class="hljs-string">&#x27;parser&#x27;</span>, <span class="hljs-string">&#x27;passed&#x27;</span>], [<span class="hljs-string">&#x27;runtime&#x27;</span>, <span class="hljs-string">&#x27;passed&#x27;</span>]])
-<span class="hljs-keyword">success</span> doc.to_string()
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">LineItem</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;LineItem&#x27;</span>, {
+    <span class="hljs-attr">description</span>: str,
+    <span class="hljs-attr">quantity</span>: int.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">minimum</span>: <span class="hljs-number">1</span> }),
+    <span class="hljs-attr">unitPrice</span>: <span class="hljs-title class_">Money</span>,
+});
+
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Invoice</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Invoice&#x27;</span>, {
+    <span class="hljs-attr">vendor</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">minLength</span>: <span class="hljs-number">1</span> }),
+    <span class="hljs-attr">date</span>: str.<span class="hljs-title function_">describe</span>(<span class="hljs-string">&#x27;ISO date YYYY-MM-DD&#x27;</span>),
+    <span class="hljs-attr">note</span>: <span class="hljs-title function_">nullable</span>(str),
+    <span class="hljs-attr">lines</span>: <span class="hljs-title function_">list</span>(<span class="hljs-title class_">LineItem</span>),
+    <span class="hljs-attr">total</span>: <span class="hljs-title class_">Money</span>,
+});
+
+<span class="hljs-keyword">const</span> invoice = <span class="hljs-title class_">Invoice</span>.<span class="hljs-title function_">parse</span>({
+    <span class="hljs-attr">vendor</span>: <span class="hljs-string">&#x27;Acme&#x27;</span>, <span class="hljs-attr">date</span>: <span class="hljs-string">&#x27;2026-01-31&#x27;</span>, <span class="hljs-attr">note</span>: <span class="hljs-literal">null</span>, <span class="hljs-attr">total</span>: <span class="hljs-number">2500</span>,
+    <span class="hljs-attr">lines</span>: [{ <span class="hljs-attr">description</span>: <span class="hljs-string">&#x27;Widget&#x27;</span>, <span class="hljs-attr">quantity</span>: <span class="hljs-number">2</span>, <span class="hljs-attr">unitPrice</span>: <span class="hljs-number">1250</span> }],
+});
+<span class="hljs-title function_">assert</span>(<span class="hljs-title class_">Invoice</span>.<span class="hljs-title function_">is</span>(invoice) &amp;&amp; !<span class="hljs-title class_">Invoice</span>.<span class="hljs-title function_">is</span>({ <span class="hljs-attr">vendor</span>: <span class="hljs-string">&#x27;Acme&#x27;</span> }));
+<span class="hljs-title function_">log</span>(<span class="hljs-title class_">Invoice</span>.<span class="hljs-title function_">schema</span>());
 </code></pre></figure>
-<p>Named imports also work: <code>import { Document, bold } from &#39;markdown&#39;</code>.
-Each <code>Document()</code> owns its own block list. Builder methods return the same document, so calls
-can be chained. All arguments shown below are required; SPL functions do not have default arguments.</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Markdown standard library reference table"><table>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Types reference table"><table>
+<thead>
+<tr>
+<th scope="col">Builder</th>
+<th scope="col">Accepts</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>str</code></td>
+<td>Strings</td>
+</tr>
+<tr>
+<td><code>int</code></td>
+<td>Safe integers (<code>Number.isSafeInteger</code>)</td>
+</tr>
+<tr>
+<td><code>float</code></td>
+<td>Finite numbers, including integers</td>
+</tr>
+<tr>
+<td><code>bool</code></td>
+<td><code>true</code> or <code>false</code></td>
+</tr>
+<tr>
+<td><code>char</code></td>
+<td>Strings of exactly one Unicode character</td>
+</tr>
+<tr>
+<td><code>nil</code></td>
+<td><code>null</code></td>
+</tr>
+<tr>
+<td><code>any</code></td>
+<td>Any JSON value</td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td>Any plain object, without a declared shape</td>
+</tr>
+<tr>
+<td><code>fn</code></td>
+<td>Functions; cannot be described as JSON</td>
+</tr>
+<tr>
+<td><code>list(T)</code></td>
+<td>Arrays whose items satisfy <code>T</code></td>
+</tr>
+<tr>
+<td><code>union(A, B, ...)</code></td>
+<td>Values satisfying any member</td>
+</tr>
+<tr>
+<td><code>nullable(T)</code></td>
+<td><code>T</code> or <code>null</code>; a nullable field must still be present</td>
+</tr>
+<tr>
+<td><code>enumOf(&#39;a&#39;, &#39;b&#39;)</code></td>
+<td>One of the listed strings</td>
+</tr>
+<tr>
+<td><code>struct(name, fields)</code></td>
+<td>Exact records: every field required, extra fields rejected</td>
+</tr>
+<tr>
+<td><code>typedef(name, type, annotations?)</code></td>
+<td>The same values as <code>type</code>, under a name</td>
+</tr>
+<tr>
+<td><code>jsonSchema(schema, name?)</code></td>
+<td>Values valid against raw JSON Schema, constraints enforced</td>
+</tr>
+</tbody></table>
+</div>
+<p>Every type has the same methods:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Types reference table"><table>
+<thead>
+<tr>
+<th scope="col">Method</th>
+<th scope="col">Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Type.parse(value)</code></td>
+<td>The validated value, or a <code>validation_failed</code> failure such as <code>$.lines[0].quantity: expected int, got 1.5</code></td>
+</tr>
+<tr>
+<td><code>Type.parseJson(text)</code></td>
+<td>Like <code>parse</code>, from strict JSON text; malformed text is <code>invalid_format</code></td>
+</tr>
+<tr>
+<td><code>Type.is(value)</code></td>
+<td><code>true</code> or <code>false</code>, without throwing</td>
+</tr>
+<tr>
+<td><code>Type.schema()</code></td>
+<td>JSON Schema, with annotations in <code>description</code></td>
+</tr>
+<tr>
+<td><code>validate(value, Type)</code></td>
+<td>Same as <code>Type.parse(value)</code>; with raw JSON Schema it checks and returns the value</td>
+</tr>
+</tbody></table>
+</div>
+<p>Parsing never coerces, fills defaults or drops fields: <code>int.parse(&#39;1&#39;)</code> fails, and a missing
+nullable field is an error. <code>parse</code> returns a copy for structs and lists.</p>
+<p>Error paths start at <code>$</code> for <code>Type.parse</code>. When an agent saves a variable through a schema, the
+variable name is the root instead: <code>invoice.tax: expected Money, got 3312.5</code>. A type named
+with <code>typedef</code> appears under its own name, as <code>Money</code> does here.</p>
+<h3 id="annotations-are-advice">Annotations are advice<a class="heading-anchor" href="#annotations-are-advice" aria-label="Link to Annotations are advice">#</a></h3>
+<p><code>.annotate({...})</code>, <code>.describe(text)</code> and the third argument of <code>typedef</code> attach arbitrary
+metadata for the model. <code>desc</code> or <code>description</code> becomes the schema description; every other key
+is appended as <code>Model advice (not validation constraints): {&quot;minimum&quot;:0}</code>. Annotations never
+reject a value: <code>Money.parse(-1)</code> succeeds. Check business rules with <code>assert</code>, or use
+<code>jsonSchema({ type: &#39;integer&#39;, minimum: 0 })</code> when a constraint must be enforced.</p>
+<p>Types are immutable: <code>annotate</code>, <code>describe</code>, <code>as</code>, <code>nullable()</code>, <code>list()</code> and <code>or(other)</code> return
+new types. <code>struct(&#39;Point&#39;).field(&#39;x&#39;, float, { desc: &#39;Horizontal&#39; }).field(&#39;y&#39;, float)</code> is the
+fluent form of a struct.</p>
+<h3 id="classes">Classes<a class="heading-anchor" href="#classes" aria-label="Link to Classes">#</a></h3>
+<p><code>.methods({...})</code> gives parsed objects methods; <code>.class(Constructor)</code> makes them instances of an
+existing class, using its static <code>fromJSON(data)</code> when present.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-7"><span class="hljs-keyword">const</span> <span class="hljs-title class_">Person</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Person&#x27;</span>, { <span class="hljs-attr">firstName</span>: str, <span class="hljs-attr">age</span>: int }).<span class="hljs-title function_">methods</span>({
+    <span class="hljs-title function_">label</span>(<span class="hljs-params"></span>) { <span class="hljs-keyword">return</span> <span class="hljs-string">`<span class="hljs-subst">${<span class="hljs-variable language_">this</span>.firstName}</span> (<span class="hljs-subst">${<span class="hljs-variable language_">this</span>.age}</span>)`</span>; },
+});
+<span class="hljs-keyword">const</span> person = <span class="hljs-title class_">Person</span>.<span class="hljs-title function_">parse</span>({ <span class="hljs-attr">firstName</span>: <span class="hljs-string">&#x27;Ada&#x27;</span>, <span class="hljs-attr">age</span>: <span class="hljs-number">36</span> });
+<span class="hljs-title function_">log</span>(person.<span class="hljs-title function_">label</span>());                    <span class="hljs-comment">// Ada (36)</span>
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">Point</span> {
+    <span class="hljs-title function_">constructor</span>(<span class="hljs-params">x, y</span>) { <span class="hljs-variable language_">this</span>.<span class="hljs-property">x</span> = x; <span class="hljs-variable language_">this</span>.<span class="hljs-property">y</span> = y; }
+    <span class="hljs-keyword">static</span> <span class="hljs-title function_">fromJSON</span>(<span class="hljs-params">data</span>) { <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Point</span>(data.<span class="hljs-property">x</span>, data.<span class="hljs-property">y</span>); }
+    <span class="hljs-title function_">norm</span>(<span class="hljs-params"></span>) { <span class="hljs-keyword">return</span> <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">hypot</span>(<span class="hljs-variable language_">this</span>.<span class="hljs-property">x</span>, <span class="hljs-variable language_">this</span>.<span class="hljs-property">y</span>); }
+}
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">PointType</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Point&#x27;</span>, { <span class="hljs-attr">x</span>: float, <span class="hljs-attr">y</span>: float }).<span class="hljs-title function_">class</span>(<span class="hljs-title class_">Point</span>);
+<span class="hljs-title function_">log</span>(<span class="hljs-title class_">PointType</span>.<span class="hljs-title function_">parse</span>({ <span class="hljs-attr">x</span>: <span class="hljs-number">3</span>, <span class="hljs-attr">y</span>: <span class="hljs-number">4</span> }).<span class="hljs-title function_">norm</span>());    <span class="hljs-comment">// 5</span>
+</code></pre></figure>
+<p>For a class type, <code>is</code> requires an instance, <code>parse</code> accepts plain data or an existing instance,
+and <code>Person.data</code> is the plain-struct view with the same fields. Instances serialize like plain
+objects with <code>JSON.stringify</code>.</p>
+<h3 id="typescript">TypeScript<a class="heading-anchor" href="#typescript" aria-label="Link to TypeScript">#</a></h3>
+<p>In a <code>ts</code> fence, <code>Infer</code> gives the JavaScript type a builder parses to. Model calls are typed by
+their options, so <code>invoice</code> below is known to have a numeric <code>total</code>.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">ts</span><span class="code-language">ts</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy ts code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="ts code example"><code class="language-ts" id="code-8"><span class="hljs-keyword">import</span> <span class="hljs-keyword">type</span> { <span class="hljs-title class_">Infer</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;spl-lang&#x27;</span>;
+
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Invoice</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Invoice&#x27;</span>, { <span class="hljs-attr">vendor</span>: str, <span class="hljs-attr">total</span>: int });
+<span class="hljs-keyword">type</span> <span class="hljs-title class_">Invoice</span> = <span class="hljs-title class_">Infer</span>&lt;<span class="hljs-keyword">typeof</span> <span class="hljs-title class_">Invoice</span>&gt;;
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">describe</span>(<span class="hljs-params"><span class="hljs-attr">invoice</span>: <span class="hljs-title class_">Invoice</span></span>): <span class="hljs-built_in">string</span> {
+    <span class="hljs-keyword">return</span> <span class="hljs-string">`<span class="hljs-subst">${invoice.vendor}</span>: <span class="hljs-subst">${invoice.total}</span>`</span>;
+}
+
+<span class="hljs-keyword">const</span> invoice = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">&#x27;Extract the invoice: Acme, 25.00 EUR&#x27;</span>, { <span class="hljs-attr">schema</span>: <span class="hljs-title class_">Invoice</span> });
+<span class="hljs-title function_">log</span>(<span class="hljs-title function_">describe</span>(invoice));
+</code></pre></figure>
+<p><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/TYPES.md">TYPES.md</a> records the full contract of the type builder.</p>
+<h2 id="markdown-builder">Markdown builder<a class="heading-anchor" href="#markdown-builder" aria-label="Link to Markdown builder">#</a></h2>
+<p><code>markdown</code> builds Markdown text without string concatenation. Every method returns the document,
+so calls chain; <code>toString()</code> returns the result.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-9"><span class="hljs-keyword">const</span> doc = markdown.<span class="hljs-title function_">document</span>()
+    .<span class="hljs-title function_">heading</span>(<span class="hljs-string">&#x27;Build report&#x27;</span>, <span class="hljs-number">1</span>)
+    .<span class="hljs-title function_">paragraph</span>(<span class="hljs-string">`<span class="hljs-subst">${markdown.bold(<span class="hljs-string">&#x27;Results&#x27;</span>)}</span> from <span class="hljs-subst">${markdown.link(<span class="hljs-string">&#x27;CI&#x27;</span>, <span class="hljs-string">&#x27;https://example.com/build&#x27;</span>)}</span>`</span>)
+    .<span class="hljs-title function_">bulletList</span>([<span class="hljs-string">&#x27;parser&#x27;</span>, <span class="hljs-string">&#x27;runtime&#x27;</span>].<span class="hljs-title function_">map</span>(<span class="hljs-function"><span class="hljs-params">name</span> =&gt;</span> <span class="hljs-string">`<span class="hljs-subst">${markdown.<span class="hljs-built_in">escape</span>(name)}</span>: passed`</span>))
+    .<span class="hljs-title function_">codeBlock</span>(<span class="hljs-string">&#x27;spl workflow.md --check&#x27;</span>, <span class="hljs-string">&#x27;bash&#x27;</span>)
+    .<span class="hljs-title function_">table</span>([<span class="hljs-string">&#x27;Suite&#x27;</span>, <span class="hljs-string">&#x27;Status&#x27;</span>], [[<span class="hljs-string">&#x27;parser&#x27;</span>, <span class="hljs-string">&#x27;passed&#x27;</span>], [<span class="hljs-string">&#x27;runtime&#x27;</span>, <span class="hljs-string">&#x27;passed&#x27;</span>]]);
+<span class="hljs-title function_">success</span>(doc.<span class="hljs-title function_">toString</span>());
+</code></pre></figure>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Markdown builder reference table"><table>
 <thead>
 <tr>
 <th scope="col">Method</th>
@@ -323,7 +440,7 @@ can be chained. All arguments shown below are required; SPL functions do not hav
 </tr>
 </thead>
 <tbody><tr>
-<td><code>heading(text, level)</code></td>
+<td><code>heading(text, level = 1)</code></td>
 <td>Heading with level <code>1</code> through <code>6</code></td>
 </tr>
 <tr>
@@ -331,389 +448,69 @@ can be chained. All arguments shown below are required; SPL functions do not hav
 <td>Paragraph containing inline Markdown</td>
 </tr>
 <tr>
-<td><code>bullet_list(items)</code></td>
+<td><code>bulletList(items)</code></td>
 <td>Bullet list of strings; multiline items are indented</td>
 </tr>
 <tr>
-<td><code>ordered_list(items, start)</code></td>
-<td>Numbered list; <code>start</code> and subsequent markers must have at most nine digits</td>
+<td><code>orderedList(items, start = 1)</code></td>
+<td>Numbered list</td>
 </tr>
 <tr>
 <td><code>quote(text)</code></td>
 <td>Blockquote, including multiline text</td>
 </tr>
 <tr>
-<td><code>code_block(text, language)</code></td>
-<td>Fenced code block; use <code>&#39;&#39;</code> for no language</td>
+<td><code>codeBlock(text, language = &#39;&#39;)</code></td>
+<td>Fenced code block; the fence grows to fit backticks in the text</td>
 </tr>
 <tr>
 <td><code>table(headers, rows)</code></td>
-<td>GFM table; string cells, nonempty headers, matching row widths</td>
+<td>GFM table; rows must match the header width</td>
 </tr>
 <tr>
-<td><code>thematic_break()</code></td>
+<td><code>thematicBreak()</code></td>
 <td>Horizontal rule</td>
 </tr>
 <tr>
 <td><code>raw(text)</code></td>
-<td>Unmodified Markdown block, apart from line-ending normalization</td>
+<td>Markdown as written</td>
 </tr>
 <tr>
-<td><code>to_string()</code></td>
+<td><code>toString()</code></td>
 <td>Blocks joined with blank lines and a final newline; <code>&#39;&#39;</code> for an empty document</td>
 </tr>
 </tbody></table>
 </div>
-<p><code>to_string()</code> is repeatable and does not consume the document. Empty raw blocks and empty lists
-add nothing. Raw text and paragraphs preserve whitespace, including any supplied trailing newlines.
-Line endings are normalized to <code>\n</code>. Tables escape pipe delimiters and replace cell newlines with
-<code>&lt;br&gt;</code>. Code fences grow to accommodate embedded backticks and preserve code whitespace.</p>
-<p>Inline helpers return strings: <code>bold(text)</code>, <code>italic(text)</code>, <code>code(text)</code>, <code>link(label, url)</code>,
-<code>image(alt, url)</code>, and <code>escape(text)</code>. Paragraphs, headings, lists, quotes, table cells, and formatting
-helpers accept Markdown, so use <code>escape(text)</code> for literal dynamic text. Link labels and image
-alt text are escaped automatically; whitespace, backslashes and angle brackets in destinations
-are percent-encoded. Inline code handles embedded backticks and padding, normalizes newlines to
-spaces, and requires nonempty text. Headings, link labels, image alt text, bold/italic text, and code
-language labels must be single-line; code language labels must not contain backticks.
-These helpers generate Markdown, not sanitized HTML or validated URL schemes.</p>
-<h2 id="gradual-typing">Gradual typing<a class="heading-anchor" href="#gradual-typing" aria-label="Link to Gradual typing">#</a></h2>
-<p>Annotations are optional enforced contracts, not advisory lint hints. Untyped bindings remain
-dynamic. Known typed violations block execution before model calls; unknown values are validated
-at typed boundaries without coercion, defaults or field removal.</p>
-<p>Built-in types and existing type declarations remain available after <code>if</code>, loops, and
-<code>try</code>/<code>except</code> blocks. An untyped alias used as an annotation must still identify the same
-type on every possible control-flow path.</p>
-<h3 id="types-at-a-glance">Types at a glance<a class="heading-anchor" href="#types-at-a-glance" aria-label="Link to Types at a glance">#</a></h3>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Types at a glance reference table"><table>
-<thead>
-<tr>
-<th scope="col">Type</th>
-<th scope="col">Accepted values</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>int</code></td>
-<td>Signed 64-bit integers; checked arithmetic, no overflow wrapping</td>
-</tr>
-<tr>
-<td><code>float</code></td>
-<td>Finite binary64 numbers, distinct from <code>int</code></td>
-</tr>
-<tr>
-<td><code>str</code></td>
-<td>Strings</td>
-</tr>
-<tr>
-<td><code>char</code></td>
-<td>Strings containing exactly one Unicode scalar value</td>
-</tr>
-<tr>
-<td><code>bool</code></td>
-<td><code>True</code> or <code>False</code>, not integers</td>
-</tr>
-<tr>
-<td><code>None</code></td>
-<td>The null value, not an absent field</td>
-</tr>
-<tr>
-<td><code>object</code></td>
-<td>Dynamic string-keyed dictionaries, not nominal class instances</td>
-</tr>
-<tr>
-<td><code>list[T]</code></td>
-<td>Lists whose elements satisfy <code>T</code></td>
-</tr>
-<tr>
-<td><code>A | B</code></td>
-<td>Values satisfying either member; narrow before member-specific operations</td>
-</tr>
-<tr>
-<td><code>fn(T1, T2) -&gt; R</code></td>
-<td>Callables with the declared parameter and return contracts</td>
-</tr>
-</tbody></table>
-</div>
-<p>Typed literals select the representation: <code>let count: int = 2</code>, but
-<code>let ratio: float = 2.0</code>. Neither <code>let count: int = 2.0</code> nor
-<code>let ratio: float = 2</code> is valid. Untyped numbers keep their existing representation;
-use <code>int(value)</code> or <code>float(value)</code> explicitly to enter typed numeric code.
-<code>int(...)</code> rejects fractions, booleans and out-of-range values; conversion to <code>float</code>
-can lose integer precision. Mixed <code>int</code>/<code>float</code> arithmetic requires explicit conversion.
-Integer <code>/</code> produces a float. Counts from <code>len</code> and <code>range</code> remain untyped numbers.</p>
-<h3 id="transparent-type-aliases">Transparent type aliases<a class="heading-anchor" href="#transparent-type-aliases" aria-label="Link to Transparent type aliases">#</a></h3>
-<p>Declare read-only, transparent aliases with optional semantic advice:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-11"><span class="hljs-keyword">let</span> a <span class="hljs-operator">=</span> <span class="hljs-number">10</span>
-<span class="hljs-keyword">let</span> b: <span class="hljs-built_in">int</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">int</span>(a)
-<span class="hljs-keyword">let</span> c: <span class="hljs-built_in">float</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">float</span>(b)
-
-
-<span class="hljs-keyword">type</span> <span class="hljs-title class_">Money</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">int</span> [minimum<span class="hljs-operator">=</span><span class="hljs-number">0</span>, desc<span class="hljs-operator">=</span><span class="hljs-string">&#x27;Amount in cents&#x27;</span>]
-<span class="hljs-keyword">type</span> <span class="hljs-title class_">Prices</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>[Money]
-<span class="hljs-keyword">type</span> <span class="hljs-title class_">MaybeMoney</span> <span class="hljs-operator">=</span> Money <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
-<span class="hljs-keyword">let</span> subtotal: Money <span class="hljs-operator">=</span> <span class="hljs-number">1250</span>
-<span class="hljs-keyword">let</span> computed: Money <span class="hljs-operator">=</span> <span class="hljs-number">0</span>
-computed <span class="hljs-operator">+=</span> subtotal
-<span class="hljs-keyword">let</span> prices: Prices <span class="hljs-operator">=</span> [subtotal, computed]
-<span class="hljs-keyword">let</span> discount: MaybeMoney <span class="hljs-operator">=</span> <span class="hljs-literal">None</span>
-
-<span class="hljs-keyword">def</span> <span class="hljs-title function_">computeDiscount</span>(total: Money, 
-                    discount: MaybeMoney) <span class="hljs-operator">-&gt;</span> Money:
-    <span class="hljs-keyword">let</span> discountWithDefault <span class="hljs-operator">=</span> <span class="hljs-keyword">if</span> <span class="hljs-built_in">isinstance</span>(discount, <span class="hljs-literal">None</span>):
-        <span class="hljs-built_in">int</span>(<span class="hljs-number">10</span>)
-    <span class="hljs-keyword">else</span>:
-        <span class="hljs-built_in">validate</span>(discount, Money)
-    <span class="hljs-keyword">return</span> <span class="hljs-built_in">int</span>(total <span class="hljs-operator">*</span> (<span class="hljs-number">100</span><span class="hljs-operator">-</span>discountWithDefault)<span class="hljs-operator">/</span><span class="hljs-number">100</span>)
-
-
-<span class="hljs-built_in">log</span>(computeDiscount(<span class="hljs-number">1000</span>, <span class="hljs-literal">None</span>))
-
+<p>Inline helpers return strings: <code>markdown.bold(text)</code>, <code>italic(text)</code>, <code>code(text)</code>,
+<code>link(label, url)</code>, <code>image(alt, url)</code> and <code>escape(text)</code>. Block methods accept Markdown, so use
+<code>escape</code> for literal dynamic text. Link labels and image alt text are escaped automatically, and
+table cells escape <code>|</code>. Invalid input, such as a heading level of 7 or a multiline heading,
+raises <code>assertion_failed</code>. Other modules import the builder from <code>spl-lang/markdown</code>;
+<code>new markdown.Document()</code> is equivalent to <code>markdown.document()</code>.</p>
+<h2 id="inputs-args-and-env">Inputs: args and env<a class="heading-anchor" href="#inputs-args-and-env" aria-label="Link to Inputs: args and env">#</a></h2>
+<p><code>args</code> is the read-only list of <code>--arg</code> values. <code>env</code> is the read-only process environment.
+Missing entries are <code>undefined</code>.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-10"><span class="hljs-keyword">const</span> [target = <span class="hljs-string">&#x27;world&#x27;</span>, mode] = args;
+<span class="hljs-keyword">const</span> home = env.<span class="hljs-property">HOME</span> ?? env.<span class="hljs-property">USERPROFILE</span>;
+<span class="hljs-title function_">log</span>(<span class="hljs-string">`Hello <span class="hljs-subst">${target}</span>`</span>, { mode, home });
 </code></pre></figure>
-<p>Aliases accept the same values and operations as their underlying types, without implicit
-conversion. Advice is included in generated schemas&#39; descriptions, including when an alias
-is used as a field or list element; it does not enforce extra constraints. Aliasing an alias
-inherits its advice, with newly supplied keys overriding inherited keys. Field advice is
-appended separately. <code>type(value)</code> remains the type-name builtin.</p>
-<h3 id="enums-structs-and-functions">Enums, structs and functions<a class="heading-anchor" href="#enums-structs-and-functions" aria-label="Link to Enums, structs and functions">#</a></h3>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-12" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-12"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Greeting</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;hello&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;world&#x27;</span>
-
-<span class="hljs-comment"># let g: Greeting = &#x27;hi&#x27; // error</span>
-<span class="hljs-keyword">let</span> g: Greeting <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;hello&#x27;</span>
-<span class="hljs-built_in">log</span>(g)
-
-<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Test</span>:
-    num: <span class="hljs-built_in">int</span> 
-    desc: <span class="hljs-built_in">str</span> 
-
-<span class="hljs-keyword">let</span> t: Test <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;num&#x27;</span>: <span class="hljs-number">1</span>
-    <span class="hljs-string">&#x27;desc&#x27;</span>: <span class="hljs-string">&#x27;hi&#x27;</span>
-
-<span class="hljs-built_in">log</span>(t)
-
-<span class="hljs-keyword">let</span> o1 <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;a&#x27;</span>: <span class="hljs-number">1</span>
-    <span class="hljs-string">&#x27;b&#x27;</span>: [<span class="hljs-number">2</span>,<span class="hljs-number">3</span>]
-<span class="hljs-keyword">let</span> o2 <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;a&#x27;</span>: <span class="hljs-number">1</span>
-    <span class="hljs-string">&#x27;b&#x27;</span>: [<span class="hljs-number">2</span>,<span class="hljs-number">3</span>]
-
-<span class="hljs-keyword">assert</span> o1 <span class="hljs-operator">==</span> o2
-   
-</code></pre></figure>
-<p>Enums accept matching strings directly and are subtypes of <code>str</code>. Structs are structural:
-equivalent field contracts are interchangeable. Fields are exact and required; nullable does
-not mean absent, so <code>note</code> above must be present even when it is <code>None</code>.
-Metadata such as <code>str [min=2, desc=&#39;Name&#39;]</code> is model advice, not a validity constraint.
-Use <code>assert</code> for business rules, or explicit JSON Schema for strict data constraints.
-Function parameters, results and callable fields are checked at their typed boundaries.
-A union value can be assigned or passed to another union, including a list element contract,
-when every source alternative is accepted by the destination. Member order does not matter;
-an alternative missing from the destination must be narrowed first.</p>
-<h3 id="validation-narrowing-and-mutation">Validation, narrowing and mutation<a class="heading-anchor" href="#validation-narrowing-and-mutation" aria-label="Link to Validation, narrowing and mutation">#</a></h3>
-<p><code>validate(value, Type)</code> checks values and returns a typed view, or fails. For a class
-target it explicitly converts structural field data into a nominal instance.
-<code>isinstance(value, Type)</code> tests without converting and narrows within a branch:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-13" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-13"><span class="hljs-keyword">def</span> <span class="hljs-title function_">describe</span>(value: <span class="hljs-built_in">int</span> <span class="hljs-operator">|</span> <span class="hljs-built_in">str</span>) <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
-    <span class="hljs-keyword">if</span> <span class="hljs-built_in">isinstance</span>(value, <span class="hljs-built_in">str</span>):
-        <span class="hljs-keyword">return</span> value.upper()
-    <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;Integer: <span class="hljs-subst">{value}</span>&#x27;</span>
-
-<span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-built_in">json_parse</span>(<span class="hljs-string">r&#x27;{&quot;color&quot;:&quot;blue&quot;,&quot;note&quot;:null}&#x27;</span>)
-<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Selection</span>:
-    color: Color
-    note: <span class="hljs-built_in">str</span> <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
-<span class="hljs-keyword">let</span> selection <span class="hljs-operator">=</span> <span class="hljs-built_in">validate</span>(data, Selection)
-</code></pre></figure>
-<p>Neither operation converts untyped numbers. <code>isinstance</code> never converts structural data
-into a class. <code>validate(data, Class)</code> checks all declared fields and creates a complete
-instance without running the constructor, including for ordinary classes. Missing or extra
-fields fail; no defaults or numeric conversions are inserted. Class conversion also applies
-to nested fields, lists and union members; distinct ambiguous conversions fail.
-Converted field dictionaries and containers are copied rather than rewriting the source.</p>
-<p>Successful tests and validation install persistent contracts on mutable values.
-These survive untyped aliases, index/member writes and bulk mutators. For example, an
-untyped alias cannot append an integer to a <code>list[str]</code>. Mutable contracts are invariant:
-<code>list[Color]</code> cannot be used as <code>list[str]</code>. Failed bulk mutations leave the whole value
-unchanged. Narrowing expires after relevant assignment or potentially mutating calls.</p>
-<h3 id="classes-and-structural-projections">Classes and structural projections<a class="heading-anchor" href="#classes-and-structural-projections" aria-label="Link to Classes and structural projections">#</a></h3>
-<p>Classes have nominal identity, declared fields, and implicitly bound <code>self</code> in methods.
-Normal construction calls the constructor named after the class and must initialize every field.
-Use <code>hydratable class</code> only when constructor-free JSON hydration is safe:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-14" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-14"><span class="hljs-keyword">hydratable</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Person</span>:
-    name: <span class="hljs-built_in">str</span>
-
-    <span class="hljs-keyword">def</span> <span class="hljs-title function_">Person</span>(name: <span class="hljs-built_in">str</span>):
-        self.name <span class="hljs-operator">=</span> name
-
-    <span class="hljs-keyword">def</span> <span class="hljs-title function_">greeting</span>() <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
-        <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;Hello <span class="hljs-subst">{self.name}</span>&#x27;</span>
-
-<span class="hljs-keyword">let</span> person: Person <span class="hljs-operator">=</span> Person(<span class="hljs-string">&#x27;Ada&#x27;</span>)
-<span class="hljs-keyword">let</span> fields <span class="hljs-operator">=</span> <span class="hljs-built_in">validate</span>(<span class="hljs-built_in">object</span>(person), <span class="hljs-keyword">struct</span>(Person))
-<span class="hljs-keyword">let</span> snapshot <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>(person)
-<span class="hljs-keyword">success</span> snapshot
-</code></pre></figure>
-<p><code>struct(Person)</code> describes structural field data, not a <code>Person</code> instance.
-To explicitly turn that data into an instance, use <code>validate(data, Person)</code>:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-15" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-15"><span class="hljs-keyword">class</span> <span class="hljs-title class_">GeneratedPerson</span>:
-    name: <span class="hljs-built_in">str</span>
-    age: <span class="hljs-built_in">int</span>
-    <span class="hljs-keyword">def</span> <span class="hljs-title function_">label</span>() <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
-        <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;<span class="hljs-subst">{self.name}</span> at age <span class="hljs-subst">{self.age}</span>&#x27;</span>
-<span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span><span class="hljs-keyword">struct</span>(GeneratedPerson)) <span class="hljs-string">&#x27;Generate person data&#x27;</span>
-<span class="hljs-keyword">let</span> person: GeneratedPerson <span class="hljs-operator">=</span> <span class="hljs-built_in">validate</span>(data, GeneratedPerson)
-<span class="hljs-built_in">log</span>(person.label())
-</code></pre></figure>
-<p>This conversion bypasses constructor normalization and side effects. Direct
-<code>schema=GeneratedPerson</code> still requires a <code>hydratable class</code> declaration.</p>
-<p><code>object(person)</code> makes a deep snapshot and drops named function properties.
-Validate that snapshot against <code>struct(Person)</code> when a checked field view is needed;
-validation rejects missing required fields, including callable fields dropped by projection.
-Use explicit projection before serializing class instances.
-See <a href="llm-commands.html#schemas-and-repairs">Schemas and repairs</a> for typed model output,
-<a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/typed-data.md">typed-data.md</a> for an offline workflow, and
-<a href="migration.html">Typing migration</a> for the full migration rules.</p>
-<h2 id="runtime-inputs-env-and-args">Runtime inputs: $env and $args<a class="heading-anchor" href="#runtime-inputs-env-and-args" aria-label="Link to Runtime inputs: $env and $args">#</a></h2>
-<p><code>$env.NAME</code> or <code>$env[&#39;NAME&#39;]</code> reads a process environment variable as a string.
-<code>$args[0]</code>, <code>$args[1]</code>, … read the CLI&#39;s repeated <code>--arg</code> values. Missing variables and
-out-of-range indexes return <code>None</code>. Both are read-only snapshots and are never persisted by stores.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-16" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-16"><span class="hljs-keyword">let</span> target <span class="hljs-operator">=</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
-<span class="hljs-keyword">if</span> target <span class="hljs-operator">==</span> <span class="hljs-literal">None</span>:
-    target <span class="hljs-operator">=</span> <span class="hljs-variable">$env</span>.USER
-</code></pre></figure>
+<p>With <code>--trace</code> or <code>--pin</code>, the first use of <code>env</code> records the environment so that replay sees
+the same values; <code>process.env</code> is not recorded. Blockquote agents read <code>@args</code> and one
+environment variable at a time with <code>@env.NAME</code>.</p>
 <h2 id="logging">Logging<a class="heading-anchor" href="#logging" aria-label="Link to Logging">#</a></h2>
-<p><code>log(value, ...)</code> writes to stderr at info level. <code>log(level=debug)(value)</code> selects <code>error</code>, <code>info</code> or
-<code>debug</code>. Debug output appears only with <code>--log-level debug</code>; <code>--silent</code> hides all logs.
-Objects and lists are logged as indented JSON, including when mixed with text arguments.
-Every continuation line carries the same log tag. Terminal output colors JSON tokens;
-redirected logs are plain text by default. See <a href="cli.html#output-and-exit-codes">console formatting</a>.</p>
-<h2 id="built-in-functions">Built-in functions<a class="heading-anchor" href="#built-in-functions" aria-label="Link to Built-in functions">#</a></h2>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Built-in functions reference table"><table>
-<thead>
-<tr>
-<th scope="col">Function</th>
-<th scope="col">Description</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>len(x)</code> <code>type(x)</code></td>
-<td>Length; type name</td>
-</tr>
-<tr>
-<td><code>str(x)</code> <code>int(x)</code> <code>float(x)</code> <code>bool(x)</code> <code>list(x)</code></td>
-<td>Conversions</td>
-</tr>
-<tr>
-<td><code>object()</code> <code>object(x)</code></td>
-<td>Empty dictionary; deep dynamic-data snapshot</td>
-</tr>
-<tr>
-<td><code>validate(x, T)</code> <code>isinstance(x, T)</code></td>
-<td>Validation with explicit struct-to-class conversion; non-converting type testing</td>
-</tr>
-<tr>
-<td><code>struct(Class)</code></td>
-<td>Structural descriptor for declared class fields, not nominal hydration</td>
-</tr>
-<tr>
-<td><code>range(stop)</code> <code>range(start, stop[, step])</code></td>
-<td>List of integers</td>
-</tr>
-<tr>
-<td><code>abs(x)</code> <code>round(x[, digits])</code> <code>min(...)</code> <code>max(...)</code> <code>sum(list)</code></td>
-<td>Numbers</td>
-</tr>
-<tr>
-<td><code>sorted(list[, reverse])</code> <code>reversed(list)</code> <code>enumerate(list)</code> <code>zip(a, b, ...)</code></td>
-<td>Sequences</td>
-</tr>
-<tr>
-<td><code>any(list)</code> <code>all(list)</code></td>
-<td>Truthiness checks</td>
-</tr>
-<tr>
-<td><code>keys(d)</code> <code>values(d)</code> <code>items(d)</code></td>
-<td>Dict views as lists</td>
-</tr>
-<tr>
-<td><code>json_parse(text)</code> <code>json_stringify(value[, indent])</code></td>
-<td>Strict JSON</td>
-</tr>
-<tr>
-<td><code>log(...)</code></td>
-<td>Logging, see above</td>
-</tr>
-</tbody></table>
-</div>
-<p>Methods:</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Built-in functions reference table"><table>
-<thead>
-<tr>
-<th scope="col">Type</th>
-<th scope="col">Methods</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>String</td>
-<td><code>upper</code> <code>lower</code> <code>strip</code> <code>lstrip</code> <code>rstrip</code> <code>title</code> <code>capitalize</code> <code>isdigit</code> <code>split</code> <code>splitlines</code> <code>join</code> <code>replace</code> <code>startswith</code> <code>endswith</code> <code>find</code> <code>count</code></td>
-</tr>
-<tr>
-<td>List</td>
-<td><code>append</code> <code>extend</code> <code>insert</code> <code>pop</code> <code>remove</code> <code>index</code> <code>count</code> <code>reverse</code> <code>sort</code> <code>copy</code> <code>clear</code> <code>map</code> <code>filter</code> <code>reduce</code></td>
-</tr>
-<tr>
-<td>Dict</td>
-<td><code>keys</code> <code>values</code> <code>items</code> <code>get</code> <code>pop</code> <code>update</code> <code>copy</code> <code>clear</code></td>
-</tr>
-</tbody></table>
-</div>
-<h3 id="list-callbacks-and-lambdas">List callbacks and lambdas<a class="heading-anchor" href="#list-callbacks-and-lambdas" aria-label="Link to List callbacks and lambdas">#</a></h3>
-<p><code>lambda x: expression</code> creates an anonymous function that implicitly returns its
-expression. Use <code>lambda: expression</code> for no parameters, or comma-separated names
-for multiple parameters. Lambdas capture lexical bindings like <code>def</code>, can be stored
-or returned, and accept a checked <code>fn(...) -&gt; ...</code> contract. Parameter annotations
-and default arguments are not supported in lambda syntax. Parenthesize a lambda
-to call it immediately: <code>(lambda x: x + 1)(2)</code>.</p>
-<p>These methods are available <strong>only on lists</strong>, not strings or dictionaries:</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="List callbacks and lambdas reference table"><table>
-<thead>
-<tr>
-<th scope="col">Method</th>
-<th scope="col">Behavior</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>xs.map(callback)</code></td>
-<td>Return a new list containing <code>callback(item)</code> for each item</td>
-</tr>
-<tr>
-<td><code>xs.filter(callback)</code></td>
-<td>Return a new list of original items whose callback result is truthy</td>
-</tr>
-<tr>
-<td><code>xs.reduce(callback[, initial])</code></td>
-<td>Fold left with <code>callback(accumulator, item)</code> and return the final accumulator</td>
-</tr>
-</tbody></table>
-</div>
-<p>Callbacks can be lambdas, named functions, or built-ins. Map and filter pass only
-the item, not an index. Reduce uses the initial value when supplied; otherwise it
-starts with the first item. An empty list reduces to its initial value, including
-<code>None</code>; without one it raises a runtime error. A singleton without an initial value
-returns its item without calling the callback.</p>
-<p>Callbacks run sequentially, including asynchronous operations, and failures propagate
-normally. Each operation takes a shallow snapshot of the list before invoking callbacks;
-it does not mutate the source itself. Changes a callback makes to the source do not
-add or remove work from that snapshot. Filter preserves the original item references.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-17" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-17"><span class="hljs-keyword">let</span> xs <span class="hljs-operator">=</span> [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>, <span class="hljs-number">4</span>]
-<span class="hljs-keyword">let</span> doubled <span class="hljs-operator">=</span> xs.map(<span class="hljs-keyword">lambda</span> x: x <span class="hljs-operator">*</span> <span class="hljs-number">2</span>)
-<span class="hljs-keyword">let</span> evens <span class="hljs-operator">=</span> xs.filter(<span class="hljs-keyword">lambda</span> x: x <span class="hljs-operator">%</span> <span class="hljs-number">2</span> <span class="hljs-operator">==</span> <span class="hljs-number">0</span>)
-<span class="hljs-keyword">let</span> total <span class="hljs-operator">=</span> xs.reduce(<span class="hljs-keyword">lambda</span> acc, x: acc <span class="hljs-operator">+</span> x, <span class="hljs-number">0</span>)
-<span class="hljs-keyword">success</span> [doubled, evens, total]  <span class="hljs-comment"># [[2, 4, 6, 8], [2, 4], 10]</span>
+<p><code>log(...values)</code> writes to the run log on stderr at info level; <code>log.error(...)</code> and
+<code>log.debug(...)</code> select other levels. Debug output appears only with <code>--log-level debug</code>, and
+<code>--silent</code> hides all logs. Objects and arrays are logged as indented JSON:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-11">[info] log: review:
+{
+  &quot;findings&quot;: [],
+  &quot;count&quot;: 0
+}
 </code></pre></figure>
+<p>See <a href="cli.html#output-and-exit-codes">console formatting</a>.</p>
 <h2 id="exact-tools">Exact tools<a class="heading-anchor" href="#exact-tools" aria-label="Link to Exact tools">#</a></h2>
-<p>Tools are ordinary functions that never call a model. Paths are relative to <code>--cwd</code>, and every
-call is checked against active <a href="safety.html#restrictions">restrictions</a>.</p>
+<p>Tools are ordinary async functions that never call a model. Paths are relative to the working
+directory, and every call is checked against active <a href="safety.html#restrictions">restrictions</a>.</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Exact tools reference table"><table>
 <thead>
 <tr>
@@ -722,39 +519,106 @@ call is checked against active <a href="safety.html#restrictions">restrictions</
 </tr>
 </thead>
 <tbody><tr>
-<td><code>read_file(path)</code></td>
+<td><code>await readFile(path)</code></td>
 <td>File contents as UTF-8 text</td>
 </tr>
 <tr>
-<td><code>write_file(path, content)</code></td>
-<td>Writes the file and returns a confirmation</td>
+<td><code>await writeFile(path, content)</code></td>
+<td>Writes the file, creating parent folders, and returns a confirmation</td>
 </tr>
 <tr>
-<td><code>web_fetch(url)</code></td>
+<td><code>await webFetch(url)</code></td>
 <td>Response body as text (30 s timeout, up to 5 redirects)</td>
 </tr>
 <tr>
-<td><code>web_search(query)</code></td>
+<td><code>await webSearch(query)</code></td>
 <td>Search results as text</td>
 </tr>
 <tr>
-<td><code>shell(command)</code></td>
+<td><code>await shell(command)</code></td>
 <td>Combined stdout/stderr; a nonzero exit raises <code>tool_error</code> (120 s timeout)</td>
 </tr>
 </tbody></table>
 </div>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-18" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-18"><span class="hljs-keyword">let</span> diff <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
-<span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;git&#x27;</span>:
-    diff <span class="hljs-operator">=</span> <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;git diff --cached&#x27;</span>)
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-12" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-12"><span class="hljs-keyword">const</span> diff = <span class="hljs-keyword">await</span> <span class="hljs-title function_">restrict</span>({ <span class="hljs-attr">exec</span>: <span class="hljs-string">&#x27;git&#x27;</span> }, <span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">shell</span>(<span class="hljs-string">&#x27;git diff --cached&#x27;</span>));
 </code></pre></figure>
 <p><code>shell</code> runs through the platform shell (<code>cmd.exe</code> on Windows, <code>/bin/sh</code> elsewhere).
-External state can still change between runs; &quot;exact&quot; means no model is involved.</p>
+Agents see the same tools under the names <code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>
+and <code>shell</code>.</p>
+<h2 id="errors">Errors<a class="heading-anchor" href="#errors" aria-label="Link to Errors">#</a></h2>
+<p>Library failures are <code>Failure</code> objects: <code>error.statusCode</code> (also <code>error.status_code</code>) and
+<code>error.reason</code> say what happened. Catch them with <code>try</code>/<code>catch</code> and rethrow anything else.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-13" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-13"><span class="hljs-keyword">let</span> notes = <span class="hljs-string">&#x27;&#x27;</span>;
+<span class="hljs-keyword">try</span> {
+    notes = <span class="hljs-keyword">await</span> <span class="hljs-title function_">readFile</span>(<span class="hljs-string">&#x27;./optional-notes.txt&#x27;</span>);
+} <span class="hljs-keyword">catch</span> (error) {
+    <span class="hljs-keyword">if</span> (!(error <span class="hljs-keyword">instanceof</span> <span class="hljs-title class_">Failure</span>)) <span class="hljs-keyword">throw</span> error;
+    <span class="hljs-title function_">log</span>(<span class="hljs-string">`<span class="hljs-subst">${error.statusCode}</span>: <span class="hljs-subst">${error.reason}</span>`</span>);
+}
+</code></pre></figure>
+<p>Any other uncaught exception, such as a <code>TypeError</code> in your code or an error thrown by an
+imported module, ends the document as a <code>runtime_error</code> whose reason is <code>Name: message</code> and
+whose <code>line</code> is the document line that threw. <code>success(value)</code> ends the run by throwing a
+signal that is not an <code>Error</code>; a catch-all must rethrow it. See
+<a href="safety.html#try--catch">Guards &amp; failures</a>.</p>
+<h2 id="what-the-runtime-does-not-see">What the runtime does not see<a class="heading-anchor" href="#what-the-runtime-does-not-see" aria-label="Link to What the runtime does not see">#</a></h2>
+<p>The runtime records, replays and restricts <strong>library calls</strong>. Code that reaches the outside
+world directly is your own responsibility:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="What the runtime does not see reference table"><table>
+<thead>
+<tr>
+<th scope="col"></th>
+<th scope="col">Library (<code>readFile</code>, <code>shell</code>, <code>webFetch</code>, <code>agent</code>, MCP)</th>
+<th scope="col">Node.js APIs (<code>node:fs</code>, <code>fetch</code>, <code>child_process</code>)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Checked by <code>restrict</code></td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Recorded by <code>--trace</code> and <code>--pin</code></td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>On replay</td>
+<td>Recorded result is returned</td>
+<td>Runs again</td>
+</tr>
+</tbody></table>
+</div>
+<p>Values from <code>Date.now()</code>, <code>Math.random()</code> or a direct file read can differ between a recording
+and its replay. If such a value reaches a prompt or a tool argument, the replayed request no
+longer matches the recording and the run stops with a mismatch. Use the library tools for
+anything a replay must reproduce.</p>
+<p>Helper modules are in the same position: they are imported from disk again on every replay, so
+a trace or a locked workflow that imports local helpers depends on those files staying as they were.</p>
+<h2 id="the-library-in-nodejs-programs">The library in Node.js programs<a class="heading-anchor" href="#the-library-in-nodejs-programs" aria-label="Link to The library in Node.js programs">#</a></h2>
+<p>Outside Markdown, the library is a regular package. Calls use a default runtime: provider keys
+from the environment or <code>spl login</code>, info-level logs on stderr (override with <code>SPL_LOG_LEVEL</code>),
+the process working directory and stdin for <code>human</code>.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-14" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-14"><span class="hljs-keyword">import</span> { ask, configure, enumOf, restrict, str, struct, writeFile } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;spl-lang&#x27;</span>;
+
+<span class="hljs-keyword">const</span> runtime = <span class="hljs-title function_">configure</span>({ <span class="hljs-attr">model</span>: <span class="hljs-string">&#x27;gpt-6-luna&#x27;</span>, <span class="hljs-attr">logLevel</span>: <span class="hljs-string">&#x27;error&#x27;</span> });
+
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Triage</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Triage&#x27;</span>, { <span class="hljs-attr">label</span>: <span class="hljs-title function_">enumOf</span>(<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;feature&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>), <span class="hljs-attr">reason</span>: str });
+<span class="hljs-keyword">const</span> triage = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">&#x27;Classify: the export button does nothing&#x27;</span>, { <span class="hljs-attr">schema</span>: <span class="hljs-title class_">Triage</span>, <span class="hljs-attr">repairs</span>: <span class="hljs-number">1</span> });
+<span class="hljs-keyword">await</span> <span class="hljs-title function_">restrict</span>(<span class="hljs-string">&#x27;./out&#x27;</span>, <span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">writeFile</span>(<span class="hljs-string">&#x27;./out/triage.json&#x27;</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(triage)));
+
+<span class="hljs-keyword">await</span> runtime.<span class="hljs-property">backend</span>.<span class="hljs-title function_">close</span>();
+</code></pre></figure>
+<p><code>configure(options)</code> is optional and replaces the default runtime. Options: <code>model</code>, <code>provider</code>,
+<code>cwd</code>, <code>args</code>, <code>logLevel</code> (<code>silent</code>, <code>error</code>, <code>info</code>, <code>debug</code>), <code>logger</code>, <code>backend</code>, <code>timeoutMs</code>,
+<code>mcpServers</code>, <code>trace</code> and <code>human</code>. Running whole documents from a program is described under
+<a href="cli.html#embedding">Embedding</a>.</p>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Language.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
     <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="getting-started.html"><span>Previous</span><strong>Getting started</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="llm-commands.html"><span>Next</span><strong>Natural language & models</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#values-and-strings">Values and strings</a></li><li class="toc-level-2"><a href="#lists">Lists</a></li><li class="toc-level-2"><a href="#objects">Objects</a></li><li class="toc-level-2"><a href="#bindings-and-scopes">Bindings and scopes</a></li><li class="toc-level-2"><a href="#control-flow-and-expressions">Control flow and expressions</a></li><li class="toc-level-2"><a href="#functions">Functions</a></li><li class="toc-level-2"><a href="#modules">Modules</a></li><li class="toc-level-3"><a href="#markdown-standard-library">Markdown standard library</a></li><li class="toc-level-2"><a href="#gradual-typing">Gradual typing</a></li><li class="toc-level-3"><a href="#types-at-a-glance">Types at a glance</a></li><li class="toc-level-3"><a href="#transparent-type-aliases">Transparent type aliases</a></li><li class="toc-level-3"><a href="#enums-structs-and-functions">Enums, structs and functions</a></li><li class="toc-level-3"><a href="#validation-narrowing-and-mutation">Validation, narrowing and mutation</a></li><li class="toc-level-3"><a href="#classes-and-structural-projections">Classes and structural projections</a></li><li class="toc-level-2"><a href="#runtime-inputs-env-and-args">Runtime inputs: $env and $args</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#built-in-functions">Built-in functions</a></li><li class="toc-level-3"><a href="#list-callbacks-and-lambdas">List callbacks and lambdas</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#fences">Fences</a></li><li class="toc-level-2"><a href="#one-shared-scope">One shared scope</a></li><li class="toc-level-2"><a href="#await-model-calls-and-tools">Await model calls and tools</a></li><li class="toc-level-2"><a href="#imports">Imports</a></li><li class="toc-level-2"><a href="#the-library">The library</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-3"><a href="#annotations-are-advice">Annotations are advice</a></li><li class="toc-level-3"><a href="#classes">Classes</a></li><li class="toc-level-3"><a href="#typescript">TypeScript</a></li><li class="toc-level-2"><a href="#markdown-builder">Markdown builder</a></li><li class="toc-level-2"><a href="#inputs-args-and-env">Inputs: args and env</a></li><li class="toc-level-2"><a href="#logging">Logging</a></li><li class="toc-level-2"><a href="#exact-tools">Exact tools</a></li><li class="toc-level-2"><a href="#errors">Errors</a></li><li class="toc-level-2"><a href="#what-the-runtime-does-not-see">What the runtime does not see</a></li><li class="toc-level-2"><a href="#the-library-in-nodejs-programs">The library in Node.js programs</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

@@ -1,7 +1,7 @@
-import { ExecutionSession } from '../../lang/src/interpreter.js';
+import { ExecutionSession } from '../../lang/src/workflow.js';
 import { Logger } from '../../lang/src/logger.js';
 import { SplSyntaxError } from '../../lang/src/errors.js';
-import { describeValue, type Value } from '../../lang/src/values.js';
+import { describeValue } from '../../lang/src/runtime.js';
 import type { LlmBackend } from '../../lang/src/llm.js';
 import { parseWorkflowCell } from './notebookFormat';
 import type { ExecuteCell, WorkerReply } from './notebookProtocol';
@@ -28,7 +28,7 @@ const lazyBackend: LlmBackend = {
     async close() { await backend?.close(); },
 };
 
-export function formatNotebookValue(value: Value): string {
+export function formatNotebookValue(value: unknown): string {
     if (typeof value === 'string') return value;
     return JSON.stringify(describeValue(value), null, 2);
 }
@@ -40,8 +40,8 @@ process.on('message', async (request: ExecuteCell) => {
     }
     active = request;
     try {
-        const program = parseWorkflowCell(request.value, request.language, request.frontmatter);
-        const result = await session.run(program, {
+        const workflow = parseWorkflowCell(request.value, request.language, request.frontmatter);
+        const result = await session.run(workflow, {
             logger, backend: lazyBackend, source: request.source, sourceVersion: request.version,
         });
         if (result.status === 'failure') {

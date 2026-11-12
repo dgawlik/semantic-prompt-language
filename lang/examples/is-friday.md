@@ -4,12 +4,9 @@ version: 1
 model: 'gpt-6-luna'
 ---
 
+```js
+const isFriday = await ask('Is today Friday? Return true or false.', { schema: bool });
 
-```spl
-let isFriday = ask(schema=bool) \
-'Is today Friday? Return true or false.'
-if isFriday:
-    success 'Today is Friday!'
-else:
-    success ask 'Complain in original way'
+if (isFriday) success('Today is Friday!');
+success(await ask('Complain in original way'));
 ```

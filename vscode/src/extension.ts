@@ -1,16 +1,17 @@
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind } from 'vscode-languageclient/node';
-import { extendMarkdownIt } from './markdownPreview';
 import { registerNotebooks } from './notebook';
 import { registerCopilotContext } from './copilotContext';
-import { notebookSemanticTokens, registerNotebookLanguageFeatures } from './notebookLanguageFeatures';
+import { registerNotebookLanguageFeatures } from './notebookLanguageFeatures';
 
 let client: LanguageClient | undefined;
 
-export async function activate(context: vscode.ExtensionContext): Promise<{ extendMarkdownIt: typeof extendMarkdownIt }> {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
     registerNotebooks(context);
     const outputChannel = vscode.window.createOutputChannel('SPL Language Server');
     context.subscriptions.push(outputChannel);
+    // Workflow Markdown files: JavaScript features inside fences come from the TypeScript language
+    // service running in the server; notebook cells use VS Code's own JavaScript support.
     client = new LanguageClient(
         'spl',
         'SPL Language Server',
@@ -19,11 +20,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ exte
             transport: TransportKind.ipc,
         },
         {
-            documentSelector: [{ language: 'markdown' }, { language: 'spl' }],
+            documentSelector: [{ language: 'markdown', scheme: 'file' }, { language: 'markdown', scheme: 'untitled' }],
             outputChannel,
-            middleware: {
-                provideDocumentSemanticTokens: (document, token, next) => notebookSemanticTokens(document) ?? next(document, token),
-            },
         },
     );
     try {
@@ -35,7 +33,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ exte
     }
     registerNotebookLanguageFeatures(context);
     await registerCopilotContext(context, outputChannel);
-    return { extendMarkdownIt };
 }
 
 export async function deactivate(): Promise<void> {

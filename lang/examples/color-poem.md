@@ -10,7 +10,6 @@ model: 'gpt-6-luna'
 
 > A paragraph long poem about @color and @fruit -> @poem
 
-```spl
-success object:
-    'poem': poem
+```js
+success({ poem });
 ```

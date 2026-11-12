@@ -9,32 +9,27 @@ model: 'gpt-6-luna'
 Classifies open issues without labels and applies the labels only after a human approves
 the plan. Needs an authenticated `gh` CLI. Pass `--arg owner/repo` to target another repository.
 Enums constrain labels and priorities; a named list alias lets the agent save the
-whole batch with typed decoding. Field metadata is advice, so code checks nonempty reasons.
+whole batch with typed decoding. Field annotations are advice, so code checks nonempty reasons.
 
     spl examples/triage-issues.md --arg owner/repo
 
-```spl
-let repo = ''
-if $args[0] != None:
-    repo = "--repo {$args[0]}"
-let issues = []
-restrict exec 'gh':
-    issues = json_parse(shell('gh issue list {repo} --state open --search "no:label" --limit 20 --json number,title,body'))
-if len(issues) == 0:
-    success 'No unlabeled issues'
-let LABELS = ['bug', 'enhancement', 'question', 'documentation']
+```js
+const repo = args[0] ? `--repo ${args[0]}` : '';
 
-enum Labels = 'bug' | 'enhancement' | 'question' | 'documentation'
+const issues = await restrict({ exec: 'gh' }, async () => JSON.parse(
+    await shell(`gh issue list ${repo} --state open --search "no:label" --limit 20 --json number,title,body`)));
+if (issues.length === 0) success('No unlabeled issues');
 
-enum Priority = 'low' | 'medium' | 'high'
+const LABELS = ['bug', 'enhancement', 'question', 'documentation'];
 
-hydratable class Plan:
-    number: int
-    label: Labels
-    priority: Priority
-    reason: str [minLength = 1]
+const Plan = struct('Plan', {
+    number: int,
+    label: enumOf(...LABELS),
+    priority: enumOf('low', 'medium', 'high'),
+    reason: str.annotate({ minLength: 1 }),
+});
 
-type TriagePlan = list[Plan]
+const TriagePlan = typedef('TriagePlan', list(Plan));
 ```
 
 > @CTL(forbid='judging an issue by its title alone when the body says otherwise')
@@ -43,29 +38,25 @@ type TriagePlan = list[Plan]
 > Crashes, data loss and security problems are high priority.
 > @validate[TriagePlan] save to @plan
 
-```spl
-let numbers = []
-for issue in issues:
-    numbers.append(issue.number)
-let planned = []
-for p in plan:
-    planned.append(p.number)
-assert len(plan) == len(issues) "expected {len(issues)} decisions, got {len(plan)}"
-let table = []
-for p in plan:
-    assert len(p.reason.strip()) > 0 "issue #{p.number} needs a reason"
-    assert p.number in numbers "issue #{p.number} is not part of this batch"
-    assert planned.count(p.number) == 1 "issue #{p.number} was classified twice"
-    table.append("#{p.number} -> {p.label} ({p.priority}): {p.reason}")
+```js
+const numbers = issues.map(issue => issue.number);
+assert(plan.length === issues.length, `expected ${issues.length} decisions, got ${plan.length}`);
+
+const table = plan.map(item => {
+    assert(item.reason.trim().length > 0, `issue #${item.number} needs a reason`);
+    assert(numbers.includes(item.number), `issue #${item.number} is not part of this batch`);
+    assert(plan.filter(other => other.number === item.number).length === 1, `issue #${item.number} was classified twice`);
+    return `#${item.number} -> ${item.label} (${item.priority}): ${item.reason}`;
+});
 ```
 
 > Show the @table lines and ask the human "Apply these labels? (yes/no)". Save the answer to @approved
 
-```spl
-if not approved.strip().lower().startswith('y'):
-    fail 'Labels were not applied'
-restrict exec 'gh':
-    for p in plan:
-        shell('gh issue edit {p.number} {repo} --add-label {p.label}')
-success table
+```js
+if (!approved.trim().toLowerCase().startsWith('y')) fail('Labels were not applied');
+
+await restrict({ exec: 'gh' }, async () => {
+    for (const item of plan) await shell(`gh issue edit ${item.number} ${repo} --add-label ${item.label}`);
+});
+success(table);
 ```

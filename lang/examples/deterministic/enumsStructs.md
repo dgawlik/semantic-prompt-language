@@ -1,34 +1,27 @@
 ---
 extension: 'semantic-prompt-language'
 version: 1
-model: 'gpt-6-luna'
 ---
 
+# Enums and structs
 
-```spl 
-enum Greeting = 'hello' | 'world'
+```js
+const Greeting = enumOf('hello', 'world');
 
-# let g: Greeting = 'hi' // error
-let g: Greeting = 'hello'
-log(g)
+// Greeting.parse('hi') would fail: expected "hello" | "world", got "hi"
+const greeting = Greeting.parse('hello');
+log(greeting);
 
-struct Test:
-    num: int 
-    desc: str 
+const Test = struct('Test', {
+    num: int,
+    desc: str,
+});
 
-let t: Test = object:
-    'num': 1
-    'desc': 'hi'
+const test = Test.parse({ num: 1, desc: 'hi' });
+log(test);
 
-log(t)
-
-let o1 = object:
-    'a': 1
-    'b': [2,3]
-let o2 = object:
-    'a': 1
-    'b': [2,3]
-
-assert o1 == o2
-   
+assert(Test.is({ num: 1, desc: 'hi' }), 'matching data satisfies the struct');
+assert(!Test.is({ num: 1 }), 'every field is required');
+assert(!Test.is({ num: 1, desc: 'hi', extra: true }), 'extra fields are rejected');
+success(test);
 ```

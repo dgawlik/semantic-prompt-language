@@ -16,13 +16,13 @@
       "version: 1",
       "---",
       "",
-      "```spl",
-      "let ${1:answer} = ${2:42}",
+      "```js",
+      "const ${1:answer} = ${2:await ask('${3:Prompt}')};",
       "```",
       "",
       "> Return @${1:answer} using @success.",
       "$0"
     ],
-    "description": "An executable Markdown workflow with shared SPL and natural-language steps"
+    "description": "An executable Markdown workflow with shared JavaScript and natural-language steps"
   }
 }

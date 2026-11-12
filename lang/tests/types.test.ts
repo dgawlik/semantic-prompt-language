@@ -1,443 +1,255 @@
-import { describe, expect, it, vi } from 'vitest';
-import { callMethod } from '../src/builtins.js';
-import { run } from '../src/interpreter.js';
-import { Logger } from '../src/logger.js';
-import { parse } from '../src/parser.js';
-import { aliasType, contractOf, convertFloat, convertInt, descriptor, equivalent, primitives, testValue, typedFloat, validateType, validateValue } from '../src/types.js';
-import { compareValues, encodeJson, isInstance, newDict, type Value } from '../src/values.js';
-import type { LlmBackend, LlmRequest } from '../src/llm.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { Failure } from '../src/errors.js';
+import {
+    any, bool, char, enumOf, float, fn, int, isType, jsonSchema, list, nil, nullable, object, str, struct, t, typedef, union, validate,
+    type Infer,
+} from '../src/types.js';
 
-const int = primitives.get('int')!;
-const str = primitives.get('str')!;
-const ints = descriptor('list', 'list[int]', { element: int });
-const strings = descriptor('list', 'list[str]', { element: str });
-const logger = () => new Logger('silent');
-const execute = (source: string, answers: string[] = []) => {
-    const call = vi.fn(async (_request: LlmRequest) => ({ text: answers.shift() ?? '', effective: {} }));
-    const backend: LlmBackend = { call, close: async () => {} };
-    return { result: run(parse(source), { backend, logger: logger() }), call };
+const reason = (action: () => unknown): string => {
+    try {
+        action();
+    } catch (error) {
+        if (error instanceof Failure) return `${error.statusCode}: ${error.reason}`;
+        throw error;
+    }
+    throw new Error('expected a failure');
 };
 
-describe('runtime type contracts', () => {
-    const person = descriptor('class', 'Person', { fields: {
-        name: { type: str, advice: {} }, age: { type: int, advice: {} },
-    }, methods: {} });
-
-    it('converts structural data only through explicit validation and copies the class fields', () => {
-        const shape = descriptor('struct', 'struct(Person)', { fields: person.fields });
-        const input = newDict([['name', 'Ada'], ['age', 37n]]);
-        validateValue(input, shape);
-        expect(testValue(input, person)).toBe(false);
-        expect(() => validateValue(input, person)).toThrow(/expected Person/);
-        const result = validateType(input, person);
-        expect(isInstance(result)).toBe(true);
-        if (!isInstance(result)) throw new Error('expected a Person instance');
-        expect(result.descriptor).toBe(person);
-        expect(result.fields).toEqual(input);
-        expect(result.fields).not.toBe(input);
-        expect(contractOf(input)).toBe(shape);
-        expect(validateType(result, person)).toBe(result);
-        expect(testValue(result, person)).toBe(true);
-        callMethod(result.fields, 'update', [newDict([['age', 38n]])]);
-        expect(input.age).toBe(37n);
-        expect(() => callMethod(result.fields, 'update', [newDict([['age', 38]])])).toThrow(/expected int/);
+describe('primitive types', () => {
+    it('validates without coercion', () => {
+        expect(str.parse('a')).toBe('a');
+        expect(int.parse(3)).toBe(3);
+        expect(float.parse(1.5)).toBe(1.5);
+        expect(float.parse(2)).toBe(2);
+        expect(bool.parse(false)).toBe(false);
+        expect(char.parse('é')).toBe('é');
+        expect(char.parse('😀')).toBe('😀');
+        expect(nil.parse(null)).toBeNull();
+        expect(any.parse({ a: [1] })).toEqual({ a: [1] });
+        expect(object.parse({ a: 1 })).toEqual({ a: 1 });
+        expect(reason(() => int.parse('3'))).toBe('validation_failed: $: expected int, got "3"');
+        expect(reason(() => int.parse(1.5))).toMatch(/expected int, got 1.5/);
+        expect(reason(() => int.parse(2 ** 60))).toMatch(/expected int/);
+        expect(reason(() => float.parse(Infinity))).toMatch(/expected float/);
+        expect(reason(() => str.parse(1))).toMatch(/expected str, got 1/);
+        expect(reason(() => bool.parse(0))).toMatch(/expected bool/);
+        expect(reason(() => char.parse('ab'))).toMatch(/expected char/);
+        expect(reason(() => nil.parse(undefined))).toMatch(/expected null/);
+        expect(reason(() => object.parse([]))).toMatch(/expected object, got an array/);
+        expect(reason(() => any.parse(undefined))).toMatch(/expected any/);
     });
 
-    it.each<{ input: Value; reason: RegExp }>([
-        { input: newDict([['name', 'Ada']]), reason: /\$\.age: missing required field/ },
-        { input: newDict([['name', 'Ada'], ['age', 37]]), reason: /\$\.age: expected int/ },
-        { input: newDict([['name', 'Ada'], ['age', 37n], ['extra', true]]), reason: /\$\.extra:.*extra field/ },
-        { input: 'Ada', reason: /expected Person/ },
-    ])('rejects invalid class field data $input', ({ input, reason }) => {
-        expect(() => validateType(input, person)).toThrow(reason);
-    });
-
-    it('converts nested records and lists while leaving their structural input intact', () => {
-        const input = [newDict([['name', 'Ada'], ['age', 37n]])];
-        const sourceType = descriptor('list', 'list[struct(Person)]', { element: descriptor('struct', 'struct(Person)', { fields: person.fields }) });
-        validateValue(input, sourceType);
-        const target = descriptor('list', 'list[Person]', { element: person });
-        const output = validateType(input, target);
-        expect(output).not.toBe(input);
-        expect(output).toMatchObject([{ __instance: true, fields: input[0] }]);
-        expect(isInstance(input[0])).toBe(false);
-        expect(contractOf(input)).toBe(sourceType);
-        expect(() => callMethod(output, 'append', [input[0]])).toThrow(/expected Person/);
-    });
-
-    it('leaves no contracts or changes after a failed class conversion', () => {
-        const items: Value[] = [];
-        const type = descriptor('class', 'Data', { fields: {
-            items: { type: ints, advice: {} }, name: { type: str, advice: {} },
-        } });
-        const input = newDict([['items', items], ['name', 1]]);
-        expect(() => validateType(input, type)).toThrow(/\$\.name: expected str/);
-        expect(contractOf(items)).toBeUndefined();
-        callMethod(items, 'append', ['still dynamic']);
-        expect(input).toEqual({ items: ['still dynamic'], name: 1 });
-    });
-
-    it('rejects ambiguous class conversions and preserves nullable and equivalent targets', () => {
-        const other = descriptor('class', 'Other', { fields: person.fields });
-        const input = newDict([['name', 'Ada'], ['age', 37n]]);
-        for (const members of [[person, other], [person, primitives.get('object')!]]) {
-            expect(() => validateType(input, descriptor('union', 'ambiguous', { members }))).toThrow(/ambiguous/);
-            expect(contractOf(input)).toBeUndefined();
-        }
-        const optional = descriptor('union', 'Person | None', { members: [person, primitives.get('None')!] });
-        expect(validateType(null, optional)).toBeNull();
-        expect(isInstance(validateType(input, optional))).toBe(true);
-        const alias = aliasType(person, { desc: 'Person advice' });
-        expect(isInstance(validateType(input, descriptor('union', 'Person aliases', { members: [person, alias] })))).toBe(true);
-    });
-
-    it('keeps aliased contracts equivalent while merging advice', () => {
-        const money = aliasType(int, { minimum: 0, desc: 'Cents' });
-        const price = aliasType(money, { desc: 'Price' });
-        expect(equivalent(price, int)).toBe(true);
-        expect(price.advice).toEqual({ minimum: 0, desc: 'Price' });
-        expect(money.advice).toEqual({ minimum: 0, desc: 'Cents' });
-        expect(int.advice).toBeUndefined();
-        expect(testValue(-1n, price)).toBe(true);
-        expect(testValue(1, price)).toBe(false);
-    });
-
-    it('uses exact, finite explicit conversion and mathematical numeric ordering', () => {
-        expect(convertInt('9223372036854775807')).toBe(9223372036854775807n);
-        expect(() => convertInt(1.1)).toThrow(/exact/);
-        expect(() => convertInt(true)).toThrow();
-        expect(() => convertInt('9223372036854775808')).toThrow(/overflow/);
-        expect(() => convertFloat(Infinity)).toThrow(/finite/);
-        expect(compareValues(9007199254740993n, typedFloat(9007199254740992))).toBe(1);
-        expect(convertFloat(9007199254740993n)).toEqual(typedFloat(9007199254740992));
-    });
-
-    it('checks Unicode scalars, not UTF-16 units or graphemes', () => {
-        const char = primitives.get('char')!;
-        expect(testValue('😀', char)).toBe(true);
-        expect(testValue('e\u0301', char)).toBe(false);
-        expect(testValue('\uD800', char)).toBe(false);
-        expect(testValue('', char)).toBe(false);
-        expect(testValue(true, int)).toBe(false);
-        expect(testValue(1, int)).toBe(false);
-    });
-
-    it('guards untyped aliases and makes bulk operations atomic', () => {
-        const list: Value[] = [1n];
-        expect(validateValue(list, ints)).toBe(list);
-        const alias = list;
-        expect(() => callMethod(alias, 'append', ['bad'])).toThrow();
-        expect(() => callMethod(alias, 'extend', [[2n, 'bad']])).toThrow();
-        expect(list).toEqual([1n]);
-        callMethod(alias, 'extend', [[2n, 3n]]);
-        expect(list).toEqual([1n, 2n, 3n]);
-        expect(testValue(list, strings)).toBe(false);
-    });
-
-    it('installs successful tests atomically and failed tests leave no child contracts', () => {
-        const child: Value[] = [];
-        const record = newDict([['items', child], ['name', 1]]);
-        const shape = descriptor('struct', 'Shape', { fields: {
-            items: { type: ints, advice: {} }, name: { type: str, advice: {} },
-        } });
-        expect(testValue(record, shape)).toBe(false);
-        callMethod(child, 'append', ['still dynamic']);
-        expect(child).toEqual(['still dynamic']);
-        const empty: Value[] = [];
-        expect(testValue(empty, ints)).toBe(true);
-        expect(testValue(empty, strings)).toBe(false);
-        expect(() => callMethod(empty, 'append', ['bad'])).toThrow();
-    });
-
-    it('protects exact required record fields and atomic update/delete', () => {
-        const shape = descriptor('struct', 'Shape', { fields: { name: { type: str, advice: {} } } });
-        const record = newDict([['name', 'x']]);
-        validateValue(record, shape);
-        expect(() => callMethod(record, 'update', [newDict([['name', 'valid'], ['extra', true]])])).toThrow(/extra/);
-        expect(record).toEqual({ name: 'x' });
-        expect(() => callMethod(record, 'pop', ['name'])).toThrow(/required/);
-        expect(() => callMethod(record, 'clear', [])).toThrow(/required/);
-        expect(record).toEqual({ name: 'x' });
-    });
-
-    it('keeps runtime representation markers distinct from user dictionary data', () => {
-        expect(testValue(newDict([['__float', 1]]), primitives.get('float')!)).toBe(false);
-        expect(testValue(newDict([['__type', true], ['kind', 'int'], ['name', 'int']]), primitives.get('object')!)).toBe(true);
-        const callable = descriptor('fn', 'fn() -> str', { params: [], result: str });
-        expect(testValue(newDict([['__fn', 'builtin'], ['name', 'fake']]), callable)).toBe(false);
+    it('tests values without throwing', () => {
+        expect(int.is(1)).toBe(true);
+        expect(int.is('1')).toBe(false);
+        expect(union(int, str).is('x')).toBe(true);
+        expect(list(int).is([1, 'x'])).toBe(false);
     });
 });
 
-describe('typed execution', () => {
-    it('validates structs into ordinary classes without running constructors and binds methods', async () => {
-        const { result, call } = execute(`class Person:
-    name: str
-    age: int
-    def Person(name: str, age: int):
-        fail 'constructor must not run'
-    def toString() -> str:
-        return '{self.name} at age {self.age}'
-type Alias = Person [desc='A person']
-let input = ask(schema=struct(Person)) 'Generate a person'
-let person: Person = validate(input, Alias)
-let validateAlias = validate
-let second: Person = validateAlias(input, Person)
-let label: fn() -> str = person.toString
-success [isinstance(input, Person), isinstance(person, Person), isinstance(second, Person), label(), second.toString()]`,
-        ['{"name":"Ada","age":37}']);
-        const outcome = await result;
-        expect(outcome, outcome.status === 'failure' ? outcome.failure.reason : undefined).toMatchObject({
-            status: 'success', value: [false, true, true, 'Ada at age 37', 'Ada at age 37'],
+describe('composite types', () => {
+    const Color = enumOf('red', 'green', 'blue');
+    const Money = typedef('Money', int, { minimum: 0, desc: 'Amount in cents' });
+    const Address = struct('Address', { city: str, postalCode: nullable(str) });
+    const Order = struct('Order', {
+        id: str.annotate({ pattern: '^A-\\d+$' }),
+        color: Color,
+        total: Money,
+        address: Address,
+        tags: list(str),
+    });
+
+    it('parses exact structs into plain objects with field paths in errors', () => {
+        const input = { id: 'A-1', color: 'red', total: 10, address: { city: 'London', postalCode: null }, tags: ['x'] };
+        const order = Order.parse(input);
+        expect(order).toEqual(input);
+        expect(order).not.toBe(input);
+        expect(Object.getPrototypeOf(order)).toBe(Object.prototype);
+        expect(reason(() => Order.parse({ ...input, extra: 1 }))).toBe("validation_failed: $: unexpected field 'extra' in Order");
+        expect(reason(() => Order.parse({ ...input, tags: undefined }))).toMatch(/\$\.tags: expected list\(str\)/);
+        const { tags: _tags, ...partial } = input;
+        expect(reason(() => Order.parse(partial))).toBe("validation_failed: $: missing required field 'tags' of Order");
+        expect(reason(() => Order.parse({ ...input, address: { city: 'X', postalCode: 5 } }))).toBe('validation_failed: $.address.postalCode: expected str, got 5');
+        expect(reason(() => Order.parse({ ...input, color: 'pink' }))).toBe('validation_failed: $.color: expected "red" | "green" | "blue", got "pink"');
+        expect(reason(() => Order.parse({ ...input, tags: ['a', 2] }))).toBe('validation_failed: $.tags[1]: expected str, got 2');
+        expect(reason(() => Order.parse([]))).toMatch(/expected Order, got an array/);
+        expect(reason(() => Order.parse(new Map()))).toMatch(/expected Order/);
+    });
+
+    it('does not enforce annotations: they are advice for the model', () => {
+        expect(Money.parse(-5)).toBe(-5);
+        expect(Order.fields.id.parse('not matching')).toBe('not matching');
+    });
+
+    it('renders JSON Schema with annotations as model advice', () => {
+        expect(Order.schema()).toEqual({
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'Model advice (not validation constraints): {"pattern":"^A-\\\\d+$"}' },
+                color: { type: 'string', enum: ['red', 'green', 'blue'] },
+                total: { type: 'integer', description: 'Amount in cents\nModel advice (not validation constraints): {"minimum":0}' },
+                address: {
+                    type: 'object',
+                    properties: { city: { type: 'string' }, postalCode: { anyOf: [{ type: 'string' }, { type: 'null' }] } },
+                    required: ['city', 'postalCode'], additionalProperties: false,
+                },
+                tags: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['id', 'color', 'total', 'address', 'tags'],
+            additionalProperties: false,
         });
-        expect(call).toHaveBeenCalledOnce();
+        expect(str.describe('A title').schema()).toEqual({ type: 'string', description: 'A title' });
+        expect(char.annotate({ desc: 'Initial' }).schema().description).toBe('Exactly one Unicode character.\nInitial');
+        expect(any.schema()).toEqual({});
+        expect(reason(() => struct('Handler', { callback: fn }).schema())).toMatch(/runtime_error: fn is a callable/);
     });
 
-    it('converts nested structural class fields, lists and nullable targets', async () => {
-        const { result } = execute(`class Person:
-    name: str
-class Team:
-    leader: Person
-    members: list[Person]
-    note: str | None
-let PersonData = struct(Person)
-struct TeamData:
-    leader: PersonData
-    members: list[PersonData]
-    note: str | None
-let input = ask(schema=TeamData) 'Generate team data'
-let team: Team = validate(input, Team)
-let members: list[Person] = validate(input.members, list[Person])
-let optional: Person | None = validate(input.leader, Person | None)
-success [isinstance(team, Team), isinstance(team.leader, Person), isinstance(team.members[0], Person), isinstance(members[0], Person), isinstance(optional, Person)]`,
-        ['{"leader":{"name":"Ada"},"members":[{"name":"Grace"}],"note":null}']);
-        const outcome = await result;
-        expect(outcome, outcome.status === 'failure' ? outcome.failure.reason : undefined).toMatchObject({
-            status: 'success', value: [true, true, true, true, true],
-        });
+    it('keeps types immutable: modifiers return copies', () => {
+        const titled = str.describe('Title');
+        expect(str.annotations).toEqual({});
+        expect(titled.annotations).toEqual({ description: 'Title' });
+        expect(titled.annotate({ maxLength: 10 }).annotations).toEqual({ description: 'Title', maxLength: 10 });
+        expect(Object.isFrozen(titled)).toBe(true);
+        expect(Money.name).toBe('Money');
+        expect(int.name).toBe('int');
+        expect(String(Money)).toBe('Money');
+        expect(JSON.stringify({ Money })).toBe('{"Money":"<type Money>"}');
+        expect(isType(Money)).toBe(true);
+        expect(isType({ kind: 'int' })).toBe(false);
     });
 
-    it('retains guards for callable fields on converted instances', async () => {
-        const { result } = execute(`class Handler:
-    callback: fn(str) -> str
-def bad(value):
-    return 1
-let input = object:
-    'callback': bad
-let handler: Handler = validate(input, Handler)
-success (handler.callback)('value')`);
-        expect(await result).toMatchObject({
-            status: 'failure', failure: { status_code: 'type_error', reason: expect.stringContaining('return: expected str') },
-        });
+    it('builds structs fluently, field by field', () => {
+        const Point = struct('Point').field('x', float, { desc: 'Horizontal' }).field('y', float);
+        expect(Point.parse({ x: 1, y: 2 })).toEqual({ x: 1, y: 2 });
+        expect(Point.schema().properties).toEqual({ x: { type: 'number', description: 'Horizontal' }, y: { type: 'number' } });
+        expect(reason(() => Point.field('x', int))).toMatch(/duplicate field 'x'/);
+        expect(reason(() => struct('Bad', { a: 'str' as never }))).toMatch(/field 'a' of Bad must be a type/);
+        expect(reason(() => struct(''))).toMatch(/requires a name/);
     });
 
-    it('does not implicitly convert untyped JSON numbers during validation', async () => {
-        const { result, call } = execute(`let result = ask(fmt='object') 'Sample person JSON'
-struct Person:
-    firstName: str
-    lastName: str
-    age: int
-let person: Person = validate(result, Person)
-success person`, ['{"firstName":"Ada","lastName":"Lovelace","age":37}']);
-        expect(await result).toMatchObject({
-            status: 'failure',
-            failure: { status_code: 'type_error', reason: '$.age: expected int, got number', line: 6 },
-        });
-        expect(call).toHaveBeenCalledOnce();
+    it('decodes unions member by member and reports nullable errors precisely', () => {
+        const Id = union(int, str);
+        expect(Id.parse(1)).toBe(1);
+        expect(Id.parse('a')).toBe('a');
+        expect(reason(() => Id.parse(true))).toBe('validation_failed: $: expected int | str, got true');
+        expect(reason(() => nullable(Address).parse({ city: 1, postalCode: null }))).toBe('validation_failed: $.city: expected str, got 1');
+        expect(nullable(int).parse(null)).toBeNull();
+        expect(int.nullable().name).toBe('int | null');
+        expect(int.or(str).list().name).toBe('list(int | str)');
+        expect(union(int, int)).toBe(int);
     });
 
-    it('appends schema-generated numeric union values without narrowing first', async () => {
-        const { result, call } = execute(`type FloatOrInt = float | int [description='Either float or int']
-let numbers: list[FloatOrInt] = []
-for i in range(4):
-    let num = ask(tokens=128, schema=FloatOrInt) 'Sample number'
-    numbers.append(num)
-for n in numbers:
-    if isinstance(n, int):
-        log('Integer: {n}')
-    else:
-        log('Float: {n}')
-success numbers`, ['1', '1.5', '2', '2.5']);
-        expect(await result).toMatchObject({
-            status: 'success', value: [1n, typedFloat(1.5), 2n, typedFloat(2.5)],
-        });
-        expect(call).toHaveBeenCalledTimes(4);
+    it('accepts enum values as arguments or one array', () => {
+        expect(enumOf(['a', 'b']).parse('b')).toBe('b');
+        expect(reason(() => enumOf())).toMatch(/one or more strings/);
+        expect(t.enum('x').is('x')).toBe(true);
     });
 
-    it('uses integer aliases in arithmetic, conversions, functions, lists and generated schemas', async () => {
-        const { result, call } = execute(`type Money = int [minimum=0, desc='Cents']
-type Prices = list[Money]
-type MaybeMoney = Money | None
-def twice(value: Money) -> Money:
-    return value + value
-let values: Prices = [1250, 890]
-let computed: Money = 0
-for value in values:
-    computed += twice(value)
-let optional: MaybeMoney = None
-let generated: Money = ask(schema=Money) 'Generate cents'
-let converted = Money('10')
-success [computed, generated, converted, type(computed), optional]`, ['-1']);
-        expect(await result).toMatchObject({ status: 'success', value: [4280n, -1n, 10n, 'int', null] });
-        expect(call).toHaveBeenCalledOnce();
-        expect(call.mock.calls[0][0].prompt).toContain('Cents');
+    it('enforces raw JSON Schema wrapped as a type', () => {
+        const Rating = jsonSchema<number>({ type: 'integer', minimum: 1, maximum: 5 }, 'Rating');
+        expect(Rating.parse(3)).toBe(3);
+        expect(reason(() => Rating.parse(9))).toBe('validation_failed: $: must be <= 5');
+        expect(Rating.schema()).toEqual({ type: 'integer', minimum: 1, maximum: 5 });
+        const Review = struct('Review', { rating: Rating });
+        expect(reason(() => Review.parse({ rating: 0 }))).toBe('validation_failed: $.rating: must be >= 1');
+        const Range = jsonSchema({ type: 'object', properties: { low: { type: 'number' } }, required: ['low'] });
+        expect(reason(() => struct('Chart', { ranges: list(Range) }).parse({ ranges: [{ low: 'x' }] }))).toBe('validation_failed: $.ranges[0].low: must be number');
+        expect(reason(() => jsonSchema({ type: 'nope' }))).toMatch(/invalid schema/);
+    });
+});
+
+describe('classes', () => {
+    const Person = struct('Person', { firstName: str, lastName: str, age: int }).methods({
+        fullName() { return `${this.firstName} ${this.lastName}`; },
+        older(years: number) { return this.age + years; },
     });
 
-    it('preserves class identity and constructors through metadata-bearing aliases', async () => {
-        const { result } = execute(`hydratable class Item:
-    value: int
-    def Item(value: int):
-        self.value = value
-type Alias = Item [desc='Item data']
-let original: Item = Item(1)
-let aliased: Alias = original
-let constructed: Item = Alias(2)
-let decoded: Alias = ask(schema=Alias) 'Generate an item'
-success [isinstance(original, Alias), isinstance(constructed, Item), isinstance(decoded, Item), decoded.value]`,
-        ['{"value":3}']);
-        expect(await result).toMatchObject({ status: 'success', value: [true, true, true, 3n] });
+    it('attaches methods to parsed objects', () => {
+        const person = Person.parse({ firstName: 'Ada', lastName: 'Lovelace', age: 36 });
+        expect(person.fullName()).toBe('Ada Lovelace');
+        expect(person.older(4)).toBe(40);
+        expect(JSON.stringify(person)).toBe('{"firstName":"Ada","lastName":"Lovelace","age":36}');
+        expect(Object.keys(person)).toEqual(['firstName', 'lastName', 'age']);
+        expect(Person.is(person)).toBe(true);
+        expect(Person.is({ firstName: 'Ada', lastName: 'Lovelace', age: 36 })).toBe(false);
+        expect(Person.parse(person)).toBe(person);
+        expect(Person.kind).toBe('class');
     });
 
-    it('constructs distinct typed literals while keeping untyped bindings dynamic', async () => {
-        const { result } = execute(`let n: int = 1
-let f: float = 1.0
-let dynamic = 2
-dynamic = 'changed'
-success [type(n), type(f), dynamic, json_stringify([n, f])]`);
-        expect(await result).toMatchObject({ status: 'success', value: ['int', 'float', 'changed', '[1,1.0]'] });
+    it('offers the plain-data view of a class', () => {
+        const data = Person.data.parse({ firstName: 'Ada', lastName: 'Lovelace', age: 36 });
+        expect(Object.getPrototypeOf(data)).toBe(Object.prototype);
+        expect(Person.data.kind).toBe('struct');
+        expect(Person.schema()).toEqual(Person.data.schema());
     });
 
-    it('retains contracts across aliases, indexing, captured bindings and mutators', async () => {
-        const { result } = execute(`let values: list[int] = [1]
-let alias = values
-try:
-    alias.extend(json_parse('[2, "bad"]'))
-except error:
-    pass
-alias[0] = int(3)
-def mutate():
-    values.append(4)
-mutate()
-success values`);
-        const outcome = await result;
-        expect(outcome, outcome.status === 'failure' ? outcome.failure.reason : undefined).toMatchObject({ status: 'success', value: [3n, 4n] });
+    it('hydrates existing classes, through fromJSON when present', () => {
+        class Point {
+            x = 0;
+            y = 0;
+            norm(): number { return Math.hypot(this.x, this.y); }
+        }
+        const PointType = struct('Point', { x: float, y: float }).class(Point);
+        const point = PointType.parse({ x: 3, y: 4 });
+        expect(point).toBeInstanceOf(Point);
+        expect(point.norm()).toBe(5);
+        expect(PointType.is(new Point())).toBe(true);
+
+        class Celsius {
+            constructor(readonly degrees: number) {
+                if (degrees < -273.15) throw new Failure('assertion_failed', 'below absolute zero');
+            }
+            static fromJSON(data: { degrees: number }): Celsius { return new Celsius(data.degrees); }
+        }
+        const CelsiusType = struct('Celsius', { degrees: float }).class(Celsius);
+        expect(CelsiusType.parse({ degrees: 20 })).toBeInstanceOf(Celsius);
+        expect(reason(() => CelsiusType.parse({ degrees: -300 }))).toBe('assertion_failed: below absolute zero');
     });
 
-    it('uses field metadata only as generation advice', async () => {
-        const { result, call } = execute(`struct Data:
-    title: str [min=2, max=10, desc='Title']
-let data = ask(schema=Data) 'Generate data'
-success data`, ['{"title":"x"}']);
-        expect(await result).toMatchObject({ status: 'success', value: { title: 'x' } });
-        expect(call).toHaveBeenCalledOnce();
+    it('nests classes inside structs and lists, and rejects invalid shapes', () => {
+        const Team = struct('Team', { members: list(Person) });
+        const team = Team.parse({ members: [{ firstName: 'A', lastName: 'B', age: 1 }] });
+        expect(team.members[0].fullName()).toBe('A B');
+        expect(reason(() => Team.parse({ members: [{ firstName: 'A', lastName: 'B' }] })))
+            .toBe("validation_failed: $.members[0]: missing required field 'age' of Person");
+        expect(reason(() => Person.field('x', int))).toMatch(/before attaching methods/);
+        expect(reason(() => struct('P', { name: str }).methods({ name() { return 1; } }))).toMatch(/collides with a field/);
     });
 
-    it('repairs typed decoding overflow using the existing budget', async () => {
-        const { result, call } = execute(`let n: int = ask(schema=int, repairs=1) 'Generate an integer'
-success n`, ['9223372036854775808', '9223372036854775807']);
-        expect(await result).toMatchObject({ status: 'success', value: 9223372036854775807n });
-        expect(call).toHaveBeenCalledTimes(2);
+    it('rejects ambiguous class unions instead of guessing', () => {
+        const A = struct('A', { v: int }).methods({ a() { return 1; } });
+        const B = struct('B', { v: int }).methods({ b() { return 2; } });
+        expect(reason(() => union(A, B).parse({ v: 1 }))).toMatch(/ambiguous: matches A and B/);
+        const a = A.parse({ v: 1 });
+        expect(union(A, B).parse(a)).toBe(a);
     });
+});
 
-    it('guards unknown callable arguments/results and honors dictionary built-in precedence', async () => {
-        const { result } = execute(`def echo(value):
-    return value
-let callback: fn(str) -> str = echo
-let o = object:
-    'pop': callback
-    'stored': callback
-    'data': 'x'
-let read = o.pop('data')
-let called = (o.pop)('property call')
-let fallback = o.stored('fallback')
-success [read, called, fallback]`);
-        expect(await result).toMatchObject({ status: 'success', value: ['x', 'property call', 'fallback'] });
+describe('validate and JSON text', () => {
+    it('parses with a type or checks raw JSON Schema', () => {
+        const Pair = struct('Pair', { a: int });
+        expect(validate({ a: 1 }, Pair)).toEqual({ a: 1 });
+        expect(validate(5, { type: 'integer', minimum: 1 })).toBe(5);
+        expect(reason(() => validate(0, { type: 'integer', minimum: 1 }))).toMatch(/validation_failed: \$: must be >= 1/);
+        expect(reason(() => validate(1, 'int' as never))).toMatch(/schema must be a type/);
+        expect(Pair.parseJson('{"a":2}')).toEqual({ a: 2 });
+        expect(reason(() => Pair.parseJson('{a:2}'))).toMatch(/invalid_format: not valid JSON/);
     });
+});
 
-    it('hydrates constructor-free opt-in classes and binds methods, but projects class schemas structurally', async () => {
-        const { result, call } = execute(`hydratable class Person:
-    name: str
-    def Person(name: str):
-        self.name = name.upper()
-    def label() -> str:
-        return self.name
-let constructed = Person('ada')
-let hydrated: Person = ask(schema=Person) 'Generate a person'
-let data = ask(schema=struct(Person)) 'Generate data'
-success [constructed.label(), hydrated.label(), isinstance(data, Person), object(hydrated)]`,
-        ['{"name":"grace"}', '{"name":"data"}']);
-        const outcome = await result;
-        expect(outcome, outcome.status === 'failure' ? outcome.failure.reason : undefined).toMatchObject({ status: 'success', value: ['ADA', 'grace', false, { name: 'grace' }] });
-        expect(call).toHaveBeenCalledTimes(2);
-    });
-
-    it('checks typed overflow and exact serialization of both int limits', async () => {
-        const { result } = execute(`let lower: int = -9223372036854775808
-let upper: int = 9223372036854775807
-success json_stringify([lower, upper])`);
-        expect(await result).toMatchObject({ status: 'success', value: '[-9223372036854775808,9223372036854775807]' });
-        expect(encodeJson([convertInt('-9223372036854775808'), convertInt('9223372036854775807')])).toBe('[-9223372036854775808,9223372036854775807]');
-    });
-
-    it('guards narrowed callable views of known wider implementations and extracted functions', async () => {
-        const { result } = execute(`enum Color = 'red' | 'blue'
-def echo(text: str) -> str:
-    return text
-let callback: fn(Color) -> str = echo
-let callbacks: list[fn(Color) -> str] = [echo]
-let unknown = json_parse('"green"')
-let rejected = 0
-try:
-    callback(unknown)
-except error:
-    rejected += 1
-try:
-    callbacks[0](unknown)
-except error:
-    rejected += 1
-let extracted = callbacks.pop()
-try:
-    extracted(unknown)
-except error:
-    rejected += 1
-success [rejected, callback('red')]`);
-        const outcome = await result;
-        expect(outcome, outcome.status === 'failure' ? outcome.failure.reason : undefined).toMatchObject({ status: 'success', value: [3, 'red'] });
-    });
-
-    it('contextualizes nullable containers and grouped signed integer literals', async () => {
-        const { result } = execute(`struct Count:
-    value: int
-let record: Count | None = object:
-    'value': 1
-let numbers: list[int] | None = [1, 2]
-let minimum: int = -(9223372036854775808)
-success json_stringify([record, numbers, minimum])`);
-        const outcome = await result;
-        expect(outcome, outcome.status === 'failure' ? outcome.failure.reason : undefined).toMatchObject({
-            status: 'success', value: '[{"value":1},[1,2],-9223372036854775808]',
-        });
-    });
-
-    it('does not invoke repairs for ordinary typed call or assignment failures', async () => {
-        const { result, call } = execute(`let value: int = ask(schema=int, repairs=5) 'Generate an integer'
-value = json_parse('"bad"')
-success value`, ['1', '2', '3']);
-        const outcome = await result;
-        expect(outcome).toMatchObject({ status: 'failure', failure: { status_code: 'type_error', line: 2 } });
-        expect(call).toHaveBeenCalledOnce();
-    });
-
-    it('evaluates inline dictionary functions in property entry order', async () => {
-        const { result } = execute(`let o = object:
-    def x() -> str:
-        return 'function'
-    'x': 'last entry'
-let p = object:
-    'x': 'first entry'
-    def x() -> str:
-        return 'function'
-success [o.x, p.x()]`);
-        const outcome = await result;
-        expect(outcome, outcome.status === 'failure' ? outcome.failure.reason : undefined).toMatchObject({ status: 'success', value: ['last entry', 'function'] });
+describe('static inference', () => {
+    it('derives TypeScript types from builders', () => {
+        const Line = struct('Line', { description: str, quantity: int, unit: enumOf('kg', 'pc'), note: nullable(str) });
+        const Invoice = struct('Invoice', { lines: list(Line), paid: bool }).field('total', float);
+        type Invoice = Infer<typeof Invoice>;
+        expectTypeOf<Invoice>().toEqualTypeOf<{
+            lines: { description: string; quantity: number; unit: 'kg' | 'pc'; note: string | null }[];
+            paid: boolean;
+            total: number;
+        }>();
+        expectTypeOf(union(int, str).parse(1)).toEqualTypeOf<number | string>();
+        const Named = struct('Named', { name: str }).methods({ greet() { return `Hi ${this.name}`; } });
+        expectTypeOf(Named.parse({ name: 'x' }).greet()).toEqualTypeOf<string>();
+        expectTypeOf(typedef('Money', int).parse(1)).toEqualTypeOf<number>();
     });
 });

@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { CliRenderer } from '@bettertui/core';
 import { RendererProtocol, type ChildMessage, type LogEvent, type ModelStreamEvent } from './log-events.js';
-import { eventHeader, formatSegments, paint, prettyJson, prettySpl, sanitize } from './log-format.js';
+import { eventHeader, formatSegments, paint, prettyJson, prettyCode, sanitize } from './log-format.js';
 
 interface ProbeInput {
     setRawMode(mode: boolean): void;
@@ -150,7 +150,7 @@ export async function createEventView(renderer: CliRenderer, color: boolean,
                     const offsets = new Map<string, number>();
                     for (const part of event.segments) {
                         if (part.type === 'code') {
-                            content += '\n' + prettySpl(part.source, color);
+                            content += '\n' + prettyCode(part.source, color);
                             continue;
                         }
                         if (part.type !== 'json' && part.type !== 'preface') { content += part.text; continue; }
@@ -182,7 +182,7 @@ export async function createEventView(renderer: CliRenderer, color: boolean,
                     ? paint(`<- output ${stream.interaction.kind} [streaming]`, 36, color, true)
                     : paint(`i info reasoning ${stream.interaction.kind} [streaming]`, 34, color, true);
                 const body = stream.channel === 'response' && stream.interaction.kind === 'codegen'
-                    ? '\n' + prettySpl(stream.text, color) : ' ' + stream.text;
+                    ? '\n' + prettyCode(stream.text, color) : ' ' + stream.text;
                 this.rows.push(...wrap(header + body, this.width));
             }
             this.rows.push(paint(spinnerFrames[spinnerFrame], 90, color));

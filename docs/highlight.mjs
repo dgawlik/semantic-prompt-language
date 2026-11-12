@@ -2,84 +2,41 @@ import hljs from 'highlight.js/lib/core';
 import bash from 'highlight.js/lib/languages/bash';
 import json from 'highlight.js/lib/languages/json';
 import javascript from 'highlight.js/lib/languages/javascript';
+import typescript from 'highlight.js/lib/languages/typescript';
 import powershell from 'highlight.js/lib/languages/powershell';
-import ebnf from 'highlight.js/lib/languages/ebnf';
 import markdown from 'highlight.js/lib/languages/markdown';
 
-hljs.registerLanguage('spl', (engine) => {
-    const keywords = {
-        keyword: 'let def lambda enum struct class hydratable fn import from as if elif else for in while return try except assert fail success enforce forbid restrict ask think agent human break continue pass and or not',
-        literal: 'True False None',
-        built_in: 'len str char int float bool object type list isinstance validate range abs round min max sum sorted reversed enumerate zip any all keys values items json_parse json_stringify log read_file write_file web_fetch web_search shell',
-    };
-    const substitution = { scope: 'subst', begin: /\{/, end: /\}/, keywords, contains: [] };
-    const string = {
-        scope: 'string',
-        variants: [
-            { begin: /'''/, end: /'''/ },
-            { begin: /"""/, end: /"""/ },
-            { begin: /'/, end: /'|$/ },
-            { begin: /"/, end: /"|$/ },
-        ],
-        contains: [
-            { scope: 'char.escape', match: /\\(?:[ntr0\\'"{}]|\r?\n)/ },
-            { match: /\{\{|\}\}/ },
-            substitution,
-        ],
-    };
-    const expression = [
-        engine.HASH_COMMENT_MODE,
-        {
-            scope: 'string',
-            variants: [
-                { begin: /\br'''/, end: /'''/ },
-                { begin: /\br"""/, end: /"""/ },
-                { begin: /\br'/, end: /'|$/ },
-                { begin: /\br"/, end: /"|$/ },
-            ],
-        },
-        string,
-        { scope: 'variable', match: /\$(?:env|args)\b/ },
-        {
-            match: [/\bdef\b/, /\s+/, /[A-Za-z_]\w*/],
-            scope: { 1: 'keyword', 3: 'title.function' },
-        },
-        {
-            match: [/\b(?:type|enum|struct|class)\b/, /\s+/, /[A-Za-z_]\w*(?=\s*[:=])/],
-            scope: { 1: 'keyword', 3: 'title.class' },
-        },
-        { scope: 'attr', match: /\b(?:len|fmt|reasoning|hide|schema|repairs|model|tokens|level|seed|temperature|top_p)\b(?=\s*=(?!=))/ },
-        { scope: 'number', match: /\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/ },
-        { scope: 'operator', match: /->|\||\/\/=|\*\*|\/\/|==|!=|<=|>=|[-+*/%<>=]=?/ },
-    ];
-    const braces = { begin: /\{/, end: /\}/, keywords, contains: [...expression, 'self'] };
-    substitution.contains = [...expression, braces];
-    return { name: 'SPL', keywords, contains: expression };
-});
+// Fence info strings the runtime executes, by the highlight.js language that colors them.
+const FENCES = { javascript: 'js|javascript|mjs', typescript: 'ts|typescript|mts' };
 
+// Workflow documents shown inside `markdown` blocks: blockquotes are agent commands and
+// js/ts fences are code, so both get more than plain Markdown coloring.
 hljs.registerLanguage('markdown', (engine) => {
     const language = markdown(engine);
-    const reference = { scope: 'variable', match: /(?<![\w@])@[A-Za-z_]\w*/ };
-    const marker = { scope: 'keyword', match: /(?<![\w@])@(?:CTL|CODEGEN|SUCCESS|fail|validate)\b/i };
+    // highlight.js drops regex flags, so case-insensitive markers spell out both cases.
+    const anyCase = (word) => [...word].map((letter) => `[${letter.toLowerCase()}${letter.toUpperCase()}]`).join('');
+    const marker = { scope: 'keyword', match: new RegExp(`(?<![\\w@\\\\])@(?:${['CTL', 'CODEGEN', 'validate', 'success', 'fail'].map(anyCase).join('|')})\\b`) };
+    const reference = { scope: 'variable', match: /(?<![\w@\\])@(?:env\.[A-Za-z_]\w*|[A-Za-z_]\w*)/ };
     const control = { scope: 'attr', match: /\b(?:restrict|enforce|forbid|model|reasoning)\b(?=\s*=)/ };
     const quote = language.contains.find((mode) => mode.className === 'quote');
     quote.begin = /^ {0,3}>[ \t]?/;
     quote.contains.unshift(marker, control, reference);
-    language.contains.unshift({
-        begin: /^ {0,3}(`{3,}|~{3,})spl[ \t]*\r?$/,
+    language.contains.unshift(...Object.entries(FENCES).map(([subLanguage, names]) => ({
+        begin: new RegExp(`^ {0,3}(\`{3,}|~{3,})[ \\t]*(?:${names})(?:[ \\t][^\`\\r\\n]*)?\\r?$`),
         end: /^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/,
         beginScope: 'meta',
         endScope: 'meta',
-        subLanguage: 'spl',
+        subLanguage,
         'on:begin': (match, response) => { response.data.fence = match[1]; },
         'on:end': (match, response) => {
             const fence = response.data.fence;
             if (match[1][0] !== fence[0] || match[1].length < fence.length) response.ignoreMatch();
         },
-    });
+    })));
     return language;
 });
 
-for (const [name, grammar] of Object.entries({ bash, sh: bash, json, js: javascript, javascript, powershell, ebnf })) hljs.registerLanguage(name, grammar);
+// `js`, `ts` and `sh` resolve through the aliases declared by the grammars themselves.
+for (const [name, grammar] of Object.entries({ bash, json, javascript, typescript, powershell })) hljs.registerLanguage(name, grammar);
 
 export default hljs;

@@ -1,6 +1,5 @@
 import { Ajv, type ErrorObject } from 'ajv';
 import { Failure } from './errors.js';
-import { isDict, runtimeError, toJson, type Value } from './values.js';
 
 const ajv = new Ajv({ allErrors: true, strict: true });
 
@@ -14,17 +13,18 @@ function errorPath(error: ErrorObject): string {
     }, '') || '$';
 }
 
-export function compileSchema(schema: Value): (value: Value) => void {
-    if (typeof schema !== 'boolean' && !isDict(schema)) throw runtimeError('schema must be a JSON Schema object or boolean');
-    const json = toJson(schema);
-    if (typeof json !== 'boolean' && (typeof json !== 'object' || json === null)) throw runtimeError('invalid schema');
+/** Compiles strict JSON Schema (draft-07) into a validator that throws `validation_failed`. */
+export function compileSchema(schema: unknown): (value: unknown) => void {
+    if (typeof schema !== 'boolean' && (typeof schema !== 'object' || schema === null || Array.isArray(schema))) {
+        throw new Failure('runtime_error', 'schema must be a type, a JSON Schema object or a boolean');
+    }
     let validate;
     try {
-        validate = ajv.compile(json);
+        validate = ajv.compile(typeof schema === 'boolean' ? schema : JSON.parse(JSON.stringify(schema)));
         if ('$async' in validate && validate.$async) throw new Error('asynchronous schemas are not supported');
     } catch (e) {
         if (!(e instanceof Error)) throw e;
-        throw runtimeError(`invalid schema: ${e.message}`);
+        throw new Failure('runtime_error', `invalid schema: ${e.message}`);
     }
     return (value) => {
         if (!validate(value)) {

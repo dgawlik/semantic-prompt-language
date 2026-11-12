@@ -1,306 +1,163 @@
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { run } from '../src/interpreter.js';
-import { Logger } from '../src/logger.js';
-import { parse } from '../src/parser.js';
-import { extractMarkdown, parseMarkdown } from '../src/markdown.js';
-import type { LlmRequest, RuntimeAction } from '../src/llm.js';
-import { LIVE_TIMEOUT, RecordingCopilot, live } from './live.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { LlmBackend, LlmRequest, RuntimeAction } from '../src/llm.js';
+import { parseMarkdown } from '../src/markdown.js';
+import { Trace } from '../src/trace.js';
+import { checkWorkflow, run, type RunOptions, type RunResult } from '../src/workflow.js';
+import { NoLlm, acting, action, backend, cleanTemp, collecting, scripted, silent, tempDir, text } from './helpers.js';
 
-const dir = path.resolve(__dirname, '..', 'examples');
-const load = (name: string) => fs.readFileSync(path.join(dir, name), 'utf8');
-const exampleCode = (name: string) => extractMarkdown(load(name)).blocks.filter((block) => block.kind === 'spl').map((block) => block.text).join('\n');
+const lang = path.resolve(__dirname, '..');
+const dir = path.join(lang, 'examples');
+const load = (name: string): string => fs.readFileSync(path.join(dir, name), 'utf8');
+const workflows = fs.readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .map(name => name.replaceAll('\\', '/'))
+    .filter(name => name.endsWith('.md') && !name.startsWith('data/'))
+    .sort();
+
+afterEach(() => {
+    vi.unstubAllEnvs();
+    cleanTemp();
+});
+
+/** A scratch working directory with copies of the sample data, so examples never write into the repository. */
+function scratch(): string {
+    const cwd = tempDir('spl-example-');
+    fs.cpSync(path.join(dir, 'data'), path.join(cwd, 'examples', 'data'), { recursive: true });
+    return cwd;
+}
+
+function example(name: string, options: Partial<RunOptions> = {}): Promise<RunResult> {
+    const cwd = options.cwd ?? scratch();
+    return run(parseMarkdown(load(name)), {
+        backend: new NoLlm(), logger: silent, cwd, file: path.join(cwd, path.basename(name)), ...options,
+    });
+}
+
+const written = (cwd: string, name: string): string => fs.readFileSync(path.join(cwd, name), 'utf8');
+const save = (name: string, value: unknown, schema?: string): RuntimeAction =>
+    action('save_variable', { name, value, ...(schema ? { schema } : {}) });
+
+type Step = RuntimeAction | ((results: unknown[]) => RuntimeAction);
+
+/** Answers generation calls with `replies` in order; each blockquote performs its next list of tool calls. */
+function model(replies: string[], ...commands: Step[][]): LlmBackend & { asks: LlmRequest[]; quotes: LlmRequest[]; results: unknown[][] } {
+    const asks: LlmRequest[] = [];
+    const quotes: LlmRequest[] = [];
+    const results: unknown[][] = [];
+    return { asks, quotes, results, ...backend(async request => {
+        if (!request.naturalLanguage) {
+            const reply = replies[asks.push(request) - 1];
+            if (reply === undefined) throw new Error(`unexpected model call ${asks.length}: ${request.prompt.slice(-80)}`);
+            return { text: reply, effective: {} };
+        }
+        const steps = commands[quotes.push(request) - 1];
+        if (!steps) throw new Error(`unexpected blockquote ${quotes.length}: ${request.prompt.slice(-80)}`);
+        const done: unknown[] = [];
+        results.push(done);
+        for (const step of steps) done.push(await request.invokeAction!(typeof step === 'function' ? step(done) : step));
+        return { text: 'Done.', effective: {} };
+    }) };
+}
 
 describe('examples', () => {
-    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.md'))) {
-        it(`${file} is valid syntax`, () => {
-            expect(() => parseMarkdown(load(file))).not.toThrow();
-        });
-    }
+    it('finds the shipped workflows, including subfolders but not the sample data', () => {
+        expect(workflows).toEqual(expect.arrayContaining(['hi.md', 'basics.md', 'deterministic/node.md', 'imports/run.md']));
+        expect(workflows).not.toContain('data/product-update.md');
+    });
 
-    it.each([37n, 9223372036854775807n])('runs the types example with exact int age %s', async age => {
-        const answers = ['1', '1.5', '2', '2.5', `{"firstName":"Ada","lastName":"Lovelace","age":${age}}`];
-        const backend = {
-            call: async (_request: LlmRequest) => {
-                const text = answers.shift();
-                if (text === undefined) throw new Error('unexpected model call');
-                return { text, effective: {} };
-            },
-            close: async () => {},
-        };
-        const result = await run(parse(`${exampleCode('types.md')}\nsuccess [person, type(person.age)]`), {
-            backend, logger: new Logger('silent'),
-        });
-        expect(result).toMatchObject({
-            status: 'success',
-            value: [{ __instance: true, complete: true, fields: { firstName: 'Ada', lastName: 'Lovelace', age } }, 'int'],
-        });
-        expect(answers).toEqual([]);
+    it.each(workflows)('%s parses and passes the static checks', name => {
+        const workflow = parseMarkdown(load(name));
+        expect(workflow.steps.length).toBeGreaterThan(0);
+        expect(checkWorkflow(workflow, lang)).toEqual([]);
     });
 });
 
-describe('documentation snippets', () => {
-    const docs = path.resolve(dir, '..', '..', 'docs');
-    const normalize = (source: string) => source.replace(/\r\n/g, '\n').trim();
-    const decode = (source: string) => source.replace(/<\/?span\b[^>]*>/g, '')
-        .replace(/&#x([a-f\d]+);/gi, (_, digits: string) => String.fromCodePoint(parseInt(digits, 16)))
-        .replace(/&#(\d+);/g, (_, digits: string) => String.fromCodePoint(parseInt(digits, 10)))
-        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-    for (const file of fs.readdirSync(docs).filter((name) => name.endsWith('.html'))) {
-        const html = fs.readFileSync(path.join(docs, file), 'utf8');
-        it(`${file} includes an accessible static documentation shell`, () => {
-            expect([...html.matchAll(/<h1(?:\s|>)/g)]).toHaveLength(1);
-            expect(html).toContain('<html lang="en">');
-            expect(html).toContain('<main id="page"');
-            expect(html).toContain('href="#page">Skip to content');
-            expect(html).toContain('<dialog class="search-dialog" aria-labelledby="search-title">');
-            expect(html).toContain('aria-current="page"');
-            const depths = [...html.matchAll(/<h([1-6])(?:\s|>)/g)].map((match) => Number(match[1]));
-            for (let i = 1; i < depths.length; i++) expect(depths[i]).toBeLessThanOrEqual(depths[i - 1] + 1);
-            for (const match of html.matchAll(/(?:src|href)="(assets\/[^"]+)"/g)) {
-                expect(fs.existsSync(path.join(docs, match[1].split('?')[0])), `${file}: ${match[1]}`).toBe(true);
-            }
-        });
-        it(`${file} local documentation links resolve`, () => {
-            for (const match of html.matchAll(/href="([^"]+)"/g)) {
-                const href = match[1];
-                if (/^[a-z][a-z\d+.-]*:/i.test(href)) continue;
-                const [name, fragment] = href.split('#');
-                const target = path.resolve(docs, decodeURIComponent(name.split('?')[0] || file));
-                expect(fs.existsSync(target), `${file}: ${href}`).toBe(true);
-                if (fragment && target.endsWith('.html')) {
-                    expect(fs.readFileSync(target, 'utf8'), `${file}: ${href}`).toContain(`id="${fragment}"`);
-                }
-            }
-        });
-        const snippets = [...html.matchAll(/<code class="language-spl"([^>]*)>([\s\S]*?)<\/code>/g)];
-        snippets.forEach((match, i) => {
-            it(`${file} SPL block ${i + 1} parses`, () => {
-                expect(() => parse(decode(match[2]))).not.toThrow();
-            });
-            const name = /data-file="([^"]+)"/.exec(match[1])?.[1];
-            const source = name === 'quickstart.md' ? 'hi.md' : name;
-            if (source && fs.existsSync(path.join(dir, source))) {
-                it(`${file} embeds current ${source}`, () => {
-                    expect(normalize(decode(match[2]))).toBe(normalize(exampleCode(source)));
-                });
-            }
-        });
-    }
-    const root = path.resolve(docs, '..');
-    it('keeps the README presentation example current and runnable', () => {
-        const presentation = fs.readFileSync(path.join(root, 'generate-presentation.md'), 'utf8');
-        const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
-        const embedded = /^````markdown\r?\n([\s\S]*?)^````[ \t]*\r?$/m.exec(readme);
-        expect(embedded).not.toBeNull();
-        expect(normalize(embedded![1])).toBe(normalize(presentation));
-        expect(() => parseMarkdown(presentation)).not.toThrow();
+describe('examples without a model', () => {
+    it.each([
+        ['typed-data.md', { name: 'Ada', favorite: 'blue', address: { city: 'London', postalCode: null } }],
+        ['markdown.md', [
+            '# Report', '', '**Ready**', '', '- `parser`: passed', '- `runtime`: passed', '',
+            '| Check | Result |', '| --- | --- |', '| build | ok |', '| tests | ok |', '',
+        ].join('\n')],
+        ['deterministic/enumsStructs.md', { num: 1, desc: 'hi' }],
+        ['deterministic/types.md', { prices: [1250, 2500], discounted: 750 }],
+        ['deterministic/node.md', {
+            fib: 89, evens: [0, 2, 4, 6, 8], file: 'node.md',
+            digest: createHash('sha256').update('89').digest('hex').slice(0, 8),
+        }],
+    ])('runs %s to its documented result', async (name, value) => {
+        expect(await example(name)).toEqual({ status: 'success', value, hasValue: true });
     });
-    const markdownDocs = path.join(root, 'docs-template');
-    const markdownFiles = fs.readdirSync(markdownDocs).filter((file) => file.endsWith('.md'));
-    const withoutFences = (markdown: string) => normalize(markdown).replace(/^[ \t]*```[^\n]*\n[\s\S]*?^[ \t]*```[ \t]*$/gm, '');
-    const headingId = (heading: string) => heading.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, '').replace(/ /g, '-');
-    it('has a Markdown page for every HTML documentation page', () => {
-        const expected = fs.readdirSync(docs).filter((file) => file.endsWith('.html'))
-            .map((file) => file === 'index.html' ? 'introduction.md' : file.replace(/\.html$/, '.md'))
-            .sort();
-        expect(markdownFiles.map((file) => file.toLowerCase()).sort()).toEqual(expected);
+
+    it('typed-data.md returns a parsed object that carries its methods', async () => {
+        const { logger, events } = collecting();
+        const result = await example('typed-data.md', { logger });
+        expect(result.status === 'success' && (result.value as { greeting(): string }).greeting()).toBe('Hello Ada');
+        expect(events.map(text)).toEqual(['log: Hello Ada Money\n{"minimum":0,"desc":"Amount in cents"}']);
     });
-    it('indexes every page and resolves every search result', () => {
-        const content = fs.readFileSync(path.join(docs, 'assets', 'search-index.js'), 'utf8');
-        const entries: { href: string; title: string; text: string }[] = JSON.parse(content.replace(/^window\.SPL_SEARCH_INDEX = /, '').trim().replace(/;$/, ''));
-        const indexedPages = [...new Set(entries.map((entry) => entry.href.split('#')[0]))].sort();
-        expect(indexedPages).toEqual(fs.readdirSync(docs).filter((file) => file.endsWith('.html')).sort());
-        for (const entry of entries) {
-            const [name, fragment] = entry.href.split('#');
-            expect(entry.title.trim()).not.toBe('');
-            if (fragment) {
-                expect(fs.readFileSync(path.join(docs, name), 'utf8'), entry.href).toContain(`id="${fragment}"`);
-            }
-        }
-    });
-    it('preserves the published output formats permalink', () => {
-        expect(fs.readFileSync(path.join(docs, 'llm-commands.html'), 'utf8')).toContain('id="fmt-object"');
-    });
-    for (const file of markdownFiles) {
-        const markdown = fs.readFileSync(path.join(markdownDocs, file), 'utf8');
-        it(`${file} local Markdown links resolve`, () => {
-            for (const match of withoutFences(markdown).matchAll(/\[[^\n]*?\]\(([^)\s]+)\)/g)) {
-                const href = match[1];
-                if (/^[a-z][a-z\d+.-]*:/i.test(href)) continue;
-                const [name, fragment] = href.split('#');
-                const target = path.resolve(markdownDocs, decodeURIComponent(name || file));
-                expect(fs.existsSync(target), `${file}: ${href}`).toBe(true);
-                if (fragment && target.endsWith('.md')) {
-                    const headings = [...withoutFences(fs.readFileSync(target, 'utf8')).matchAll(/^#{1,6} (.+)$/gm)]
-                        .map((heading) => headingId(heading[1]));
-                    expect(headings, `${file}: ${href}`).toContain(decodeURIComponent(fragment));
-                }
-            }
+
+    it('imports/run.md imports its helper module and a Node.js built-in from the lang folder', async () => {
+        expect(await example('imports/run.md', { cwd: lang })).toEqual({
+            status: 'success', value: { fib: 55, factorial: 3628800, platform: os.platform() }, hasValue: true,
         });
-        for (const match of markdown.matchAll(/^`([^`\r\n]+\.md)`\r?\n\r?\n```spl\r?\n([\s\S]*?)^```[ \t]*\r?$/gm)) {
-            const name = match[1];
-            if (fs.existsSync(path.join(dir, name))) {
-                it(`${file} embeds current ${name}`, () => {
-                    expect(normalize(match[2])).toBe(normalize(exampleCode(name)));
-                });
-            }
-        }
-        for (const match of markdown.matchAll(/^`([^`\r\n]+\.md)`\r?\n\r?\n````markdown\r?\n([\s\S]*?)^````[ \t]*\r?$/gm)) {
-            const name = match[1];
-            if (fs.existsSync(path.join(dir, name))) {
-                it(`${file} embeds the full current ${name}`, () => {
-                    expect(normalize(match[2])).toBe(normalize(load(name)));
-                });
-            }
-        }
-    }
-    it('renders the canonical Markdown grammar without a separate EBNF source', () => {
-        const markdown = fs.readFileSync(path.join(markdownDocs, 'Grammar.md'), 'utf8');
-        const grammar = /```ebnf\s*\n([\s\S]*?)```/.exec(markdown);
-        const html = fs.readFileSync(path.join(docs, 'grammar.html'), 'utf8');
-        const rendered = /<code class="language-ebnf"[^>]*>([\s\S]*?)<\/code>/.exec(html);
-        expect(grammar).not.toBeNull();
-        expect(rendered).not.toBeNull();
-        expect(normalize(decode(rendered![1]))).toBe(normalize(grammar![1]));
-    });
-    for (const file of ['README.md', path.join('lang', 'README.md'), ...markdownFiles.map((file) => path.join('docs-template', file))]) {
-        const markdown = fs.readFileSync(path.join(root, file), 'utf8');
-        [...markdown.matchAll(/```spl\s*\n([\s\S]*?)```/g)].forEach((match, i) => {
-            it(`${file} SPL example ${i + 1} parses`, () => {
-                expect(() => parse(match[1])).not.toThrow();
-            });
+        expect(await example('imports/run.md')).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', reason: expect.stringContaining('Cannot find module'), line: 14 },
         });
-    }
+    });
 });
 
-describe('examples with offline backends', () => {
-    const save = (name: string, value: unknown): RuntimeAction => ({ name: 'save_variable', arguments: { name, value } });
-    function scriptedBackend(commands: RuntimeAction[][]) {
-        const counts = { commands: 0, actions: 0 };
-        return {
-            counts,
-            backend: {
-                async call(req: LlmRequest) {
-                    if (!req.naturalLanguage || !commands[counts.commands]) throw new Error('unexpected model call');
-                    const actions = commands[counts.commands++];
-                    for (const action of actions) {
-                        counts.actions++;
-                        await req.invokeAction!(action);
-                    }
-                    return { text: 'Done', effective: {} };
-                },
-                async close() {},
-            },
-        };
-    }
-
-    it('decodes an issue batch through the triage example named list alias', async () => {
-        const declarations = parseMarkdown(load('triage-issues.md')).body
-            .filter(statement => statement.t === 'enum' || statement.t === 'class' || statement.t === 'type-alias');
-        const program = parseMarkdown([
-            '---', 'extension: semantic-prompt-language', 'version: 1', '---', '',
-            '> @validate[TriagePlan] save to @plan', '',
-            '```spl', 'success object(plan)', '```',
-        ].join('\n'));
-        program.body.unshift(...declarations);
-        const { backend, counts } = scriptedBackend([[
-            { name: 'load_variable', arguments: { name: 'TriagePlan' } },
-            { name: 'save_variable', arguments: {
-                name: 'plan', schema: 'TriagePlan',
-                value: [{ number: 42, label: 'bug', priority: 'high', reason: 'Crashes on startup.' }],
-            } },
-        ]]);
-        const result = await run(program, { logger: new Logger('silent'), backend });
-        expect(result).toMatchObject({
-            status: 'success',
-            value: [{ number: 42n, label: 'bug', priority: 'high', reason: 'Crashes on startup.' }],
-        });
-        expect(counts).toEqual({ commands: 1, actions: 2 });
-    });
-
-    it('preserves journal state and bounds its history across runs with block scopes', async () => {
-        const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-journal-'));
-        try {
-            fs.mkdirSync(path.join(cwd, 'examples', 'data'), { recursive: true });
-            fs.writeFileSync(path.join(cwd, 'examples', 'data', 'notes.txt'), 'Today we shipped.');
-            const file = path.join(cwd, 'journal.json');
-            fs.writeFileSync(file, '{"runs":0,"history":[]}');
-            for (let i = 1; i <= 6; i++) {
-                const { backend, counts } = scriptedBackend([
-                    [save('today', `Summary ${i}`)],
-                    i > 1 ? [save('trend', 'Steady progress.')] : [],
-                ]);
-                const result = await run(parseMarkdown(load('journal.md')), {
-                    cwd, logger: new Logger('silent'), backend,
-                });
-                expect(result, result.status === 'failure' ? JSON.stringify(result.failure) : undefined).toMatchObject({
-                    status: 'success', value: { run: i, today: `Summary ${i}`, trend: i === 1 ? '' : 'Steady progress.' },
-                });
-                expect(counts).toEqual({ commands: 2, actions: i === 1 ? 1 : 2 });
-                const state = JSON.parse(fs.readFileSync(file, 'utf8'));
-                expect(state.runs).toBe(i);
-                expect(state.history).toHaveLength(Math.min(i, 5));
-                expect(state).not.toHaveProperty('first_run');
+describe('examples with scripted models', () => {
+    it('hi.md asks for typed flashcards, lets an agent pick one and writes it as Markdown', async () => {
+        const cwd = scratch();
+        const calls: LlmRequest[] = [];
+        const llm = backend(async request => {
+            calls.push(request);
+            if (request.naturalLanguage) {
+                const cards = await request.invokeAction!(action('load_variable', { name: 'cards' })) as unknown[];
+                await request.invokeAction!(save('hardest', cards[2]));
+                return { text: 'Done.', effective: {} };
             }
-        } finally {
-            fs.rmSync(cwd, { recursive: true, force: true });
-        }
-    });
-
-    it('compares integer generation with deterministic Fibonacci in the basics example', async () => {
-        const { backend, counts } = scriptedBackend([
-            [{ name: 'call_function', arguments: { name: 'factorial', args: [15] } }, save('fact15', 1307674368000)],
-            [{ name: 'call_function', arguments: { name: 'fib', args: [10] } }, save('fib10', 55)],
-            [save('fibPlus2', 57)],
-            [save('modelFib10', 55)],
-            [save('joke', { setup: 'A programmer walks into a bar.', punchline: 'It was a FooBar.' })],
-            [
-                { name: 'set_guidance', arguments: { kind: 'enforce', text: 'Answer in Chinese' } },
-                { name: 'set_guidance', arguments: { kind: 'forbid', text: 'Mentioning the word cat' } },
-                save('animal', 'A pet story.'),
-            ],
-        ]);
-        const result = await run(parseMarkdown(load('basics.md')), { logger: new Logger('silent'), backend });
-        expect(result).toMatchObject({
-            status: 'success',
-            value: {
-                fib: 55, modelFib: 55,
-                joke: { setup: 'A programmer walks into a bar.', punchline: 'It was a FooBar.' },
-                animal: 'A pet story.',
-            },
+            const topic = ['recursion', 'closures', 'regular expressions'].find(topic => request.prompt.includes(`about ${topic}`))!;
+            const term = topic === 'closures' && !request.prompt.includes('Validation failed') ? 'Closures' : topic;
+            return { text: JSON.stringify({ term, definition: `${topic} in one line`, description: `A paragraph about ${topic}.` }), effective: {} };
         });
-        expect(counts).toEqual({ commands: 6, actions: 10 });
+        expect(await example('hi.md', { cwd, backend: llm })).toEqual({ status: 'success', value: null, hasValue: false });
+        expect(written(cwd, 'out/hardest-card.md')).toBe('### regular expressions\n\n**regular expressions in one line**\n\nA paragraph about regular expressions.\n');
+        expect(calls.map(call => call.kind)).toEqual(['ask', 'ask', 'ask', 'ask', 'agent']);
+        expect(calls.every(call => call.model === 'gpt-6-luna' && call.prompt.includes('\n\nBe concise.\n\n'))).toBe(true);
+        expect(calls[0].prompt).toContain('"description":"One line about"');
+        expect(calls[3].prompt).toContain('Validation failed: $.term: expected "recursion" | "closures" | "regular expressions", got "Closures"');
+        expect(calls[4].prompt).toContain('Blockquote:\nPick the item of @cards whose card a beginner would find hardest. Save that item to @hardest');
     });
 
-    it('rejects a wrong model answer in the basics example', async () => {
-        const { backend } = scriptedBackend([
-            [{ name: 'call_function', arguments: { name: 'factorial', args: [15] } }, save('fact15', 1307674368000)],
-            [{ name: 'call_function', arguments: { name: 'fib', args: [10] } }, save('fib10', 55)],
-            [save('fibPlus2', 57)],
-            [save('modelFib10', 54)],
-        ]);
-        const result = await run(parseMarkdown(load('basics.md')), { logger: new Logger('silent'), backend });
-        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
+    it.each([
+        [['true'], 'Today is Friday!'],
+        [['false', 'Mondays again.'], 'Mondays again.'],
+    ])('is-friday.md branches on a boolean answer %j', async (replies, value) => {
+        const llm = scripted(...replies);
+        expect(await example('is-friday.md', { backend: llm })).toEqual({ status: 'success', value, hasValue: true });
+        expect(llm.calls).toHaveLength(replies.length);
+        expect(llm.calls[0].prompt).toContain('{"type":"boolean"}');
     });
-    async function runScripted(file: string, actions: RuntimeAction[], args: string[] = [], outputs: string[] = []) {
-        const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-example-'));
-        fs.cpSync(path.join(dir, 'data'), path.join(cwd, 'examples', 'data'), { recursive: true });
-        const { backend, counts } = scriptedBackend([actions]);
-        try {
-            const result = await run(parseMarkdown(load(file)), {
-                cwd, args, logger: new Logger('silent'),
-                backend,
-            });
-            expect(counts).toEqual({ commands: 1, actions: actions.length });
-            const files = Object.fromEntries(outputs.map((name) => [name, fs.readFileSync(path.join(cwd, name), 'utf8')]));
-            return { result, files };
-        } finally {
-            fs.rmSync(cwd, { recursive: true, force: true });
-        }
-    }
+
+    it('types.md decodes union numbers and a class instance', async () => {
+        const { logger, events } = collecting();
+        const llm = scripted('1', '1.5', '2', '2.5', '{"firstName":"Ada","lastName":"Lovelace","age":37}');
+        expect(await example('types.md', { backend: llm, logger })).toEqual({ status: 'success', value: 'Ada Lovelace at age 37', hasValue: true });
+        expect(events.filter(event => event.origin === 'script').map(text)).toEqual(['log: Integer: 1', 'log: Float: 1.5', 'log: Integer: 2', 'log: Float: 2.5']);
+        expect(llm.calls.slice(0, 4).every(call => call.tokens === 128 && call.prompt.includes('Either float or int'))).toBe(true);
+        expect(llm.calls[4].prompt).toContain('Age in years');
+    });
+
+    it.each(['37.5', '9223372036854775807', '"37"'])('types.md rejects the non-integer age %s', async age => {
+        const llm = scripted('1', '1.5', '2', '2.5', `{"firstName":"Ada","lastName":"Lovelace","age":${age}}`);
+        expect(await example('types.md', { backend: llm })).toMatchObject({
+            status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringContaining('$.age: expected int'), line: 31 },
+        });
+    });
 
     const invoice = {
         vendor: 'ACME Industrial Supplies GmbH', number: 'INV-2026-0042', date: '2026-03-14', currency: 'EUR',
@@ -312,77 +169,260 @@ describe('examples with offline backends', () => {
         subtotal: 17430, tax: 3312, total: 20742,
     };
 
-    it('checks invoice structure and arithmetic offline', async () => {
-        const output = 'out/invoices/INV-2026-0042.json';
-        const { result, files } = await runScripted('extract-invoice.md', [
-            { name: 'save_variable', arguments: { name: 'invoice', value: invoice, schema: 'Invoice' } },
-        ], [], [output]);
-        expect(result).toMatchObject({ status: 'success', value: {
-            ...invoice,
-            lines: invoice.lines.map(line => ({ ...line, quantity: BigInt(line.quantity), unit_price: BigInt(line.unit_price) })),
-            subtotal: 17430n, tax: 3312n, total: 20742n,
-        } });
-        expect(JSON.parse(files[output])).toEqual(invoice);
+    it('extract-invoice.md checks invoice structure and arithmetic, then writes the JSON', async () => {
+        const cwd = scratch();
+        const llm = acting(action('load_variable', { name: 'text' }), action('load_variable', { name: 'Invoice' }), save('invoice', invoice, 'Invoice'));
+        expect(await example('extract-invoice.md', { cwd, backend: llm })).toEqual({ status: 'success', value: invoice, hasValue: true });
+        expect(JSON.parse(written(cwd, 'out/invoices/INV-2026-0042.json'))).toEqual(invoice);
+        expect(llm.results[0]).toBe(written(cwd, 'examples/data/invoice.txt'));
+        expect(llm.results[1]).toMatchObject({ type: 'object', required: Object.keys(invoice) });
+        expect(llm.calls[0].prompt).toContain('- Avoid: filling in values that are not printed on the invoice');
     });
 
-    it('rejects an invoice whose line items do not add up', async () => {
-        const wrong = { ...invoice, subtotal: 17431, total: 20743 };
-        const { result } = await runScripted('extract-invoice.md', [
-            { name: 'save_variable', arguments: { name: 'invoice', value: wrong, schema: 'Invoice' } },
-        ]);
-        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
+    it.each([
+        ['line items that do not add up', { ...invoice, subtotal: 17431, total: 20743 }, 'assertion_failed', 'line items add up to 17430 cents but the subtotal is 17431 cents'],
+        ['a total that misses subtotal plus tax by one cent', { ...invoice, total: 20743 }, 'assertion_failed', 'subtotal 17430 + tax 3312 does not equal total 20743 cents'],
+        ['a fractional amount', { ...invoice, tax: 3312.5 }, 'validation_failed', 'invoice.tax: expected Money, got 3312.5'],
+    ])('extract-invoice.md rejects %s', async (_, wrong, code, reason) => {
+        const cwd = scratch();
+        expect(await example('extract-invoice.md', { cwd, backend: acting(save('invoice', wrong, 'Invoice')) })).toMatchObject({
+            status: 'failure', failure: { status_code: code, reason: expect.stringContaining(reason) },
+        });
+        expect(fs.existsSync(path.join(cwd, 'out'))).toBe(false);
     });
 
-    it('rejects an invoice whose tax and subtotal miss the total by one cent', async () => {
-        const { result } = await runScripted('extract-invoice.md', [
-            { name: 'save_variable', arguments: { name: 'invoice', value: { ...invoice, total: 20743 }, schema: 'Invoice' } },
-        ]);
-        expect(result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
+    it('incident-report.md counts and groups log errors in code and saves the narrative', async () => {
+        const cwd = scratch();
+        const report = ['Summary', 'Timeline', 'Impact', 'Likely root cause', 'Follow-ups'].map(section => `## ${section}\n`).join('');
+        const llm = acting(action('load_variable', { name: 'errors' }), action('load_variable', { name: 'counts' }), save('report', report));
+        expect(await example('incident-report.md', { cwd, backend: llm })).toEqual({
+            status: 'success', value: { errors: 6, groups: 3, report: './reports/incident-2026-10-25.md' }, hasValue: true,
+        });
+        expect(written(cwd, 'reports/incident-2026-10-25.md')).toBe(report);
+        expect(llm.results.slice(0, 2)).toEqual([[
+            '3x payments: Timeout calling payment provider after 30000ms (first at 2026-10-25T14:02:11Z)',
+            '2x api: POST /v2/checkout returned 502 (first at 2026-10-25T14:02:15Z)',
+            '1x db: Connection pool exhausted (first at 2026-10-25T14:04:10Z)',
+        ], { INFO: 5, WARN: 2, ERROR: 6 }]);
+        expect(await example('incident-report.md', { backend: acting(save('report', report.replace('## Impact\n', ''))) })).toMatchObject({
+            status: 'failure', failure: { status_code: 'assertion_failed', reason: "report is missing the 'Impact' section" },
+        });
     });
 
-    it('counts and groups log errors deterministically for the incident report', async () => {
-        const output = 'reports/incident-2026-10-25.md';
-        const report = ['Summary', 'Timeline', 'Impact', 'Likely root cause', 'Follow-ups'].map((s) => `## ${s}\n`).join('');
-        const { result, files } = await runScripted('incident-report.md', [save('report', report)], [], [output]);
-        expect(result).toMatchObject({ status: 'success', value: { errors: 6, groups: 3, report: `./${output}` } });
-        expect(files[output]).toContain('## Likely root cause');
+    it('incident-report.md ends early without a model when the log has no errors', async () => {
+        const cwd = scratch();
+        fs.writeFileSync(path.join(cwd, 'quiet.log'), '2026-10-25T13:58:02Z INFO  api       GET /v2/reports 200 in 84ms\n');
+        expect(await example('incident-report.md', { cwd, args: ['./quiet.log'] })).toEqual({ status: 'success', value: 'No errors in ./quiet.log', hasValue: true });
     });
 
-    it('verifies that translations keep links, code spans and headings', async () => {
+    it.each([
+        ['ok', 'Dark mode is here.'],
+        ['Make the wording clearer', 'Dark mode has arrived.'],
+    ])('human-review.md applies the reviewer feedback %j', async (feedback, final) => {
+        const cwd = scratch();
+        const questions: string[] = [];
+        const llm = model([],
+            [action('load_variable', { name: 'changes' }), save('draft', 'Dark mode is here.')],
+            [action('load_variable', { name: 'feedback' }), results => results[0] === 'ok' ? action('load_variable', { name: 'final' }) : save('final', final)]);
+        const result = await example('human-review.md', { cwd, backend: llm, human: question => { questions.push(question); return feedback; } });
+        expect(result).toEqual({ status: 'success', value: { draft: 'Dark mode is here.', feedback, final }, hasValue: true });
+        expect(questions).toEqual(['Reply "ok" to accept this draft, or describe what to change:\n\nDark mode is here.']);
+        expect(llm.results[0][0]).toBe(written(cwd, 'examples/data/product-update.md'));
+        expect(written(cwd, 'out/review-draft.txt')).toBe('Dark mode is here.');
+        expect(written(cwd, 'out/announcement.txt')).toBe(final);
+    });
+
+    const sieve = 'function sieve(number) {\n    const primes = [];\n    for (let n = 2; n <= number; n++) if (primes.every(prime => n % prime)) primes.push(n);\n    return primes;\n}';
+    const slugify = "function slugify(title) {\n    return title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\n}";
+
+    it('codegen.md defines generated functions from a blockquote and from codegen()', async () => {
+        const cwd = scratch();
+        const { logger, events } = collecting();
+        const llm = scripted(`\`\`\`js\n${sieve}\n\`\`\``, slugify);
+        expect(await example('codegen.md', { cwd, backend: llm, logger })).toEqual({ status: 'success', value: 'hello-generated-world', hasValue: true });
+        expect(events.filter(event => event.origin === 'script').map(text)).toEqual([`log:\n${JSON.stringify([2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97])}`]);
+        expect(llm.calls[0].prompt).toContain('Function description:\nGenerate sieve(number) sieve of eratosthenes function that returns primes until given number');
+        expect(llm.calls[1].prompt).toContain('Function description:\nslugify(title): lowercase, trim');
+        expect(fs.readdirSync(cwd)).toEqual(['examples']);
+    });
+
+    it('codegen.md saves generated code beside the workflow in traced runs and reuses it later', async () => {
+        const cwd = scratch();
+        const source = load('codegen.md');
+        const traced = async (name: string, llm: LlmBackend): Promise<RunResult> => {
+            const trace = Trace.open(path.join(cwd, name), { source, runtime: 'test', cwd });
+            try {
+                return await example('codegen.md', { cwd, backend: llm, trace });
+            } finally {
+                trace.close();
+            }
+        };
+        expect(await traced('first.jsonl', scripted(sieve, slugify))).toMatchObject({ status: 'success', value: 'hello-generated-world' });
+        expect(written(cwd, 'codegen.sieve.js')).toMatch(/^\/\/ @CODEGEN sha256:[0-9a-f]{64}\nfunction sieve\(number\) \{/);
+        expect(fs.existsSync(path.join(cwd, 'codegen.slugify.js'))).toBe(true);
+        expect(await traced('second.jsonl', new NoLlm())).toMatchObject({ status: 'success', value: 'hello-generated-world' });
+    });
+
+    const basics = (modelFib: number): Step[][] => [
+        [action('call_function', { name: 'factorial', args: [15] }), results => save('fact15', results[0])],
+        [action('call_function', { name: 'fib', args: [10] }), results => save('fib10', results[0])],
+        [action('load_variable', { name: 'fib10' }), results => save('fibPlus2', (results[0] as number) + 2)],
+        [save('modelFib10', modelFib)],
+        [save('joke', { setup: 'A programmer walks into a bar.', punchline: 'It was a FooBar.' })],
+        [save('animal', 'A pet story.')],
+    ];
+
+    it('basics.md shares functions and variables between fences and blockquote agents', async () => {
+        const llm = model([], ...basics(55));
+        expect(await example('basics.md', { backend: llm })).toEqual({
+            status: 'success', hasValue: true,
+            value: {
+                fib: 55, modelFib: 55, animal: 'A pet story.',
+                joke: { setup: 'A programmer walks into a bar.', punchline: 'It was a FooBar.' },
+            },
+        });
+        expect(llm.results.slice(0, 3)).toEqual([[1307674368000, 1307674368000], [55, 55], [55, 57]]);
+        expect(llm.quotes).toHaveLength(6);
+        expect(llm.quotes[0].prompt).toContain('"fib":"function fib(n)"');
+        expect(llm.quotes[4].prompt).not.toContain('Answer in Chinese');
+        expect(llm.quotes[5].prompt).toContain('- Follow: Answer in Chinese\n- Avoid: Mentioning the word cat');
+        expect(llm.quotes[5].prompt).toContain('Blockquote:\nParagraph of funny story about a pet animal -> @animal');
+    });
+
+    it('basics.md rejects a wrong model answer with exact code', async () => {
+        const llm = model([], ...basics(54));
+        expect(await example('basics.md', { backend: llm })).toMatchObject({
+            status: 'failure', failure: { status_code: 'assertion_failed', reason: 'Oops, the model got it wrong', line: 33 },
+        });
+        expect(llm.quotes).toHaveLength(4);
+    });
+
+    it('color-poem.md asks both questions through blockquote agents', async () => {
+        const questions: [string, number][] = [];
+        const answers = ['blue', 'apple'];
+        const ask = (question: string, name: string): Step[] => [action('ask_human', { question }), results => save(name, results[0])];
+        const llm = model([],
+            ask('What is your favorite color?', 'color'), ask('What is your favorite fruit?', 'fruit'),
+            [action('load_variable', { name: 'color' }), action('load_variable', { name: 'fruit' }), results => save('poem', `${results[0]} ${results[1]}`)]);
+        const result = await example('color-poem.md', { backend: llm, human: (question, line) => { questions.push([question, line]); return answers.shift()!; } });
+        expect(result).toEqual({ status: 'success', value: { poem: 'blue apple' }, hasValue: true });
+        expect(questions).toEqual([['What is your favorite color?', 7], ['What is your favorite fruit?', 9]]);
+    });
+
+    it('randomness.md repeats one seeded request and compares the answers', async () => {
+        const recipe = 'Bake apples in a pastry crust with sugar and cinnamon.';
+        const llm = scripted(recipe, recipe, 'true');
+        expect(await example('randomness.md', { backend: llm })).toEqual({ status: 'success', value: 'It works', hasValue: true });
+        for (const call of llm.calls.slice(0, 2)) {
+            expect(call).toMatchObject({ kind: 'ask', model: 'gpt-6-luna', tokens: 1024, randomness: { seed: 13, temperature: 0, top_p: 0.0001 } });
+            expect(call.prompt.endsWith('<most-frequent>give a recipe for an apple pie</most-frequent>')).toBe(true);
+        }
+        expect(llm.calls[2].randomness).toBeUndefined();
+        expect(await example('randomness.md', { backend: scripted(recipe, 'Stew pears.', 'false') })).toMatchObject({
+            status: 'failure', failure: { status_code: 'explicit_failure', reason: 'Not similar' },
+        });
+    });
+
+    it('journal.md keeps its state in a file and bounds the history across runs', async () => {
+        const cwd = scratch();
+        fs.writeFileSync(path.join(cwd, 'journal.json'), '{"runs":0,"history":[]}');
+        for (let i = 1; i <= 6; i++) {
+            const llm = model([],
+                [action('load_variable', { name: 'notes' }), save('today', `Summary ${i}`)],
+                [action('load_variable', { name: 'history' }), results => (results[0] as unknown[]).length > 1 ? save('trend', 'Steady progress.') : action('load_variable', { name: 'trend' })]);
+            expect(await example('journal.md', { cwd, backend: llm })).toEqual({
+                status: 'success', value: { run: i, today: `Summary ${i}`, trend: i === 1 ? '' : 'Steady progress.' }, hasValue: true,
+            });
+            const state = JSON.parse(written(cwd, 'journal.json'));
+            expect(state.runs).toBe(i);
+            expect(state.history).toHaveLength(Math.min(i, 5));
+            expect(state.history.at(-1)).toEqual({ run: i, summary: `Summary ${i}` });
+        }
+    });
+
+    it('translate-docs.md verifies that translations keep links, code spans and headings', async () => {
         const translation = (title: string) => [
             `# ${title}`, '', '## New', '', '- `GET /v2/reports` supports `limit` and `cursor`.', '',
             '## Fixes', '', 'See https://example.com/help or write to support@example.com.',
         ].join('\n');
-        const good = save('translations', { en: translation('Product update'), de: translation('Produktupdate') });
-        const output = 'out/translations/product-update.de.md';
-        const { result, files } = await runScripted('translate-docs.md', [good], ['en', 'de'], [output]);
-        expect(result).toMatchObject({ status: 'success', value: ['en', 'de'] });
-        expect(files[output]).toContain('# Produktupdate');
+        const cwd = scratch();
+        const good = acting(save('translations', { en: translation('Product update'), de: translation('Produktupdate') }));
+        expect(await example('translate-docs.md', { cwd, backend: good, args: ['en', 'de'] })).toEqual({ status: 'success', value: ['en', 'de'], hasValue: true });
+        expect(written(cwd, 'out/translations/product-update.de.md')).toContain('# Produktupdate');
+        expect(good.calls[0].prompt).toContain('- Follow: Keep the Markdown structure, URLs, e-mail addresses and `code spans` exactly as in the source');
 
-        const broken = save('translations', { en: translation('Product update').replace('support@example.com', 'support') });
-        const failed = await runScripted('translate-docs.md', [broken], ['en']);
-        expect(failed.result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed' } });
-        expect((failed.result as { failure: { reason: string } }).failure.reason).toContain('support@example.com');
+        for (const [broken, reason] of [
+            [translation('Product update').replace('support@example.com', 'support'), 'en: lost support@example.com'],
+            [translation('Product update').replace('## Fixes', '### Fixes'), 'en: heading structure changed'],
+            [undefined, "missing translation for 'en'"],
+        ] as const) {
+            const failed = scratch();
+            expect(await example('translate-docs.md', { cwd: failed, backend: acting(save('translations', { en: broken })), args: ['en'] })).toMatchObject({
+                status: 'failure', failure: { status_code: 'assertion_failed', reason },
+            });
+            expect(fs.existsSync(path.join(failed, 'out'))).toBe(false);
+        }
     });
-});
 
-describe.skipIf(!live)('examples on Copilot', () => {
-    it(
-        'extract-invoice extracts a balanced invoice from the sample document',
-        async () => {
-            const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-live-invoice-'));
-            fs.cpSync(path.join(dir, 'data'), path.join(cwd, 'examples', 'data'), { recursive: true });
-            const backend = new RecordingCopilot(cwd);
-            try {
-                const result = await run(parseMarkdown(load('extract-invoice.md')), { backend, logger: new Logger('silent'), cwd });
-                expect(result).toMatchObject({
-                    status: 'success', value: { number: 'INV-2026-0042', currency: 'EUR', total: 20742n },
-                });
-            } finally {
-                await backend.close();
-                fs.rmSync(cwd, { recursive: true, force: true });
-            }
-        },
-        LIVE_TIMEOUT * 3,
-    );
+    it('env.md lets agents read environment variables one at a time and code read args', async () => {
+        vi.stubEnv('lhs', '2');
+        vi.stubEnv('rhs', '40');
+        const { logger, events } = collecting();
+        const llm = model([],
+            [action('get_env', { name: 'lhs' }), action('get_env', { name: 'rhs' }), results => save('s', Number(results[0]) + Number(results[1]))],
+            [action('load_variable', { name: 's' }), results => action('success', { value: results[0] })]);
+        expect(await example('env.md', { backend: llm, logger, args: ['first', 'second'] })).toEqual({ status: 'success', value: 42, hasValue: true });
+        expect(llm.results[0].slice(0, 2)).toEqual(['2', '40']);
+        expect(events.filter(event => event.origin === 'script').map(text)).toEqual(['log: first second', `log: HOME is ${process.env.HOME ?? process.env.USERPROFILE}`]);
+    });
+
+    it('repo.md fails on high severity findings and succeeds otherwise', async () => {
+        const issue = { name: 'Command injection', 'cwe-id': 'CWE-78', link: 'src/run.js', describtion: 'Unescaped shell input.' };
+        expect(await example('repo.md', { backend: acting(save('vulnerabilities', { high: [], medium: [issue], low: [issue] })) }))
+            .toEqual({ status: 'success', value: 'Analyzed', hasValue: true });
+        expect(await example('repo.md', { backend: acting(save('vulnerabilities', { high: [issue] })) })).toMatchObject({
+            status: 'failure', failure: { status_code: 'explicit_failure', reason: `High vulnerabilities found. Fix this one first ${JSON.stringify(issue)}`, line: 20 },
+        });
+    });
+
+    it('mcp.md restricts an agent to one MCP tool and requires cited sources', async () => {
+        const answer = 'Run spl login first.\nSources:\nhttps://docs.example.com/start';
+        const llm = model([answer], [action('load_variable', { name: 'answer' }), results => action('success', { value: `- ${results[0]}` })]);
+        expect(await example('mcp.md', { backend: llm, args: ['How do I log in?'] })).toEqual({ status: 'success', value: `- ${answer}`, hasValue: true });
+        expect(llm.asks[0]).toMatchObject({ kind: 'agent', restrictions: { list: [{ kind: 'mcp', values: ['docs/search'] }] } });
+        expect(llm.asks[0].prompt).toContain('Use docs/search to answer: How do I log in?');
+        expect(llm.quotes[0].prompt).toContain('- Avoid: adding facts that are not in @answer');
+        expect(await example('mcp.md', { backend: model(['No idea.']) })).toMatchObject({
+            status: 'failure', failure: { status_code: 'assertion_failed', reason: 'the answer does not cite its sources' },
+        });
+    });
+
+    const finding = (severity: string) => ({ severity, title: `A ${severity} problem`, location: 'src/app.js:12', fix: 'Validate the input.' });
+    const review = (...severities: string[]): Step[][] => [
+        [save('notes', 'Unvalidated input in src/app.js:12.')],
+        [action('load_variable', { name: 'Review' }), save('review', { findings: severities.map(finding) }, 'Review')],
+        [action('load_variable', { name: 'groups' }), results => action('write_file', { path: './reports/review.md', content: `# Review\n\n${Object.keys(results[0] as object).join(', ')}\n` })],
+    ];
+
+    it('code-review.md turns agent notes into typed findings and a report inside the allowed folder', async () => {
+        const cwd = scratch();
+        const llm = model([], ...review('medium', 'low', 'medium'));
+        expect(await example('code-review.md', { cwd, backend: llm })).toEqual({
+            status: 'success', hasValue: true,
+            value: 'medium: A medium problem (src/app.js:12)\nlow: A low problem (src/app.js:12)\nmedium: A medium problem (src/app.js:12)',
+        });
+        expect(written(cwd, 'reports/review.md')).toBe('# Review\n\nmedium, low\n');
+        expect(llm.quotes.map(quote => quote.model)).toEqual(['gpt-6-luna', 'gpt-6-luna', 'gpt-6.1-sol']);
+        expect(llm.quotes.map(quote => quote.restrictions.list.map(item => item.kind))).toEqual([['fs', 'exec'], [], ['fs']]);
+        expect(llm.quotes[0].prompt).toContain('- Avoid: suggesting purely stylistic changes');
+    });
+
+    it('code-review.md fails on high severity findings and rejects unknown severities', async () => {
+        expect(await example('code-review.md', { backend: model([], ...review('low', 'high')) })).toMatchObject({
+            status: 'failure', failure: { status_code: 'explicit_failure', reason: '1 high severity finding(s), see ./reports/review.md' },
+        });
+        expect(await example('code-review.md', { backend: model([], ...review('critical')) })).toMatchObject({
+            status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringContaining('expected "low" | "medium" | "high", got "critical"') },
+        });
+    });
 });

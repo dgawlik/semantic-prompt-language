@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { RestrictKind } from './ast.js';
 import { Failure } from './errors.js';
+
+export type RestrictKind = 'fs' | 'net' | 'exec' | 'mcp';
 
 export interface Restriction {
     kind: RestrictKind;

@@ -1,309 +1,482 @@
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import {
-    DocumentHighlightKind, ErrorCodes, FoldingRangeKind, MarkupKind, ResponseError,
-    SemanticTokensBuilder, SymbolKind,
-    type DocumentHighlight, type FoldingRange, type Location, type Position, type Range,
-    type SemanticTokens, type SignatureHelp, type SymbolInformation, type WorkspaceEdit,
+    CompletionItemKind, CompletionTriggerKind, DiagnosticSeverity, DocumentHighlightKind, InsertTextFormat, MarkupKind, SymbolKind,
+    type CompletionContext, type CompletionItem, type Diagnostic, type DocumentHighlight, type DocumentSymbol, type Hover,
+    type Location, type Position, type Range, type SignatureHelp, type TextEdit, type WorkspaceEdit,
 } from 'vscode-languageserver/node';
-import type { Token } from '../../lang/src/lexer.js';
-import { ASK_MODIFIER_NAMES, MODIFIER_NAMES } from '../../lang/src/parser.js';
-import { builtins, keywords, modifiers, specialVariables } from './catalog';
-import { expressionTokens, nameAt, resolveBinding, tokenRange, type Analysis, type Binding, type NamedToken } from './features';
-import { blockquoteText, scanCodegen, scanControls } from './blockquoteFeatures';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import { compileCell } from '../../lang/src/cell.js';
+import { SplSyntaxError } from '../../lang/src/errors.js';
+import { missingImport } from '../../lang/src/imports.js';
+import { blockquoteText, controlCompletions, controlHelp, scanControls } from './blockquoteFeatures';
+import { callable, library, markers } from './catalog';
+import type { TypeScriptProject } from './typescriptService';
+import { analyzeWorkflow, blockquoteAt, codeBlockAt, type Marker, type WorkflowAnalysis } from './workflow';
 
-export const semanticTokenLegend = {
-    tokenTypes: ['variable', 'parameter', 'function', 'class', 'struct', 'enum', 'type', 'keyword', 'property', 'string', 'operator'],
-    tokenModifiers: ['declaration', 'readonly', 'defaultLibrary'],
+/** A workflow document together with its virtual TypeScript module. */
+export interface WorkflowContext {
+    analysis: WorkflowAnalysis;
+    project: TypeScriptProject;
+    /** Name of the virtual module in the project. */
+    file: string;
+    /** The virtual module text; fence positions equal document positions. */
+    virtual: TextDocument;
+}
+
+/**
+ * Analyzes a document and syncs its virtual module into the project. Returns undefined, and
+ * releases the previous module, when the document is not a workflow.
+ */
+export function workflowContext(document: TextDocument, project: TypeScriptProject, previous?: WorkflowContext): WorkflowContext | undefined {
+    const analysis = analyzeWorkflow(document);
+    if (!analysis.workflow) {
+        previous?.project.remove(previous.file);
+        return undefined;
+    }
+    const extension = analysis.language === 'ts' ? 'mts' : 'mjs';
+    let file = previous?.file;
+    if (!file || previous!.project !== project || !file.endsWith(extension)) {
+        previous?.project.remove(previous.file);
+        file = project.allocate(extension);
+    }
+    project.update(file, analysis.virtual);
+    return {
+        analysis, project, file,
+        virtual: TextDocument.create(`${document.uri}#code`, extension === 'mts' ? 'typescript' : 'javascript', document.version, analysis.virtual),
+    };
+}
+
+interface SharedBinding {
+    name: string;
+    kind: 'function' | 'type' | 'variable';
+    detail: string;
+    /** Where the name is declared: an offset in the virtual module, or another file. */
+    offset?: number;
+    external?: { file: string; offset: number };
+    marker?: Marker;
+}
+
+export interface CompletionData {
+    uri: string;
+    offset: number;
+    name: string;
+    source?: string;
+    entry?: ts.CompletionEntryData;
+}
+
+const TS_TRIGGERS = new Set(['.', '"', "'", '`', '/', '@', '<', '#', ' ']);
+const WORD = /[A-Za-z_$][\w$]*/g;
+
+const COMPLETION_KINDS: Partial<Record<ts.ScriptElementKind, CompletionItemKind>> = {
+    [ts.ScriptElementKind.functionElement]: CompletionItemKind.Function,
+    [ts.ScriptElementKind.localFunctionElement]: CompletionItemKind.Function,
+    [ts.ScriptElementKind.memberFunctionElement]: CompletionItemKind.Method,
+    [ts.ScriptElementKind.constructSignatureElement]: CompletionItemKind.Constructor,
+    [ts.ScriptElementKind.constructorImplementationElement]: CompletionItemKind.Constructor,
+    [ts.ScriptElementKind.constElement]: CompletionItemKind.Constant,
+    [ts.ScriptElementKind.letElement]: CompletionItemKind.Variable,
+    [ts.ScriptElementKind.variableElement]: CompletionItemKind.Variable,
+    [ts.ScriptElementKind.localVariableElement]: CompletionItemKind.Variable,
+    [ts.ScriptElementKind.parameterElement]: CompletionItemKind.Variable,
+    [ts.ScriptElementKind.alias]: CompletionItemKind.Variable,
+    [ts.ScriptElementKind.classElement]: CompletionItemKind.Class,
+    [ts.ScriptElementKind.localClassElement]: CompletionItemKind.Class,
+    [ts.ScriptElementKind.interfaceElement]: CompletionItemKind.Interface,
+    [ts.ScriptElementKind.typeElement]: CompletionItemKind.Interface,
+    [ts.ScriptElementKind.typeParameterElement]: CompletionItemKind.TypeParameter,
+    [ts.ScriptElementKind.enumElement]: CompletionItemKind.Enum,
+    [ts.ScriptElementKind.enumMemberElement]: CompletionItemKind.EnumMember,
+    [ts.ScriptElementKind.moduleElement]: CompletionItemKind.Module,
+    [ts.ScriptElementKind.externalModuleName]: CompletionItemKind.Module,
+    [ts.ScriptElementKind.memberVariableElement]: CompletionItemKind.Field,
+    [ts.ScriptElementKind.memberGetAccessorElement]: CompletionItemKind.Property,
+    [ts.ScriptElementKind.memberSetAccessorElement]: CompletionItemKind.Property,
+    [ts.ScriptElementKind.keyword]: CompletionItemKind.Keyword,
+    [ts.ScriptElementKind.string]: CompletionItemKind.Value,
+    [ts.ScriptElementKind.scriptElement]: CompletionItemKind.File,
+    [ts.ScriptElementKind.directory]: CompletionItemKind.Folder,
 };
 
-function occurrences(analysis: Analysis, binding: Binding): NamedToken[] {
-    return analysis.names.filter(token => resolveBinding(analysis, token) === binding);
+const SYMBOL_KINDS: Partial<Record<ts.ScriptElementKind, SymbolKind>> = {
+    [ts.ScriptElementKind.functionElement]: SymbolKind.Function,
+    [ts.ScriptElementKind.localFunctionElement]: SymbolKind.Function,
+    [ts.ScriptElementKind.memberFunctionElement]: SymbolKind.Method,
+    [ts.ScriptElementKind.constructorImplementationElement]: SymbolKind.Constructor,
+    [ts.ScriptElementKind.classElement]: SymbolKind.Class,
+    [ts.ScriptElementKind.localClassElement]: SymbolKind.Class,
+    [ts.ScriptElementKind.interfaceElement]: SymbolKind.Interface,
+    [ts.ScriptElementKind.typeElement]: SymbolKind.Interface,
+    [ts.ScriptElementKind.enumElement]: SymbolKind.Enum,
+    [ts.ScriptElementKind.constElement]: SymbolKind.Constant,
+    [ts.ScriptElementKind.memberVariableElement]: SymbolKind.Property,
+    [ts.ScriptElementKind.memberGetAccessorElement]: SymbolKind.Property,
+    [ts.ScriptElementKind.alias]: SymbolKind.Variable,
+};
+
+function span(document: TextDocument, start: number, length: number): Range {
+    return { start: document.positionAt(start), end: document.positionAt(start + length) };
 }
 
-function lexicalBinding(analysis: Analysis, position: Position): Binding | undefined {
-    const token = nameAt(analysis, position);
-    const binding = token && resolveBinding(analysis, token);
-    return binding?.property ? undefined : binding;
+function documentation(parts: ts.SymbolDisplayPart[] | undefined, tags: ts.JSDocTagInfo[] | undefined): string {
+    const text = ts.displayPartsToString(parts);
+    const extra = (tags ?? []).map(tag => `*@${tag.name}*${tag.text?.length ? ` ${ts.displayPartsToString(tag.text)}` : ''}`);
+    return [text, ...extra].filter(Boolean).join('\n\n');
 }
 
-export function references(analysis: Analysis, position: Position, includeDeclaration: boolean): Location[] {
-    const binding = lexicalBinding(analysis, position);
-    if (!binding) return [];
-    return occurrences(analysis, binding)
-        .filter(token => includeDeclaration || token !== binding.token)
-        .map(token => ({ uri: analysis.document.uri, range: tokenRange(token) }));
+/** The identifier around a position on its line, if any. */
+function wordAt(document: TextDocument, position: Position): { text: string; start: number } | undefined {
+    const line = document.getText({ start: { line: position.line, character: 0 }, end: { line: position.line + 1, character: 0 } });
+    for (const match of line.matchAll(WORD)) {
+        if (match.index <= position.character && position.character <= match.index + match[0].length) return { text: match[0], start: match.index };
+    }
+    return undefined;
 }
 
-export function documentHighlights(analysis: Analysis, position: Position): DocumentHighlight[] {
-    const binding = lexicalBinding(analysis, position);
-    if (!binding) return [];
-    return occurrences(analysis, binding).map(token => {
-        const index = analysis.tokens.indexOf(token);
-        const next = analysis.tokens[index + 1];
-        const write = token === binding.token || (index >= 0 && next?.type === 'op' &&
-            ['=', '+=', '-=', '*=', '/=', '//=', '%='].includes(next.value));
-        return { range: tokenRange(token), kind: write ? DocumentHighlightKind.Write : DocumentHighlightKind.Read };
+function markerAt(analysis: WorkflowAnalysis, position: Position): Marker | undefined {
+    return analysis.markers.find(marker => marker.line === position.line &&
+        position.character >= marker.character - 1 && position.character <= marker.character + marker.name.length);
+}
+
+/** Top-level bindings of the workflow: fence declarations, library globals and names saved by agents. */
+function sharedBindings(context: WorkflowContext, names?: ReadonlySet<string>): SharedBinding[] {
+    const program = context.project.service.getProgram();
+    const source = program?.getSourceFile(context.file);
+    if (!program || !source) return [];
+    const checker = program.getTypeChecker();
+    const bindings: SharedBinding[] = [];
+    for (const symbol of checker.getSymbolsInScope(source.endOfFileToken, ts.SymbolFlags.Value)) {
+        const name = symbol.getName();
+        if (names ? !names.has(name) : false) continue;
+        const declaration = symbol.declarations?.[0];
+        if (!declaration) continue;
+        const file = declaration.getSourceFile();
+        const own = file === source;
+        if (!own && !Object.hasOwn(library, name)) continue;
+        const identifier = ts.getNameOfDeclaration(declaration) ?? declaration;
+        const offset = identifier.getStart(file);
+        const type = checker.getTypeOfSymbolAtLocation(symbol, source.endOfFileToken);
+        const detail = checker.typeToString(type).slice(0, 400);
+        const schema = ['Type', 'StructType'].includes(type.getSymbol()?.getName() ?? '');
+        const ambient = own && offset >= context.analysis.mirrored ? context.analysis.ambient.find(item => item.name === name) : undefined;
+        bindings.push({
+            name, detail,
+            kind: schema ? 'type' : type.getCallSignatures().length || symbol.flags & ts.SymbolFlags.Function ? 'function' : 'variable',
+            ...(own ? { offset } : { external: { file: file.fileName, offset } }),
+            ...(ambient ? { marker: ambient.marker } : {}),
+        });
+    }
+    return bindings;
+}
+
+function bindingLocation(context: WorkflowContext, binding: SharedBinding): Location | undefined {
+    const uri = context.analysis.document.uri;
+    if (binding.marker) return { uri, range: { start: { line: binding.marker.line, character: binding.marker.character }, end: { line: binding.marker.line, character: binding.marker.character + binding.name.length } } };
+    if (binding.offset !== undefined) return { uri, range: span(context.virtual, binding.offset, binding.name.length) };
+    if (!binding.external) return undefined;
+    const start = context.project.position(binding.external.file, binding.external.offset);
+    return start && { uri: pathToFileURL(binding.external.file).href, range: { start, end: { line: start.line, character: start.character + binding.name.length } } };
+}
+
+// ---- diagnostics ------------------------------------------------------------
+
+export function diagnostics(context: WorkflowContext): Diagnostic[] {
+    const { analysis, project, file, virtual } = context;
+    const result = [...analysis.diagnostics];
+    for (const block of analysis.blocks) {
+        if (block.kind !== 'code' || block.language !== 'js') continue;
+        try {
+            for (const item of compileCell(block.text, { line: block.line }).imports) {
+                const missing = missingImport(project.base, item.specifier);
+                if (!missing) continue;
+                result.push({
+                    range: { start: { line: item.line - 1, character: item.column - 1 }, end: { line: item.line - 1, character: item.column - 1 + 'import'.length } },
+                    severity: DiagnosticSeverity.Error, source: 'spl',
+                    message: `cannot find module '${item.specifier}' (imports resolve against the working directory ${project.base})`,
+                });
+            }
+        } catch (error) {
+            if (!(error instanceof SplSyntaxError)) throw error;
+        }
+    }
+    const typed = analysis.blocks.filter(block => block.kind === 'code' && block.language === 'ts');
+    if (!typed.length) return result;
+    const severity: Record<ts.DiagnosticCategory, DiagnosticSeverity> = {
+        [ts.DiagnosticCategory.Error]: DiagnosticSeverity.Error, [ts.DiagnosticCategory.Warning]: DiagnosticSeverity.Warning,
+        [ts.DiagnosticCategory.Suggestion]: DiagnosticSeverity.Hint, [ts.DiagnosticCategory.Message]: DiagnosticSeverity.Information,
+    };
+    for (const item of [...project.service.getSyntacticDiagnostics(file), ...project.service.getSemanticDiagnostics(file)]) {
+        if (item.start === undefined || item.start >= analysis.mirrored) continue;
+        const range = span(virtual, item.start, item.length ?? 1);
+        if (!typed.some(block => range.start.line + 1 >= block.line && range.start.line + 1 <= block.endLine)) continue;
+        result.push({
+            range, severity: severity[item.category], source: 'ts', code: item.code,
+            message: ts.flattenDiagnosticMessageText(item.messageText, '\n'),
+        });
+    }
+    return result;
+}
+
+// ---- completion -------------------------------------------------------------
+
+function blockquoteCompletions(context: WorkflowContext, position: Position): CompletionItem[] {
+    const { analysis } = context;
+    const block = blockquoteAt(analysis, position)!;
+    const document = analysis.document;
+    const quote = blockquoteText(document, block);
+    const at = document.offsetAt(position) - quote.from;
+    const range = (from: number, to: number): Range => ({ start: document.positionAt(quote.from + from), end: document.positionAt(quote.from + to) });
+    const controls = controlCompletions(quote.text, at, range, analysis.model);
+    if (controls) return controls;
+    const before = quote.text.slice(0, at);
+    const schema = /(?<![\w@\\])@validate[ \t]*\[[ \t]*([A-Za-z_$][\w$]*)?$/i.exec(before);
+    const reference = /(?<![\w@\\])@([A-Za-z_$][\w$]*)?$/.exec(before);
+    if (!schema && !reference) return [];
+    const typed = schema?.[1] ?? reference?.[1] ?? '';
+    const replace = range(at - typed.length, at);
+    const start = document.offsetAt({ line: block.line - 1, character: 0 });
+    const items: CompletionItem[] = [];
+    for (const binding of sharedBindings(context)) {
+        if (schema && binding.kind !== 'type') continue;
+        const own = binding.offset !== undefined || binding.marker !== undefined;
+        // Fences below this blockquote have not run yet; agents can only use what exists.
+        if (binding.offset !== undefined && !binding.marker && binding.offset > start) continue;
+        if (!own && !callable.includes(binding.name)) continue;
+        items.push({
+            label: binding.name,
+            kind: binding.kind === 'function' ? CompletionItemKind.Function : binding.kind === 'type' ? CompletionItemKind.Struct : CompletionItemKind.Variable,
+            detail: own ? binding.detail : library[binding.name].signature,
+            ...(own ? {} : { documentation: library[binding.name].description }),
+            sortText: `${own ? '0' : '2'}${binding.name}`,
+            textEdit: { range: replace, newText: binding.name },
+        });
+    }
+    if (!schema) {
+        const opening = !before.slice(0, reference!.index).trim();
+        for (const [name, help] of Object.entries(markers)) {
+            if ((name === 'ctl' || name === 'codegen') && !opening && !(name === 'codegen' && scanControls(quote.text)?.closed)) continue;
+            items.push({
+                label: help.signature.slice(1).split(/[\s(['.]/)[0], kind: CompletionItemKind.Keyword,
+                detail: help.signature, documentation: help.description, sortText: `1${name}`,
+                insertTextFormat: InsertTextFormat.Snippet, textEdit: { range: replace, newText: help.insert },
+            });
+        }
+    }
+    return items;
+}
+
+export function completions(context: WorkflowContext, position: Position, trigger?: CompletionContext): CompletionItem[] {
+    const { analysis, project, file, virtual } = context;
+    if (blockquoteAt(analysis, position)) return blockquoteCompletions(context, position);
+    if (!codeBlockAt(analysis, position)) return [];
+    const character = trigger?.triggerKind === CompletionTriggerKind.TriggerCharacter ? trigger.triggerCharacter : undefined;
+    if (character && !TS_TRIGGERS.has(character)) return [];
+    const offset = virtual.offsetAt(position);
+    const info = project.service.getCompletionsAtPosition(file, offset, {
+        triggerCharacter: character as ts.CompletionsTriggerCharacter | undefined,
+        includeCompletionsWithInsertText: true, includeCompletionsForModuleExports: false,
+    });
+    if (!info) return [];
+    return info.entries.map((entry): CompletionItem => {
+        const replacement = entry.replacementSpan ?? info.optionalReplacementSpan;
+        const data: CompletionData = { uri: analysis.document.uri, offset, name: entry.name, source: entry.source, entry: entry.data };
+        return {
+            label: entry.name,
+            kind: COMPLETION_KINDS[entry.kind] ?? CompletionItemKind.Text,
+            sortText: entry.sortText,
+            ...(entry.isRecommended ? { preselect: true } : {}),
+            ...(entry.kindModifiers?.includes('deprecated') ? { tags: [1] } : {}),
+            ...(replacement && replacement.start < analysis.mirrored
+                ? { textEdit: { range: span(virtual, replacement.start, replacement.length), newText: entry.insertText ?? entry.name } }
+                : entry.insertText ? { insertText: entry.insertText } : {}),
+            data,
+        };
     });
 }
 
-export function prepareRename(analysis: Analysis, position: Position): { range: Range; placeholder: string } | undefined {
-    const token = nameAt(analysis, position);
-    if (!token || !lexicalBinding(analysis, position)) return undefined;
-    return { range: tokenRange(token), placeholder: token.value };
-}
-
-export function rename(analysis: Analysis, position: Position, newName: string): WorkspaceEdit {
-    const binding = lexicalBinding(analysis, position);
-    const invalid = (message: string): never => { throw new ResponseError(ErrorCodes.InvalidParams, message); };
-    if (!binding) return invalid('Only declared lexical SPL bindings can be renamed.');
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName) || Object.hasOwn(keywords, newName) ||
-        Object.hasOwn(builtins, newName)) {
-        return invalid('Use an SPL identifier that is not a keyword or built-in.');
-    }
-    if (newName !== binding.name) {
-        if (analysis.bindings.some(other => other !== binding && other.scope === binding.scope && other.name === newName)) {
-            return invalid(`Renaming to '${newName}' would conflict with another declaration.`);
-        }
-        const renamed = { binding, name: newName };
-        for (const token of analysis.names) {
-            const before = resolveBinding(analysis, token);
-            const after = resolveBinding(analysis, token, renamed, before === binding ? newName : token.value);
-            if (before !== after) return invalid(`Renaming to '${newName}' would capture or shadow another reference.`);
-        }
-    }
+export function resolveCompletion(context: WorkflowContext, item: CompletionItem): CompletionItem {
+    const data = item.data as CompletionData | undefined;
+    if (!data) return item;
+    const details = context.project.service.getCompletionEntryDetails(context.file, data.offset, data.name, {}, data.source, {}, data.entry);
+    if (!details) return item;
+    const text = documentation(details.documentation, details.tags);
     return {
-        documentChanges: [{
-            textDocument: { uri: analysis.document.uri, version: analysis.document.version },
-            edits: occurrences(analysis, binding).map(token => ({ range: tokenRange(token), newText: newName })),
-        }],
+        ...item,
+        detail: ts.displayPartsToString(details.displayParts),
+        ...(text ? { documentation: { kind: MarkupKind.Markdown, value: text } } : {}),
     };
 }
 
-function tokenOffset(analysis: Analysis, token: Token): number {
-    return analysis.document.offsetAt({ line: token.line - 1, character: token.col - 1 });
-}
+// ---- hover and signature help -------------------------------------------------
 
-interface Call {
-    name?: NamedToken;
-    open: Token;
-    commas: number;
-    declaration: boolean;
-    modifier: boolean;
-    argumentName?: string;
-    lambdaHeader?: boolean;
-}
-
-function signatureParameters(signature: string): { label: [number, number] }[] {
-    const start = signature.indexOf('(');
-    if (start < 0) return [];
-    const parameters: { label: [number, number] }[] = [];
-    let depth = 0;
-    let from = start + 1;
-    for (let i = from; i < signature.length; i++) {
-        const char = signature[i];
-        if ('(['.includes(char)) depth++;
-        else if (')]'.includes(char)) {
-            if (depth === 0) {
-                if (signature.slice(from, i).trim()) parameters.push({ label: [from, i] });
-                break;
-            }
-            depth--;
-        } else if (char === ',' && depth === 0) {
-            parameters.push({ label: [from, i] });
-            from = i + 1;
-            while (signature[from] === ' ') from++;
-        }
+export function hover(context: WorkflowContext, position: Position): Hover | null {
+    const { analysis, project, file, virtual } = context;
+    const code = (text: string, notes: string): Hover => ({
+        contents: { kind: MarkupKind.Markdown, value: `\`\`\`typescript\n${text}\n\`\`\`${notes ? `\n\n${notes}` : ''}` },
+    });
+    if (codeBlockAt(analysis, position)) {
+        const info = project.service.getQuickInfoAtPosition(file, virtual.offsetAt(position));
+        if (!info) return null;
+        return { ...code(ts.displayPartsToString(info.displayParts), documentation(info.documentation, info.tags)), range: span(virtual, info.textSpan.start, info.textSpan.length) };
     }
-    return parameters;
-}
-
-export function signatureHelp(analysis: Analysis, position: Position): SignatureHelp | undefined {
-    if (analysis.blocks && !analysis.blocks.some(block => block.kind === 'spl' &&
-        position.line >= block.line - 1 && position.line < block.endLine)) return undefined;
-    const at = analysis.document.offsetAt(position);
-    const tokens = expressionTokens(analysis);
-    const stack: Call[] = [];
-    for (let i = 0; i < tokens.length && tokenOffset(analysis, tokens[i]) < at; i++) {
-        const token = tokens[i];
-        if (token.type !== 'op') {
-            const call = stack.at(-1);
-            if (call && token.type === 'name' && token.value === 'lambda') call.lambdaHeader = true;
-            if (call && token.type === 'name' && call.argumentName === undefined) call.argumentName = token.value;
-            continue;
-        }
-        if (['(', '[', '{'].includes(token.value)) {
-            const previous = tokens[i - 1];
-            const before = tokens[i - 2];
-            const name = previous?.type === 'name' && !(before?.type === 'op' && before.value === '.') ? previous : undefined;
-            stack.push({
-                open: token, name, commas: 0,
-                declaration: before?.type === 'name' && before.value === 'def',
-                modifier: !!name && ['ask', 'think', 'agent'].includes(name.value),
-            });
-        } else if ([')', ']', '}'].includes(token.value)) {
-            stack.pop();
-        } else if (token.value === ':') {
-            const call = stack.at(-1);
-            if (call) call.lambdaHeader = false;
-        } else if (token.value === ',') {
-            const call = stack.at(-1);
-            if (call && !call.lambdaHeader) { call.commas++; call.argumentName = undefined; }
-        }
-    }
-    const call = stack.at(-1);
-    if (!call?.name || call.declaration || call.open.type !== 'op' || call.open.value !== '(') return undefined;
-    const token = call.name;
-    const binding = resolveBinding(analysis, token);
-    if (binding && binding.kind !== SymbolKind.Function) return undefined;
-    const help = binding ? { signature: binding.signature, description: 'Function in the current document.' } :
-        builtins[token.value] ?? (call.modifier ? { signature: `${token.value}(${(token.value === 'ask' ? ASK_MODIFIER_NAMES : MODIFIER_NAMES)
-            .map(name => `${name}=...`).join(', ')}) 'prompt'`,
-            description: keywords[token.value] } : undefined);
-    if (!help) return undefined;
-    // Built-in overloads use " / " so division in a parameter description is not split.
-    const labels = help.signature.split(' / ');
-    const signatures = labels.filter(label => label.includes('(')).map(label => ({
-        label, parameters: signatureParameters(label),
-        documentation: { kind: MarkupKind.Markdown, value: help.description },
-    }));
-    if (!signatures.length) return undefined;
-    const activeSignature = Math.max(0, signatures.findIndex(signature => signature.parameters.length > call.commas));
-    const signature = signatures[activeSignature];
-    const modifierIndex = call.modifier && call.argumentName
-        ? signature.parameters.findIndex(parameter => signature.label.slice(...parameter.label).startsWith(`${call.argumentName}=`))
-        : -1;
-    return {
-        signatures, activeSignature,
-        activeParameter: modifierIndex >= 0 ? modifierIndex : Math.min(call.commas, Math.max(0, signature.parameters.length - 1)),
-    };
-}
-
-export function foldingRanges(analysis: Analysis): FoldingRange[] {
-    const result: FoldingRange[] = [];
-    const seen = new Set<string>();
-    const add = (startLine: number, endLine: number, kind?: FoldingRangeKind) => {
-        const key = `${startLine}:${endLine}`;
-        if (endLine > startLine && !seen.has(key)) {
-            result.push({ startLine, endLine, ...(kind ? { kind } : {}) });
-            seen.add(key);
-        }
-    };
-    const indents: number[] = [];
-    const brackets: Token[] = [];
-    for (let i = 0; i < analysis.tokens.length; i++) {
-        const token = analysis.tokens[i];
-        if (token.type === 'indent') {
-            let header = i - 1;
-            while (analysis.tokens[header]?.type === 'nl') header--;
-            indents.push((analysis.tokens[header]?.line ?? token.line - 1) - 1);
-        }
-        else if (token.type === 'dedent') {
-            const start = indents.pop();
-            let next = i + 1;
-            while (analysis.tokens[next]?.type === 'dedent') next++;
-            const eof = analysis.tokens[next]?.type === 'eof';
-            if (start !== undefined) add(start, token.line - (eof && token.col > 1 ? 1 : 2));
-        } else if (token.type === 'op' && ['(', '['].includes(token.value)) brackets.push(token);
-        else if (token.type === 'op' && [')', ']'].includes(token.value)) {
-            const open = brackets.pop();
-            if (open) add(open.line - 1, token.line - 1);
-        } else if (token.type === 'str') {
-            const next = analysis.tokens[i + 1];
-            if (next && next.line > token.line) {
-                const text = analysis.document.getText().slice(tokenOffset(analysis, token), tokenOffset(analysis, next));
-                const last = text.trimEnd().split(/\r?\n/).length - 1;
-                add(token.line - 1, token.line - 1 + last);
-            }
-        }
-    }
-    for (const block of analysis.blocks ?? []) {
-        if (block.kind === 'spl') add(block.line - 2, block.endLine);
-        else add(block.line - 1, block.endLine - 1);
-    }
-    return result.sort((a, b) => a.startLine - b.startLine || b.endLine - a.endLine);
-}
-
-export function semanticTokens(analysis: Analysis): SemanticTokens {
-    const builder = new SemanticTokensBuilder();
-    const entries: { line: number; character: number; length: number; type: string; flags: number }[] = [];
-    const names = [...analysis.names].sort((a, b) => a.line - b.line || a.col - b.col);
-    const kind = (binding: Binding): string => binding.signature.startsWith('parameter ') ? 'parameter' :
-        binding.kind === SymbolKind.Function ? 'function' : binding.kind === SymbolKind.Enum ? 'enum' :
-        binding.kind === SymbolKind.Struct ? 'struct' : binding.kind === SymbolKind.Class ? 'class' :
-        binding.kind === SymbolKind.TypeParameter ? 'type' : 'variable';
-    const codeTokens = expressionTokens(analysis);
-    const locations = new Map(codeTokens.map((token, index) => [`${token.line}:${token.col}`, index]));
-    let previous = '';
-    for (const token of names) {
-        const location = `${token.line}:${token.col}`;
-        if (location === previous) continue;
-        previous = location;
-        const binding = resolveBinding(analysis, token);
-        let type: string | undefined;
-        let flags = 0;
-        if (binding) {
-            type = binding.property ? 'property' : kind(binding);
-            if (binding.token === token) flags |= 1;
-        } else if (Object.hasOwn(specialVariables, token.value)) {
-            type = 'variable'; flags = 2 | 4;
-        } else {
-            const index = locations.get(location);
-            const next = index === undefined ? undefined : codeTokens[index + 1];
-            if (next?.type === 'op' && next.value === '=' && Object.hasOwn(modifiers, token.value)) type = 'property';
-            else if (['bool', 'int', 'float', 'str', 'char', 'list', 'fn', 'unknown'].includes(token.value)) {
-                type = 'type'; flags = 4;
-            }             else if (token.value === 'type' && next?.type === 'name') type = 'keyword';
-            else if (Object.hasOwn(keywords, token.value) && token.value !== 'type') type = 'keyword';
-            else if (Object.hasOwn(builtins, token.value)) { type = 'function'; flags = 4; }
-            else if (index === undefined) type = 'variable';
-        }
-        if (type) {
-            const range = tokenRange(token);
-            entries.push({ ...range.start, length: token.value.length, type, flags });
-        }
-    }
-    for (const block of analysis.blocks ?? []) {
-        if (block.kind !== 'natural') continue;
+    const block = blockquoteAt(analysis, position);
+    if (!block) return null;
+    const marker = markerAt(analysis, position);
+    if (!marker) {
         const quote = blockquoteText(analysis.document, block);
-        const tokens = [...scanControls(quote.text)?.tokens ?? [], ...scanCodegen(quote.text) ?? []];
-        for (const [index, token] of tokens.entries()) {
-            const next = tokens[index + 1];
-            const type = token.kind === 'marker' ? 'keyword' :
-                (token.kind === 'name' || token.kind === 'string') &&
-                    next?.kind === 'punctuation' && ['=', ':'].includes(next.value) ? 'property' :
-                token.kind === 'string' ? 'string' : token.kind === 'punctuation' ? 'operator' : undefined;
-            if (!type) continue;
-            const start = analysis.document.positionAt(quote.from + token.from);
-            const end = analysis.document.positionAt(quote.from + token.to);
-            for (let line = start.line; line <= end.line; line++) {
-                const lineText = analysis.document.getText({
-                    start: { line, character: 0 }, end: { line: line + 1, character: 0 },
-                }).replace(/\r?\n$/, '');
-                const prefix = /^ {0,3}(?:>[ \t]?)+/.exec(lineText)?.[0].length ?? 0;
-                const character = Math.max(prefix, line === start.line ? start.character : 0);
-                const length = (line === end.line ? end.character : lineText.length) - character;
-                if (length > 0) entries.push({ line, character, length, type, flags: 0 });
-            }
-        }
+        const at = analysis.document.offsetAt(position) - quote.from;
+        const token = scanControls(quote.text)?.tokens.find(token => token.kind === 'name' && token.from <= at && at <= token.to);
+        const help = token && Object.hasOwn(controlHelp, token.value) ? controlHelp[token.value as keyof typeof controlHelp] : undefined;
+        return help ? { contents: { kind: MarkupKind.Markdown, value: `\`${help.signature}\`\n\n${help.description}` } } : null;
     }
-    entries.sort((a, b) => a.line - b.line || a.character - b.character);
-    for (const entry of entries) {
-        builder.push(entry.line, entry.character, entry.length, semanticTokenLegend.tokenTypes.indexOf(entry.type), entry.flags);
+    const range = { start: { line: marker.line, character: marker.character - 1 }, end: { line: marker.line, character: marker.character + marker.name.length } };
+    const binding = sharedBindings(context, new Set([marker.name]))[0];
+    if (binding && (binding.offset !== undefined || binding.marker)) {
+        if (binding.marker) return { ...code(`let ${binding.name}: ${binding.detail}`, 'Saved by a blockquote agent.'), range };
+        const info = project.service.getQuickInfoAtPosition(file, binding.offset!);
+        if (info) return { ...code(ts.displayPartsToString(info.displayParts), documentation(info.documentation, info.tags)), range };
     }
-    return builder.build();
+    const fixed = Object.hasOwn(markers, marker.name.toLowerCase()) ? markers[marker.name.toLowerCase()] : undefined;
+    const help = fixed ?? (Object.hasOwn(library, marker.name) ? library[marker.name] : undefined);
+    return help ? { contents: { kind: MarkupKind.Markdown, value: `\`${help.signature}\`\n\n${help.description}` }, range } : null;
 }
 
-export function workspaceSymbols(analyses: Iterable<Analysis>, query: string): SymbolInformation[] {
-    const result: SymbolInformation[] = [];
-    for (const analysis of analyses) {
-        for (const binding of analysis.bindings) {
-            if (binding.signature.startsWith('parameter ') || !binding.name.toLowerCase().includes(query.toLowerCase())) continue;
-            const parent = analysis.bindings.find(candidate => candidate.functionScope === binding.scope);
-            result.push({
-                name: binding.name, kind: binding.kind,
-                location: { uri: analysis.document.uri, range: tokenRange(binding.token) },
-                ...(parent ? { containerName: parent.name } : {}),
+export function signatureHelp(context: WorkflowContext, position: Position): SignatureHelp | null {
+    if (!codeBlockAt(context.analysis, position)) return null;
+    const help = context.project.service.getSignatureHelpItems(context.file, context.virtual.offsetAt(position), {});
+    if (!help) return null;
+    return {
+        activeSignature: help.selectedItemIndex,
+        activeParameter: help.argumentIndex,
+        signatures: help.items.map(item => {
+            const parameters = item.parameters.map(parameter => ts.displayPartsToString(parameter.displayParts));
+            const text = documentation(item.documentation, item.tags);
+            return {
+                label: ts.displayPartsToString(item.prefixDisplayParts) + parameters.join(ts.displayPartsToString(item.separatorDisplayParts))
+                    + ts.displayPartsToString(item.suffixDisplayParts),
+                ...(text ? { documentation: { kind: MarkupKind.Markdown, value: text } } : {}),
+                parameters: item.parameters.map((parameter, index) => {
+                    const note = ts.displayPartsToString(parameter.documentation);
+                    return { label: parameters[index], ...(note ? { documentation: note } : {}) };
+                }),
+            };
+        }),
+    };
+}
+
+// ---- navigation --------------------------------------------------------------
+
+/** Maps a span of the program to an editor location; generated declarations point at their blockquote marker. */
+function location(context: WorkflowContext, file: string, start: number, length: number): Location | undefined {
+    const { analysis, project, virtual } = context;
+    if (project.same(file, context.file)) {
+        if (start < analysis.mirrored) return { uri: analysis.document.uri, range: span(virtual, start, length) };
+        const ambient = analysis.ambient.find(item => item.offset === start);
+        return ambient && {
+            uri: analysis.document.uri,
+            range: { start: { line: ambient.marker.line, character: ambient.marker.character }, end: { line: ambient.marker.line, character: ambient.marker.character + ambient.name.length } },
+        };
+    }
+    if (project.owns(file)) return undefined;
+    const from = project.position(file, start);
+    const to = project.position(file, start + length);
+    return from && to ? { uri: pathToFileURL(file).href, range: { start: from, end: to } } : undefined;
+}
+
+/** The offset in the virtual module a position stands for: code as is, markers through their declaration. */
+function target(context: WorkflowContext, position: Position): { offset: number; name?: string; binding?: SharedBinding } | undefined {
+    if (codeBlockAt(context.analysis, position)) {
+        return { offset: context.virtual.offsetAt(position), name: wordAt(context.virtual, position)?.text };
+    }
+    const marker = markerAt(context.analysis, position);
+    if (!marker) return undefined;
+    const binding = sharedBindings(context, new Set([marker.name]))[0];
+    if (!binding) return undefined;
+    const ambient = context.analysis.ambient.find(item => item.name === marker.name);
+    const offset = ambient?.offset ?? binding.offset;
+    return offset === undefined ? { offset: -1, name: marker.name, binding } : { offset, name: marker.name, binding };
+}
+
+export function definition(context: WorkflowContext, position: Position): Location[] {
+    const at = target(context, position);
+    if (!at) return [];
+    if (at.binding) {
+        const found = bindingLocation(context, at.binding);
+        return found ? [found] : [];
+    }
+    return (context.project.service.getDefinitionAtPosition(context.file, at.offset) ?? [])
+        .flatMap(item => location(context, item.fileName, item.textSpan.start, item.textSpan.length) ?? []);
+}
+
+/** Every use of the binding at a position: code references plus `@name` markers of shared bindings. */
+function occurrences(context: WorkflowContext, position: Position): { range: Range; write: boolean }[] {
+    const { analysis, project, file, virtual } = context;
+    const at = target(context, position);
+    if (!at || at.offset < 0) return [];
+    const found: { range: Range; write: boolean }[] = [];
+    // Only top-level bindings are visible to blockquotes; a local of the same name is not.
+    const top = at.name ? sharedBindings(context, new Set([at.name]))[0] : undefined;
+    let shared = at.binding !== undefined;
+    for (const group of project.service.findReferences(file, at.offset) ?? []) {
+        if (!project.same(group.definition.fileName, file)) continue;
+        shared ||= top?.offset === group.definition.textSpan.start;
+        for (const reference of group.references) {
+            if (!project.same(reference.fileName, file) || reference.textSpan.start >= analysis.mirrored) continue;
+            found.push({ range: span(virtual, reference.textSpan.start, reference.textSpan.length), write: reference.isWriteAccess });
+        }
+    }
+    if (shared && at.name) {
+        for (const marker of analysis.markers) {
+            if (marker.name !== at.name) continue;
+            found.push({
+                range: { start: { line: marker.line, character: marker.character }, end: { line: marker.line, character: marker.character + marker.name.length } },
+                write: marker.output,
             });
         }
     }
-    return result;
+    return found.sort((a, b) => a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character);
+}
+
+export function references(context: WorkflowContext, position: Position): Location[] {
+    return occurrences(context, position).map(item => ({ uri: context.analysis.document.uri, range: item.range }));
+}
+
+export function documentHighlights(context: WorkflowContext, position: Position): DocumentHighlight[] {
+    return occurrences(context, position).map(item => ({ range: item.range, kind: item.write ? DocumentHighlightKind.Write : DocumentHighlightKind.Read }));
+}
+
+export function prepareRename(context: WorkflowContext, position: Position): { range: Range; placeholder: string } | null {
+    const at = target(context, position);
+    if (!at || at.offset < 0) return null;
+    const info = context.project.service.getRenameInfo(context.file, at.offset, {});
+    if (!info.canRename) return null;
+    // Only names declared by this workflow can change: not the library, imports or other files.
+    const definitions = context.project.service.getDefinitionAtPosition(context.file, at.offset) ?? [];
+    if (!definitions.length || definitions.some(item => !context.project.same(item.fileName, context.file))) return null;
+    const marker = markerAt(context.analysis, position);
+    const range = marker
+        ? { start: { line: marker.line, character: marker.character }, end: { line: marker.line, character: marker.character + marker.name.length } }
+        : span(context.virtual, info.triggerSpan.start, info.triggerSpan.length);
+    return { range, placeholder: info.displayName };
+}
+
+export function rename(context: WorkflowContext, position: Position, newName: string): WorkspaceEdit | null {
+    if (!/^[A-Za-z_$][\w$]*$/.test(newName) || !prepareRename(context, position)) return null;
+    const edits: TextEdit[] = occurrences(context, position).map(item => ({ range: item.range, newText: newName }));
+    return edits.length ? { changes: { [context.analysis.document.uri]: edits } } : null;
+}
+
+export function documentSymbols(context: WorkflowContext): DocumentSymbol[] {
+    const { analysis, virtual } = context;
+    const convert = (item: ts.NavigationTree): DocumentSymbol | undefined => {
+        const whole = item.spans[0];
+        if (!whole || whole.start >= analysis.mirrored || !item.text || item.text.startsWith('<')) return undefined;
+        const range = span(virtual, whole.start, whole.length);
+        return {
+            name: item.text, kind: SYMBOL_KINDS[item.kind] ?? SymbolKind.Variable, range,
+            selectionRange: item.nameSpan ? span(virtual, item.nameSpan.start, item.nameSpan.length) : range,
+            children: (item.childItems ?? []).flatMap(child => convert(child) ?? []),
+        };
+    };
+    return (context.project.service.getNavigationTree(context.file).childItems ?? []).flatMap(item => convert(item) ?? []);
 }

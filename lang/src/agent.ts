@@ -1,8 +1,7 @@
 import type { RuntimeAction, RuntimeTool } from './llm.js';
+import { Failure } from './errors.js';
 import { TOOL_SPECS } from './tools.js';
 import { compileSchema } from './schema.js';
-import { isReservedName } from './parser.js';
-import { fromJson, isDict, isFunction, runtimeError, type Value } from './values.js';
 
 const name = { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_]*$' };
 const text = { type: 'string', minLength: 1 };
@@ -11,11 +10,11 @@ const tool = (name: string, description: string, properties: Record<string, unkn
 });
 
 export const AGENT_TOOLS: readonly RuntimeTool[] = [
-    tool('load_variable', 'Read a shared variable, or read-only $args. Type descriptors return their complete JSON Schema, including nested types.', { name: text }),
-    tool('save_variable', 'Create or update a shared variable with a JSON value. Optional schema accepts a shared type/schema name or an inline JSON Schema. Type names validate and decode values, including hydratable classes.', {
+    tool('load_variable', 'Read a shared variable, or the read-only CLI arguments with the name args. Types return their complete JSON Schema, including nested types and annotations.', { name: text }),
+    tool('save_variable', 'Create or update a shared variable with a JSON value. Optional schema accepts a shared type/schema name or an inline JSON Schema. Type names validate and parse values, including classes.', {
         name, value: {}, schema: { anyOf: [text, { type: 'object' }, { type: 'boolean' }] },
     }, ['name', 'value']),
-    tool('call_function', 'Invoke an existing SPL function or builtin with positional JSON arguments. Annotated parameters decode according to their declared types; send numbers, not numeric strings.', { name, args: { type: 'array', items: {} } }),
+    tool('call_function', 'Invoke an existing JavaScript function or library function with positional JSON arguments. Send numbers, not numeric strings.', { name, args: { type: 'array', items: {} } }),
     tool('get_env', 'Read one environment variable. Missing variables return null.', { name: text }),
     tool('ask_human', 'Ask a human a question and return their answer.', { question: text }),
     tool('success', 'End the whole document successfully with a JSON value.', { value: {} }),
@@ -30,27 +29,37 @@ export const AGENT_TOOLS: readonly RuntimeTool[] = [
     ...Object.values(TOOL_SPECS).map(spec => tool(spec.name, spec.description, spec.properties, spec.required)),
 ];
 
-const validators = new Map(AGENT_TOOLS.map(spec => [spec.name, compileSchema(fromJson(spec.parameters))]));
+const validators = new Map(AGENT_TOOLS.map(spec => [spec.name, compileSchema(spec.parameters)]));
+
+const RESERVED = new Set([
+    'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'else', 'enum',
+    'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'implements', 'import', 'in', 'instanceof', 'interface',
+    'let', 'new', 'null', 'package', 'private', 'protected', 'public', 'return', 'static', 'super', 'switch', 'this', 'throw',
+    'true', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'arguments', 'eval', 'undefined',
+]);
+
+/** JavaScript words that can never name a shared binding. */
+export function isReservedName(name: string): boolean {
+    return RESERVED.has(name);
+}
 
 export function isRuntimeAction(value: unknown): value is RuntimeAction {
     return typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string'
         && 'arguments' in value && typeof value.arguments === 'object' && value.arguments !== null && !Array.isArray(value.arguments);
 }
 
-export function actionArguments(action: RuntimeAction): Record<string, Value> {
+export function actionArguments(action: RuntimeAction): Record<string, unknown> {
     const validate = validators.get(action.name);
-    if (!validate) throw runtimeError(`unknown blockquote tool '${action.name}'`);
-    const value = fromJson(action.arguments);
+    if (!validate) throw new Failure('runtime_error', `unknown blockquote tool '${action.name}'`);
+    const value: Record<string, unknown> = structuredClone(action.arguments);
     validate(value);
-    const check = (v: Value): void => {
-        if (isFunction(v)) throw runtimeError('runtime tool arguments must not contain function values');
-        if (typeof v === 'number' && !Number.isFinite(v)) throw runtimeError('runtime tool arguments must contain finite JSON numbers');
-        if (v && typeof v === 'object') for (const child of Object.values(v)) check(child);
+    const check = (item: unknown): void => {
+        if (typeof item === 'number' && !Number.isFinite(item)) throw new Failure('runtime_error', 'runtime tool arguments must contain finite JSON numbers');
+        if (item && typeof item === 'object') for (const child of Object.values(item)) check(child);
     };
     check(value);
-    if (!isDict(value)) throw runtimeError('runtime tool arguments must be an object');
     if ((action.name === 'save_variable' || action.name === 'call_function') && typeof value.name === 'string' && isReservedName(value.name)) {
-        throw runtimeError(`'${value.name}' is a reserved word and cannot be used as a binding`);
+        throw new Failure('runtime_error', `'${value.name}' is a reserved word and cannot be used as a binding`);
     }
     return value;
 }

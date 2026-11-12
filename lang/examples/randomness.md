@@ -6,18 +6,17 @@ model: 'gpt-6-luna'
 
 # Randomness Controls
 
-This document shows how to limit randomness in LLM prompts with `ask` sampling modifiers.
+This document shows how to limit randomness in LLM prompts with `ask` sampling options.
 Sampling is best-effort and does not guarantee identical responses.
 
-```spl
-let recipe1 = ask(seed=13, temperature=0.0, top_p=0.0001, tokens=1024) \
-                '<most-frequent>give a recipe for an apple pie</most-frequent>';
+```js
+const sampling = { seed: 13, temperature: 0, topP: 0.0001, tokens: 1024 };
+const prompt = '<most-frequent>give a recipe for an apple pie</most-frequent>';
 
-let recipe2 = ask(seed=13, temperature=0.0, top_p=0.0001, tokens=1024) \
-                '<most-frequent>give a recipe for an apple pie</most-frequent>';
+const recipe1 = await ask(prompt, sampling);
+const recipe2 = await ask(prompt, sampling);
 
-if ask(schema=bool) 'Is {recipe1} and {recipe2} semantically similar at least in 95%?':
-    success 'It works'
-else:
-    fail 'Not similar'
+const similar = await ask(`Is ${recipe1} and ${recipe2} semantically similar at least in 95%?`, { schema: bool });
+if (!similar) fail('Not similar');
+success('It works');
 ```

@@ -4,14 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Every example is a runnable document in lang/examples. Run them from the lang
-folder, for example spl examples/hi.md. Each example&#39;s header shows its arguments.">
+folder, for example spl examples/hi.md: relative paths and imports resolve against the working
+directory. Each example&#39;s header shows its arguments.">
 <meta name="color-scheme" content="light dark">
 <title>Examples - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=f87de69cf3fa">
-<link rel="stylesheet" href="assets/style.css?v=f87de69cf3fa">
+<link rel="icon" type="image/png" href="assets/icon.png?v=6bad2bd86bcd">
+<link rel="stylesheet" href="assets/style.css?v=6bad2bd86bcd">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=f87de69cf3fa"></script>
-<script defer src="assets/site.js?v=f87de69cf3fa"></script>
+<script defer src="assets/search-index.js?v=6bad2bd86bcd"></script>
+<script defer src="assets/site.js?v=6bad2bd86bcd"></script>
 </head>
 <body data-page="examples">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -23,13 +24,14 @@ folder, for example spl examples/hi.md. Each example&#39;s header shows its argu
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.17.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Examples</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Examples</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>Guides</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Examples</span><span class="reading-time">5 min read</span></div>
+    <div class="page-meta"><span>Guides</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Examples</span><span class="reading-time">6 min read</span></div>
     <header class="page-heading"><h1>Examples</h1><div class="lead"><p>Every example is a runnable document in <a href="https://github.com/dgawlik/semantic-prompt-language/tree/HEAD/lang/examples">lang/examples</a>. Run them from the <code>lang</code>
-folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header shows its arguments.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#getting-started">Getting started</a></li><li class="toc-level-2"><a href="#developer-workflows">Developer workflows</a></li><li class="toc-level-2"><a href="#data-and-documents">Data and documents</a></li><li class="toc-level-2"><a href="#agents-state-and-people">Agents, state and people</a></li><li class="toc-level-2"><a href="#extract-an-invoice">Extract an invoice</a></li><li class="toc-level-2"><a href="#triage-issues">Triage issues</a></li></ul></nav></details>
+folder, for example <code>spl examples/hi.md</code>: relative paths and imports resolve against the working
+directory. Each example&#39;s header shows its arguments.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#getting-started">Getting started</a></li><li class="toc-level-2"><a href="#no-model-required">No model required</a></li><li class="toc-level-2"><a href="#developer-workflows">Developer workflows</a></li><li class="toc-level-2"><a href="#data-and-documents">Data and documents</a></li><li class="toc-level-2"><a href="#agents-state-and-people">Agents, state and people</a></li><li class="toc-level-2"><a href="#extract-an-invoice">Extract an invoice</a></li><li class="toc-level-2"><a href="#triage-issues">Triage issues</a></li><li class="toc-level-2"><a href="#plain-javascript">Plain JavaScript</a></li></ul></nav></details>
     <article class="prose"><h2 id="getting-started">Getting started<a class="heading-anchor" href="#getting-started" aria-label="Link to Getting started">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Getting started reference table"><table>
 <thead>
@@ -40,23 +42,58 @@ folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header s
 </thead>
 <tbody><tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/hi.md">hi.md</a></td>
-<td>Hydrated class schemas, shared variables, an assertion and a restricted JSON projection</td>
+<td>A struct schema with one repair, a blockquote saving a shared variable, the Markdown builder</td>
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/basics.md">basics.md</a></td>
-<td>Checking a model&#39;s answer against exact code; grouped guidance with <code>@CTL(enforce=..., forbid=...)</code></td>
+<td>Agents calling JavaScript functions, checking a model&#39;s answer against exact code, <code>@CTL(enforce=..., forbid=...)</code></td>
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/is-friday.md">is-friday.md</a></td>
-<td>Branching on a JSON answer</td>
+<td>Branching on a boolean answer</td>
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/env.md">env.md</a></td>
-<td>Reading <code>$env</code> and <code>--arg</code> values</td>
+<td>Reading <code>env</code> and <code>args</code> in code, <code>@env.NAME</code> in a blockquote</td>
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/color-poem.md">color-poem.md</a></td>
-<td>Asking a person directly in plain language, or supplying <code>--human blue --human apple</code></td>
+<td>Asking a person in plain language, or supplying <code>--human blue --human apple</code></td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="no-model-required">No model required<a class="heading-anchor" href="#no-model-required" aria-label="Link to No model required">#</a></h2>
+<p>These run offline, without credentials.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="No model required reference table"><table>
+<thead>
+<tr>
+<th scope="col">Example</th>
+<th scope="col">Shows</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/typed-data.md">typed-data.md</a></td>
+<td>Enums, aliases, exact structs, nullable fields, unions, classes with methods, validation and JSON Schema output</td>
+</tr>
+<tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/markdown.md">markdown.md</a></td>
+<td>The Markdown builder</td>
+</tr>
+<tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/deterministic/node.md">deterministic/node.md</a></td>
+<td>Plain JavaScript with Node.js built-ins and top-level <code>await</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/deterministic/enumsStructs.md">deterministic/enumsStructs.md</a></td>
+<td><code>parse</code> and <code>is</code> on enums and structs</td>
+</tr>
+<tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/deterministic/types.md">deterministic/types.md</a></td>
+<td>Named types, annotations and their JSON Schema</td>
+</tr>
+<tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/imports/run.md">imports/run.md</a></td>
+<td>Importing a local <code>.js</code> module and <code>node:os</code></td>
 </tr>
 </tbody></table>
 </div>
@@ -70,7 +107,7 @@ folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header s
 </thead>
 <tbody><tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/code-review.md">code-review.md</a></td>
-<td>A review that fails CI on high-severity findings</td>
+<td>A restricted review agent, typed findings and a run that fails CI on high-severity findings</td>
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/release-notes.md">release-notes.md</a></td>
@@ -78,7 +115,15 @@ folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header s
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/triage-issues.md">triage-issues.md</a></td>
-<td>Enums and a named typed-list schema; labeling GitHub issues with <code>gh</code> after human approval</td>
+<td>Enums and a named list type; labeling GitHub issues with <code>gh</code> after human approval</td>
+</tr>
+<tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/codegen.md">codegen.md</a></td>
+<td>Generating functions with <code>@CODEGEN</code> and <code>codegen()</code>, cached with <code>--trace</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/repo.md">repo.md</a></td>
+<td>An agent auditing the repository, with plain code deciding the outcome</td>
 </tr>
 </tbody></table>
 </div>
@@ -95,8 +140,8 @@ folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header s
 <td>Struct schemas and a <code>Money</code> alias with integer-cent arithmetic</td>
 </tr>
 <tr>
-<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/typed-data.md">typed-data.md</a></td>
-<td>Primitives, aliases, unions, validation, guarded lists, structs, classes, callable fields and deep projection without a model</td>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/types.md">types.md</a></td>
+<td>Unions and a class type as model output</td>
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/translate-docs.md">translate-docs.md</a></td>
@@ -109,6 +154,10 @@ folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header s
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/web-digest.md">web-digest.md</a></td>
 <td>Web research with restricted fetches and checked citations</td>
+</tr>
+<tr>
+<td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/randomness.md">randomness.md</a></td>
+<td>Sampling options on <code>ask</code></td>
 </tr>
 </tbody></table>
 </div>
@@ -130,13 +179,13 @@ folder, for example <code>spl examples/hi.md</code>. Each example&#39;s header s
 </tr>
 <tr>
 <td><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/human-review.md">human-review.md</a></td>
-<td>Asking for review directly, with optional append-only trace resumption</td>
+<td>Asking for review directly, with optional trace resumption</td>
 </tr>
 </tbody></table>
 </div>
 <h2 id="extract-an-invoice">Extract an invoice<a class="heading-anchor" href="#extract-an-invoice" aria-label="Link to Extract an invoice">#</a></h2>
-<p>The struct schema checks the shape of the answer; a reusable <code>Money</code> alias keeps arithmetic
-in signed-64-bit integer cents. Metadata such as <code>minimum=0</code> is model advice, not a constraint;
+<p>The struct schema checks the shape of the answer; a reusable <code>Money</code> alias documents that amounts
+are integer cents. Annotations such as <code>minimum: 0</code> are advice for the model, not constraints;
 plain arithmetic checks that the numbers add up.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">extract-invoice.md</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy extract-invoice.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="extract-invoice.md code example"><code class="language-markdown" data-file="extract-invoice.md" id="code-1">---
 extension: &#x27;semantic-prompt-language&#x27;
@@ -152,52 +201,47 @@ produce valid JSON with wrong totals.
 
 <span class="hljs-code">    spl examples/extract-invoice.md --arg ./examples/data/invoice.txt
 </span>
-<span class="hljs-meta">```spl</span><span class="language-spl">
-<span class="hljs-keyword">let</span> path <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;./examples/data/invoice.txt&#x27;</span>
-<span class="hljs-keyword">if</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>] <span class="hljs-operator">!=</span> <span class="hljs-literal">None</span>:
-    path <span class="hljs-operator">=</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]
-<span class="hljs-keyword">let</span> document <span class="hljs-operator">=</span> <span class="hljs-built_in">read_file</span>(path)
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">const</span> path = args[<span class="hljs-number">0</span>] ?? <span class="hljs-string">&#x27;./examples/data/invoice.txt&#x27;</span>;
+<span class="hljs-keyword">const</span> text = <span class="hljs-keyword">await</span> <span class="hljs-title function_">readFile</span>(path);
 
-<span class="hljs-keyword">type</span> <span class="hljs-title class_">Money</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">int</span> [minimum<span class="hljs-operator">=</span><span class="hljs-number">0</span>, desc<span class="hljs-operator">=</span><span class="hljs-string">&#x27;Monetary amount in cents&#x27;</span>]
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Money</span> = <span class="hljs-title function_">typedef</span>(<span class="hljs-string">&#x27;Money&#x27;</span>, int, { <span class="hljs-attr">minimum</span>: <span class="hljs-number">0</span>, <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;Monetary amount in cents&#x27;</span> });
 
-<span class="hljs-keyword">struct</span> <span class="hljs-title class_">LineItem</span>:
-    description: <span class="hljs-built_in">str</span>
-    quantity: <span class="hljs-built_in">int</span> [minimum <span class="hljs-operator">=</span> <span class="hljs-number">1</span>]
-    unit_price: Money
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">LineItem</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;LineItem&#x27;</span>, {
+    <span class="hljs-attr">description</span>: str,
+    <span class="hljs-attr">quantity</span>: int.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">minimum</span>: <span class="hljs-number">1</span> }),
+    <span class="hljs-attr">unit_price</span>: <span class="hljs-title class_">Money</span>,
+});
 
-<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Invoice</span>:
-    vendor: <span class="hljs-built_in">str</span> [minLength <span class="hljs-operator">=</span> <span class="hljs-number">1</span>]
-    number: <span class="hljs-built_in">str</span> [minLength <span class="hljs-operator">=</span> <span class="hljs-number">1</span>]
-    date: <span class="hljs-built_in">str</span> [pattern <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$&#x27;</span>]
-    currency: <span class="hljs-built_in">str</span> [pattern <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;^[A-Z]{{3}}$&#x27;</span>]
-    lines: <span class="hljs-built_in">list</span>[LineItem]
-    subtotal: Money
-    tax: Money
-    total: Money
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Invoice</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Invoice&#x27;</span>, {
+    <span class="hljs-attr">vendor</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">minLength</span>: <span class="hljs-number">1</span> }),
+    <span class="hljs-attr">number</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">minLength</span>: <span class="hljs-number">1</span> }),
+    <span class="hljs-attr">date</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">pattern</span>: <span class="hljs-string">&#x27;^[0-9]{4}-[0-9]{2}-[0-9]{2}$&#x27;</span> }),
+    <span class="hljs-attr">currency</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">pattern</span>: <span class="hljs-string">&#x27;^[A-Z]{3}$&#x27;</span> }),
+    <span class="hljs-attr">lines</span>: <span class="hljs-title function_">list</span>(<span class="hljs-title class_">LineItem</span>),
+    <span class="hljs-attr">subtotal</span>: <span class="hljs-title class_">Money</span>,
+    <span class="hljs-attr">tax</span>: <span class="hljs-title class_">Money</span>,
+    <span class="hljs-attr">total</span>: <span class="hljs-title class_">Money</span>,
+});
 </span><span class="hljs-meta">```</span>
 
 <span class="hljs-quote">&gt; <span class="hljs-keyword">@CTL</span>(<span class="hljs-attr">forbid</span>=&#x27;filling in values that are not printed on the invoice&#x27;)</span>
 <span class="hljs-quote">&gt;</span>
-<span class="hljs-quote">&gt; Extract the invoice in <span class="hljs-variable">@document</span>. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,</span>
+<span class="hljs-quote">&gt; Extract the invoice in <span class="hljs-variable">@text</span>. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,</span>
 <span class="hljs-quote">&gt; and there is one entry per line item. Convert printed monetary amounts to integer cents</span>
 <span class="hljs-quote">&gt; (for example, 12.50 becomes 1250). <span class="hljs-keyword">@validate</span>[Invoice] save to <span class="hljs-variable">@invoice</span></span>
 
-<span class="hljs-meta">```spl</span><span class="language-spl">
-<span class="hljs-keyword">if</span> <span class="hljs-built_in">isinstance</span>(invoice, Invoice):
-    <span class="hljs-keyword">let</span> computed: Money <span class="hljs-operator">=</span> <span class="hljs-number">0</span>
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">const</span> computed = invoice.<span class="hljs-property">lines</span>.<span class="hljs-title function_">reduce</span>(<span class="hljs-function">(<span class="hljs-params">sum, line</span>) =&gt;</span> sum + line.<span class="hljs-property">quantity</span> * line.<span class="hljs-property">unit_price</span>, <span class="hljs-number">0</span>);
 
-    <span class="hljs-keyword">for</span> line <span class="hljs-keyword">in</span> invoice.lines:
-        computed <span class="hljs-operator">+=</span> line.quantity <span class="hljs-operator">*</span> line.unit_price
+<span class="hljs-title function_">assert</span>(computed === invoice.<span class="hljs-property">subtotal</span>,
+    <span class="hljs-string">`line items add up to <span class="hljs-subst">${computed}</span> cents but the subtotal is <span class="hljs-subst">${invoice.subtotal}</span> cents`</span>);
+<span class="hljs-title function_">assert</span>(invoice.<span class="hljs-property">subtotal</span> + invoice.<span class="hljs-property">tax</span> === invoice.<span class="hljs-property">total</span>,
+    <span class="hljs-string">`subtotal <span class="hljs-subst">${invoice.subtotal}</span> + tax <span class="hljs-subst">${invoice.tax}</span> does not equal total <span class="hljs-subst">${invoice.total}</span> cents`</span>);
 
-    <span class="hljs-keyword">assert</span> computed <span class="hljs-operator">==</span> invoice.subtotal \
-    <span class="hljs-string">&quot;line items add up to <span class="hljs-subst">{computed}</span> cents but the subtotal is <span class="hljs-subst">{invoice.subtotal}</span> cents&quot;</span>
-
-    <span class="hljs-keyword">assert</span> invoice.subtotal <span class="hljs-operator">+</span> invoice.tax <span class="hljs-operator">==</span> invoice.total \
-    <span class="hljs-string">&quot;subtotal <span class="hljs-subst">{invoice.subtotal}</span> + tax <span class="hljs-subst">{invoice.tax}</span> does not equal total <span class="hljs-subst">{invoice.total}</span> cents&quot;</span>
-
-    <span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./out/invoices&#x27;</span>:
-        <span class="hljs-built_in">write_file</span>(<span class="hljs-string">&#x27;./out/invoices/<span class="hljs-subst">{invoice.number}</span>.json&#x27;</span>, <span class="hljs-built_in">json_stringify</span>(invoice, <span class="hljs-number">2</span>))
-    <span class="hljs-keyword">success</span> invoice
+<span class="hljs-keyword">await</span> <span class="hljs-title function_">restrict</span>(<span class="hljs-string">&#x27;./out/invoices&#x27;</span>, <span class="hljs-function">() =&gt;</span>
+    <span class="hljs-title function_">writeFile</span>(<span class="hljs-string">`./out/invoices/<span class="hljs-subst">${invoice.number}</span>.json`</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(invoice, <span class="hljs-literal">null</span>, <span class="hljs-number">2</span>)));
+<span class="hljs-title function_">success</span>(invoice);
 </span><span class="hljs-meta">```</span>
 </code></pre></figure>
 <h2 id="triage-issues">Triage issues<a class="heading-anchor" href="#triage-issues" aria-label="Link to Triage issues">#</a></h2>
@@ -213,32 +257,27 @@ version: 1
 Classifies open issues without labels and applies the labels only after a human approves
 the plan. Needs an authenticated <span class="hljs-code">`gh`</span> CLI. Pass <span class="hljs-code">`--arg owner/repo`</span> to target another repository.
 Enums constrain labels and priorities; a named list alias lets the agent save the
-whole batch with typed decoding. Field metadata is advice, so code checks nonempty reasons.
+whole batch with typed decoding. Field annotations are advice, so code checks nonempty reasons.
 
 <span class="hljs-code">    spl examples/triage-issues.md --arg owner/repo
 </span>
-<span class="hljs-meta">```spl</span><span class="language-spl">
-<span class="hljs-keyword">let</span> repo <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
-<span class="hljs-keyword">if</span> <span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>] <span class="hljs-operator">!=</span> <span class="hljs-literal">None</span>:
-    repo <span class="hljs-operator">=</span> <span class="hljs-string">&quot;--repo <span class="hljs-subst">{<span class="hljs-variable">$args</span>[<span class="hljs-number">0</span>]}</span>&quot;</span>
-<span class="hljs-keyword">let</span> issues <span class="hljs-operator">=</span> []
-<span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;gh&#x27;</span>:
-    issues <span class="hljs-operator">=</span> <span class="hljs-built_in">json_parse</span>(<span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;gh issue list <span class="hljs-subst">{repo}</span> --state open --search &quot;no:label&quot; --limit 20 --json number,title,body&#x27;</span>))
-<span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(issues) <span class="hljs-operator">==</span> <span class="hljs-number">0</span>:
-    <span class="hljs-keyword">success</span> <span class="hljs-string">&#x27;No unlabeled issues&#x27;</span>
-<span class="hljs-keyword">let</span> LABELS <span class="hljs-operator">=</span> [<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;enhancement&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>, <span class="hljs-string">&#x27;documentation&#x27;</span>]
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">const</span> repo = args[<span class="hljs-number">0</span>] ? <span class="hljs-string">`--repo <span class="hljs-subst">${args[<span class="hljs-number">0</span>]}</span>`</span> : <span class="hljs-string">&#x27;&#x27;</span>;
 
-<span class="hljs-keyword">enum</span> <span class="hljs-title class_">Labels</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;bug&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;enhancement&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;question&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;documentation&#x27;</span>
+<span class="hljs-keyword">const</span> issues = <span class="hljs-keyword">await</span> <span class="hljs-title function_">restrict</span>({ <span class="hljs-attr">exec</span>: <span class="hljs-string">&#x27;gh&#x27;</span> }, <span class="hljs-title function_">async</span> () =&gt; <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">parse</span>(
+    <span class="hljs-keyword">await</span> <span class="hljs-title function_">shell</span>(<span class="hljs-string">`gh issue list <span class="hljs-subst">${repo}</span> --state open --search &quot;no:label&quot; --limit 20 --json number,title,body`</span>)));
+<span class="hljs-keyword">if</span> (issues.<span class="hljs-property">length</span> === <span class="hljs-number">0</span>) <span class="hljs-title function_">success</span>(<span class="hljs-string">&#x27;No unlabeled issues&#x27;</span>);
 
-<span class="hljs-keyword">enum</span> <span class="hljs-title class_">Priority</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;low&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;medium&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;high&#x27;</span>
+<span class="hljs-keyword">const</span> <span class="hljs-variable constant_">LABELS</span> = [<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;enhancement&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>, <span class="hljs-string">&#x27;documentation&#x27;</span>];
 
-<span class="hljs-keyword">hydratable</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Plan</span>:
-    number: <span class="hljs-built_in">int</span>
-    label: Labels
-    priority: Priority
-    reason: <span class="hljs-built_in">str</span> [minLength <span class="hljs-operator">=</span> <span class="hljs-number">1</span>]
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Plan</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Plan&#x27;</span>, {
+    <span class="hljs-attr">number</span>: int,
+    <span class="hljs-attr">label</span>: <span class="hljs-title function_">enumOf</span>(...<span class="hljs-variable constant_">LABELS</span>),
+    <span class="hljs-attr">priority</span>: <span class="hljs-title function_">enumOf</span>(<span class="hljs-string">&#x27;low&#x27;</span>, <span class="hljs-string">&#x27;medium&#x27;</span>, <span class="hljs-string">&#x27;high&#x27;</span>),
+    <span class="hljs-attr">reason</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">minLength</span>: <span class="hljs-number">1</span> }),
+});
 
-<span class="hljs-keyword">type</span> <span class="hljs-title class_">TriagePlan</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>[Plan]
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">TriagePlan</span> = <span class="hljs-title function_">typedef</span>(<span class="hljs-string">&#x27;TriagePlan&#x27;</span>, <span class="hljs-title function_">list</span>(<span class="hljs-title class_">Plan</span>));
 </span><span class="hljs-meta">```</span>
 
 <span class="hljs-quote">&gt; <span class="hljs-keyword">@CTL</span>(<span class="hljs-attr">forbid</span>=&#x27;judging an issue by its title alone when the body says otherwise&#x27;)</span>
@@ -247,39 +286,64 @@ whole batch with typed decoding. Field metadata is advice, so code checks nonemp
 <span class="hljs-quote">&gt; Crashes, data loss and security problems are high priority.</span>
 <span class="hljs-quote">&gt; <span class="hljs-keyword">@validate</span>[TriagePlan] save to <span class="hljs-variable">@plan</span></span>
 
-<span class="hljs-meta">```spl</span><span class="language-spl">
-<span class="hljs-keyword">let</span> numbers <span class="hljs-operator">=</span> []
-<span class="hljs-keyword">for</span> issue <span class="hljs-keyword">in</span> issues:
-    numbers.append(issue.number)
-<span class="hljs-keyword">let</span> planned <span class="hljs-operator">=</span> []
-<span class="hljs-keyword">for</span> p <span class="hljs-keyword">in</span> plan:
-    planned.append(p.number)
-<span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(plan) <span class="hljs-operator">==</span> <span class="hljs-built_in">len</span>(issues) <span class="hljs-string">&quot;expected <span class="hljs-subst">{<span class="hljs-built_in">len</span>(issues)}</span> decisions, got <span class="hljs-subst">{<span class="hljs-built_in">len</span>(plan)}</span>&quot;</span>
-<span class="hljs-keyword">let</span> table <span class="hljs-operator">=</span> []
-<span class="hljs-keyword">for</span> p <span class="hljs-keyword">in</span> plan:
-    <span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(p.reason.strip()) <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span> <span class="hljs-string">&quot;issue #<span class="hljs-subst">{p.number}</span> needs a reason&quot;</span>
-    <span class="hljs-keyword">assert</span> p.number <span class="hljs-keyword">in</span> numbers <span class="hljs-string">&quot;issue #<span class="hljs-subst">{p.number}</span> is not part of this batch&quot;</span>
-    <span class="hljs-keyword">assert</span> planned.count(p.number) <span class="hljs-operator">==</span> <span class="hljs-number">1</span> <span class="hljs-string">&quot;issue #<span class="hljs-subst">{p.number}</span> was classified twice&quot;</span>
-    table.append(<span class="hljs-string">&quot;#<span class="hljs-subst">{p.number}</span> -&gt; <span class="hljs-subst">{p.label}</span> (<span class="hljs-subst">{p.priority}</span>): <span class="hljs-subst">{p.reason}</span>&quot;</span>)
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">const</span> numbers = issues.<span class="hljs-title function_">map</span>(<span class="hljs-function"><span class="hljs-params">issue</span> =&gt;</span> issue.<span class="hljs-property">number</span>);
+<span class="hljs-title function_">assert</span>(plan.<span class="hljs-property">length</span> === issues.<span class="hljs-property">length</span>, <span class="hljs-string">`expected <span class="hljs-subst">${issues.length}</span> decisions, got <span class="hljs-subst">${plan.length}</span>`</span>);
+
+<span class="hljs-keyword">const</span> table = plan.<span class="hljs-title function_">map</span>(<span class="hljs-function"><span class="hljs-params">item</span> =&gt;</span> {
+    <span class="hljs-title function_">assert</span>(item.<span class="hljs-property">reason</span>.<span class="hljs-title function_">trim</span>().<span class="hljs-property">length</span> &gt; <span class="hljs-number">0</span>, <span class="hljs-string">`issue #<span class="hljs-subst">${item.number}</span> needs a reason`</span>);
+    <span class="hljs-title function_">assert</span>(numbers.<span class="hljs-title function_">includes</span>(item.<span class="hljs-property">number</span>), <span class="hljs-string">`issue #<span class="hljs-subst">${item.number}</span> is not part of this batch`</span>);
+    <span class="hljs-title function_">assert</span>(plan.<span class="hljs-title function_">filter</span>(<span class="hljs-function"><span class="hljs-params">other</span> =&gt;</span> other.<span class="hljs-property">number</span> === item.<span class="hljs-property">number</span>).<span class="hljs-property">length</span> === <span class="hljs-number">1</span>, <span class="hljs-string">`issue #<span class="hljs-subst">${item.number}</span> was classified twice`</span>);
+    <span class="hljs-keyword">return</span> <span class="hljs-string">`#<span class="hljs-subst">${item.number}</span> -&gt; <span class="hljs-subst">${item.label}</span> (<span class="hljs-subst">${item.priority}</span>): <span class="hljs-subst">${item.reason}</span>`</span>;
+});
 </span><span class="hljs-meta">```</span>
 
 <span class="hljs-quote">&gt; Show the <span class="hljs-variable">@table</span> lines and ask the human &quot;Apply these labels? (yes/no)&quot;. Save the answer to <span class="hljs-variable">@approved</span></span>
 
-<span class="hljs-meta">```spl</span><span class="language-spl">
-<span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> approved.strip().lower().startswith(<span class="hljs-string">&#x27;y&#x27;</span>):
-    <span class="hljs-keyword">fail</span> <span class="hljs-string">&#x27;Labels were not applied&#x27;</span>
-<span class="hljs-keyword">restrict</span> exec <span class="hljs-string">&#x27;gh&#x27;</span>:
-    <span class="hljs-keyword">for</span> p <span class="hljs-keyword">in</span> plan:
-        <span class="hljs-built_in">shell</span>(<span class="hljs-string">&#x27;gh issue edit <span class="hljs-subst">{p.number}</span> <span class="hljs-subst">{repo}</span> --add-label <span class="hljs-subst">{p.label}</span>&#x27;</span>)
-<span class="hljs-keyword">success</span> table
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">if</span> (!approved.<span class="hljs-title function_">trim</span>().<span class="hljs-title function_">toLowerCase</span>().<span class="hljs-title function_">startsWith</span>(<span class="hljs-string">&#x27;y&#x27;</span>)) <span class="hljs-title function_">fail</span>(<span class="hljs-string">&#x27;Labels were not applied&#x27;</span>);
+
+<span class="hljs-keyword">await</span> <span class="hljs-title function_">restrict</span>({ <span class="hljs-attr">exec</span>: <span class="hljs-string">&#x27;gh&#x27;</span> }, <span class="hljs-title function_">async</span> () =&gt; {
+    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> item <span class="hljs-keyword">of</span> plan) <span class="hljs-keyword">await</span> <span class="hljs-title function_">shell</span>(<span class="hljs-string">`gh issue edit <span class="hljs-subst">${item.number}</span> <span class="hljs-subst">${repo}</span> --add-label <span class="hljs-subst">${item.label}</span>`</span>);
+});
+<span class="hljs-title function_">success</span>(table);
+</span><span class="hljs-meta">```</span>
+</code></pre></figure>
+<h2 id="plain-javascript">Plain JavaScript<a class="heading-anchor" href="#plain-javascript" aria-label="Link to Plain JavaScript">#</a></h2>
+<p>No model is involved here: the workflow imports Node.js built-ins, declares a function and ends
+with a JSON result.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">deterministic/node.md</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy deterministic/node.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="deterministic/node.md code example"><code class="language-markdown" data-file="deterministic/node.md" id="code-3">---
+extension: &#x27;semantic-prompt-language&#x27;
+<span class="hljs-section">version: 1
+---</span>
+
+<span class="hljs-section"># Plain JavaScript and the Node.js standard library</span>
+
+Fences are native JavaScript: top-level <span class="hljs-code">`await`</span>, imports and every Node.js built-in work as usual.
+
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">import</span> path <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:path&#x27;</span>;
+<span class="hljs-keyword">import</span> { createHash } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:crypto&#x27;</span>;
+<span class="hljs-keyword">import</span> { <span class="hljs-built_in">setTimeout</span> <span class="hljs-keyword">as</span> sleep } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:timers/promises&#x27;</span>;
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">fib</span>(<span class="hljs-params">n</span>) {
+    <span class="hljs-keyword">return</span> n &lt; <span class="hljs-number">2</span> ? <span class="hljs-number">1</span> : <span class="hljs-title function_">fib</span>(n - <span class="hljs-number">1</span>) + <span class="hljs-title function_">fib</span>(n - <span class="hljs-number">2</span>);
+}
+
+<span class="hljs-keyword">const</span> evens = <span class="hljs-title class_">Array</span>.<span class="hljs-title function_">from</span>({ <span class="hljs-attr">length</span>: <span class="hljs-number">5</span> }, <span class="hljs-function">(<span class="hljs-params">_, index</span>) =&gt;</span> index * <span class="hljs-number">2</span>);
+<span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> [index, n] <span class="hljs-keyword">of</span> evens.<span class="hljs-title function_">entries</span>()) <span class="hljs-title function_">log</span>(<span class="hljs-string">`<span class="hljs-subst">${index}</span> = <span class="hljs-subst">${n}</span>`</span>);
+
+<span class="hljs-keyword">await</span> <span class="hljs-title function_">sleep</span>(<span class="hljs-number">10</span>);
+<span class="hljs-keyword">const</span> digest = <span class="hljs-title function_">createHash</span>(<span class="hljs-string">&#x27;sha256&#x27;</span>).<span class="hljs-title function_">update</span>(<span class="hljs-title class_">String</span>(<span class="hljs-title function_">fib</span>(<span class="hljs-number">10</span>))).<span class="hljs-title function_">digest</span>(<span class="hljs-string">&#x27;hex&#x27;</span>).<span class="hljs-title function_">slice</span>(<span class="hljs-number">0</span>, <span class="hljs-number">8</span>);
+<span class="hljs-title function_">success</span>({ <span class="hljs-attr">fib</span>: <span class="hljs-title function_">fib</span>(<span class="hljs-number">10</span>), evens, digest, <span class="hljs-attr">file</span>: path.<span class="hljs-title function_">basename</span>(<span class="hljs-keyword">import</span>.<span class="hljs-property">meta</span>.<span class="hljs-property">filename</span>) });
 </span><span class="hljs-meta">```</span>
 </code></pre></figure>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Examples.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
-    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="grammar.html"><span>Previous</span><strong>Grammar</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="migration.html"><span>Next</span><strong>Typing migration</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="reference.html"><span>Previous</span><strong>API reference</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="migration.html"><span>Next</span><strong>Migrating from 1.x</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#getting-started">Getting started</a></li><li class="toc-level-2"><a href="#developer-workflows">Developer workflows</a></li><li class="toc-level-2"><a href="#data-and-documents">Data and documents</a></li><li class="toc-level-2"><a href="#agents-state-and-people">Agents, state and people</a></li><li class="toc-level-2"><a href="#extract-an-invoice">Extract an invoice</a></li><li class="toc-level-2"><a href="#triage-issues">Triage issues</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#getting-started">Getting started</a></li><li class="toc-level-2"><a href="#no-model-required">No model required</a></li><li class="toc-level-2"><a href="#developer-workflows">Developer workflows</a></li><li class="toc-level-2"><a href="#data-and-documents">Data and documents</a></li><li class="toc-level-2"><a href="#agents-state-and-people">Agents, state and people</a></li><li class="toc-level-2"><a href="#extract-an-invoice">Extract an invoice</a></li><li class="toc-level-2"><a href="#triage-issues">Triage issues</a></li><li class="toc-level-2"><a href="#plain-javascript">Plain JavaScript</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

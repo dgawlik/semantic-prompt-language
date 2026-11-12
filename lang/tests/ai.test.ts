@@ -1,18 +1,17 @@
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AGENT_TOOLS } from '../src/agent.js';
 import type { ModelStreamPart, ModelCallOptions, ToolOutput } from '../src/ai-native.js';
 import { AiBackend, reasoningOptions } from '../src/ai.js';
 import { CopilotBackend } from '../src/copilot.js';
+import { Failure, SuccessSignal } from '../src/errors.js';
+import type { LlmRequest, LlmStreamUpdate } from '../src/llm.js';
+import type { ModelStreamEvent } from '../src/log-events.js';
 import { Logger } from '../src/logger.js';
 import { makeRestriction, Restrictions } from '../src/restrict.js';
 import { TOOL_SPECS, ToolHost } from '../src/tools.js';
-import { AGENT_TOOLS } from '../src/agent.js';
-import type { LlmRequest, LlmStreamUpdate } from '../src/llm.js';
-import { run } from '../src/interpreter.js';
-import { parseMarkdown } from '../src/markdown.js';
-import { Failure, SuccessSignal } from '../src/errors.js';
+import { cleanTemp, collecting, exec, execMarkdown, fence, tempDir, text as body } from './helpers.js';
 
 const sdk = vi.hoisted(() => ({
     model: vi.fn(),
@@ -52,13 +51,13 @@ const client = () => ({
         { name: 'search', description: 'Search', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
         { name: 'write', inputSchema: { type: 'object', properties: {} } },
     ] })),
-    callTool: vi.fn(async () => ({ content: [{ type: 'text', text: 'Verified documentation' }] })),
+    callTool: vi.fn(async (): Promise<Record<string, unknown>> => ({ content: [{ type: 'text', text: 'Verified documentation' }] })),
     close: vi.fn(async () => {}),
 });
 
 beforeEach(() => {
     vi.clearAllMocks();
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'spl-ai-'));
+    cwd = tempDir('spl-ai-');
     vi.stubEnv('SPL_HOME', path.join(cwd, 'home'));
     vi.stubEnv('OPENAI_API_KEY', 'test-openai-key');
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-anthropic-key');
@@ -102,7 +101,7 @@ beforeEach(() => {
 afterEach(async () => {
     await backend.close();
     vi.unstubAllEnvs();
-    fs.rmSync(cwd, { recursive: true, force: true });
+    cleanTemp();
 });
 
 it('retains the old backend import as an alias, not a second implementation', () => {
@@ -210,22 +209,6 @@ it('denies a tool attempt during generation even when the provider ignores the e
 it('exposes exactly the runtime tool set for explicit agents', async () => {
     await backend.call(request({ kind: 'agent' }));
     expect(requests[0].tools?.map(tool => tool.name).sort()).toEqual(Object.keys(TOOL_SPECS).sort());
-});
-
-it('executes a factorial instruction and saves the real function result in the same conversation', async () => {
-    steps = [[call('call_function', { name: 'factorial', args: [15] }), finish('tool-calls')],
-        [call('save_variable', { name: 'fact15', value: 1307674368000 }), finish('tool-calls')],
-        [...text(''), finish()]];
-    const result = await run(parseMarkdown([
-        '---', 'extension: semantic-prompt-language', 'version: 1', '---', '',
-        '```spl', 'def factorial(n):', '    if n == 0:', '        return 1', '    return n * factorial(n - 1)', '```', '',
-        '> Invoke @factorial with 15 as argument -> @fact15', '',
-        '```spl', 'success fact15', '```',
-    ].join('\n')), { cwd, backend, logger: new Logger('silent') });
-    expect(result).toEqual({ status: 'success', value: 1307674368000, hasValue: true });
-    expect(requests).toHaveLength(3);
-    expect(JSON.stringify(requests[1].prompt)).toContain('1307674368000');
-    expect(requests[0].tools?.map(tool => tool.name)).toEqual(AGENT_TOOLS.map(tool => tool.name));
 });
 
 it('serializes multiple actions requested together and supplies actual results to the next step', async () => {
@@ -435,4 +418,168 @@ it('routes provider warnings through the SPL logger instead of leaking global SD
         warn.mockRestore();
         emit.mockRestore();
     }
+});
+
+describe('workflows on the provider backend', () => {
+    const logger = new Logger('silent');
+    const factorial = fence('function factorial(n) {\n    return n === 0 ? 1 : n * factorial(n - 1);\n}');
+
+    it('executes a factorial instruction and saves the real function result in the same conversation', async () => {
+        steps = [[call('call_function', { name: 'factorial', args: [15] }), finish('tool-calls')],
+            [call('save_variable', { name: 'fact15', value: 1307674368000 }), finish('tool-calls')],
+            [...text(''), finish()]];
+        const result = await execMarkdown(`${factorial}\n\n> Invoke @factorial with 15 as argument -> @fact15\n\n${fence('success(fact15);')}`, { cwd, backend, logger });
+        expect(result).toEqual({ status: 'success', value: 1307674368000, hasValue: true });
+        expect(requests).toHaveLength(3);
+        expect(JSON.stringify(requests[1].prompt)).toContain('1307674368000');
+        expect(requests[0].tools?.map(tool => tool.name)).toEqual(AGENT_TOOLS.map(tool => tool.name));
+        expect(requests[0].prompt[0]).toMatchObject({ role: 'user', content: [{ text: expect.stringContaining('Blockquote:\nInvoke @factorial with 15 as argument -> @fact15') }] });
+    });
+
+    it('gives a blockquote agent types, async functions and schema-checked saves through runtime tools', async () => {
+        steps = [[call('load_variable', { name: 'Review' }), finish('tool-calls')],
+            [call('call_function', { name: 'grade', args: ['four'] }), finish('tool-calls')],
+            [call('save_variable', { name: 'review', value: { score: 4 }, schema: 'Review' }), finish('tool-calls')],
+            [...text('Saved the review.'), finish()]];
+        const result = await execMarkdown(`${fence("const Review = struct('Review', { score: int.describe('Characters') }).methods({ stars() { return '*'.repeat(this.score); } });\nasync function grade(text) { await 0; return text.length; }")}
+
+> Grade the word and save a @Review to @review
+
+${fence('success(review.stars());')}`, { cwd, backend, logger });
+        expect(result).toMatchObject({ status: 'success', value: '****' });
+        expect(JSON.stringify(requests[1].prompt)).toContain('"description":"Characters"'.replaceAll('"', '\\"'));
+        expect(JSON.stringify(requests[2].prompt)).toContain('{"value":4}'.replaceAll('"', '\\"'));
+        expect(JSON.stringify(requests[3].prompt)).toContain('{"value":{"score":4}}'.replaceAll('"', '\\"'));
+    });
+
+    it('keeps the failure of a workflow function, aborts the model turn and never runs a later action', async () => {
+        steps = [[call('call_function', { name: 'explode', args: [] }), call('save_variable', { name: 'later', value: 1 }), finish('tool-calls')],
+            [...text('unreachable'), finish()]];
+        const result = await execMarkdown(`${fence('function explode() {\n    null.x;\n}')}\n\n> Call @explode\n\n${fence('success(typeof later);')}`, { cwd, backend, logger });
+        expect(result).toMatchObject({ status: 'failure', failure: {
+            status_code: 'runtime_error', reason: expect.stringContaining('TypeError'), line: 8, command: 'null.x;',
+        } });
+        expect(requests).toHaveLength(1);
+        expect(requests[0].abortSignal.aborted).toBe(true);
+    });
+
+    it('rejects a schema-invalid save as validation_failed without retrying the model', async () => {
+        steps = [[call('save_variable', { name: 'rating', value: 0, schema: { type: 'integer', minimum: 1 } }), finish('tool-calls')],
+            [...text('unreachable'), finish()]];
+        expect(await execMarkdown('> Save a rating to @rating', { cwd, backend, logger })).toMatchObject({
+            status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringMatching(/must be >= 1/), line: 6 },
+        });
+        expect(requests).toHaveLength(1);
+    });
+
+    it('ends the document as soon as a blockquote agent calls success', async () => {
+        steps = [[call('success', { value: { ok: true } }), call('save_variable', { name: 'later', value: 1 }), finish('tool-calls')]];
+        expect(await execMarkdown(`> Finish with @success\n\n${fence("fail('unreachable');")}`, { cwd, backend, logger }))
+            .toEqual({ status: 'success', value: { ok: true }, hasValue: true });
+        expect(requests).toHaveLength(1);
+        expect(requests[0].abortSignal.aborted).toBe(true);
+    });
+
+    it('answers ask_human and get_env actions from the run, and returns their results to the model', async () => {
+        vi.stubEnv('SPL_AI_TEST_VALUE', 'from-env');
+        steps = [[call('ask_human', { question: 'Proceed?' }), call('get_env', { name: 'SPL_AI_TEST_VALUE' }), finish('tool-calls')],
+            [...text('Asked.'), finish()]];
+        const questions: string[] = [];
+        expect(await execMarkdown('> Ask whether to proceed', { cwd, backend, logger, human: question => { questions.push(question); return 'yes'; } }))
+            .toMatchObject({ status: 'success' });
+        expect(questions).toEqual(['Proceed?']);
+        const results = JSON.stringify(requests[1].prompt);
+        expect(results).toContain('{"value":"yes"}'.replaceAll('"', '\\"'));
+        expect(results).toContain('{"value":"from-env"}'.replaceAll('"', '\\"'));
+    });
+
+    it('runs agent() file tools inside the working directory and stops on a restriction violation', async () => {
+        fs.writeFileSync(path.join(cwd, 'secret.txt'), 'top secret');
+        steps = [[call('write_file', { path: './out/note.txt', content: 'written' }), finish('tool-calls')], [...text('Wrote it'), finish()],
+            [call('read_file', { path: './out/missing.txt' }), finish('tool-calls')], [...text('Not found'), finish()],
+            [call('read_file', { path: './secret.txt' }), finish('tool-calls')], [...text('unreachable'), finish()]];
+        const result = await exec(`
+const reports = await restrict('./out', async () => [await agent('Write the note'), await agent('Read a missing file')]);
+let blocked;
+try {
+    await restrict('./out', () => agent('Read the secret'));
+} catch (error) {
+    blocked = [error.statusCode, error.reason.includes('secret.txt')];
+}
+success([reports, blocked, await readFile('./out/note.txt')]);`, { cwd, backend, logger });
+        expect(result).toMatchObject({ status: 'success', value: [['Wrote it', 'Not found'], ['restriction_violation', true], 'written'] });
+        expect(requests).toHaveLength(5);
+        expect(requests[0].tools.map(tool => tool.name)).toEqual(Object.keys(TOOL_SPECS));
+        expect(requests[0].prompt[0]).toMatchObject({ content: [{ text: expect.stringContaining(`File system: you may read and write only inside: ${path.join(cwd, 'out')}.`) }] });
+        expect(JSON.stringify(requests[3].prompt)).toContain('missing.txt');
+        expect(steps).toHaveLength(1);
+    });
+
+    it('forwards per-call model, reasoning, token and sampling options, and reports the effective settings', async () => {
+        steps = [[...text('one'), finish()], [...text('two'), finish()], [...text('three'), finish()], [...text('four'), finish()]];
+        const { logger: recorder, events } = collecting('info');
+        const code = `success([
+    await ask('One', { model: 'google/gemini-2.5-flash', reasoning: 'high', tokens: 128, hide: true }),
+    await ask('Two', { seed: 7, temperature: 0, topP: 0.5 }),
+    await think('Three', { model: 'anthropic/claude-sonnet-4-6' }),
+]);`;
+        expect(await exec(code, { cwd, backend, logger: recorder })).toMatchObject({ status: 'success', value: ['one', 'two', 'three'] });
+        expect(requests[0]).toMatchObject({ tokens: 128, providerOptions: { google: { thinkingConfig: { thinkingBudget: 16384, includeThoughts: false } } } });
+        expect(requests[1]).toMatchObject({ seed: 7, temperature: 0, topP: 0.5 });
+        expect(requests[1].tokens).toBeUndefined();
+        expect(requests[2]).toMatchObject({ providerOptions: { anthropic: { thinking: { type: 'adaptive' }, effort: 'medium' } } });
+        expect(sdk.google).toHaveBeenCalledWith({ apiKey: 'test-google-key' });
+        expect(sdk.openai).toHaveBeenCalledWith({ apiKey: 'test-openai-key' });
+        expect(sdk.anthropic).toHaveBeenCalledWith({ apiKey: 'test-anthropic-key' });
+        const effective = events.filter(event => event.kind === 'info').map(event => JSON.parse(body(event).split('\n')[1].replace(/ \(\d+ ms\)$/, '')));
+        expect(effective).toEqual([
+            { backend: 'native-sdk', provider: 'google', model: 'gemini-2.5-flash', reasoningEffort: 'high', tokens: 128 },
+            { backend: 'native-sdk', provider: 'openai', model: 'gpt-4.1', reasoningEffort: null, randomness: { seed: 7, temperature: 0, top_p: 0.5 } },
+            { backend: 'native-sdk', provider: 'anthropic', model: 'claude-sonnet-4-6', reasoningEffort: 'medium' },
+        ]);
+        await exec("await ask('Four', { model: 'google/gemini-2.5-flash' });", { cwd, backend, logger, model: 'anthropic/claude-sonnet-4-5' });
+        expect(sdk.anthropic).toHaveBeenCalledTimes(2);
+    });
+
+    it('streams provider previews and reasoning into the run logger', async () => {
+        steps = [[
+            { type: 'reasoning-start', id: 'why' }, { type: 'reasoning-delta', id: 'why', delta: 'Because.' }, { type: 'reasoning-end', id: 'why' },
+            ...text('Final answer'), finish(),
+        ]];
+        const streams: ModelStreamEvent[] = [];
+        const result = await exec("success(await think('Prompt'));", { cwd, backend, logger: new Logger('error', () => {}, { streamSink: event => streams.push(event) }) });
+        expect(result).toMatchObject({ status: 'success', value: 'Final answer' });
+        expect(streams.map(event => event.type === 'update' ? [event.update.channel, event.update.messageId, event.update.mode, event.update.text] : [event.type, event.outcome])).toEqual([
+            ['reasoning', '0:why', 'append', 'Because.'], ['reasoning', '0:why', 'replace', 'Because.'],
+            ['response', '0:answer', 'append', 'Final answer'], ['response', '0:answer', 'replace', 'Final answer'],
+            ['end', 'completed'],
+        ]);
+        expect(streams.at(-1)).toMatchObject({ response: 'Final answer', reasoning: 'Because.', interaction: { kind: 'think' } });
+    });
+
+    it.each([
+        ['an empty response', () => { steps = [[...text(' '), finish()]]; }, 'llm_error', 'the model returned an empty response'],
+        ['a truncated turn', () => { steps = [[...text('Partial'), finish('length')]]; }, 'llm_error', 'model turn did not complete (length)'],
+        ['a tool attempt during generation', () => { steps = [[call('read_file', { path: 'secret' }), finish('tool-calls')]]; },
+            'restriction_violation', 'generation cannot use tools; use an explicit agent operation'],
+        ['a missing API key', () => { vi.stubEnv('OPENAI_API_KEY', undefined); }, 'llm_error', 'no API key for openai; set OPENAI_API_KEY or run spl login openai'],
+        ['a stalled provider', () => {
+            backend = new AiBackend({ cwd, timeoutMs: 30, logger });
+            streamOverride = () => new ReadableStream({ start() {} });
+        }, 'llm_error', 'model call timed out after 30ms'],
+    ])('reports %s as a located workflow failure', async (_name, arrange, code, reason) => {
+        arrange();
+        expect(await exec("\nconst answer = await ask('Prompt');\nsuccess(answer);", { cwd, backend, logger })).toEqual({
+            status: 'failure', failure: { status: 'failure', status_code: code, reason, line: 2, command: "const answer = await ask('Prompt');" },
+        });
+    });
+
+    it('lets workflow code catch a provider failure and continue with another call', async () => {
+        steps = [[...text('Partial'), finish('content-filter')], [...text('Recovered'), finish()]];
+        const result = await exec(`
+let first;
+try { await ask('Risky'); } catch (error) { first = [error instanceof Failure, error.statusCode]; }
+success([first, await ask('Safe')]);`, { cwd, backend, logger });
+        expect(result).toMatchObject({ status: 'success', value: [[true, 'llm_error'], 'Recovered'] });
+    });
 });

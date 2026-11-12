@@ -4,38 +4,31 @@ version: 1
 model: 'gpt-6-luna'
 ---
 
-# Types 
+# Types
 
-This sample shows how to use opt-in types.
+This sample shows how to describe model output with types.
 
-```spl
-type FloatOrInt = float | int [description = 'Either float or int']
+```js
+const FloatOrInt = union(float, int).annotate({ description: 'Either float or int' });
 
-let numbers: list[FloatOrInt] = []
+const numbers = [];
+for (let i = 0; i < 4; i++) {
+    numbers.push(await ask('Sample number', { tokens: 128, schema: FloatOrInt }));
+}
 
-for i in range(4):
-    let num = ask(tokens=128, schema=FloatOrInt) 'Sample number'
-    numbers.append(num)
-
-for n in numbers:
-    if isinstance(n, int):
-        log('Integer: {n}')
-    else:
-        log('Float: {n}')
+for (const n of numbers) log(Number.isInteger(n) ? `Integer: ${n}` : `Float: ${n}`);
 ```
 
-```spl
-class Person:
-    firstName: str 
-    lastName: str 
-    age: int 
+```js
+const Person = struct('Person', {
+    firstName: str,
+    lastName: str,
+    age: int.annotate({ desc: 'Age in years' }),
+}).methods({
+    toString() { return `${this.firstName} ${this.lastName} at age ${this.age}`; },
+});
 
-    def toString():
-        return '{self.firstName} {self.lastName} at age {self.age}'
+const person = await ask('Sample person JSON with firstName, lastName and int age fields', { schema: Person });
 
-let result = ask(schema=struct(Person)) 'Sample person JSON with firstName, lastName and int age fields'
-
-let person: Person = validate(result, Person)
-
-success person.toString()
+success(person.toString());
 ```

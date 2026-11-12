@@ -4,52 +4,43 @@ version: 1
 model: 'gpt-6-luna'
 ---
 
+# Review the riskiest source files
+
+An agent picks and reviews three files inside `./src`, a second step turns its notes into typed
+findings, and plain code decides whether the run fails.
+
 > @CTL(restrict={fs: ['./src'], exec: ['git']}, forbid='suggesting purely stylistic changes')
 >
 > List source files with `git ls-files src`.
 > Then read the 3 files that are most likely to contain security problems or correctness bugs, and review only those.
 > List each finding with its location, why it matters and a suggested fix. Save to @notes
 
+```js
+const Severity = enumOf('low', 'medium', 'high');
 
-```spl
-enum Severity = 'low' | 'medium' | 'high'
+const Item = struct('Item', {
+    severity: Severity,
+    title: str,
+    location: str.annotate({ desc: 'File path and line' }),
+    fix: str,
+});
 
-hydratable class Item:
-    severity: Severity
-    title: str
-    location: str 
-    fix: str 
-
-hydratable class Review:
-    findings: list[Item]
+const Review = struct('Review', { findings: list(Item) });
 ```
 
 > Convert @notes into structured finding @validate[Review] save to @review
 
-```spl
-
-let groups = object() 
-groups.high = []
-groups.medium = []
-groups.low = []
-
-for f in review.findings:
-    if f.severity == 'high':
-        groups.high.append(f)
-    elif f.severity == 'medium':
-        groups.medium.append(f)
-    else:
-        groups.low.append(f)
+```js
+const groups = Object.groupBy(review.findings, finding => finding.severity);
+const high = groups.high ?? [];
 ```
 
 > @CTL(restrict={fs: ['./reports']}, model='gpt-6.1-sol')
 >
-> Write convert @groups to markdown report 
-> and write to './reports/review.md'
+> Convert @groups to a Markdown report and write it to './reports/review.md'
 
-```spl
-if len(groups.high) > 0:
-    fail '{len(groups.high)} high severity finding(s), see ./reports/review.md'
+```js
+if (high.length > 0) fail(`${high.length} high severity finding(s), see ./reports/review.md`);
 
-success '\n'.join(lines)
+success(review.findings.map(finding => `${finding.severity}: ${finding.title} (${finding.location})`).join('\n'));
 ```

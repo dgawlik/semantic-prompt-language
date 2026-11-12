@@ -1,41 +1,59 @@
 {
   "name": "spl-lang",
-  "version": "1.17.1",
-  "description": "Semantic Prompt Language: a Python-like language with LLM calls built into the syntax",
+  "version": "2.0.0",
+  "description": "Semantic Prompt Language: executable Markdown workflows and a Node.js library for checked LLM calls, agents and guards",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./markdown": {
+      "types": "./dist/markdown-lib.d.ts",
+      "default": "./dist/markdown-lib.js"
+    },
+    "./globals": {
+      "types": "./globals.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "spl": "dist/cli.js",
     "spl-lang": "dist/cli.js"
   },
   "files": [
     "dist",
-    "docs"
+    "globals.d.ts",
+    "examples"
   ],
   "engines": {
     "node": ">=24.15.0"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/stdlib','dist/stdlib',{recursive:true})\"",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "prepare": "npm run build",
     "test": "npm run build && vitest run",
     "start": "node dist/cli.js"
   },
   "keywords": [
     "llm",
-    "language",
-    "copilot"
+    "agents",
+    "markdown",
+    "workflow",
+    "structured-output"
   ],
   "license": "ISC",
   "dependencies": {
-    "@bettertui/core": "0.1.1",
     "@ai-sdk/mcp": "^2.0.88",
     "@anthropic-ai/sdk": "^1.4.0",
+    "@bettertui/core": "0.1.1",
     "@google/genai": "^2.32.0",
-    "openai": "^7.48.0",
+    "acorn": "^8.19.0",
     "ajv": "^8.17.1",
     "marked": "^18.1.1",
+    "openai": "^7.48.0",
     "yaml": "^2.8.1"
   },
   "devDependencies": {

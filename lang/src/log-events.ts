@@ -3,7 +3,7 @@ import type { LlmStreamUpdate } from './llm.js';
 
 export type BodySegment =
     | { readonly type: 'text' | 'inspection'; readonly text: string }
-    | { readonly type: 'code'; readonly language: 'spl'; readonly source: string }
+    | { readonly type: 'code'; readonly language: 'javascript'; readonly source: string }
     | {
         readonly type: 'preface';
         readonly payloadId: string;
@@ -181,7 +181,7 @@ function stateChange(value: unknown): boolean {
 function segment(value: unknown, eventId: string): value is BodySegment {
     if (!record(value)) return false;
     if (value.type === 'text' || value.type === 'inspection') return fields(value, ['type', 'text']) && safeText(value.text);
-    if (value.type === 'code') return fields(value, ['type', 'language', 'source']) && value.language === 'spl' && safeText(value.source);
+    if (value.type === 'code') return fields(value, ['type', 'language', 'source']) && value.language === 'javascript' && safeText(value.source);
     if (value.type === 'preface') return fields(value, ['type', 'payloadId', 'source', 'summary']) &&
         nonempty(value.payloadId) && value.payloadId.startsWith(`${eventId}:`) && safeText(value.source) &&
         nonempty(value.source) && safeText(value.summary) && nonempty(value.summary) && !/[\r\n]/.test(value.summary);

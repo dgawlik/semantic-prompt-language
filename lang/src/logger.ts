@@ -59,7 +59,7 @@ export class Logger {
         [msg, ...values].forEach((value, index) => {
             const parts: BodySegment[] = detail.kind === 'model-output' && detail.interaction.kind === 'codegen'
                 && detail.interaction.role !== 'action' && typeof value === 'string'
-                ? [{ type: 'code', language: 'spl', source: sanitize(value) }]
+                ? [{ type: 'code', language: 'javascript', source: sanitize(value) }]
                 : valueSegments(value, id, String(index), raw);
             if (index) segments.push({ type: 'text', text: detail.kind === 'generic' || formatSegments(parts).includes('\n') ? '\n' : ' ' });
             segments.push(...parts);

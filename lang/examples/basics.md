@@ -6,22 +6,19 @@ model: 'gpt-6-luna'
 
 # Basics
 
-SPL fences run exact code. Blockquotes run agent commands with tools, not generated SPL.
+`js` fences run exact JavaScript. Blockquotes run agent commands with tools, not generated code.
 Both share one scope; agents load and save variables and can invoke existing functions.
 
-```spl
-def fib(n: int) -> int:
-    if n < 2:
-        return n
-    return fib(n - 1) + fib(n - 2)
+```js
+function fib(n) {
+    return n < 2 ? n : fib(n - 1) + fib(n - 2);
+}
 ```
 
-```spl
-def factorial(n: int) -> int:
-    if n == 0:
-        return 1
-    else:
-        return n * factorial(n - 1)
+```js
+function factorial(n) {
+    return n === 0 ? 1 : n * factorial(n - 1);
+}
 ```
 
 > Invoke @factorial with 15 as argument -> @fact15
@@ -30,12 +27,10 @@ def factorial(n: int) -> int:
 
 > Add to @fib10 2 and save to @fibPlus2
 
-
-
 > Ask the model for the 10th Fibonacci number as an integer, without using @fib. Save it to @modelFib10
 
-```spl
-assert fib10 == modelFib10 'Oops, the model got it wrong'
+```js
+assert(fib10 === modelFib10, 'Oops, the model got it wrong');
 ```
 
 > @joke = a joke about programmers as an object with "setup" and "punchline"
@@ -44,10 +39,6 @@ assert fib10 == modelFib10 'Oops, the model got it wrong'
 >
 > Paragraph of funny story about a pet animal -> @animal
 
-```spl
-success object:
-    'fib': fib10
-    'modelFib': modelFib10
-    'joke': joke
-    'animal': animal
+```js
+success({ fib: fib10, modelFib: modelFib10, joke, animal });
 ```

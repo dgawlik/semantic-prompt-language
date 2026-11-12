@@ -7,11 +7,11 @@
 This page covers both, and how to check what comes back.">
 <meta name="color-scheme" content="light dark">
 <title>Natural language &amp; models - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=f87de69cf3fa">
-<link rel="stylesheet" href="assets/style.css?v=f87de69cf3fa">
+<link rel="icon" type="image/png" href="assets/icon.png?v=6bad2bd86bcd">
+<link rel="stylesheet" href="assets/style.css?v=6bad2bd86bcd">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=f87de69cf3fa"></script>
-<script defer src="assets/site.js?v=f87de69cf3fa"></script>
+<script defer src="assets/search-index.js?v=6bad2bd86bcd"></script>
+<script defer src="assets/site.js?v=6bad2bd86bcd"></script>
 </head>
 <body data-page="llm-commands">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -23,21 +23,21 @@ This page covers both, and how to check what comes back.">
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.17.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Natural language &amp; models</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Natural language &amp; models</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>The language</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Natural language &amp; models</span><span class="reading-time">16 min read</span></div>
+    <div class="page-meta"><span>Writing workflows</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Natural language &amp; models</span><span class="reading-time">13 min read</span></div>
     <header class="page-heading"><h1>Natural language &amp; models</h1><div class="lead"><p>Blockquotes let you write a step in plain language; <code>ask</code>, <code>think</code> and <code>agent</code> call the model from code.
 This page covers both, and how to check what comes back.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-2"><a href="#code-generation">Code generation</a></li><li class="toc-level-2"><a href="#generation-ask-and-think">Generation: ask and think</a></li><li class="toc-level-2"><a href="#agents">Agents</a></li><li class="toc-level-2"><a href="#modifiers">Modifiers</a></li><li class="toc-level-2"><a href="#randomness-controls">Randomness controls</a></li><li class="toc-level-2"><a href="#output-formats">Output formats</a></li><li class="toc-level-2"><a href="#schemas-and-repairs">Schemas and repairs</a></li><li class="toc-level-2"><a href="#guidance-enforce-and-forbid">Guidance: enforce and forbid</a></li></ul></nav></details>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-3"><a href="#controls">Controls</a></li><li class="toc-level-2"><a href="#code-generation">Code generation</a></li><li class="toc-level-2"><a href="#generation-ask-and-think">Generation: ask and think</a></li><li class="toc-level-2"><a href="#agents">Agents</a></li><li class="toc-level-2"><a href="#options">Options</a></li><li class="toc-level-2"><a href="#randomness-controls">Randomness controls</a></li><li class="toc-level-2"><a href="#output-formats">Output formats</a></li><li class="toc-level-2"><a href="#schemas-and-repairs">Schemas and repairs</a></li><li class="toc-level-2"><a href="#guidance-enforce-and-forbid">Guidance: enforce and forbid</a></li></ul></nav></details>
     <article class="prose"><h2 id="blockquotes">Blockquotes<a class="heading-anchor" href="#blockquotes" aria-label="Link to Blockquotes">#</a></h2>
-<p>A normal blockquote is an agent command, not code to compile into SPL. The model sees the instruction,
-visible bindings and function signatures, active guidance and restrictions, and the available tools.
-It acts directly on the shared document scope through tool calls.</p>
+<p>A blockquote is an agent command, not text that is compiled into code. The model receives the
+instruction, a JSON overview of the shared bindings, the active guidance and restrictions, and a
+set of tools. It acts directly on the shared scope through tool calls.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-1"><span class="hljs-quote">&gt; Summarize <span class="hljs-variable">@notes</span> in one sentence and save it to <span class="hljs-variable">@summary</span></span>
 </code></pre></figure>
 <p>For a simple generation task, the comparable code is:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">let</span> summary <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">len</span><span class="hljs-operator">=</span><span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Summarize: <span class="hljs-subst">{notes}</span>&#x27;</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-2"><span class="hljs-keyword">const</span> summary = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Summarize: <span class="hljs-subst">${notes}</span>`</span>, { <span class="hljs-attr">len</span>: <span class="hljs-string">&#x27;sentence&#x27;</span> });
 </code></pre></figure>
 <p>Blockquotes have these tools in addition to configured MCP tools:</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Blockquotes reference table"><table>
@@ -49,27 +49,27 @@ It acts directly on the shared document scope through tool calls.</p>
 </thead>
 <tbody><tr>
 <td><code>load_variable(name)</code></td>
-<td>Read a shared variable or read-only <code>$args</code>; declared types return their complete JSON Schema</td>
+<td>Read a shared variable, a library value, or the script arguments with the name <code>args</code>; a type returns its complete JSON Schema</td>
 </tr>
 <tr>
 <td><code>save_variable(name, value, schema?)</code></td>
-<td>Create or update a shared value; optionally use a declared type/schema name or inline JSON Schema</td>
+<td>Create or update a shared variable; <code>schema</code> is the name of a type or schema binding, or an inline JSON Schema</td>
 </tr>
 <tr>
 <td><code>call_function(name, args)</code></td>
-<td>Invoke an existing SPL function or builtin with positional JSON arguments</td>
+<td>Call a shared function or library function with positional JSON arguments and return its result</td>
 </tr>
 <tr>
 <td><code>get_env(name)</code></td>
-<td>Read one read-only environment value; missing values return <code>null</code></td>
+<td>Read one environment variable; missing variables return <code>null</code></td>
 </tr>
 <tr>
 <td><code>ask_human(question)</code></td>
-<td>Ask for human input and return the answer directly</td>
+<td>Ask a person and return the answer</td>
 </tr>
 <tr>
 <td><code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>, <code>shell</code></td>
-<td>Use the existing exact runtime tools</td>
+<td>The exact runtime tools</td>
 </tr>
 <tr>
 <td><code>restrict(kind, value)</code></td>
@@ -85,29 +85,60 @@ It acts directly on the shared document scope through tool calls.</p>
 </tr>
 </tbody></table>
 </div>
-<p>These shared-scope tools are specific to blockquotes. Explicit <code>agent</code> expressions retain their
-existing runtime/MCP tool set; <code>ask</code> and <code>think</code> still have no tools.</p>
-<p><code>call_function</code> decodes JSON arguments against parameter annotations, including nested lists
-and records. For example, JSON <code>15</code> becomes an SPL <code>int</code> for a parameter declared <code>n: int</code>;
-unannotated parameters keep ordinary dynamic values. <code>save_variable</code> also decodes against
-an existing binding&#39;s type annotation. This does not relax validation of ordinary SPL values:
-numeric strings, fractional integers, invalid shapes, and ambiguous decoding targets still fail.
-Tool arguments are already parsed JSON, so integer values outside JavaScript&#39;s safe integer
-range are rejected when decoding to <code>int</code>, rather than risking a rounded value. Numeric unions
-interpret integral parsed numbers as <code>int</code> and fractional numbers or negative zero as <code>float</code>;
-the original decimal/exponent spelling is no longer available at this boundary.</p>
-<p>For <code>@validate[Review]</code>, the agent can inspect <code>Review</code> with <code>load_variable(&quot;Review&quot;)</code>.
-The returned schema includes nested fields, lists, and enums; <code>&lt;type Review&gt;</code> in the shared
-bindings overview is only a display label. The agent then saves with
-<code>save_variable(name=&quot;review&quot;, value=..., schema=&quot;Review&quot;)</code>. The runtime resolves the declared
-type, validates and decodes the JSON, and hydrates any opted-in classes, including nested ones.
-Structs and typed containers retain their contracts; constructor-only classes are rejected.
-An inline JSON Schema object or boolean, or the name of a binding holding one, keeps the
-existing validation-only behavior without class hydration. Invalid values fail before saving.</p>
-<p><code>@name</code> marks a binding or operation (<code>@notes</code>, <code>@success</code>, <code>@read_file</code>), not text substitution.
-Plain language works too. Put optional controls in one <code>@CTL(...)</code> block at the start of the
-blockquote; omit any settings you do not need:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-3"><span class="hljs-quote">&gt; <span class="hljs-keyword">@CTL</span>(</span>
+<p>These shared-scope tools are specific to blockquotes. <code>agent(...)</code> calls in code have the runtime
+tools and MCP tools only; <code>ask</code> and <code>think</code> have no tools.</p>
+<p>The overview sent with every blockquote contains the current value of each top-level binding:
+data as JSON, functions as signatures such as <code>function add(a, b)</code>, types as labels such as
+<code>&lt;type Review&gt;</code>. Keep secrets and very large values out of top-level variables, or read them
+inside a function.</p>
+<p><code>@name</code> marks a binding or operation; it is a reference for the agent, not text substitution.
+Plain language works too.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquotes reference table"><table>
+<thead>
+<tr>
+<th scope="col">Marker</th>
+<th scope="col">Agent behavior</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>@notes</code>, <code>@summarize</code></td>
+<td>Load or save the shared variable; call the shared function</td>
+</tr>
+<tr>
+<td><code>@validate[Schema]</code></td>
+<td>Inspect the type <code>Schema</code>, then pass its name to <code>save_variable</code>; an invalid value stops the command</td>
+</tr>
+<tr>
+<td><code>@success</code>, <code>@fail</code></td>
+<td>End the document with a result or an explicit failure</td>
+</tr>
+<tr>
+<td><code>@env.NAME</code></td>
+<td>Read one environment variable with <code>get_env</code></td>
+</tr>
+<tr>
+<td><code>@args</code></td>
+<td>Read the script arguments</td>
+</tr>
+</tbody></table>
+</div>
+<p>With <code>@validate[Review]</code>, the runtime resolves <code>Review</code>, validates the JSON value and saves what
+<code>Review.parse</code> returns: plain objects for structs, instances for <a href="language.html#classes">class types</a>.
+An inline JSON Schema, or the name of a binding holding one, only validates. Name composite
+types first, for example <code>const Reviews = typedef(&#39;Reviews&#39;, list(Review))</code>, then write
+<code>@validate[Reviews]</code>: the tool resolves binding names, not expressions such as <code>list(Review)</code>.
+A rejected value reports the path from the variable being saved, for example
+<code>invoice.tax: expected Money, got 3312.5</code>.</p>
+<p><code>save_variable</code> refuses to replace a function, a type, an imported name or a library name, and
+<code>call_function</code> passes JSON values as they are. Each tool call executes immediately and returns its real result
+to the same agent session. Any tool error stops the command at once, keeping its own status
+code; the model cannot retry, and completed actions are not repeated. A prose reply does not
+create variables, so follow important steps with a check:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-3"><span class="hljs-title function_">assert</span>(<span class="hljs-keyword">typeof</span> summary === <span class="hljs-string">&#x27;string&#x27;</span> &amp;&amp; summary.<span class="hljs-property">length</span> &lt; <span class="hljs-number">300</span>, <span class="hljs-string">&#x27;summary is missing or too long&#x27;</span>);
+</code></pre></figure>
+<h3 id="controls">Controls<a class="heading-anchor" href="#controls" aria-label="Link to Controls">#</a></h3>
+<p>Put optional controls in one <code>@CTL(...)</code> block at the start of the blockquote:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-4"><span class="hljs-quote">&gt; <span class="hljs-keyword">@CTL</span>(</span>
 <span class="hljs-quote">&gt;     <span class="hljs-attr">restrict</span>={fs: [&#x27;./src&#x27;], exec: [&#x27;git&#x27;], net: [&#x27;docs.example.com&#x27;], mcp: [&#x27;docs/search&#x27;]},</span>
 <span class="hljs-quote">&gt;     <span class="hljs-attr">enforce</span>=&#x27;Be concise&#x27;,</span>
 <span class="hljs-quote">&gt;     <span class="hljs-attr">forbid</span>=&#x27;Suggesting purely stylistic changes&#x27;,</span>
@@ -117,7 +148,7 @@ blockquote; omit any settings you do not need:</p>
 <span class="hljs-quote">&gt;</span>
 <span class="hljs-quote">&gt; Review the source files and save findings to <span class="hljs-variable">@notes</span>.</span>
 </code></pre></figure>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquotes reference table"><table>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Controls reference table"><table>
 <thead>
 <tr>
 <th scope="col">Setting</th>
@@ -127,164 +158,127 @@ blockquote; omit any settings you do not need:</p>
 </thead>
 <tbody><tr>
 <td><code>restrict</code></td>
-<td>A map with <code>fs</code>, <code>exec</code>, <code>net</code>, or <code>mcp</code> keys; each value is a string or list of strings</td>
-<td>Narrow runtime permissions before the first tool call, using the same validation as SPL <code>restrict</code></td>
+<td>A map with <code>fs</code>, <code>exec</code>, <code>net</code> or <code>mcp</code> keys; each value is a string or list of strings</td>
+<td>Narrow runtime permissions before the first tool call, like <a href="safety.html#restrictions"><code>restrict</code></a> in code</td>
 </tr>
 <tr>
 <td><code>enforce</code>, <code>forbid</code></td>
-<td>A literal string or list of literal strings</td>
-<td>Add prompt guidance for this command and its nested model calls, not runtime validation</td>
+<td>A string or list of strings</td>
+<td>Add prompt guidance for this command and its nested model calls; not validation</td>
 </tr>
 <tr>
 <td><code>model</code></td>
-<td>A nonempty literal string</td>
-<td>Override the document model for this blockquote; CLI <code>--model</code> still takes precedence</td>
+<td>A nonempty string</td>
+<td>Model for this blockquote; CLI <code>--model</code> still takes precedence</td>
 </tr>
 <tr>
 <td><code>reasoning</code></td>
-<td><code>&#39;low&#39;</code>, <code>&#39;medium&#39;</code>, or <code>&#39;high&#39;</code></td>
-<td>Select this blockquote agent&#39;s reasoning effort; defaults to <code>&#39;medium&#39;</code></td>
+<td><code>&#39;low&#39;</code>, <code>&#39;medium&#39;</code> or <code>&#39;high&#39;</code></td>
+<td>Reasoning effort of this blockquote&#39;s agent; defaults to <code>&#39;medium&#39;</code></td>
 </tr>
 </tbody></table>
 </div>
-<p>Controls are parsed and applied by the runtime, not interpreted by the model. Names and restriction
-kinds must be unique; unknown settings, wrong value types and multiple or misplaced <code>@CTL</code> blocks are
-syntax errors, including with <code>--check</code>. Settings accept literals, not SPL expressions or interpolation.
-Strings use SPL quoting and escapes; use raw strings or doubled braces for literal braces.
-The restriction map&#39;s braces are control syntax, not SPL dictionary literals.
-Multiline settings and trailing commas are supported. The marker is case-insensitive.
-Each specified restriction requires at least one nonblank entry; restriction values and paths
-are checked at runtime before contacting the model.</p>
-<p>All settings expire at the end of the blockquote. Restrictions intersect with existing restrictions,
-and guidance is also inherited by invoked SPL functions and their model calls. Model and reasoning
-settings select only the blockquote agent; nested generation keeps its own modifiers and defaults.
-The separate <code>@Restrict</code>, <code>@Enforce</code>, <code>@Forbid</code> and <code>@Human</code> markers have been removed and are syntax
-errors. Request human input in plain language; the agent uses <code>ask_human</code>.</p>
-<p>Other conventions guide the agent&#39;s tool choices:</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquotes reference table"><table>
-<thead>
-<tr>
-<th scope="col">Marker</th>
-<th scope="col">Agent behavior</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>@validate[Schema]</code></td>
-<td>Inspect <code>Schema</code>, then pass its name to <code>save_variable</code> for validation and typed decoding; invalid values stop the command</td>
-</tr>
-<tr>
-<td><code>@SUCCESS</code>, <code>@fail</code></td>
-<td>End the document</td>
-</tr>
-</tbody></table>
-</div>
-<p>For a list or union schema, declare a named alias first, such as
-<code>type Reviews = list[Review]</code>, and use <code>@validate[Reviews]</code>. The tool resolves binding
-names, not type-expression strings such as <code>&quot;list[Review]&quot;</code>.</p>
-<p>Each runtime tool call executes immediately in the interpreter and returns its real result to the
-same agent session. Tools run sequentially, not through a deferred action queue. Saving a variable takes effect immediately;
-prose replies do not create bindings. Functions retain their normal lexical scope and runtime guards.
-Any runtime or MCP tool error stops the command immediately, preserving the original failure.
-The model cannot continue or retry after a failed action; completed external actions are not repeated.
-Follow important steps with an <code>spl</code> check:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">assert</span> <span class="hljs-built_in">len</span>(summary) <span class="hljs-operator">&lt;</span> <span class="hljs-number">300</span> <span class="hljs-string">&#x27;summary is too long&#x27;</span>
-</code></pre></figure>
+<p>Controls are parsed and applied by the runtime, not interpreted by the model. Settings are
+literals, never JavaScript expressions: strings use single, double, backtick or triple quotes,
+<code>r&#39;...&#39;</code> is a raw string, and <code>${...}</code> interpolation is rejected. Setting names and restriction
+kinds must be unique. Unknown settings, wrong value types and a misplaced or repeated <code>@CTL</code> are
+syntax errors, also with <code>--check</code>. Multiline settings and trailing commas are supported, and the
+marker is case-insensitive.</p>
+<p>All settings expire at the end of the blockquote. Restrictions intersect with those already
+active; guidance is inherited by functions the agent calls and by their model calls. <code>model</code> and
+<code>reasoning</code> select only the blockquote&#39;s agent. The former <code>@Restrict</code>, <code>@Enforce</code>, <code>@Forbid</code> and
+<code>@Human</code> markers are syntax errors: use <code>@CTL</code>, and request human input in plain language.</p>
 <p><code>--check</code> validates syntax only; it cannot validate a blockquote&#39;s intent. <code>--trace</code> records the
-agent&#39;s decisions and runtime tool results. Replay restores shared-variable changes and function
-execution without repeating external effects or contacting MCP. Reuse the same <code>--trace</code> path
-to resume or replay; choose another JSONL file to restart. Run only trusted documents.
-Old traces containing submitted SPL are incompatible with agent commands; record a new trace.</p>
-<p>Human input prompts directly in the shell and returns the answer to the same agent session.
-Repeat <code>--human &lt;answer&gt;</code> to answer questions in order without prompting. With <code>--trace</code>,
-completed decisions, effects and human answers replay from the same file, then the agent continues
-with any new answers. Supplied answers are consumed only for questions not already recorded.
-See <a href="safety.html#human-in-the-loop">Human input</a>.</p>
+agent&#39;s decisions and tool results, and replay restores shared-variable changes without
+contacting the model or MCP. Run only trusted documents.</p>
+<p>Human input prompts in the shell and returns the answer to the same agent session; repeat
+<code>--human &lt;answer&gt;</code> to answer questions in order without prompting.
+See <a href="safety.html#human-in-the-loop">Human in the loop</a>.</p>
 <h2 id="code-generation">Code generation<a class="heading-anchor" href="#code-generation" aria-label="Link to Code generation">#</a></h2>
-<p><code>@CODEGEN</code> explicitly generates reusable SPL functions instead of running an agent command:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-5"><span class="hljs-quote">&gt; <span class="hljs-keyword">@CODEGEN</span> &#x27;Define double(value), returning value multiplied by two&#x27;</span>
+<p><code>@CODEGEN</code> generates reusable JavaScript functions instead of running an agent command. In code,
+<code>await codegen(description)</code> does the same and returns the function.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">markdown</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-5" aria-label="Copy markdown code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="markdown code example"><code class="language-markdown" id="code-5">---
+extension: semantic-prompt-language
+<span class="hljs-section">version: 1
+---</span>
 
-<span class="hljs-meta">```spl</span><span class="language-spl">
-<span class="hljs-keyword">let</span> result <span class="hljs-operator">=</span> double(<span class="hljs-number">21</span>)
+<span class="hljs-quote">&gt; <span class="hljs-keyword">@CODEGEN</span> &#x27;Define double(value), returning value multiplied by two&#x27;</span>
+
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">const</span> result = <span class="hljs-title function_">double</span>(<span class="hljs-number">21</span>);
 </span><span class="hljs-meta">```</span>
 
 <span class="hljs-quote">&gt; <span class="hljs-keyword">@CTL</span>(<span class="hljs-attr">model</span>=&#x27;gpt-6-luna&#x27;, <span class="hljs-attr">reasoning</span>=&#x27;high&#x27;)</span>
 <span class="hljs-quote">&gt; <span class="hljs-keyword">@CODEGEN</span> &#x27;&#x27;&#x27;</span>
-<span class="hljs-quote">&gt; Define add<span class="hljs-emphasis">_one(value), returning the input plus one.
-&gt; &#x27;&#x27;&#x27;
+<span class="hljs-quote">&gt; Define addOne(value), returning the input plus one.</span>
+<span class="hljs-quote">&gt; &#x27;&#x27;&#x27;</span>
 
-```spl
-success add_</span>one(result)</span>
-<span class="hljs-code">```</span>
+<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-keyword">const</span> slugify = <span class="hljs-keyword">await</span> <span class="hljs-title function_">codegen</span>(<span class="hljs-string">&#x27;slugify(title): lowercase words joined with single dashes&#x27;</span>);
+<span class="hljs-title function_">success</span>([<span class="hljs-title function_">addOne</span>(result), <span class="hljs-title function_">slugify</span>(<span class="hljs-string">&#x27;Hello, World&#x27;</span>)]);
+</span><span class="hljs-meta">```</span>
 </code></pre></figure>
-<p>The case-insensitive marker must start the blockquote, after optional <code>@CTL(...)</code> settings.
-Its input is exactly one nonempty literal SPL string, including raw or triple-quoted strings.
-Interpolation is not evaluated; use raw strings or doubled braces for literal braces.
-Description syntax is checked even with <code>--check</code>; generation happens only when executing.</p>
-<p>The model receives the description, visible bindings, builtin names, SPL syntax guidance and
-active controls, with no runtime or MCP tools. Its response must contain only SPL <code>def</code>
-declarations: the requested function first, followed by any helper functions. Imports, directives,
-Markdown wrappers and top-level actions are rejected. Parsing and static contract checks must
-succeed before definitions are registered or saved. The functions are not called during generation.
-They capture the shared lexical scope and are available to subsequent fences, blockquotes and
-interactive cells until the session ends. Their calls retain normal runtime guards.</p>
-<p>With <code>--trace</code>, successful definitions are saved beside the workflow in
-<code>&lt;workflow&gt;.&lt;first-function&gt;.spl</code>, such as <code>flow.double.spl</code>. Each file starts with
-<code># @CODEGEN sha256:&lt;64 hex digits&gt;</code>, the SHA-256 hash of the decoded literal description.
-Multiple codegen blocks have separate cache files. If a friendly filename already exists,
-the new file includes its full input hash rather than overwriting it.</p>
-<p>Every new traced run checks these workflow-specific sibling files for a matching top-level
-signature. A match is parsed, type-checked and registered automatically without any import or
-model call. A matching but invalid definition fails explicitly; it is not silently regenerated.
-Files without a matching signature are not used or overwritten. These files are editable SPL:
-review generated code before trusting it. The signature identifies the input, not code integrity.
-Only the description is hashed, not bindings, model or preamble. To regenerate, change the
-description or remove its cached file, then choose a new JSONL trace.</p>
-<p>Replaying the same JSONL trace uses its recorded definitions, not current cache contents, and
-does not recreate missing cache files. Without <code>--trace</code>, no cache is read or written.
-<code>--pin</code> embeds the definitions for self-contained replay without sidecars. Embedded traced
-callers should provide <code>source</code> for workflow-relative cache names; otherwise the trace filename
-is used as the cache base.</p>
+<p>The marker must start the blockquote, after optional <code>@CTL(...)</code> settings, and takes exactly one
+nonempty literal string. <code>codegen(description, { model, reasoning })</code> accepts the same two
+controls. The description syntax is checked by <code>--check</code>; generation happens only when running.</p>
+<p>The model receives the description, the shared bindings overview, the library function names and
+active guidance, with no tools. Its response must contain only function declarations
+(<code>function name(...)</code> or <code>async function name(...)</code>): the requested function first, then any
+helpers. One enclosing code fence is unwrapped; imports, exports and other top-level statements
+are rejected with <code>invalid_format</code>. The functions are defined in the shared scope without being
+called, can use the library and shared bindings, and stay available to later fences, blockquotes
+and interactive cells.</p>
+<p>With <code>--trace</code>, generated code is saved beside the workflow as <code>&lt;workflow&gt;.&lt;function&gt;.js</code>, such
+as <code>flow.double.js</code>. Each file starts with <code>// @CODEGEN sha256:&lt;64 hex digits&gt;</code>, the SHA-256
+hash of the description. If the friendly file name is taken, the hash is added to the name
+rather than overwriting the file.</p>
+<p>Every new traced run looks for a sibling <code>&lt;workflow&gt;.*.js</code> file whose first line matches the
+description and uses it without a model call. A matching file that is not valid generated code
+fails; it is not silently regenerated. These files are editable JavaScript: review generated
+code before trusting it. The hash identifies the description, not the code, model or bindings.
+To regenerate, change the description or remove the cached file, then choose a new trace file.</p>
+<p>Replaying the same trace uses its recorded code, not the cache files. Without <code>--trace</code>, no
+cache is read or written. <code>--pin</code> embeds the generated code in the locked workflow, which then
+replays without the cache files.</p>
 <h2 id="generation-ask-and-think">Generation: ask and think<a class="heading-anchor" href="#generation-ask-and-think" aria-label="Link to Generation: ask and think">#</a></h2>
-<p><code>ask prompt</code> returns the model&#39;s answer as a value. <code>think</code> is the same with medium reasoning by default.
-Neither has tools: they cannot read files, browse or run commands.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-6"><span class="hljs-keyword">let</span> title <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span> <span class="hljs-string">&#x27;Suggest a title for: <span class="hljs-subst">{draft}</span>&#x27;</span>
-<span class="hljs-keyword">let</span> plan <span class="hljs-operator">=</span> <span class="hljs-keyword">think</span>(<span class="hljs-attr">reasoning</span><span class="hljs-operator">=</span><span class="hljs-string">&#x27;high&#x27;</span>) <span class="hljs-string">&#x27;Plan the migration of <span class="hljs-subst">{service}</span>&#x27;</span>
+<p><code>await ask(prompt)</code> returns the model&#39;s answer. <code>think</code> is the same with medium reasoning by
+default. Neither has tools: they cannot read files, browse or run commands.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-6" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-6"><span class="hljs-keyword">const</span> title = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Suggest a title for: <span class="hljs-subst">${draft}</span>`</span>);
+<span class="hljs-keyword">const</span> plan = <span class="hljs-keyword">await</span> <span class="hljs-title function_">think</span>(<span class="hljs-string">`Plan the migration of <span class="hljs-subst">${service}</span>`</span>, { <span class="hljs-attr">reasoning</span>: <span class="hljs-string">&#x27;high&#x27;</span> });
+<span class="hljs-keyword">const</span> tagline = <span class="hljs-keyword">await</span> ask<span class="hljs-string">`A tagline for <span class="hljs-subst">${product}</span>`</span>;
 </code></pre></figure>
-<p>Each call starts a fresh session. Pass context explicitly, usually through interpolation.</p>
+<p>Each call starts a fresh conversation. Pass context explicitly, usually through a template
+literal. The tagged-template form takes no options; interpolated objects are rendered as JSON.</p>
 <p>Model responses stream into the interactive CLI view and notebook cell outputs while the model
-is working, including available reasoning by default. <code>hide=True</code> suppresses reasoning, not responses.
-These are previews: variables, JSON parsing,
-schema validation and repairs use the completed response, never partial chunks. Failures and cancelled
-turns do not turn partial output into a successful result. Traces and recordings retain complete
-responses rather than streaming chunks; replay does not manufacture token timing.</p>
+is working, including available reasoning by default. <code>hide: true</code> suppresses reasoning, not
+responses. These are previews: JSON parsing, schema validation and repairs use the completed
+response, never partial chunks. Traces retain complete responses rather than streaming chunks.</p>
 <p>Embedded integrations can use <code>LoggerOptions.streamSink</code> for request-scoped <code>ModelStreamEvent</code>
-updates and completion/failure notifications. Backend callers can supply <code>LlmRequest.onStream</code>.
-Updates identify a response or reasoning channel and an SDK message ID: append chunks with
-<code>mode: &#39;append&#39;</code>, replace content with <code>mode: &#39;replace&#39;</code>, and reset the preview when the message
-ID changes. Ordinary event/string sinks still receive complete transcripts; <code>LlmResponse.text</code>
-is always the authoritative return value.</p>
+updates. Backend callers can supply <code>LlmRequest.onStream</code>. Updates identify a response or
+reasoning channel and a message ID: append chunks with <code>mode: &#39;append&#39;</code>, replace content with
+<code>mode: &#39;replace&#39;</code>. <code>LlmResponse.text</code> is always the authoritative return value.</p>
 <h2 id="agents">Agents<a class="heading-anchor" href="#agents" aria-label="Link to Agents">#</a></h2>
-<p><code>agent prompt</code> lets the model act with the runtime tools (<code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>,
-<code>web_search</code>, <code>shell</code>) and any configured MCP tools. Actions are checked against active restrictions.
-Agents default to medium reasoning and never use repairs, so a failed check never repeats their actions.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-7"><span class="hljs-keyword">let</span> report <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;&#x27;</span>
-<span class="hljs-keyword">restrict</span> <span class="hljs-string">&#x27;./src&#x27;</span>, exec <span class="hljs-string">&#x27;npm&#x27;</span>:
-    report <span class="hljs-operator">=</span> <span class="hljs-keyword">agent</span> <span class="hljs-string">&#x27;Run the tests, fix the failing source file, and describe the fix&#x27;</span>
+<p><code>await agent(prompt)</code> lets the model act with the runtime tools (<code>read_file</code>, <code>write_file</code>,
+<code>web_fetch</code>, <code>web_search</code>, <code>shell</code>) and any configured MCP tools. Actions are checked against
+active restrictions. Agents default to medium reasoning and never use repairs, so a failed check
+never repeats their actions.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-7"><span class="hljs-keyword">const</span> report = <span class="hljs-keyword">await</span> <span class="hljs-title function_">restrict</span>({ <span class="hljs-attr">fs</span>: <span class="hljs-string">&#x27;./src&#x27;</span>, <span class="hljs-attr">exec</span>: <span class="hljs-string">&#x27;npm&#x27;</span> }, <span class="hljs-function">() =&gt;</span>
+    <span class="hljs-title function_">agent</span>(<span class="hljs-string">&#x27;Run the tests, fix the failing source file, and describe the fix&#x27;</span>));
 </code></pre></figure>
-<h2 id="modifiers">Modifiers<a class="heading-anchor" href="#modifiers" aria-label="Link to Modifiers">#</a></h2>
-<p>All three commands take named modifiers in parentheses before the prompt. Values are expressions,
-evaluated once and validated before the call. Unknown or duplicate names are syntax errors.</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Modifiers reference table"><table>
+<h2 id="options">Options<a class="heading-anchor" href="#options" aria-label="Link to Options">#</a></h2>
+<p>All three calls take an options object as the second argument. Values are validated before the
+call; an unknown name or invalid value is a <code>runtime_error</code> and no model is contacted.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Options reference table"><table>
 <thead>
 <tr>
-<th scope="col">Modifier</th>
+<th scope="col">Option</th>
 <th scope="col">Values</th>
 <th scope="col">Effect</th>
 </tr>
 </thead>
 <tbody><tr>
 <td><code>len</code></td>
-<td><code>word</code> <code>sentence</code> <code>paragraph</code> <code>long</code></td>
+<td><code>&#39;word&#39;</code> <code>&#39;sentence&#39;</code> <code>&#39;paragraph&#39;</code> <code>&#39;long&#39;</code></td>
 <td>Length hint (guidance only)</td>
 </tr>
 <tr>
@@ -294,27 +288,27 @@ evaluated once and validated before the call. Unknown or duplicate names are syn
 </tr>
 <tr>
 <td><code>schema</code></td>
-<td>JSON Schema draft-07</td>
+<td>A <a href="language.html#types">type</a> or JSON Schema draft-07</td>
 <td>Validate the answer; implies JSON</td>
 </tr>
 <tr>
 <td><code>repairs</code></td>
-<td><code>0</code>–<code>5</code></td>
-<td>Extra attempts after a format or schema error</td>
+<td><code>0</code> to <code>5</code></td>
+<td>Extra attempts after a format or schema error; not for <code>agent</code></td>
 </tr>
 <tr>
 <td><code>reasoning</code></td>
-<td><code>low</code> <code>medium</code> <code>high</code></td>
+<td><code>&#39;low&#39;</code> <code>&#39;medium&#39;</code> <code>&#39;high&#39;</code></td>
 <td>Reasoning effort, if the model supports it</td>
 </tr>
 <tr>
 <td><code>hide</code></td>
-<td><code>True</code> <code>False</code> (default)</td>
-<td>Suppress reasoning display when <code>True</code>; responses remain visible</td>
+<td><code>true</code> or <code>false</code> (default)</td>
+<td>Suppress reasoning display when <code>true</code>; responses remain visible</td>
 </tr>
 <tr>
 <td><code>model</code></td>
-<td>model id</td>
+<td>Model ID</td>
 <td>Per-call model</td>
 </tr>
 <tr>
@@ -329,210 +323,153 @@ evaluated once and validated before the call. Unknown or duplicate names are syn
 </tr>
 <tr>
 <td><code>temperature</code></td>
-<td>Finite number <code>0..2</code></td>
+<td>Number <code>0..2</code></td>
 <td><code>ask</code> only: control sampling variability</td>
 </tr>
 <tr>
-<td><code>top_p</code></td>
-<td>Finite number <code>0..1</code></td>
-<td><code>ask</code> only: control nucleus sampling</td>
+<td><code>topP</code></td>
+<td>Number <code>0..1</code></td>
+<td><code>ask</code> only: control nucleus sampling (<code>top_p</code> is accepted as an alias)</td>
 </tr>
 </tbody></table>
 </div>
-<p>The former <code>show</code> modifier is no longer accepted. Omit <code>show=True</code> (reasoning is now visible
-by default), and replace <code>show=False</code> with <code>hide=True</code>.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-8"><span class="hljs-keyword">let</span> score <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(
-    <span class="hljs-attr">fmt</span><span class="hljs-operator">=</span><span class="hljs-string">&#x27;integer&#x27;</span>,
-    <span class="hljs-attr">repairs</span><span class="hljs-operator">=</span><span class="hljs-number">1</span>,
-    <span class="hljs-attr">tokens</span><span class="hljs-operator">=</span><span class="hljs-number">2048</span>,
-) <span class="hljs-string">&#x27;Rate this issue from 1 to 5: <span class="hljs-subst">{issue}</span>&#x27;</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-8"><span class="hljs-keyword">const</span> score = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Rate this issue from 1 to 5: <span class="hljs-subst">${issue}</span>`</span>, {
+    <span class="hljs-attr">fmt</span>: <span class="hljs-string">&#x27;integer&#x27;</span>,
+    <span class="hljs-attr">repairs</span>: <span class="hljs-number">1</span>,
+    <span class="hljs-attr">tokens</span>: <span class="hljs-number">2048</span>,
+});
 </code></pre></figure>
 <p><code>tokens</code> is a hard generation budget, not a length hint or a separate thinking budget.
 The same limit applies independently to every repair attempt and agent tool-continuation turn.
-Omitting it preserves existing provider defaults. It maps to OpenAI <code>max_output_tokens</code>
+Omitting it keeps provider defaults. It maps to OpenAI <code>max_output_tokens</code>
 (or <code>max_completion_tokens</code> for seeded calls), Anthropic <code>max_tokens</code>, and Google <code>maxOutputTokens</code>.
-Invalid values fail before the model call; provider/model limits still apply. Legacy Anthropic
-manual thinking requires <code>tokens</code> to exceed its reasoning budget (<code>low</code>: 1024, <code>medium</code>: 4096,
-<code>high</code>: 16384); conflicting settings fail rather than silently enlarging the generation budget.
-If the model hits its token limit, the call fails with <code>llm_error</code>, not a successful partial answer,
-and format/schema repairs do not retry the truncated turn.
-Explicit budgets are recorded in <code>effective.tokens</code> and participate in recording/trace request
-matching, so changing a budget cannot silently reuse an old answer.</p>
+Legacy Anthropic manual thinking requires <code>tokens</code> to exceed its reasoning budget (<code>low</code>: 1024,
+<code>medium</code>: 4096, <code>high</code>: 16384); conflicting settings fail rather than silently enlarging the budget.
+If the model hits its token limit, the call fails with <code>llm_error</code>, not a successful partial
+answer, and repairs do not retry the truncated turn. Explicit budgets are part of the recorded
+request, so changing a budget cannot silently reuse an old answer during replay.</p>
 <p>Model precedence: CLI <code>--model</code>, then the per-call <code>model</code>, then frontmatter <code>model</code>, then the
 provider default. OpenAI, Anthropic and Google are supported through their official clients; use bare
 model IDs or <code>provider/model</code>. See <a href="cli.html#models-and-authentication">Models and authentication</a>.</p>
 <h2 id="randomness-controls">Randomness controls<a class="heading-anchor" href="#randomness-controls" aria-label="Link to Randomness controls">#</a></h2>
-<p>Set sampling modifiers directly in <code>ask(...)</code>:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-9"><span class="hljs-keyword">let</span> answer <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">seed</span><span class="hljs-operator">=</span><span class="hljs-number">42</span>, <span class="hljs-attr">temperature</span><span class="hljs-operator">=</span><span class="hljs-number">0</span>, <span class="hljs-attr">top_p</span><span class="hljs-operator">=</span><span class="hljs-number">0.01</span>) <span class="hljs-string">&#x27;Answer precisely&#x27;</span>
-<span class="hljs-keyword">let</span> plan <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">temperature</span><span class="hljs-operator">=</span><span class="hljs-number">0</span>, <span class="hljs-attr">reasoning</span><span class="hljs-operator">=</span><span class="hljs-string">&#x27;high&#x27;</span>) <span class="hljs-string">&#x27;Plan the migration&#x27;</span>
+<p>Set sampling options directly on <code>ask</code>:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-9"><span class="hljs-keyword">const</span> answer = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">&#x27;Answer precisely&#x27;</span>, { <span class="hljs-attr">seed</span>: <span class="hljs-number">42</span>, <span class="hljs-attr">temperature</span>: <span class="hljs-number">0</span>, <span class="hljs-attr">topP</span>: <span class="hljs-number">0.01</span> });
+<span class="hljs-keyword">const</span> plan = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">&#x27;Plan the migration&#x27;</span>, { <span class="hljs-attr">temperature</span>: <span class="hljs-number">0</span>, <span class="hljs-attr">reasoning</span>: <span class="hljs-string">&#x27;high&#x27;</span> });
 </code></pre></figure>
-<p>Parameters are optional named expressions, evaluated once in source order alongside other modifiers
-and before the prompt. The same values are reused for every repair attempt.
-Omitted sampling controls use provider/model defaults; no seed, temperature or <code>top_p</code> is invented.
-Sampling controls apply only to that <code>ask</code> expression, not to surrounding code or Markdown blockquotes.
-<code>think</code> and <code>agent</code> do not accept them; their existing modifiers and reasoning defaults are unchanged.</p>
-<p><code>ask</code> has no implicit reasoning effort. An explicit
-<code>reasoning=&#39;low&#39;</code>, <code>&#39;medium&#39;</code> or <code>&#39;high&#39;</code> always takes precedence. Models that cannot disable thinking
-use the SDK&#39;s lowest supported thinking setting with a compatibility warning.</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Randomness controls reference table"><table>
-<thead>
-<tr>
-<th scope="col">Parameter</th>
-<th scope="col">Accepted values</th>
-<th scope="col">Meaning</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>seed</code></td>
-<td>Integer <code>0..2147483647</code></td>
-<td>Request repeatable sampling where the provider supports it</td>
-</tr>
-<tr>
-<td><code>temperature</code></td>
-<td>Finite number <code>0..2</code></td>
-<td>Lower values reduce variability; <code>0</code> requests greedy sampling where supported</td>
-</tr>
-<tr>
-<td><code>top_p</code></td>
-<td>Finite number <code>0..1</code></td>
-<td>Nucleus sampling; smaller values narrow token choices (<code>1</code> does not narrow them)</td>
-</tr>
-</tbody></table>
-</div>
-<p>Unknown/duplicate names, or sampling modifiers on <code>think</code> or <code>agent</code>, are syntax errors.
-Out-of-range values, booleans, strings and <code>None</code> are runtime errors before the model call.
-The former <code>randomness(...)</code> prefix and <code>eval(...)</code> statement are no longer supported.
-Move sampling values into <code>ask(...)</code> and use <code>assert</code> and schemas for explicit output checks.</p>
+<p>Omitted sampling controls use provider/model defaults; no seed, temperature or <code>topP</code> is
+invented. The same values are reused for every repair attempt. <code>think</code>, <code>agent</code> and blockquotes
+do not accept sampling options.</p>
+<p><code>ask</code> has no implicit reasoning effort. An explicit <code>reasoning</code> always takes precedence. Models
+that cannot disable thinking use the lowest supported thinking setting with a compatibility warning.</p>
 <p>Provider limitations are diagnosed with warnings; the runtime keeps supported controls without
 changing the model, and preserves explicitly requested reasoning:</p>
 <ul>
 <li><strong>OpenAI:</strong> seeded calls use Chat Completions, which accepts <code>seed</code>; unseeded calls retain
 the Responses API. Chat Completions does not expose reasoning summaries, so requested
-summaries warn and are omitted; reasoning effort and runtime/MCP tool continuations are retained.
-Tool definitions and parallel-tool settings are omitted when no tools are enabled.
-Seeds are best-effort and deprecated by the upstream API, not a guarantee of identical output.
-Models must support Chat Completions; provider errors surface without retrying on a different API.
-Compatible GPT-5.1+ and GPT-6 models accept sampling with reasoning effort <code>none</code>.
-Models that require reasoning, or calls with explicit reasoning, may remove sampling controls.
-The provider adapter diagnoses model-specific restrictions.</li>
+summaries warn and are omitted. Seeds are best-effort and deprecated by the upstream API.
+Models that require reasoning, or calls with explicit reasoning, may remove sampling controls.</li>
 <li><strong>Google:</strong> the Generate Content API receives <code>seed</code>, <code>temperature</code> and <code>topP</code>. A fixed seed
-with low temperature and a small nucleus is best-effort repeatability, not a guarantee.
-Gemini 2.5 Flash supports disabling thinking with a zero budget; Gemini 2.5 Pro and Gemini 3
-models retain their lowest supported thinking setting with a warning.</li>
+with low temperature and a small nucleus is best-effort repeatability, not a guarantee.</li>
 <li><strong>Anthropic:</strong> seeds are unsupported. Temperature is capped at <code>1</code> with a warning. On compatible
-non-thinking models, set either temperature or <code>top_p</code>; if both are supplied, temperature wins
-and the adapter warns that <code>top_p</code> is ignored. Thinking and newer models may reject sampling
-altogether; unsupported controls are removed with warnings.</li>
+non-thinking models, set either temperature or <code>topP</code>; if both are supplied, temperature wins.
+Thinking and newer models may reject sampling altogether; unsupported controls are removed
+with warnings.</li>
 </ul>
-<p>The response&#39;s <code>effective.randomness</code> records controls actually retained by the provider adapter.
-For sampling controls,
-<code>null</code> means the control was omitted/unsupported and provider defaults apply, not that a particular
-default numeric value was sent.
-<code>effective.reasoningEffort</code> is <code>none</code> when disabling thinking is honored, or <code>null</code> when the adapter
-cannot honor that setting; <code>null</code> does not mean thinking is disabled.
-Traces and pinned workflows include requested
-sampling controls in request identity; changing them cannot silently reuse an old response.
-Recreate pins and choose new trace files after editing source documents; legacy trace and
-generation-recording formats are not accepted by the append-only trace journal.</p>
+<p>The response&#39;s <code>effective.randomness</code> records the controls actually retained by the provider
+adapter; <code>null</code> means the control was omitted or unsupported and provider defaults apply.
+Traces and pinned workflows include requested sampling controls in the request identity.</p>
 <p>Even extreme settings cannot guarantee identical outputs from hosted models. Use
-<a href="cli.html#traces-and-replay"><code>--trace</code></a> or <a href="cli.html#pinned-workflows"><code>--pin</code></a> for deterministic offline replay.
-See the official <a href="https://ai-sdk.dev/providers/ai-sdk-providers/openai">OpenAI</a>,
-<a href="https://ai-sdk.dev/providers/ai-sdk-providers/google">Google</a> and
-<a href="https://ai-sdk.dev/providers/ai-sdk-providers/anthropic">Anthropic</a> adapter documentation.</p>
+<a href="cli.html#traces-and-replay"><code>--trace</code></a> or <a href="cli.html#pinned-workflows"><code>--pin</code></a> for deterministic replay.</p>
 <span id="fmt-object" class="anchor-alias" aria-hidden="true"></span><h2 id="output-formats">Output formats<a class="heading-anchor" href="#output-formats" aria-label="Link to Output formats">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Output formats reference table"><table>
 <thead>
 <tr>
 <th scope="col"><code>fmt</code></th>
 <th scope="col">Accepts</th>
+<th scope="col">JavaScript result</th>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>text</code> (default)</td>
+<td><code>&#39;text&#39;</code> (default)</td>
 <td>Trimmed text, no parsing</td>
+<td><code>string</code></td>
 </tr>
 <tr>
-<td><code>integer</code></td>
+<td><code>&#39;integer&#39;</code></td>
 <td>JSON number without a fraction</td>
+<td><code>number</code></td>
 </tr>
 <tr>
-<td><code>float</code></td>
+<td><code>&#39;float&#39;</code></td>
 <td>Any finite JSON number</td>
+<td><code>number</code></td>
 </tr>
 <tr>
-<td><code>boolean</code></td>
+<td><code>&#39;boolean&#39;</code></td>
 <td>JSON <code>true</code> or <code>false</code></td>
+<td><code>boolean</code></td>
 </tr>
 <tr>
-<td><code>array</code></td>
-<td>JSON array (a list)</td>
+<td><code>&#39;array&#39;</code></td>
+<td>JSON array</td>
+<td><code>Array</code></td>
 </tr>
 <tr>
-<td><code>object</code></td>
-<td>JSON object (a dict, not an array)</td>
+<td><code>&#39;object&#39;</code></td>
+<td>JSON object (not an array)</td>
+<td>plain object</td>
 </tr>
 <tr>
-<td><code>json</code></td>
+<td><code>&#39;json&#39;</code></td>
 <td>Any JSON value</td>
+<td>any JSON value</td>
 </tr>
 </tbody></table>
 </div>
 <p>Parsing is strict: prose around JSON and Markdown code fences are rejected, and values are never
 coerced. A malformed or wrong-typed answer raises <code>invalid_format</code>.</p>
 <h2 id="schemas-and-repairs">Schemas and repairs<a class="heading-anchor" href="#schemas-and-repairs" aria-label="Link to Schemas and repairs">#</a></h2>
-<p><code>schema</code> accepts SPL type descriptors or raw JSON Schema. Both reject invalid output without
-coercion, defaults or removal of extra fields. A mismatch raises <code>validation_failed</code> with field paths.</p>
-<p>Use enums, structs and aliases to describe typed output directly:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-10"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Label</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;bug&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;feature&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;question&#x27;</span>
-<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Triage</span>:
-    label: Label
-    reason: <span class="hljs-built_in">str</span> [desc<span class="hljs-operator">=</span><span class="hljs-string">&#x27;One-sentence explanation&#x27;</span>]
-<span class="hljs-keyword">let</span> triage: Triage <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Triage, <span class="hljs-attr">repairs</span><span class="hljs-operator">=</span><span class="hljs-number">2</span>) <span class="hljs-string">&#x27;Classify: <span class="hljs-subst">{issue}</span>&#x27;</span>
-<span class="hljs-keyword">assert</span> triage.label <span class="hljs-operator">!=</span> <span class="hljs-string">&#x27;bug&#x27;</span> <span class="hljs-keyword">or</span> <span class="hljs-built_in">len</span>(triage.reason) <span class="hljs-operator">&gt;</span> <span class="hljs-number">0</span> <span class="hljs-string">&#x27;bugs need a reason&#x27;</span>
+<p><code>schema</code> accepts a <a href="language.html#types">type</a> or raw JSON Schema. Both reject invalid output
+without coercion, defaults or removal of extra fields. A mismatch raises <code>validation_failed</code>
+with the path of the offending field.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-10" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-10"><span class="hljs-keyword">const</span> <span class="hljs-title class_">Label</span> = <span class="hljs-title function_">enumOf</span>(<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;feature&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>);
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Triage</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Triage&#x27;</span>, {
+    <span class="hljs-attr">label</span>: <span class="hljs-title class_">Label</span>,
+    <span class="hljs-attr">reason</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;One-sentence explanation&#x27;</span> }),
+});
 
-<span class="hljs-keyword">type</span> <span class="hljs-title class_">Batch</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>[Triage]
-<span class="hljs-keyword">let</span> batch: Batch <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Batch) <span class="hljs-string">&#x27;Classify each issue: <span class="hljs-subst">{issues}</span>&#x27;</span>
+<span class="hljs-keyword">const</span> triage = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Classify: <span class="hljs-subst">${issue}</span>`</span>, { <span class="hljs-attr">schema</span>: <span class="hljs-title class_">Triage</span>, <span class="hljs-attr">repairs</span>: <span class="hljs-number">2</span> });
+<span class="hljs-title function_">assert</span>(triage.<span class="hljs-property">label</span> !== <span class="hljs-string">&#x27;bug&#x27;</span> || triage.<span class="hljs-property">reason</span>.<span class="hljs-property">length</span> &gt; <span class="hljs-number">0</span>, <span class="hljs-string">&#x27;bugs need a reason&#x27;</span>);
+
+<span class="hljs-keyword">const</span> batch = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Classify each issue: <span class="hljs-subst">${<span class="hljs-built_in">JSON</span>.stringify(issues)}</span>`</span>, { <span class="hljs-attr">schema</span>: <span class="hljs-title function_">list</span>(<span class="hljs-title class_">Triage</span>) });
 </code></pre></figure>
-<p>Struct fields are exact and required, including nullable fields. Metadata in brackets
-is model advice only, not a data constraint. Raw JSON Schema still uses strict Ajv
-validation when constraints such as <code>minimum</code> or <code>minLength</code> must be enforced:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-11"><span class="hljs-keyword">let</span> Rating <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;type&#x27;</span>: <span class="hljs-string">&#x27;integer&#x27;</span>
-    <span class="hljs-string">&#x27;minimum&#x27;</span>: <span class="hljs-number">1</span>
-    <span class="hljs-string">&#x27;maximum&#x27;</span>: <span class="hljs-number">5</span>
-<span class="hljs-keyword">let</span> rating <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Rating) <span class="hljs-string">&#x27;Rate this issue from 1 to 5: <span class="hljs-subst">{issue}</span>&#x27;</span>
+<p>With a type, the result is what <code>Type.parse</code> returns: plain objects for structs, instances for
+class types. Struct fields are exact and required, including nullable fields. Annotations are
+advice for the model only. Raw JSON Schema is validated strictly with Ajv and returns the JSON
+value, for when constraints such as <code>minimum</code> must be enforced:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-11" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-11"><span class="hljs-keyword">const</span> rating = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Rate this issue from 1 to 5: <span class="hljs-subst">${issue}</span>`</span>, {
+    <span class="hljs-attr">schema</span>: { <span class="hljs-attr">type</span>: <span class="hljs-string">&#x27;integer&#x27;</span>, <span class="hljs-attr">minimum</span>: <span class="hljs-number">1</span>, <span class="hljs-attr">maximum</span>: <span class="hljs-number">5</span> },
+});
 </code></pre></figure>
-<p>Raw schemas validate dynamic JSON values; they do not install SPL type contracts or
-hydrate classes. Descriptor targets decode typed representations, including exact
-signed-64-bit integer tokens and distinct finite floats. Legacy <code>fmt=&#39;integer&#39;</code> and
-<code>fmt=&#39;float&#39;</code> alone still return dynamic numbers; use <code>schema=int</code> or <code>schema=float</code>
-when a typed numeric result is required.</p>
-<p><code>repairs=n</code> allows up to <code>n</code> more attempts, each with the previous answer and the validation errors.
-Only <code>invalid_format</code> and <code>validation_failed</code> are repaired; transport and tool errors are not.
-The prompt is not re-evaluated. Put business rules in <code>assert</code>, after the call.</p>
-<p>Struct targets decode validated structural data;
-<code>schema=Person</code> hydrates a nominal instance only for a <code>hydratable class Person</code>.
-<code>schema=struct(Person)</code> instead returns structural field data, never a <code>Person</code> instance.
-A binding annotation checks the result and does not secretly configure the ask target.
-Typed JSON decoding preserves signed-64-bit tokens exactly; typed decoding or complete hydration
-failures use the same repair budget (zero by default, at most five extra attempts). Unsupported
-non-JSON schemas and ambiguous distinct targets fail before provider calls.
-See <a href="migration.html#class-schemas-versus-structural-data">class schemas and migration</a>.</p>
+<p><code>repairs: n</code> allows up to <code>n</code> more attempts. Each sends the original prompt again, followed by
+the previous answer and the validation error. Only <code>invalid_format</code> and <code>validation_failed</code> are
+repaired; transport and tool errors are not. Put business rules in <code>assert</code>, after the call.
+<code>schema</code> and <code>repairs</code> need JSON output: combining them with <code>fmt: &#39;text&#39;</code>, or using <code>repairs</code>
+without <code>fmt</code> or <code>schema</code>, is a <code>runtime_error</code>.</p>
 <h2 id="guidance-enforce-and-forbid">Guidance: enforce and forbid<a class="heading-anchor" href="#guidance-enforce-and-forbid" aria-label="Link to Guidance: enforce and forbid">#</a></h2>
-<p><code>enforce text:</code> and <code>forbid text:</code> introduce indented blocks and add instructions to every model
-call inside, including calls in functions they invoke. Nested guidance combines. Guidance shapes prompts;
-it does not check the answer.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-12" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-12"><span class="hljs-keyword">let</span> answer <span class="hljs-operator">=</span> <span class="hljs-literal">None</span>
-<span class="hljs-keyword">enforce</span> <span class="hljs-string">&#x27;Answer in English&#x27;</span>:
-    <span class="hljs-keyword">forbid</span> <span class="hljs-string">&#x27;jokes&#x27;</span>:
-        answer <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">len</span><span class="hljs-operator">=</span><span class="hljs-string">&#x27;sentence&#x27;</span>) <span class="hljs-string">&#x27;Explain recursion&#x27;</span>
+<p><code>enforce(text, body)</code> and <code>forbid(text, body)</code> add instructions to every model call made while
+<code>body</code> runs, including calls in functions it invokes and across <code>await</code>. They return what <code>body</code>
+returns. <code>text</code> is a string or a list of strings; nested guidance combines. Guidance shapes
+prompts; it does not check the answer.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-12" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-12"><span class="hljs-keyword">const</span> answer = <span class="hljs-keyword">await</span> <span class="hljs-title function_">enforce</span>(<span class="hljs-string">&#x27;Answer in English&#x27;</span>, <span class="hljs-function">() =&gt;</span>
+    <span class="hljs-title function_">forbid</span>(<span class="hljs-string">&#x27;jokes&#x27;</span>, <span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">&#x27;Explain recursion&#x27;</span>, { <span class="hljs-attr">len</span>: <span class="hljs-string">&#x27;sentence&#x27;</span> })));
 </code></pre></figure>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/LLM-commands.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
-    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="language.html"><span>Previous</span><strong>Language</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="safety.html"><span>Next</span><strong>Guards & failures</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="language.html"><span>Previous</span><strong>Workflow code</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="safety.html"><span>Next</span><strong>Guards & failures</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-2"><a href="#code-generation">Code generation</a></li><li class="toc-level-2"><a href="#generation-ask-and-think">Generation: ask and think</a></li><li class="toc-level-2"><a href="#agents">Agents</a></li><li class="toc-level-2"><a href="#modifiers">Modifiers</a></li><li class="toc-level-2"><a href="#randomness-controls">Randomness controls</a></li><li class="toc-level-2"><a href="#output-formats">Output formats</a></li><li class="toc-level-2"><a href="#schemas-and-repairs">Schemas and repairs</a></li><li class="toc-level-2"><a href="#guidance-enforce-and-forbid">Guidance: enforce and forbid</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-3"><a href="#controls">Controls</a></li><li class="toc-level-2"><a href="#code-generation">Code generation</a></li><li class="toc-level-2"><a href="#generation-ask-and-think">Generation: ask and think</a></li><li class="toc-level-2"><a href="#agents">Agents</a></li><li class="toc-level-2"><a href="#options">Options</a></li><li class="toc-level-2"><a href="#randomness-controls">Randomness controls</a></li><li class="toc-level-2"><a href="#output-formats">Output formats</a></li><li class="toc-level-2"><a href="#schemas-and-repairs">Schemas and repairs</a></li><li class="toc-level-2"><a href="#guidance-enforce-and-forbid">Guidance: enforce and forbid</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

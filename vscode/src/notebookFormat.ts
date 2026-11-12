@@ -1,19 +1,27 @@
+import type { CellLanguage } from '../../lang/src/cell.js';
 import { SplSyntaxError } from '../../lang/src/errors.js';
-import { extractMarkdown } from '../../lang/src/markdown.js';
-import { parse } from '../../lang/src/parser.js';
-import type { Program } from '../../lang/src/ast.js';
-import { parseNatural } from '../../lang/src/controls.js';
+import { extractMarkdown, parse, parseInstruction, type Workflow } from '../../lang/src/markdown.js';
 
 export const NOTEBOOK_TYPE = 'spl-workflow';
 export const DEFAULT_FRONTMATTER = '---\nextension: semantic-prompt-language\nversion: 1\n---';
 
+/** Editor language of a code cell, by fence language. */
+export const CELL_LANGUAGES: Readonly<Record<CellLanguage, string>> = { js: 'javascript', ts: 'typescript' };
+
+export function fenceLanguage(languageId: string): CellLanguage | undefined {
+    return languageId === 'javascript' ? 'js' : languageId === 'typescript' ? 'ts' : undefined;
+}
+
 export interface WorkflowCell {
-    kind: 'markdown' | 'spl' | 'natural';
+    kind: 'markdown' | 'code' | 'natural';
     value: string;
+    /** Fence language of a code cell. */
+    language?: CellLanguage;
     leading?: string;
     raw?: string;
     originalValue?: string;
     originalKind?: WorkflowCell['kind'];
+    originalLanguage?: CellLanguage;
 }
 
 export interface WorkflowNotebook {
@@ -41,8 +49,8 @@ export function decodeWorkflow(source: string): WorkflowNotebook {
     const cells: WorkflowCell[] = [];
     let cursor = frontmatter.length;
     for (const block of document.blocks) {
-        const start = offsets[block.kind === 'spl' ? block.line - 2 : block.line - 1];
-        let end = offsets[block.kind === 'spl' ? block.endLine + 1 : block.endLine] ?? normalized.length;
+        const start = offsets[block.kind === 'code' ? block.line - 2 : block.line - 1];
+        let end = offsets[block.kind === 'code' ? block.endLine + 1 : block.endLine] ?? normalized.length;
         if (normalized[end - 1] === '\n') end--;
         const gap = normalized.slice(cursor, start);
         if (gap.trim()) cells.push({ kind: 'markdown', value: gap });
@@ -52,6 +60,7 @@ export function decodeWorkflow(source: string): WorkflowNotebook {
         cells.push({
             kind, value, leading: gap.trim() ? '' : gap,
             raw, originalValue: value, originalKind: kind,
+            ...(block.language ? { language: block.language, originalLanguage: block.language } : {}),
         });
         cursor = end;
     }
@@ -78,14 +87,16 @@ export function encodeWorkflow(notebook: WorkflowNotebook): string {
         const leading = cell.leading ?? '\n\n';
         if (!source.endsWith('\n') && !leading.startsWith('\n')) source += '\n\n';
         source += leading;
-        if (cell.raw !== undefined && cell.value === cell.originalValue && cell.kind === cell.originalKind) {
+        const language = cell.language ?? 'js';
+        if (cell.raw !== undefined && cell.value === cell.originalValue && cell.kind === cell.originalKind
+            && (cell.kind !== 'code' || language === cell.originalLanguage)) {
             source += cell.raw;
         } else if (cell.kind === 'natural') {
             source += quote(cell.value);
         } else {
             const length = Math.max(3, ...[...cell.value.matchAll(/`+/g)].map(match => match[0].length + 1));
             const fence = '`'.repeat(length);
-            source += `${fence}spl\n${cell.value}${cell.value.endsWith('\n') ? '' : '\n'}${fence}`;
+            source += `${fence}${language}\n${cell.value}${cell.value.endsWith('\n') ? '' : '\n'}${fence}`;
         }
     }
     source += notebook.trailing;
@@ -93,31 +104,25 @@ export function encodeWorkflow(notebook: WorkflowNotebook): string {
     return notebook.bom + source.replace(/\r\n?/g, '\n').replace(/\n/g, notebook.eol);
 }
 
-export function parseWorkflowCell(value: string, language: string, frontmatter: string): Program {
+/** Compiles one notebook cell: JavaScript/TypeScript code, or a Markdown-language instruction cell. */
+export function parseWorkflowCell(value: string, language: string, frontmatter: string): Workflow {
     const metadata = extractMarkdown(frontmatter + '\n');
-    let program: Program;
-    if (language === 'spl') {
-        program = parse(value);
-        if (program.directives.model !== undefined) {
-            throw new SplSyntaxError('set the document model in frontmatter, not an SPL header', 1, 1);
-        }
-    } else if (language === 'markdown') {
-        const quoted = quote(value);
-        const source = frontmatter + '\n\n' + quoted;
-        const blocks = extractMarkdown(source).blocks;
-        if (blocks.length !== 1 || blocks[0].kind !== 'natural') {
-            throw new SplSyntaxError('a natural-language cell must contain one blockquote', 1, 1);
-        }
-        const lines = source.split('\n');
-        if (lines.slice(frontmatter.split('\n').length, blocks[0].line - 1).join('\n').trim() ||
-            lines.slice(blocks[0].endLine).join('\n').trim()) {
-            throw new SplSyntaxError('a natural-language cell cannot contain text outside its blockquote', 1, 1);
-        }
-        program = { body: [parseNatural(blocks[0].text, 1)], directives: {}, lines: value.split('\n') };
-    } else {
-        throw new Error(`unsupported workflow cell language '${language}'; use SPL or Markdown`);
+    const code = fenceLanguage(language);
+    if (code) {
+        return { ...parse(value, { language: code, model: metadata.model }), markdown: { preamble: metadata.preamble } };
     }
-    program.directives = { model: metadata.model };
-    program.markdown = { preamble: metadata.preamble };
-    return program;
+    if (language !== 'markdown') {
+        throw new Error(`unsupported workflow cell language '${language}'; use JavaScript, TypeScript or Markdown`);
+    }
+    const source = frontmatter + '\n\n' + quote(value);
+    const blocks = extractMarkdown(source).blocks;
+    if (blocks.length !== 1 || blocks[0].kind !== 'natural') {
+        throw new SplSyntaxError('a natural-language cell must contain one blockquote', 1, 1);
+    }
+    const lines = source.split('\n');
+    if (lines.slice(frontmatter.split('\n').length, blocks[0].line - 1).join('\n').trim() ||
+        lines.slice(blocks[0].endLine).join('\n').trim()) {
+        throw new SplSyntaxError('a natural-language cell cannot contain text outside its blockquote', 1, 1);
+    }
+    return parseInstruction(blocks[0].text, { model: metadata.model, preamble: metadata.preamble });
 }

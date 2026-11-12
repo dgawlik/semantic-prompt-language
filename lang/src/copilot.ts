@@ -1,11 +1,10 @@
 /** Compatibility import for embedding hosts; execution now uses the AI SDK. */
 export { AiBackend as CopilotBackend, type AiBackendOptions as CopilotBackendOptions } from './ai.js';
 
-import type { ToolName } from './ast.js';
 import { Failure } from './errors.js';
 import { configuredMcpTool, type McpServers } from './mcp.js';
 import type { Restrictions } from './restrict.js';
-import { TOOL_SPECS } from './tools.js';
+import { TOOL_SPECS, type ToolName } from './tools.js';
 
 type PermissionRequest =
     | { kind: 'mcp'; serverName: string; toolName: string; readOnly?: boolean; toolTitle?: string }

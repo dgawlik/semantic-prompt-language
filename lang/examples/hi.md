@@ -7,35 +7,30 @@ preamble: 'Be concise.'
 
 # Hello, SPL
 
-Prose like this is commentary. Only `spl` fences and blockquotes run, top to bottom, in one shared scope.
+Prose like this is commentary. Only `js` fences and blockquotes run, top to bottom, in one shared scope.
+The library (`ask`, `struct`, `writeFile`, `markdown`, ...) is already imported in every fence.
 
-```spl
+```js
+const Topic = enumOf('recursion', 'closures', 'regular expressions');
+const topics = ['recursion', 'closures', 'regular expressions'];
 
-enum Topic = 'recursion' | 'closures' | 'regular expressions'
+const Card = struct('Card', {
+    term: Topic,
+    definition: str.annotate({ desc: 'One line about' }),
+    description: str.annotate({ desc: 'A paragraph about' }),
+});
 
-let topics: list[Topic] = ['recursion', 'closures', 'regular expressions']
-
-struct Card:
-    term: Topic
-    definition: str [desc = 'One line about']
-    description: str [desc='A paragraph about']
-
-let cards = topics.map(
-            lambda topic: ask(schema=Card, repairs=1) 
-                'A one-sentence flashcard about {topic}'
-)
+const cards = await Promise.all(topics.map(topic =>
+    ask(`A one-sentence flashcard about ${topic}`, { schema: Card, repairs: 1 })));
 ```
 
 > Pick the item of @cards whose card a beginner would find hardest. Save that item to @hardest
 
-```spl
-import * as markdown from 'markdown'
+```js
+const doc = markdown.document()
+    .heading(hardest.term, 3)
+    .paragraph(markdown.bold(hardest.definition))
+    .paragraph(hardest.description);
 
-let m = markdown.Document()
-
-m.heading(hardest.term, 3)
-m.paragraph(markdown.bold(hardest.definition))
-m.paragraph(hardest.description)
-
-write_file('./out/hardest-card.md', m.to_string())
+await writeFile('./out/hardest-card.md', doc.toString());
 ```

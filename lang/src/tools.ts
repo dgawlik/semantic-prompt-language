@@ -2,9 +2,10 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
-import type { ToolName } from './ast.js';
 import { Failure } from './errors.js';
 import type { Restrictions } from './restrict.js';
+
+export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'web_search' | 'shell';
 
 const MAX_TEXT = 200_000;
 const SHELL_TIMEOUT_MS = 120_000;

@@ -17,13 +17,13 @@ if (process.argv.slice(2).some((arg) => arg !== '--check')) throw new Error('Usa
 const pages = [
     ['Introduction', 'index', 'Introduction', 'Start here', 'book'],
     ['Getting-started', 'getting-started', 'Getting started', 'Start here', 'arrow'],
-    ['Language', 'language', 'Language', 'The language', 'code'],
-    ['LLM-commands', 'llm-commands', 'Natural language & models', 'The language', 'spark'],
-    ['Safety', 'safety', 'Guards & failures', 'The language', 'shield'],
+    ['Language', 'language', 'Workflow code', 'Writing workflows', 'code'],
+    ['LLM-commands', 'llm-commands', 'Natural language & models', 'Writing workflows', 'spark'],
+    ['Safety', 'safety', 'Guards & failures', 'Writing workflows', 'shield'],
     ['CLI', 'cli', 'CLI & runtime', 'Reference', 'terminal'],
-    ['Grammar', 'grammar', 'Grammar', 'Reference', 'braces'],
+    ['Reference', 'reference', 'API reference', 'Reference', 'braces'],
     ['Examples', 'examples', 'Examples', 'Guides', 'layers'],
-    ['Migration', 'migration', 'Typing migration', 'Guides', 'arrow'],
+    ['Migration', 'migration', 'Migrating from 1.x', 'Guides', 'arrow'],
 ].map(([file, slug, label, group, icon]) => ({ file, slug, label, group, icon }));
 const fingerprint = createHash('sha256');
 for (const file of [
@@ -139,7 +139,10 @@ function renderPage(page, index) {
             const content = language === 'text' ? escape(token.text)
                 : hljs.highlight(token.text, { language }).value;
             const filename = token.filename;
-            const synced = filename?.endsWith('.md') && fs.existsSync(path.join(root, 'lang', 'examples', filename));
+            // A caption naming a shipped example marks the listing as a copy of that file; the tests keep them in sync.
+            const example = filename && path.resolve(root, 'lang', 'examples', filename);
+            const synced = example && !path.relative(path.join(root, 'lang', 'examples'), example).startsWith('..')
+                && fs.existsSync(example) && fs.statSync(example).isFile();
             const id = `code-${++block}`;
             return `<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">${escape(filename || language)}</span><span class="code-language">${escape(language)}</span><button type="button" class="copy-button" data-copy="${id}" aria-label="Copy ${escape(filename || language)} code" hidden>${icon('copy')}<span>Copy</span></button></figcaption><pre tabindex="0" aria-label="${escape(filename || language)} code example"><code class="language-${escape(language)}"${synced ? ` data-file="${escape(filename)}"` : ''} id="${id}">${content}\n</code></pre></figure>\n`;
         },
@@ -192,14 +195,14 @@ function renderPage(page, index) {
   <details class="mobile-nav"><summary>Browse documentation <span>${escape(page.label)}</span>${icon('chevron')}</summary>${navigation(page, 'Mobile documentation')}</details>
   <main id="page" tabindex="-1">
     <div class="page-meta"><span>${escape(page.group)}</span>${icon('chevron')}<span>${escape(page.label)}</span><span class="reading-time">${Math.max(1, Math.ceil(markdown.split(/\s+/).length / 220))} min read</span></div>
-    <header class="page-heading${page.slug === 'index' ? ' introduction-heading' : ''}">${page.slug === 'index' ? '<p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Fast iteration. Explicit guards. Readable scripts.</p>' : ''}<h1>${heroTitle}</h1><div class="lead"><p>${leadHtml}</p></div>${page.slug === 'index' ? `<div class="hero-actions"><a class="button-primary" href="getting-started.html">Start building ${icon('arrow')}</a><a class="button-secondary" href="language.html">Explore the language ${icon('chevron')}</a></div><div class="hero-tags"><span>${icon('terminal')}Node.js 20+</span><span>${icon('spark')}GitHub Copilot</span><span>${icon('shield')}Visible boundaries</span></div>` : ''}</header>
+    <header class="page-heading${page.slug === 'index' ? ' introduction-heading' : ''}">${page.slug === 'index' ? '<p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Fast iteration. Explicit guards. Readable workflows.</p>' : ''}<h1>${heroTitle}</h1><div class="lead"><p>${leadHtml}</p></div>${page.slug === 'index' ? `<div class="hero-actions"><a class="button-primary" href="getting-started.html">Start building ${icon('arrow')}</a><a class="button-secondary" href="language.html">Write workflow code ${icon('chevron')}</a></div><div class="hero-tags"><span>${icon('terminal')}Node.js 24.15+</span><span>${icon('spark')}OpenAI, Anthropic, Google</span><span>${icon('shield')}Visible boundaries</span></div>` : ''}</header>
     <details class="mobile-toc"><summary>On this page ${icon('chevron')}</summary>${toc}</details>
     <article class="prose">${body}</article>
     <footer class="page-footer"><a href="${repository}/blob/HEAD/docs-template/${page.file}.md">${icon('edit')}View this page in Markdown ${icon('external')}</a><span>Good tools make intent clear.</span></footer>
     <nav class="page-pagination" aria-label="Previous and next pages">${neighbors}</nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="${repository}">GitHub ${icon('external')}</a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading">${icon('layers')}On this page</div>${toc}<div class="rail-note"><span class="rail-note-icon">${icon('code')}</span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script ${icon('arrow')}</a></div></aside>
+  <aside class="right-rail"><div class="toc-heading">${icon('layers')}On this page</div>${toc}<div class="rail-note"><span class="rail-note-icon">${icon('code')}</span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow ${icon('arrow')}</a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search">${icon('close')}</button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field">${icon('search')}<input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

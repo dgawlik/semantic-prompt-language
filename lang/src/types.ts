@@ -1,346 +1,403 @@
-import type { FieldDecl, TypeExpr } from './ast.js';
 import { Failure } from './errors.js';
-import { types as nodeTypes } from 'node:util';
-import {
-    hasKey, isDescriptor, isDict, isFloat, isFunction, isInstance, isList, newDict, registerDescriptor, registerFloat, registerInstance, runtimeError,
-    typeName, type FloatValue, type FunctionValue, type InstanceValue, type UserFunction, type Value,
-} from './values.js';
+import { compileSchema } from './schema.js';
 
-export type TypeKind = 'int' | 'float' | 'str' | 'char' | 'bool' | 'None' | 'object' | 'list' | 'union' | 'enum' | 'struct' | 'class' | 'fn';
-export interface FieldContract {
-    readonly type: TypeDescriptor;
-    readonly advice: Readonly<Record<string, unknown>>;
-}
-export interface TypeDescriptor {
-    readonly __type: true;
+export type Annotations = Readonly<Record<string, unknown>>;
+export type JsonSchema = boolean | { [key: string]: unknown };
+export type TypeKind =
+    | 'str' | 'int' | 'float' | 'bool' | 'char' | 'null' | 'any' | 'object'
+    | 'list' | 'union' | 'enum' | 'struct' | 'class' | 'fn' | 'schema';
+
+/** The JavaScript value a type parses to: `Infer<typeof Invoice>`. */
+export type Infer<T> = T extends Type<infer V> ? V : never;
+export type Shape = Record<string, Type<any>>;
+export type InferShape<F extends Shape> = { [K in keyof F]: Infer<F[K]> };
+type Simplify<T> = { [K in keyof T]: T[K] } & {};
+type Hydrator = { fromJSON?: (data: Record<string, unknown>) => object; prototype: object };
+
+interface Definition {
     readonly kind: TypeKind;
     readonly name: string;
-    readonly aliasOf?: TypeDescriptor;
-    readonly advice?: Readonly<Record<string, unknown>>;
-    readonly element?: TypeDescriptor;
-    readonly members?: readonly TypeDescriptor[];
+    readonly annotations: Annotations;
+    readonly element?: Type<any>;
+    readonly members?: readonly Type<any>[];
     readonly values?: readonly string[];
-    readonly fields?: Readonly<Record<string, FieldContract>>;
-    readonly params?: readonly TypeDescriptor[];
-    readonly result?: TypeDescriptor;
-    readonly hydratable?: boolean;
-    readonly methods?: Readonly<Record<string, UserFunction>>;
+    readonly fields?: Readonly<Record<string, Type<any>>>;
+    readonly prototype?: object;
+    readonly hydrate?: (data: Record<string, unknown>) => object;
+    readonly json?: JsonSchema;
+    readonly check?: (value: unknown) => void;
 }
 
-export const INT_MIN = -(1n << 63n);
-export const INT_MAX = (1n << 63n) - 1n;
-export const primitives = new Map<string, TypeDescriptor>(
-    ['int', 'float', 'str', 'char', 'bool', 'None', 'object'].map(name =>
-        [name, descriptor(name as TypeKind, name)]),
-);
+// Shared across duplicate copies of the package, so types from a helper module still match.
+const BRAND = Symbol.for('spl-lang.type');
+const invalid = (path: string, detail: string): Failure => new Failure('validation_failed', `${path}: ${detail}`);
+const plain = (value: unknown): value is Record<string, unknown> => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+};
+const set = (target: object, key: string, value: unknown): void => {
+    Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+};
+const member = (path: string, key: string): string =>
+    /^[A-Za-z_$][\w$]*$/.test(key) ? `${path}.${key}` : `${path}[${JSON.stringify(key)}]`;
 
-export function descriptor(kind: TypeKind, name: string, details: Omit<Partial<TypeDescriptor>, '__type' | 'kind' | 'name'> = {}): TypeDescriptor {
-    return registerDescriptor(Object.freeze({ __type: true, kind, name, ...details }));
+function describe(value: unknown): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'an array';
+    if (typeof value === 'object') return 'an object';
+    if (typeof value === 'string') return JSON.stringify(value.length > 40 ? `${value.slice(0, 40)}...` : value);
+    return typeof value === 'number' || typeof value === 'boolean' ? String(value) : typeof value;
 }
 
-export function aliasType(type: TypeDescriptor, advice: Record<string, unknown>): TypeDescriptor {
-    if (!Object.keys(advice).length) return type;
-    const { __type, kind, name, ...details } = type;
-    return descriptor(kind, name, {
-        ...details, aliasOf: type.aliasOf ?? type, advice: Object.freeze({ ...type.advice, ...advice }),
+/**
+ * A runtime description of data: it validates values, turns JSON into JavaScript objects
+ * and renders the JSON Schema a model sees. Types are immutable; every modifier returns a copy.
+ */
+export class Type<T = unknown> {
+    /** Type-level only: the parsed value. */
+    declare readonly _output: T;
+
+    /** @internal */
+    constructor(/** @internal */ readonly definition: Definition) {
+        Object.defineProperty(this, BRAND, { value: true });
+        Object.freeze(this);
+    }
+
+    get kind(): TypeKind { return this.definition.kind; }
+    get name(): string { return this.definition.name; }
+    /** Free-form metadata for the model; never used for validation. */
+    get annotations(): Annotations { return this.definition.annotations; }
+
+    protected copy(changes: Partial<Definition>): this {
+        const Constructor = this.constructor as new (definition: Definition) => this;
+        return new Constructor({ ...this.definition, ...changes });
+    }
+
+    /** Adds arbitrary annotations the model reads next to this type or field. */
+    annotate(annotations: Record<string, unknown>): this {
+        return this.copy({ annotations: Object.freeze({ ...this.definition.annotations, ...annotations }) });
+    }
+
+    /** Shorthand for `annotate({ description })`. */
+    describe(description: string): this {
+        return this.annotate({ description });
+    }
+
+    /** Names this type, optionally with annotations: a reusable, transparent alias. */
+    as(name: string, annotations: Record<string, unknown> = {}): this {
+        if (typeof name !== 'string' || !name.trim()) throw new Failure('runtime_error', 'a type name must be a non-empty string');
+        return this.copy({ name, annotations: Object.freeze({ ...this.definition.annotations, ...annotations }) });
+    }
+
+    nullable(): Type<T | null> {
+        return union(this, nil);
+    }
+
+    list(): Type<T[]> {
+        return list(this);
+    }
+
+    or<U>(other: Type<U>): Type<T | U> {
+        return union(this, other);
+    }
+
+    /** Validates a value and returns the parsed JavaScript object; never coerces or fills defaults. */
+    parse(value: unknown, path = '$'): T {
+        return decode(this, value, path, true) as T;
+    }
+
+    /** Parses strict JSON text, then validates it. */
+    parseJson(text: string): T {
+        let value: unknown;
+        try {
+            value = JSON.parse(text);
+        } catch (error) {
+            if (!(error instanceof SyntaxError)) throw error;
+            throw new Failure('invalid_format', `not valid JSON: ${error.message}`);
+        }
+        return this.parse(value);
+    }
+
+    /** True when the value already satisfies this type; classes require an instance. */
+    is(value: unknown): value is T {
+        try {
+            decode(this, value, '$', false);
+            return true;
+        } catch (error) {
+            if (error instanceof Failure) return false;
+            throw error;
+        }
+    }
+
+    /** JSON Schema for this type, including annotations as model advice. */
+    schema(): { [key: string]: unknown } {
+        return schemaOf(this);
+    }
+
+    toString(): string { return this.definition.name; }
+    toJSON(): string { return `<type ${this.definition.name}>`; }
+}
+
+export function isType(value: unknown): value is Type<unknown> {
+    return typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[BRAND] === true;
+}
+
+/** An exact record. Add fields fluently or pass them all at once. */
+export class StructType<S extends Record<string, unknown>, T = S> extends Type<T> {
+    get fields(): Readonly<Record<string, Type<any>>> { return this.definition.fields!; }
+
+    /** Adds one field; annotations are read by the model. */
+    field<K extends string, V>(name: K, type: Type<V>, annotations?: Record<string, unknown>): StructType<Simplify<S & Record<K, V>>> {
+        if (this.definition.kind === 'class') throw new Failure('runtime_error', `add fields to ${this.name} before attaching methods or a class`);
+        requireType(type, `field '${name}' of ${this.name}`);
+        if (Object.hasOwn(this.definition.fields!, name)) throw new Failure('runtime_error', `duplicate field '${name}' in ${this.name}`);
+        const fields: Record<string, Type<any>> = { ...this.definition.fields };
+        set(fields, name, annotations ? type.annotate(annotations) : type);
+        return this.copy({ fields: Object.freeze(fields) }) as unknown as StructType<Simplify<S & Record<K, V>>>;
+    }
+
+    /** Parsed objects get these methods; `this` is the parsed data. */
+    methods<M extends Record<string, any>>(methods: M & ThisType<S & M>): StructType<S, S & M> {
+        for (const name of Object.keys(methods)) {
+            if (Object.hasOwn(this.definition.fields!, name)) throw new Failure('runtime_error', `method '${name}' collides with a field of ${this.name}`);
+        }
+        const prototype = Object.create(this.definition.prototype ?? Object.prototype, Object.getOwnPropertyDescriptors(methods));
+        return this.copy({ kind: 'class', prototype, hydrate: undefined }) as unknown as StructType<S, S & M>;
+    }
+
+    /** Parsed objects become instances of an existing class. A static `fromJSON(data)` is used when present. */
+    class<C extends abstract new (...args: any[]) => object>(constructor: C): StructType<S, InstanceType<C>> {
+        if (typeof constructor !== 'function' || typeof constructor.prototype !== 'object') {
+            throw new Failure('runtime_error', `${this.name}.class() requires a class`);
+        }
+        const hydrator = constructor as unknown as Hydrator;
+        return this.copy({
+            kind: 'class', prototype: hydrator.prototype,
+            hydrate: typeof hydrator.fromJSON === 'function' ? data => hydrator.fromJSON!(data) : undefined,
+        }) as unknown as StructType<S, InstanceType<C>>;
+    }
+
+    /** The plain-data view of a class type: same fields, no methods or prototype. */
+    get data(): StructType<S> {
+        return this.copy({ kind: 'struct', prototype: undefined, hydrate: undefined }) as unknown as StructType<S>;
+    }
+}
+
+function requireType(value: unknown, where: string): asserts value is Type<any> {
+    if (!isType(value)) throw new Failure('runtime_error', `${where} must be a type such as str, list(int) or a struct`);
+}
+
+const primitive = <T>(kind: TypeKind, name: string = kind): Type<T> =>
+    new Type<T>({ kind, name, annotations: Object.freeze({}) });
+
+export const str = primitive<string>('str');
+export const int = primitive<number>('int');
+export const float = primitive<number>('float');
+export const bool = primitive<boolean>('bool');
+/** Exactly one Unicode character. */
+export const char = primitive<string>('char');
+export const nil = primitive<null>('null');
+/** Any JSON value. */
+export const any = primitive<unknown>('any');
+/** Any JSON object, without a declared shape. */
+export const object = primitive<Record<string, unknown>>('object');
+/** A callable; cannot be decoded from JSON. */
+export const fn = primitive<(...args: any[]) => unknown>('fn');
+
+export function list<V>(element: Type<V>): Type<V[]> {
+    requireType(element, 'list() element');
+    return new Type<V[]>({ kind: 'list', name: `list(${element.name})`, annotations: Object.freeze({}), element });
+}
+
+export function union<M extends Type<any>[]>(...members: M): Type<Infer<M[number]>> {
+    if (!members.length) throw new Failure('runtime_error', 'union() requires at least one type');
+    const flat: Type<any>[] = [];
+    for (const item of members) {
+        requireType(item, 'union() member');
+        if (!flat.includes(item)) flat.push(item);
+    }
+    if (flat.length === 1) return flat[0];
+    return new Type({ kind: 'union', name: flat.map(item => item.name).join(' | '), annotations: Object.freeze({}), members: Object.freeze(flat) });
+}
+
+export function nullable<V>(type: Type<V>): Type<V | null> {
+    return union(type, nil);
+}
+
+/** One of the given strings. */
+export function enumOf<const V extends readonly string[]>(values: V): Type<V[number]>;
+export function enumOf<const V extends readonly string[]>(...values: V): Type<V[number]>;
+export function enumOf(...values: readonly unknown[]): Type<string> {
+    const items: readonly unknown[] = values.length === 1 && Array.isArray(values[0]) ? values[0] : values;
+    if (!items.length || items.some(item => typeof item !== 'string')) throw new Failure('runtime_error', 'enumOf() requires one or more strings');
+    return new Type({
+        kind: 'enum', name: items.map(item => JSON.stringify(item)).join(' | '),
+        annotations: Object.freeze({}), values: Object.freeze([...new Set(items as string[])]),
     });
 }
 
-export function resolveType(expr: TypeExpr, lookup: (name: string) => Value): TypeDescriptor {
-    switch (expr.t) {
-        case 'type-name': {
-            const value = lookup(expr.name);
-            if (!isDescriptor(value)) throw runtimeError(`'${expr.name}' is not a type descriptor`);
-            return value;
-        }
-        case 'type-list': {
-            const element = resolveType(expr.element, lookup);
-            return descriptor('list', `list[${element.name}]`, { element });
-        }
-        case 'type-union': {
-            const members = expr.members.map(member => resolveType(member, lookup)).flatMap(type => type.kind === 'union' ? [...type.members!] : [type]);
-            const unique = members.filter((type, i) => !members.slice(0, i).some(other => equivalent(type, other)));
-            return unique.length === 1 ? unique[0] : descriptor('union', unique.map(type => type.name).join(' | '), { members: Object.freeze(unique) });
-        }
-        case 'type-fn': {
-            const params = expr.params.map(param => resolveType(param, lookup));
-            const result = resolveType(expr.result, lookup);
-            return descriptor('fn', `fn(${params.map(param => param.name).join(', ')}) -> ${result.name}`, { params: Object.freeze(params), result });
-        }
+/** An exact record: every field is required and extra fields are rejected. */
+export function struct<F extends Shape = {}>(name: string, fields?: F): StructType<Simplify<InferShape<F>>> {
+    if (typeof name !== 'string' || !name.trim()) throw new Failure('runtime_error', 'struct() requires a name');
+    const checked: Record<string, Type<any>> = {};
+    for (const [key, type] of Object.entries(fields ?? {})) {
+        requireType(type, `field '${key}' of ${name}`);
+        set(checked, key, type);
     }
+    return new StructType({ kind: 'struct', name, annotations: Object.freeze({}), fields: Object.freeze(checked) });
 }
 
-export function resolveFields(fields: FieldDecl[], lookup: (name: string) => Value): Readonly<Record<string, FieldContract>> {
-    return Object.freeze(Object.fromEntries(fields.map(field => [field.name, Object.freeze({
-        type: resolveType(field.type, lookup), advice: Object.freeze({ ...field.advice }),
-    })])));
+/** Names a type and attaches annotations: `typedef('Money', int, { desc: 'Amount in cents' })`. */
+export function typedef<T extends Type<any>>(name: string, type: T, annotations: Record<string, unknown> = {}): T {
+    requireType(type, `typedef('${name}')`);
+    return type.as(name, annotations);
 }
 
-export function equivalent(a: TypeDescriptor, b: TypeDescriptor): boolean {
-    a = a.aliasOf ?? a;
-    b = b.aliasOf ?? b;
-    if (a === b) return true;
-    if (a.kind !== b.kind || a.kind === 'class') return false;
-    switch (a.kind) {
-        case 'list': return equivalent(a.element!, b.element!);
-        case 'union': return a.members!.length === b.members!.length && a.members!.every(x => b.members!.some(y => equivalent(x, y)));
-        case 'enum': return a.values!.length === b.values!.length && a.values!.every(x => b.values!.includes(x));
-        case 'struct': {
-            const keys = Object.keys(a.fields!);
-            return keys.length === Object.keys(b.fields!).length && keys.every(key => Object.hasOwn(b.fields!, key) && equivalent(a.fields![key].type, b.fields![key].type));
-        }
-        case 'fn': return a.params!.length === b.params!.length && a.params!.every((param, i) => equivalent(param, b.params![i])) && equivalent(a.result!, b.result!);
-        default: return true;
-    }
+/** Wraps raw JSON Schema as a type; unlike annotations, its constraints are enforced. */
+export function jsonSchema<T = unknown>(schema: JsonSchema, name = 'schema'): Type<T> {
+    return new Type<T>({ kind: 'schema', name, annotations: Object.freeze({}), json: schema, check: compileSchema(schema) });
 }
 
-export function assignable(source: TypeDescriptor, target: TypeDescriptor): boolean {
-    if (equivalent(source, target)) return true;
-    if (source.kind === 'union') return source.members!.every(member => assignable(member, target));
-    if (target.kind === 'union') return target.members!.some(member => assignable(source, member));
-    if ((source.kind === 'char' || source.kind === 'enum') && target.kind === 'str') return true;
-    if (source.kind === 'struct' && target.kind === 'object') return true;
-    if (source.kind === 'fn' && target.kind === 'fn') {
-        return source.params!.length === target.params!.length
-            && target.params!.every((param, i) => assignable(param, source.params![i]))
-            && assignable(source.result!, target.result!);
-    }
-    return false;
-}
-
-export function checkedInt(value: bigint): bigint {
-    if (value < INT_MIN || value > INT_MAX) throw runtimeError('int overflow: value is outside signed 64-bit range');
-    return value;
-}
-
-export function typedFloat(value: number): FloatValue {
-    if (!Number.isFinite(value)) throw runtimeError('float must be finite');
-    return registerFloat(Object.freeze({ __float: value }));
-}
-
-export function convertInt(value: Value): bigint {
-    if (typeof value === 'bigint') return checkedInt(value);
-    if (isFloat(value)) value = value.__float;
-    if (typeof value === 'number') {
-        if (!Number.isFinite(value) || !Number.isInteger(value)) throw runtimeError('int() requires an exact finite integer');
-        return checkedInt(BigInt(value));
-    }
-    if (typeof value === 'string' && /^[+-]?\d+$/.test(value)) return checkedInt(BigInt(value));
-    throw runtimeError(`int() cannot exactly convert ${typeName(value)}`);
-}
-
-export function convertFloat(value: Value): FloatValue {
-    if (isFloat(value)) return value;
-    if (typeof value === 'bigint') return typedFloat(Number(value));
-    if (typeof value === 'number') return typedFloat(value);
-    if (typeof value === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) return typedFloat(Number(value));
-    throw runtimeError(`float() cannot convert ${typeName(value)}`);
-}
-
-type ContractPlan = Map<object, TypeDescriptor>;
-const contracts = new WeakMap<object, TypeDescriptor>();
-
-export function contractOf(value: Value): TypeDescriptor | undefined {
-    return typeof value === 'object' && value !== null ? contracts.get(value) : undefined;
-}
-
-export function signatureOf(fn: Value): TypeDescriptor | undefined {
-    if (isDescriptor(fn) && fn.kind === 'class') {
-        const constructor = fn.methods?.[fn.name];
-        if (!constructor) return Object.keys(fn.fields!).length ? undefined : descriptor('fn', fn.name, { params: [], result: fn });
-        if (!constructor.paramTypes || constructor.paramTypes.some(type => !type)) return undefined;
-        return descriptor('fn', fn.name, { params: constructor.paramTypes.filter((type): type is TypeDescriptor => type !== undefined), result: fn });
-    }
-    if (!isFunction(fn)) return undefined;
-    if (fn.__fn === 'builtin') return fn.signature;
-    if (!fn.returnType || !fn.paramTypes || fn.paramTypes.some(type => !type)) return undefined;
-    const params = fn.paramTypes.filter((type): type is TypeDescriptor => type !== undefined);
-    return descriptor('fn', fn.name, { params, result: fn.returnType });
-}
-
-function typeFailure(path: string, type: TypeDescriptor, value: Value, detail?: string): never {
-    throw new Failure('type_error', `${path}: expected ${type.name}, got ${typeName(value)}${detail ? ` (${detail})` : ''}`);
-}
-
-function addContract(value: object, type: TypeDescriptor, plan: ContractPlan, path: string): void {
-    const existing = plan.get(value) ?? contracts.get(value);
-    if (existing && !equivalent(existing, type)) throw new Failure('type_error', `${path}: incompatible established contract ${existing.name} and ${type.name}`);
-    plan.set(value, existing ?? type);
-}
-
-function check(value: Value, type: TypeDescriptor, path: string, plan: ContractPlan, test: boolean, visiting = new Set<object>(), convertClasses = false): Value {
-    switch (type.kind) {
-        case 'int': if (typeof value === 'bigint' && value >= INT_MIN && value <= INT_MAX) return value; break;
-        case 'float': if (isFloat(value) && Number.isFinite(value.__float)) return value; break;
-        case 'str': if (typeof value === 'string') return value; break;
-        case 'char': if (typeof value === 'string' && Array.from(value).length === 1 && !/[\uD800-\uDFFF]/u.test(value)) return value; break;
-        case 'bool': if (typeof value === 'boolean') return value; break;
-        case 'None': if (value === null) return value; break;
-        case 'enum': if (typeof value === 'string' && type.values!.includes(value)) return value; break;
-        case 'object': if (isDict(value)) return value; break;
-        case 'class':
-            if (isInstance(value) && value.complete && equivalent(value.descriptor, type)) return value;
-            if (convertClasses && isDict(value)) {
-                if (visiting.has(value)) throw new Failure('type_error', `${path}: cyclic typed data is not supported`);
-                visiting.add(value);
-                const shape = descriptor('struct', `struct(${type.name})`, { fields: type.fields });
-                const fields = check(newDict(Object.entries(value)), shape, path, plan, test, visiting, true);
-                visiting.delete(value);
-                if (!isDict(fields)) throw runtimeError('class validation requires structural fields');
-                return registerInstance({ __instance: true, descriptor: type, fields, complete: true });
+function decode(type: Type<any>, value: unknown, path: string, hydrate: boolean): unknown {
+    const definition = type.definition;
+    const fail = (detail = `expected ${definition.name}, got ${describe(value)}`): never => { throw invalid(path, detail); };
+    switch (definition.kind) {
+        case 'str': return typeof value === 'string' ? value : fail();
+        case 'int': return typeof value === 'number' && Number.isSafeInteger(value) ? value : fail();
+        case 'float': return typeof value === 'number' && Number.isFinite(value) ? value : fail();
+        case 'bool': return typeof value === 'boolean' ? value : fail();
+        case 'char': return typeof value === 'string' && Array.from(value).length === 1 && !/^[\uD800-\uDFFF]$/.test(value) ? value : fail();
+        case 'null': return value === null ? value : fail();
+        case 'fn': return typeof value === 'function' ? value : fail();
+        case 'object': return plain(value) ? value : fail();
+        case 'any': return value === undefined || typeof value === 'function' || typeof value === 'symbol' ? fail() : value;
+        case 'enum': return typeof value === 'string' && definition.values!.includes(value) ? value : fail();
+        case 'schema':
+            try {
+                definition.check!(value);
+            } catch (error) {
+                if (!(error instanceof Failure)) throw error;
+                // Schema errors carry paths relative to this value; anchor them at its place in the whole.
+                throw new Failure('validation_failed', error.reason.split('; ').map(item => {
+                    const [, at, detail] = /^([^:]*): (.*)$/s.exec(item) ?? [];
+                    return detail === undefined ? `${path}: ${item}` : `${at === '$' ? path : `${path}${at.startsWith('[') ? '' : '.'}${at}`}: ${detail}`;
+                }).join('; '));
             }
-            break;
-        case 'fn': {
-            const callableDescriptor = isDescriptor(value) && ['class', 'int', 'float', 'str', 'bool', 'char', 'object', 'struct'].includes(value.kind);
-            if (!isFunction(value) && !callableDescriptor) break;
-            const signature = signatureOf(value);
-            if (signature && !assignable(signature, type)) break;
-            if (test && !signature) break;
-            const arity = isFunction(value) && value.__fn === 'user' ? value.params.length : signature?.params?.length;
-            if (arity !== undefined && arity !== type.params!.length) break;
-            if (!signature) addContract(value, type, plan, path);
             return value;
-        }
         case 'list':
-        case 'struct': {
-            if (type.kind === 'list' ? !isList(value) : !isDict(value)) break;
-            const container = value as Value[] | Record<string, Value>;
-            if (!convertClasses) addContract(container, type, plan, path);
-            if (visiting.has(container)) throw new Failure('type_error', `${path}: cyclic typed data is not supported`);
-            visiting.add(container);
-            let result: Value[] | Record<string, Value> = container;
-            if (isList(container)) {
-                const children = container.map((child, i) => check(child, type.element!, `${path}[${i}]`, plan, test, visiting, convertClasses));
-                if (children.some((child, i) => child !== container[i])) result = children;
-            } else {
-                const record = container;
-                const children = newDict();
-                for (const key of Object.keys(record)) if (!Object.hasOwn(type.fields!, key)) typeFailure(`${path}.${key}`, type, record[key], 'extra field');
-                for (const [key, field] of Object.entries(type.fields!)) {
-                    if (!hasKey(record, key)) throw new Failure('type_error', `${path}.${key}: missing required field`);
-                    Object.defineProperty(children, key, { value: check(record[key], field.type, `${path}.${key}`, plan, test, visiting, convertClasses), enumerable: true, configurable: true, writable: true });
-                }
-                if (Object.keys(children).some(key => children[key] !== record[key])) result = children;
-            }
-            visiting.delete(container);
-            if (convertClasses) addContract(result, type, plan, path);
-            return result;
-        }
+            if (!Array.isArray(value)) return fail();
+            return value.map((item, index) => decode(definition.element!, item, `${path}[${index}]`, hydrate));
         case 'union': {
-            const matches: { plan: ContractPlan; value: Value; type: TypeDescriptor }[] = [];
-            for (const member of type.members!) {
-                const candidate = new Map(plan);
-                try { matches.push({ plan: candidate, value: check(value, member, path, candidate, test, new Set(visiting), convertClasses), type: member }); }
-                catch (error) { if (!(error instanceof Failure) || error.statusCode !== 'type_error') throw error; }
+            const matches: { type: Type<any>; value: unknown }[] = [];
+            let first: Failure | undefined;
+            for (const candidate of definition.members!) {
+                try {
+                    matches.push({ type: candidate, value: decode(candidate, value, path, hydrate) });
+                } catch (error) {
+                    if (!(error instanceof Failure)) throw error;
+                    first ??= error;
+                }
             }
-            if (!matches.length) break;
-            const first = matches[0];
-            if (matches.some(match => (match.value === value) !== (first.value === value)
-                || first.value !== value && !equivalent(first.type, match.type))) {
-                throw new Failure('type_error', `${path}: ambiguous union conversions for ${type.name}`);
+            if (!matches.length) {
+                // For `T | null`, the error for T says more than "expected T | null".
+                const members = definition.members!.filter(item => item.kind !== 'null');
+                if (first && members.length === 1 && value !== null) throw first;
+                return fail();
             }
-            if (first.value === value && matches.some(match => match.plan.size !== first.plan.size
-                || [...first.plan].some(([object, contract]) => !match.plan.has(object) || !equivalent(contract, match.plan.get(object)!)))) {
-                throw new Failure('type_error', `${path}: ambiguous union contracts for ${type.name}`);
+            const classes = matches.filter(match => match.type.kind === 'class');
+            if (hydrate && classes.length > 1 && !classes.some(match => match.value === value)) {
+                return fail(`ambiguous: matches ${classes.map(match => match.type.name).join(' and ')}`);
             }
-            for (const [object, contract] of first.plan) plan.set(object, contract);
-            return first.value;
+            return (classes[0] ?? matches[0]).value;
+        }
+        case 'struct':
+        case 'class': {
+            const fields = definition.fields!;
+            const instance = definition.kind === 'class' && typeof value === 'object' && value !== null
+                && definition.prototype!.isPrototypeOf(value);
+            if (!instance && (!plain(value) || definition.kind === 'class' && !hydrate)) return fail();
+            const source = value as Record<string, unknown>;
+            if (!instance) {
+                for (const key of Object.keys(source)) {
+                    if (!Object.hasOwn(fields, key)) fail(`unexpected field '${key}' in ${definition.name}`);
+                }
+            }
+            const data: Record<string, unknown> = {};
+            for (const [key, field] of Object.entries(fields)) {
+                if (!Object.hasOwn(source, key)) fail(`missing required field '${key}' of ${definition.name}`);
+                set(data, key, decode(field, source[key], member(path, key), hydrate));
+            }
+            if (instance) return value;
+            if (definition.kind === 'struct') return data;
+            if (definition.hydrate) {
+                const created = definition.hydrate(data);
+                if (typeof created !== 'object' || created === null || !definition.prototype!.isPrototypeOf(created)) {
+                    return fail(`${definition.name}.fromJSON() must return an instance of the class`);
+                }
+                return created;
+            }
+            return Object.defineProperties(Object.create(definition.prototype!), Object.getOwnPropertyDescriptors(data));
         }
     }
-    typeFailure(path, type, value);
 }
 
-export function validateValue(value: Value, type: TypeDescriptor, path = '$'): Value {
-    return validatedValue(value, type, path, false);
-}
-
-export function validateType(value: Value, type: TypeDescriptor, path = '$'): Value {
-    return validatedValue(value, type, path, true);
-}
-
-function validatedValue(value: Value, type: TypeDescriptor, path: string, convertClasses: boolean): Value {
-    const plan: ContractPlan = new Map();
-    value = check(value, type, path, plan, false, new Set(), convertClasses);
-    for (const [object, contract] of plan) contracts.set(object, contract);
-    if (type.kind === 'fn' && (isFunction(value) || isDescriptor(value))) {
-        if (isFunction(value) && value.__fn === 'builtin' && value.target && value.signature && equivalent(value.signature, type)) return value;
-        return { __fn: 'builtin', name: value.name, signature: type, target: value, call: () => { throw runtimeError('guarded callable requires interpreter dispatch'); } };
+function advise(schema: { [key: string]: unknown }, annotations: Annotations): void {
+    const rest: Record<string, unknown> = { ...annotations };
+    const parts: string[] = [];
+    if (typeof schema.description === 'string') parts.push(schema.description);
+    for (const key of ['description', 'desc']) {
+        const text = rest[key];
+        if (typeof text !== 'string' || !text.trim()) continue;
+        parts.push(text);
+        delete rest[key];
     }
+    if (Object.keys(rest).length) parts.push(`Model advice (not validation constraints): ${JSON.stringify(rest)}`);
+    if (parts.length) schema.description = parts.join('\n');
+}
+
+function schemaOf(type: Type<any>, seen: Type<any>[] = []): { [key: string]: unknown } {
+    const definition = type.definition;
+    const shape = (): { [key: string]: unknown } => {
+        switch (definition.kind) {
+            case 'str': return { type: 'string' };
+            case 'int': return { type: 'integer' };
+            case 'float': return { type: 'number' };
+            case 'bool': return { type: 'boolean' };
+            case 'char': return { type: 'string', minLength: 1, maxLength: 1, description: 'Exactly one Unicode character.' };
+            case 'null': return { type: 'null' };
+            case 'any': return {};
+            case 'object': return { type: 'object' };
+            case 'enum': return { type: 'string', enum: [...definition.values!] };
+            case 'schema': return definition.json === true ? {} : definition.json === false ? { not: {} } : structuredClone(definition.json as { [key: string]: unknown });
+            case 'list': return { type: 'array', items: schemaOf(definition.element!, seen) };
+            case 'union': return { anyOf: definition.members!.map(item => schemaOf(item, seen)) };
+            case 'fn': throw new Failure('runtime_error', `${definition.name} is a callable and cannot be described as JSON`);
+            case 'struct':
+            case 'class': {
+                if (seen.includes(type)) throw new Failure('runtime_error', `recursive type ${definition.name} cannot be described as JSON Schema`);
+                const properties: { [key: string]: unknown } = {};
+                for (const [key, field] of Object.entries(definition.fields!)) set(properties, key, schemaOf(field, [...seen, type]));
+                return { type: 'object', properties, required: Object.keys(definition.fields!), additionalProperties: false };
+            }
+        }
+    };
+    const schema = shape();
+    advise(schema, definition.annotations);
+    return schema;
+}
+
+/** `validate(value, Invoice)` parses with a type; raw JSON Schema only checks and returns the value. */
+export function validate<T>(value: unknown, type: Type<T>): T;
+export function validate(value: unknown, schema: JsonSchema): unknown;
+export function validate(value: unknown, target: Type<unknown> | JsonSchema): unknown {
+    if (isType(target)) return target.parse(value);
+    compileSchema(target)(value);
     return value;
 }
 
-export function contractRead(container: Value[] | Record<string, Value>, key: string | number): Value {
-    const contract = contracts.get(container);
-    const type = contract?.kind === 'list' ? contract.element : contract?.fields?.[key]?.type;
-    const value = isList(container) ? container[Number(key)] : container[String(key)];
-    return type?.kind === 'fn' ? validateValue(value, type, `$[${JSON.stringify(key)}]`) : value;
-}
-
-export function testValue(value: Value, type: TypeDescriptor): boolean {
-    const plan: ContractPlan = new Map();
-    try { check(value, type, '$', plan, true); }
-    catch (error) { if (error instanceof Failure && error.statusCode === 'type_error') return false; throw error; }
-    for (const [object, contract] of plan) contracts.set(object, contract);
-    return true;
-}
-
-/** Validate the final state and all child contracts before publishing any write. */
-export function mutateContract(value: Value[] | Record<string, Value>, operation: (draft: Value[] | Record<string, Value>) => Value): Value {
-    const type = contracts.get(value);
-    if (!type) return operation(value);
-    const draft = isList(value) ? [...value] : newDict(Object.entries(value));
-    const result = operation(draft);
-    const plan: ContractPlan = new Map();
-    check(draft, type, '$', plan, false);
-    plan.delete(draft);
-    if (isList(value) && isList(draft)) value.splice(0, value.length, ...draft);
-    else {
-        const record = value as Record<string, Value>;
-        for (const key of Object.keys(record)) delete record[key];
-        for (const [key, child] of Object.entries(draft)) Object.defineProperty(record, key, { value: child, writable: true, enumerable: true, configurable: true });
-    }
-    for (const [object, contract] of plan) contracts.set(object, contract);
-    return result;
-}
-
-export function assertComplete(value: Value, visiting = new Set<object>()): void {
-    if (typeof value === 'object' && value !== null && nodeTypes.isProxy(value)) return;
-    if (isInstance(value)) {
-        if (!value.complete) throw runtimeError('an incomplete instance cannot escape its constructor');
-        return;
-    }
-    if (!isList(value) && !isDict(value)) return;
-    if (visiting.has(value)) return;
-    visiting.add(value);
-    for (const property of Object.values(Object.getOwnPropertyDescriptors(value))) {
-        if ('value' in property) assertComplete(property.value, visiting);
-    }
-}
-
-export function project(value: Value, dropFunctionProperties = true): Value {
-    const visiting = new Set<object>();
-    const snapshot = (value: Value, property = false): Value | undefined => {
-        if (isFunction(value)) {
-            if (property && dropFunctionProperties) return undefined;
-            throw runtimeError('object() cannot project a function at the root or in an array');
-        }
-        if (isDescriptor(value)) throw runtimeError('object() cannot project a type descriptor');
-        if (isInstance(value)) assertComplete(value);
-        if (!isInstance(value) && !isDict(value) && !isList(value)) return value;
-        if (visiting.has(value)) throw runtimeError('object() cannot project a cyclic data graph');
-        visiting.add(value);
-        let result: Value;
-        if (isList(value)) result = value.map(child => snapshot(child)!);
-        else {
-            const fields = isInstance(value) ? value.fields : value;
-            result = newDict();
-            for (const [key, child] of Object.entries(fields)) {
-                const projected = snapshot(child, true);
-                if (projected !== undefined) Object.defineProperty(result, key, { value: projected, writable: true, enumerable: true, configurable: true });
-            }
-        }
-        visiting.delete(value);
-        return result;
-    };
-    return snapshot(value)!;
-}
+/** The builders under one name, for code that prefers `t.str` and `t.list(t.int)`. */
+export const t = Object.freeze({
+    str, int, float, bool, char, null: nil, nil, any, object, fn,
+    list, union, nullable, enum: enumOf, enumOf, struct, typedef, schema: jsonSchema, jsonSchema, validate,
+});

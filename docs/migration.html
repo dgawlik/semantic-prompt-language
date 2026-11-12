@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="This is a breaking source revision, including for unannotated programs. Migrate source manually;
-there is no legacy grammar mode or general-purpose automatic converter. Recreate pins and
-traces after editing their source. The full contract is recorded in TYPES.md.">
+<meta name="description" content="SPL 2.0 removes the custom SPL language. Workflow code is now native JavaScript in js fences,
+and everything the language had as syntax is a function of the spl-lang library. This guide
+maps every 1.x construct to its replacement and lists the behavior that changed.">
 <meta name="color-scheme" content="light dark">
-<title>Typing migration - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=f87de69cf3fa">
-<link rel="stylesheet" href="assets/style.css?v=f87de69cf3fa">
+<title>Migrating from 1.x - SPL docs</title>
+<link rel="icon" type="image/png" href="assets/icon.png?v=6bad2bd86bcd">
+<link rel="stylesheet" href="assets/style.css?v=6bad2bd86bcd">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=f87de69cf3fa"></script>
-<script defer src="assets/site.js?v=f87de69cf3fa"></script>
+<script defer src="assets/search-index.js?v=6bad2bd86bcd"></script>
+<script defer src="assets/site.js?v=6bad2bd86bcd"></script>
 </head>
 <body data-page="migration">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -24,165 +24,481 @@ traces after editing their source. The full contract is recorded in TYPES.md.">
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.17.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Typing migration</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>Migrating from 1.x</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>Guides</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Typing migration</span><span class="reading-time">6 min read</span></div>
-    <header class="page-heading"><h1>Typing migration</h1><div class="lead"><p>This is a breaking source revision, including for unannotated programs. Migrate source manually;
-there is no legacy grammar mode or general-purpose automatic converter. Recreate pins and
-traces after editing their source. The full contract is recorded in <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/TYPES.md">TYPES.md</a>.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blocks-and-dictionaries">Blocks and dictionaries</a></li><li class="toc-level-2"><a href="#opt-into-typed-contracts">Opt into typed contracts</a></li><li class="toc-level-2"><a href="#reusable-type-aliases">Reusable type aliases</a></li><li class="toc-level-2"><a href="#numeric-representations-and-conversions">Numeric representations and conversions</a></li><li class="toc-level-2"><a href="#class-schemas-versus-structural-data">Class schemas versus structural data</a></li><li class="toc-level-2"><a href="#persistent-mutation-contracts-and-projection">Persistent mutation contracts and projection</a></li></ul></nav></details>
-    <article class="prose"><h2 id="blocks-and-dictionaries">Blocks and dictionaries<a class="heading-anchor" href="#blocks-and-dictionaries" aria-label="Link to Blocks and dictionaries">#</a></h2>
-<p>Old blocks such as <code>if True { log(&#39;ok&#39;) }</code> are rejected. Replace the opening brace with a colon,
-put the body on new lines, and remove the closing brace. Each level adds <strong>exactly four spaces</strong>;
-tabs, inline suites and inconsistent dedents are errors. Align <code>elif</code>, <code>else</code> and <code>except</code> with
-their opening statement. Use <code>pass</code> for an otherwise empty statement body.</p>
-<p>Old dictionaries such as <code>let data = {&#39;name&#39;: &#39;Ada&#39;}</code> are also rejected. Use an <code>object:</code> expression;
-replace <code>{}</code> with <code>object()</code>. Do not change ordinary JavaScript objects, raw JSON wire payloads,
-or interpolation braces inside SPL strings. Expression continuation inside <code>()</code> and <code>[]</code> suspends
-ordinary indentation; explicit <code>object:</code> blocks still delimit their own entries.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-1"><span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>:
-    <span class="hljs-string">&#x27;name&#x27;</span>: <span class="hljs-string">&#x27;Ada&#x27;</span>
-    <span class="hljs-string">&#x27;address&#x27;</span>: <span class="hljs-built_in">object</span>:
-        <span class="hljs-string">&#x27;city&#x27;</span>: <span class="hljs-string">&#x27;London&#x27;</span>
-<span class="hljs-keyword">let</span> empty <span class="hljs-operator">=</span> <span class="hljs-built_in">object</span>()
-<span class="hljs-keyword">if</span> <span class="hljs-literal">True</span>:
-    <span class="hljs-built_in">log</span>(data.name)
+    <div class="page-meta"><span>Guides</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Migrating from 1.x</span><span class="reading-time">10 min read</span></div>
+    <header class="page-heading"><h1>Migrating from 1.x</h1><div class="lead"><p>SPL 2.0 removes the custom SPL language. Workflow code is now native JavaScript in <code>js</code> fences,
+and everything the language had as syntax is a function of the <code>spl-lang</code> library. This guide
+maps every 1.x construct to its replacement and lists the behavior that changed.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#before-and-after">Before and after</a></li><li class="toc-level-2"><a href="#documents-and-modules">Documents and modules</a></li><li class="toc-level-2"><a href="#statements">Statements</a></li><li class="toc-level-2"><a href="#values-and-expressions">Values and expressions</a></li><li class="toc-level-2"><a href="#library-calls">Library calls</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-2"><a href="#behavior-differences">Behavior differences</a></li><li class="toc-level-2"><a href="#embedding-api">Embedding API</a></li><li class="toc-level-2"><a href="#editor">Editor</a></li><li class="toc-level-2"><a href="#checklist">Checklist</a></li></ul></nav></details>
+    <article class="prose"><p>Migration is manual: there is no compatibility mode and no converter. A <code>spl</code> fence is a syntax
+error that points here. Blockquotes, frontmatter, CLI options, traces, pins, MCP configuration
+and logging work as before; recorded traces and locked workflows must be recreated because
+their source changed.</p>
+<h2 id="before-and-after">Before and after<a class="heading-anchor" href="#before-and-after" aria-label="Link to Before and after">#</a></h2>
+<p>SPL 1.x:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-1">enum Label = &#39;bug&#39; | &#39;feature&#39; | &#39;question&#39;
+struct Triage:
+    label: Label
+    reason: str [desc=&#39;One-sentence explanation&#39;]
+
+let issue = read_file($args[0])
+let triage: Triage = ask(schema=Triage, repairs=2) &#39;Classify: {issue}&#39;
+assert len(triage.reason) &gt; 0 &#39;a reason is required&#39;
+
+restrict &#39;./out&#39;:
+    write_file(&#39;./out/triage.json&#39;, json_stringify(triage, 2))
+success triage
 </code></pre></figure>
-<p>Object keys do not introduce a lexical scope. Inline <code>def</code> properties capture ordinary lexical
-variables, receive no implicit <code>self</code>, and should access fields through an explicit argument or
-captured dictionary. Dictionary built-in methods win in member calls: <code>o.pop()</code> calls the built-in,
-whereas <code>(o.pop)()</code> invokes a function stored at the colliding key.</p>
-<h2 id="opt-into-typed-contracts">Opt into typed contracts<a class="heading-anchor" href="#opt-into-typed-contracts" aria-label="Link to Opt into typed contracts">#</a></h2>
-<p>Untyped bindings remain dynamically assignable. Add annotations only where an enforced contract
-is wanted. Known typed violations stop execution before model calls; unknown dynamic values
-are checked at runtime without coercion or repair.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-2"><span class="hljs-keyword">enum</span> <span class="hljs-title class_">Color</span> <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;red&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;green&#x27;</span> <span class="hljs-operator">|</span> <span class="hljs-string">&#x27;blue&#x27;</span>
-<span class="hljs-keyword">struct</span> <span class="hljs-title class_">Request</span>:
-    color: Color
-    note: <span class="hljs-built_in">str</span> <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
-    callback: <span class="hljs-keyword">fn</span>(<span class="hljs-built_in">str</span>, <span class="hljs-built_in">int</span>) <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>
+<p>SPL 2.0:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-2"><span class="hljs-keyword">const</span> <span class="hljs-title class_">Label</span> = <span class="hljs-title function_">enumOf</span>(<span class="hljs-string">&#x27;bug&#x27;</span>, <span class="hljs-string">&#x27;feature&#x27;</span>, <span class="hljs-string">&#x27;question&#x27;</span>);
+<span class="hljs-keyword">const</span> <span class="hljs-title class_">Triage</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Triage&#x27;</span>, {
+    <span class="hljs-attr">label</span>: <span class="hljs-title class_">Label</span>,
+    <span class="hljs-attr">reason</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;One-sentence explanation&#x27;</span> }),
+});
 
-<span class="hljs-keyword">def</span> <span class="hljs-title function_">repeat</span>(text: <span class="hljs-built_in">str</span>, count: <span class="hljs-built_in">int</span>) <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
-    <span class="hljs-keyword">return</span> text <span class="hljs-operator">*</span> count
+<span class="hljs-keyword">const</span> issue = <span class="hljs-keyword">await</span> <span class="hljs-title function_">readFile</span>(args[<span class="hljs-number">0</span>]);
+<span class="hljs-keyword">const</span> triage = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">`Classify: <span class="hljs-subst">${issue}</span>`</span>, { <span class="hljs-attr">schema</span>: <span class="hljs-title class_">Triage</span>, <span class="hljs-attr">repairs</span>: <span class="hljs-number">2</span> });
+<span class="hljs-title function_">assert</span>(triage.<span class="hljs-property">reason</span>.<span class="hljs-property">length</span> &gt; <span class="hljs-number">0</span>, <span class="hljs-string">&#x27;a reason is required&#x27;</span>);
 
-<span class="hljs-keyword">let</span> count: <span class="hljs-built_in">int</span> <span class="hljs-operator">=</span> <span class="hljs-number">2</span>
-<span class="hljs-keyword">let</span> colors: <span class="hljs-built_in">list</span>[Color] <span class="hljs-operator">=</span> [<span class="hljs-string">&#x27;red&#x27;</span>]
-<span class="hljs-keyword">let</span> choice: <span class="hljs-built_in">int</span> <span class="hljs-operator">|</span> <span class="hljs-built_in">str</span> <span class="hljs-operator">=</span> <span class="hljs-number">1</span>
+<span class="hljs-keyword">await</span> <span class="hljs-title function_">restrict</span>(<span class="hljs-string">&#x27;./out&#x27;</span>, <span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">writeFile</span>(<span class="hljs-string">&#x27;./out/triage.json&#x27;</span>, <span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(triage, <span class="hljs-literal">null</span>, <span class="hljs-number">2</span>)));
+<span class="hljs-title function_">success</span>(triage);
 </code></pre></figure>
-<p>Structs are structural, exact records: every field is required, including nullable fields.
-Missing and extra fields fail. Enums accept matching strings directly. <code>char</code> requires exactly
-one Unicode scalar, not one UTF-16 code unit or grapheme cluster. <code>fn(T1, T2) -&gt; R</code> uses explicit
-arity, contravariant parameters and covariant returns; annotated and guarded callable boundaries
-check arguments and results. Neither <code>validate(value, Type)</code> nor <code>isinstance(value, Type)</code>
-converts legacy numbers. Explicit <code>validate(data, Class)</code> can turn structural field data
-into a nominal instance; <code>isinstance</code> remains a non-converting test.</p>
-<p>Field advice such as <code>str [min=2, desc=&#39;Name&#39;]</code> is compile-time JSON-compatible metadata, not a
-constraint: a one-character string still satisfies that type. Raw JSON Schema constraints remain
-strict. Forward declarations, recursive data schemas and inheritance are not supported.</p>
-<h2 id="reusable-type-aliases">Reusable type aliases<a class="heading-anchor" href="#reusable-type-aliases" aria-label="Link to Reusable type aliases">#</a></h2>
-<p>Use <code>type Name = T</code> for a read-only, transparent alias. Aliases work in annotations,
-fields, unions, lists and <code>schema=</code> targets, preserving the underlying representation
-and class identity:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-3"><span class="hljs-keyword">type</span> <span class="hljs-title class_">Money</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">int</span> [minimum<span class="hljs-operator">=</span><span class="hljs-number">0</span>, desc<span class="hljs-operator">=</span><span class="hljs-string">&#x27;Amount in cents&#x27;</span>]
-<span class="hljs-keyword">type</span> <span class="hljs-title class_">Prices</span> <span class="hljs-operator">=</span> <span class="hljs-built_in">list</span>[Money]
-<span class="hljs-keyword">type</span> <span class="hljs-title class_">MaybeMoney</span> <span class="hljs-operator">=</span> Money <span class="hljs-operator">|</span> <span class="hljs-literal">None</span>
-<span class="hljs-keyword">let</span> prices: Prices <span class="hljs-operator">=</span> [<span class="hljs-number">1250</span>, <span class="hljs-number">890</span>]
-<span class="hljs-keyword">let</span> total: Money <span class="hljs-operator">=</span> <span class="hljs-number">0</span>
-<span class="hljs-keyword">for</span> price <span class="hljs-keyword">in</span> prices:
-    total <span class="hljs-operator">+=</span> price
-<span class="hljs-keyword">let</span> discount: MaybeMoney <span class="hljs-operator">=</span> <span class="hljs-literal">None</span>
-</code></pre></figure>
-<p>Advice is descriptive, not a constraint: <code>minimum=0</code> does not reject negative integers.
-Assert business rules explicitly. Alias chains inherit advice; newly declared keys
-override inherited keys, while field advice is appended separately.
-<code>type(value)</code> still returns the runtime type name.</p>
-<p>For blockquotes, give composite schemas a binding name, for example
-<code>type Batch = list[Request]</code>, then request <code>@validate[Batch]</code>.
-The agent passes <code>schema=&quot;Batch&quot;</code> to <code>save_variable</code>; a string such as
-<code>&quot;list[Request]&quot;</code> is not a declared binding name.</p>
-<h2 id="numeric-representations-and-conversions">Numeric representations and conversions<a class="heading-anchor" href="#numeric-representations-and-conversions" aria-label="Link to Numeric representations and conversions">#</a></h2>
-<p>Typed <code>1</code> is a signed 64-bit <code>int</code>; typed <code>1.0</code> is a distinct finite binary64 <code>float</code>.
-Untyped literals retain legacy number behavior. A legacy value needs explicit <code>int(value)</code> or
-<code>float(value)</code> conversion to enter a new representation; validation never converts it.</p>
-<p><code>int(...)</code> is exact and range-checked: fractions, booleans, nonfinite values, out-of-range inputs,
-and inexact integer strings fail. It no longer truncates fractions or treats booleans as integers.
-The inclusive range is <code>-9223372036854775808</code> to <code>9223372036854775807</code>.
-<code>float(...)</code> constructs the distinct representation and rejects NaN and infinities; converting
-an integer to binary64 may round and lose precision. Mixed <code>int</code>/<code>float</code> arithmetic requires
-explicit conversion. Integer arithmetic checks overflow; integer <code>/</code> produces a float.
-<code>sum</code>, <code>abs</code> and <code>round</code> preserve typed numeric representations. Ordinary <code>len</code> and <code>range</code>
-counts remain legacy numbers: use explicit <code>int(...)</code> when a typed count is required.</p>
-<p>Descriptor-directed JSON decoding preserves integer tokens without first passing through a
-JavaScript number. For <code>int | float</code>, integer tokens select <code>int</code>, decimal/exponent tokens select
-<code>float</code>. SPL emits integers exactly and integral floats as <code>1.0</code> (or exponent spelling).
-External JSON normalization may erase that distinction; only SPL&#39;s typed encoder/decoder
-provides this round-trip guarantee.</p>
-<p>Explicit JSON file loading remains dynamic: files do not carry type descriptors or
-automatically restore typed contracts. Use an explicitly
-requested descriptor for typed numeric decoding; do not assume a generic JSON loader preserves
-signed-64-bit values or the <code>int</code>/<code>float</code> distinction.</p>
-<h2 id="class-schemas-versus-structural-data">Class schemas versus structural data<a class="heading-anchor" href="#class-schemas-versus-structural-data" aria-label="Link to Class schemas versus structural data">#</a></h2>
-<p>Classes are nominal instances with declared fields, a constructor named after the class, and
-implicitly bound <code>self</code> in constructors and methods. A matching dictionary is not a class instance.
-Normal construction runs the constructor and must initialize every declared field before publishing
-the instance. Direct schema hydration requires <code>hydratable class</code>; explicit
-<code>validate(data, Class)</code> can populate an ordinary class from validated fields without
-running the constructor.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">spl</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy spl code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="spl code example"><code class="language-spl" id="code-4"><span class="hljs-keyword">hydratable</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Person</span>:
-    name: <span class="hljs-built_in">str</span>
-
-    <span class="hljs-keyword">def</span> <span class="hljs-title function_">Person</span>(name: <span class="hljs-built_in">str</span>):
-        self.name <span class="hljs-operator">=</span> name
-
-    <span class="hljs-keyword">def</span> <span class="hljs-title function_">greeting</span>() <span class="hljs-operator">-&gt;</span> <span class="hljs-built_in">str</span>:
-        <span class="hljs-keyword">return</span> <span class="hljs-string">&#x27;Hello <span class="hljs-subst">{self.name}</span>&#x27;</span>
-
-<span class="hljs-keyword">let</span> person: Person <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span>Person) <span class="hljs-string">&#x27;Generate a person&#x27;</span>
-<span class="hljs-keyword">let</span> data <span class="hljs-operator">=</span> <span class="hljs-keyword">ask</span>(<span class="hljs-attr">schema</span><span class="hljs-operator">=</span><span class="hljs-keyword">struct</span>(Person)) <span class="hljs-string">&#x27;Generate person data&#x27;</span>
-<span class="hljs-keyword">success</span> <span class="hljs-built_in">object</span>(person)
-</code></pre></figure>
-<p><code>schema=Person</code> returns a hydrated instance only when the class opts in. <code>schema=struct(Person)</code>
-returns validated structural field data, <strong>not</strong> a <code>Person</code>. Consequently the old proposed
-<code>let result: Person = ask(schema=struct(Person)) &#39;Random Person&#39;</code> cannot satisfy the annotation.
-An annotation never secretly selects an ask schema, format or hydration target.
-To convert the structural result explicitly, use <code>let person: Person = validate(data, Person)</code>.
-This validates exact declared fields, recursively converts nested class data and bypasses
-constructors. It does not convert legacy numbers; use typed schemas or explicit numeric
-conversions before validation.</p>
-<p>For an existing instance, <code>validate(object(person), struct(Person))</code> creates a deep field
-snapshot and checks its structural contract. Dynamic <code>object(person)</code> projection drops named
-function properties; validation then rejects any missing required callable field rather than
-silently accepting an incomplete record.</p>
-<p>Hydration skips the constructor: methods must not assume constructor normalization, side effects
-or semantic invariants occurred. Callable/non-JSON required fields make a schema target unsupported
-before any model call; they are not silently omitted. Distinct ambiguous decoding targets fail
-rather than being selected by union declaration order.</p>
-<p>Typed decoding and complete hydration validation share the ask repair pipeline: zero repairs by
-default, at most five additional attempts, and existing format/repair restrictions. Ordinary
-assignment, call, mutation and validation failures do not trigger model retries.</p>
-<h2 id="persistent-mutation-contracts-and-projection">Persistent mutation contracts and projection<a class="heading-anchor" href="#persistent-mutation-contracts-and-projection" aria-label="Link to Persistent mutation contracts and projection">#</a></h2>
-<p>Typed mutable values retain their contracts for their lifetime, including mutations through
-untyped aliases, member/index writes, captured bindings and built-in mutators. Mutable contracts
-are invariant: <code>list[Color]</code> is not interchangeable with <code>list[str]</code>.</p>
-<p>Successful mutable <code>isinstance</code> tests atomically install compatible contracts, just as validation
-does. Failed tests leave data and contracts unchanged. Incompatible typed aliases fail even when
-an empty collection&#39;s contents happen to satisfy both types. Bulk writes validate everything
-before committing; failures leave no valid prefix written or partial contracts installed.
-Narrowing expires after relevant assignment or potentially mutating calls; use stable local
-snapshots when appropriate.</p>
-<p>Project class instances explicitly before JSON output. <code>object(value)</code> makes a deep dynamic
-snapshot without sharing mutable children or changing its source. Named function properties,
-including methods, are dropped by dynamic projection; root functions, array functions and cycles
-are rejected. Class-to-struct projection likewise snapshots declared data fields without silently
-discarding required non-JSON fields. Ordinary untyped function serialization is unchanged:
-projection rules do not globally make the serializer ignore functions.</p>
+<h2 id="documents-and-modules">Documents and modules<a class="heading-anchor" href="#documents-and-modules" aria-label="Link to Documents and modules">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Documents and modules reference table"><table>
+<thead>
+<tr>
+<th scope="col">SPL 1.x</th>
+<th scope="col">SPL 2.0</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>```spl</code> fence</td>
+<td><code>```js</code> fence, or <code>```ts</code> with erasable types</td>
+</tr>
+<tr>
+<td><code>helpers.spl</code> module, every top-level name exported</td>
+<td><code>helpers.js</code> ES module with explicit <code>export</code></td>
+</tr>
+<tr>
+<td><code>import { double } from &#39;./helpers.spl&#39;</code>, relative to the importing file</td>
+<td><code>import { double } from &#39;./helpers.js&#39;</code>, relative to the working directory</td>
+</tr>
+<tr>
+<td><code>import * as markdown from &#39;markdown&#39;</code></td>
+<td>Nothing: <code>markdown</code> is a global (<code>spl-lang/markdown</code> in modules)</td>
+</tr>
+<tr>
+<td>No access to the host platform</td>
+<td><code>import fs from &#39;node:fs&#39;</code> and any package in <code>node_modules</code></td>
+</tr>
+<tr>
+<td>Top-level <code>return</code> ends the document</td>
+<td><code>success(value)</code>; top-level <code>return</code> is a syntax error</td>
+</tr>
+<tr>
+<td><code>&lt;workflow&gt;.&lt;function&gt;.spl</code> codegen cache with a <code># @CODEGEN sha256:</code> header</td>
+<td><code>&lt;workflow&gt;.&lt;function&gt;.js</code> with a <code>// @CODEGEN sha256:</code> header; old caches are ignored</td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="statements">Statements<a class="heading-anchor" href="#statements" aria-label="Link to Statements">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Statements reference table"><table>
+<thead>
+<tr>
+<th scope="col">SPL 1.x</th>
+<th scope="col">SPL 2.0</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>let x = 1</code></td>
+<td><code>const x = 1;</code> or <code>let x = 1;</code></td>
+</tr>
+<tr>
+<td><code>let x: int = 1</code></td>
+<td><code>const x = 1;</code> (<code>const x: number = 1;</code> in a <code>ts</code> fence); validate with <code>int.parse(x)</code></td>
+</tr>
+<tr>
+<td><code>def add(a, b):</code> with <code>return a + b</code></td>
+<td><code>function add(a, b) { return a + b; }</code></td>
+</tr>
+<tr>
+<td><code>lambda x: x * 2</code></td>
+<td><code>x =&gt; x * 2</code></td>
+</tr>
+<tr>
+<td><code>if</code> / <code>elif</code> / <code>else</code> with colon blocks</td>
+<td><code>if (...) { } else if (...) { } else { }</code></td>
+</tr>
+<tr>
+<td><code>for item in items:</code></td>
+<td><code>for (const item of items) { }</code></td>
+</tr>
+<tr>
+<td><code>for i in range(3):</code></td>
+<td><code>for (let i = 0; i &lt; 3; i++) { }</code></td>
+</tr>
+<tr>
+<td><code>for key, value in items(d):</code></td>
+<td><code>for (const [key, value] of Object.entries(d)) { }</code></td>
+</tr>
+<tr>
+<td><code>while cond:</code>, <code>break</code>, <code>continue</code></td>
+<td><code>while (cond) { }</code>, <code>break</code>, <code>continue</code></td>
+</tr>
+<tr>
+<td><code>pass</code></td>
+<td>An empty block <code>{ }</code></td>
+</tr>
+<tr>
+<td><code>try:</code> / <code>except err:</code></td>
+<td><code>try { } catch (error) { }</code></td>
+</tr>
+<tr>
+<td><code># comment</code></td>
+<td><code>// comment</code></td>
+</tr>
+<tr>
+<td>Block and <code>if</code> expressions (<code>let x = :</code>)</td>
+<td>A conditional expression <code>c ? a : b</code>, or a function</td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="values-and-expressions">Values and expressions<a class="heading-anchor" href="#values-and-expressions" aria-label="Link to Values and expressions">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Values and expressions reference table"><table>
+<thead>
+<tr>
+<th scope="col">SPL 1.x</th>
+<th scope="col">SPL 2.0</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>True</code>, <code>False</code>, <code>None</code></td>
+<td><code>true</code>, <code>false</code>, <code>null</code> (absent values are <code>undefined</code>)</td>
+</tr>
+<tr>
+<td><code>and</code>, <code>or</code>, <code>not</code></td>
+<td><code>&amp;&amp;</code>, <code>||</code>, <code>!</code></td>
+</tr>
+<tr>
+<td><code>a == b</code> on lists and dictionaries</td>
+<td><code>===</code> compares identity; use <code>isDeepStrictEqual</code> from <code>node:util</code></td>
+</tr>
+<tr>
+<td><code>a if cond else b</code></td>
+<td><code>cond ? a : b</code></td>
+</tr>
+<tr>
+<td><code>a // b</code></td>
+<td><code>Math.floor(a / b)</code></td>
+</tr>
+<tr>
+<td><code>x in xs</code>, <code>x not in xs</code></td>
+<td><code>xs.includes(x)</code>, <code>!xs.includes(x)</code></td>
+</tr>
+<tr>
+<td><code>&#39;Hello {name}&#39;</code></td>
+<td><code>`Hello ${name}`</code>; braces in ordinary strings are literal</td>
+</tr>
+<tr>
+<td><code>&#39;Use {{name}}&#39;</code>, <code>r&#39;C:\temp&#39;</code></td>
+<td><code>&#39;Use {name}&#39;</code>, <code>String.raw</code> with a template literal</td>
+</tr>
+<tr>
+<td><code>&#39;&#39;&#39;multiline&#39;&#39;&#39;</code></td>
+<td>A template literal</td>
+</tr>
+<tr>
+<td><code>object:</code> block, <code>object()</code></td>
+<td><code>{ key: value }</code>, <code>{}</code></td>
+</tr>
+<tr>
+<td><code>len(x)</code></td>
+<td><code>x.length</code></td>
+</tr>
+<tr>
+<td><code>xs.append(x)</code>, <code>xs[1:4]</code>, <code>xs[::-1]</code></td>
+<td><code>xs.push(x)</code>, <code>xs.slice(1, 4)</code>, <code>xs.toReversed()</code></td>
+</tr>
+<tr>
+<td><code>range(n)</code>, <code>sum(xs)</code>, <code>sorted(xs)</code></td>
+<td><code>Array.from({ length: n }, (_, i) =&gt; i)</code>, <code>xs.reduce((a, b) =&gt; a + b, 0)</code>, <code>xs.toSorted()</code></td>
+</tr>
+<tr>
+<td><code>keys(d)</code>, <code>values(d)</code>, <code>items(d)</code></td>
+<td><code>Object.keys(d)</code>, <code>Object.values(d)</code>, <code>Object.entries(d)</code></td>
+</tr>
+<tr>
+<td><code>text.upper()</code>, <code>text.strip()</code>, <code>text.startswith(p)</code></td>
+<td><code>text.toUpperCase()</code>, <code>text.trim()</code>, <code>text.startsWith(p)</code></td>
+</tr>
+<tr>
+<td><code>&#39;, &#39;.join(xs)</code>, <code>text.splitlines()</code></td>
+<td><code>xs.join(&#39;, &#39;)</code>, <code>text.split(/\r?\n/)</code></td>
+</tr>
+<tr>
+<td><code>str(x)</code>, <code>int(x)</code>, <code>float(x)</code>, <code>bool(x)</code></td>
+<td><code>String(x)</code>, <code>Number(x)</code>, <code>Number(x)</code>, <code>Boolean(x)</code></td>
+</tr>
+<tr>
+<td><code>json_parse(text)</code>, <code>json_stringify(value, 2)</code></td>
+<td><code>JSON.parse(text)</code>, <code>JSON.stringify(value, null, 2)</code></td>
+</tr>
+<tr>
+<td><code>type(x)</code>, <code>isinstance(x, T)</code></td>
+<td><code>typeof x</code>, <code>T.is(x)</code></td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="library-calls">Library calls<a class="heading-anchor" href="#library-calls" aria-label="Link to Library calls">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Library calls reference table"><table>
+<thead>
+<tr>
+<th scope="col">SPL 1.x</th>
+<th scope="col">SPL 2.0</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ask &#39;Summarize {notes}&#39;</code></td>
+<td><code>await ask(`Summarize ${notes}`)</code></td>
+</tr>
+<tr>
+<td><code>ask(fmt=&#39;integer&#39;, repairs=1) &#39;Rate {x}&#39;</code></td>
+<td><code>await ask(`Rate ${x}`, { fmt: &#39;integer&#39;, repairs: 1 })</code></td>
+</tr>
+<tr>
+<td><code>think(reasoning=&#39;high&#39;) &#39;Plan&#39;</code></td>
+<td><code>await think(&#39;Plan&#39;, { reasoning: &#39;high&#39; })</code></td>
+</tr>
+<tr>
+<td><code>agent &#39;Run the tests&#39;</code></td>
+<td><code>await agent(&#39;Run the tests&#39;)</code></td>
+</tr>
+<tr>
+<td>Modifiers <code>hide=True</code>, <code>top_p=0.1</code></td>
+<td>Options <code>hide: true</code>, <code>topP: 0.1</code></td>
+</tr>
+<tr>
+<td><code>human &#39;Approve?&#39;</code></td>
+<td><code>await human(&#39;Approve?&#39;)</code></td>
+</tr>
+<tr>
+<td><code>enforce &#39;Be brief&#39;:</code> block</td>
+<td><code>enforce(&#39;Be brief&#39;, () =&gt; ...)</code></td>
+</tr>
+<tr>
+<td><code>forbid &#39;jokes&#39;:</code> block</td>
+<td><code>forbid(&#39;jokes&#39;, () =&gt; ...)</code></td>
+</tr>
+<tr>
+<td><code>restrict &#39;./out&#39;:</code> block</td>
+<td><code>await restrict(&#39;./out&#39;, () =&gt; ...)</code></td>
+</tr>
+<tr>
+<td><code>restrict fs &#39;./src&#39;, exec &#39;git&#39;:</code> block</td>
+<td><code>await restrict({ fs: &#39;./src&#39;, exec: &#39;git&#39; }, () =&gt; ...)</code></td>
+</tr>
+<tr>
+<td><code>success value</code>, <code>fail &#39;reason&#39;</code></td>
+<td><code>success(value)</code>, <code>fail(&#39;reason&#39;)</code></td>
+</tr>
+<tr>
+<td><code>assert cond &#39;message&#39;</code></td>
+<td><code>assert(cond, &#39;message&#39;)</code></td>
+</tr>
+<tr>
+<td><code>read_file(p)</code>, <code>write_file(p, text)</code></td>
+<td><code>await readFile(p)</code>, <code>await writeFile(p, text)</code></td>
+</tr>
+<tr>
+<td><code>web_fetch(url)</code>, <code>web_search(q)</code>, <code>shell(cmd)</code></td>
+<td><code>await webFetch(url)</code>, <code>await webSearch(q)</code>, <code>await shell(cmd)</code></td>
+</tr>
+<tr>
+<td><code>$args[0]</code>, <code>$env.NAME</code></td>
+<td><code>args[0]</code>, <code>env.NAME</code></td>
+</tr>
+<tr>
+<td><code>log(level=&#39;debug&#39;)(value)</code></td>
+<td><code>log.debug(value)</code></td>
+</tr>
+<tr>
+<td><code>except err:</code> with <code>err.status_code</code>, <code>err.reason</code></td>
+<td><code>catch (error)</code> with <code>error.statusCode</code> or <code>error.status_code</code>, <code>error.reason</code></td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="types">Types<a class="heading-anchor" href="#types" aria-label="Link to Types">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Types reference table"><table>
+<thead>
+<tr>
+<th scope="col">SPL 1.x</th>
+<th scope="col">SPL 2.0</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enum Color = &#39;red&#39; | &#39;green&#39;</code></td>
+<td><code>const Color = enumOf(&#39;red&#39;, &#39;green&#39;);</code></td>
+</tr>
+<tr>
+<td><code>struct Card:</code> with <code>term: str [desc=&#39;Name&#39;]</code></td>
+<td><code>const Card = struct(&#39;Card&#39;, { term: str.annotate({ desc: &#39;Name&#39; }) });</code></td>
+</tr>
+<tr>
+<td><code>type Money = int [minimum=0]</code></td>
+<td><code>const Money = typedef(&#39;Money&#39;, int, { minimum: 0 });</code></td>
+</tr>
+<tr>
+<td><code>list[T]</code>, <code>A | B</code>, <code>T | None</code></td>
+<td><code>list(T)</code>, <code>union(A, B)</code>, <code>nullable(T)</code></td>
+</tr>
+<tr>
+<td><code>fn(str, int) -&gt; str</code></td>
+<td><code>fn</code>: any callable, without a signature</td>
+</tr>
+<tr>
+<td><code>class Person:</code> with methods, <code>hydratable class</code></td>
+<td><code>struct(&#39;Person&#39;, { ... }).methods({ ... })</code> or <code>.class(Person)</code></td>
+</tr>
+<tr>
+<td><code>struct(Person)</code></td>
+<td><code>Person.data</code></td>
+</tr>
+<tr>
+<td><code>validate(data, T)</code></td>
+<td><code>validate(data, T)</code> or <code>T.parse(data)</code></td>
+</tr>
+<tr>
+<td><code>object(person)</code> projection</td>
+<td><code>Person.data.parse(JSON.parse(JSON.stringify(person)))</code></td>
+</tr>
+<tr>
+<td><code>ask(schema=Card) &#39;prompt&#39;</code></td>
+<td><code>await ask(&#39;prompt&#39;, { schema: Card })</code></td>
+</tr>
+<tr>
+<td>Annotated bindings, parameters and results</td>
+<td>Not enforced; call <code>T.parse(value)</code> where a check is needed</td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="blockquotes">Blockquotes<a class="heading-anchor" href="#blockquotes" aria-label="Link to Blockquotes">#</a></h2>
+<p>Blockquotes are unchanged: the same agent tools, <code>@name</code> markers, <code>@validate[Type]</code>,
+<code>@CTL(...)</code> and <code>@CODEGEN</code>. Three details differ:</p>
+<ul>
+<li><code>call_function</code> calls JavaScript functions and passes JSON values as they are; arguments are
+no longer decoded against parameter annotations.</li>
+<li><code>@CODEGEN</code> generates JavaScript function declarations, and <code>codegen(description)</code> does the
+same from code.</li>
+<li>Script arguments are <code>@args</code>; the agent&#39;s <code>load_variable</code> still accepts the old <code>$args</code> name.</li>
+</ul>
+<h2 id="behavior-differences">Behavior differences<a class="heading-anchor" href="#behavior-differences" aria-label="Link to Behavior differences">#</a></h2>
+<ul>
+<li><strong>Everything asynchronous needs <code>await</code>.</strong> 1.x ran model calls and tools implicitly in
+sequence. In JavaScript they return promises. A <code>map</code> over a model call yields promises:
+use <code>await Promise.all(items.map(item =&gt; ask(...)))</code>, which runs the calls concurrently, or
+a <code>for</code> loop to run them one by one.</li>
+<li><strong>No typed 64-bit integers.</strong> Numbers are JavaScript numbers. <code>int</code> accepts safe integers
+(up to 2^53 - 1) and <code>float</code> any finite number, including integers. There is no separate
+integer representation, no checked overflow and no exact decoding of larger integer tokens.</li>
+<li><strong>No static type checker and no persistent contracts.</strong> Annotations on variables and
+parameters do not exist at run time, <code>--check</code> does not check types, and a value that passed
+<code>parse</code> can be changed freely afterwards. Types check data where you apply them: <code>schema</code>,
+<code>@validate</code>, <code>parse</code>, <code>is</code> and <code>validate</code>. TypeScript in <code>ts</code> fences is erased, not checked,
+when the workflow runs; the VS Code extension reports type errors while editing. The
+<code>type_error</code> status code is no longer produced.</li>
+<li><strong>Annotations are advice.</strong> As before, field and alias annotations describe data to the model
+and never reject a value.</li>
+<li><strong><code>const</code> is not enforced across fences.</strong> Top-level names live in one shared scope with REPL
+rules: redeclaring a name in a later fence rebinds it, and a top-level <code>const</code> can be
+reassigned. Inside functions and blocks, JavaScript&#39;s usual <code>let</code>/<code>const</code> scoping applies.</li>
+<li><strong>Imports resolve against the working directory.</strong> 1.x resolved <code>.spl</code> imports next to the
+importing file. JavaScript imports resolve against <code>--cwd</code>, are loaded and cached by Node.js
+and need explicit <code>export</code>. Imported names are live, read-only bindings as before.
+<code>spl-lang</code> and <code>spl-lang/markdown</code> always resolve to the running copy of the package, so
+helper modules need no local install.</li>
+<li><strong>Helper modules are not recorded.</strong> 1.x captured module source in traces and locked
+workflows. Now helpers are imported from disk again on replay: a locked workflow that imports
+local helpers is not self-contained, an edited helper changes the result and a deleted one fails.</li>
+<li><strong><code>--check</code> is a syntax check.</strong> It compiles fences, parses controls and verifies static
+relative <code>import</code> declarations. It no longer type-checks, and dynamic <code>import()</code> calls are not
+verified.</li>
+<li><strong>Native Node.js APIs are outside the runtime.</strong> In 1.x all I/O went through tools. Now code
+can call <code>node:fs</code>, <code>fetch</code> or <code>child_process</code> directly; such calls are not checked by
+<code>restrict</code>, not recorded by <code>--trace</code> or <code>--pin</code>, and run again on replay.</li>
+<li><strong>Replay runs your JavaScript again.</strong> Recorded library effects return their recorded
+results, but <code>Date.now()</code>, <code>Math.random()</code> and direct file reads produce new values. A changed
+value that reaches a prompt or tool argument makes the replay fail with a mismatch.</li>
+<li><strong>Fences run on the main thread.</strong> They are ordinary JavaScript: a long synchronous loop
+blocks log rendering, timers and Ctrl+C handling until it yields. Add <code>await</code> points or move
+heavy work to a worker thread or child process.</li>
+<li><strong>Truthiness and equality are JavaScript&#39;s.</strong> Empty arrays and objects are truthy, <code>==</code> on
+arrays and objects compares identity, and a missing argument is <code>undefined</code>, not <code>None</code>.
+Use <code>??</code> for defaults: <code>args[0] ?? &#39;world&#39;</code>.</li>
+<li><strong>Strings interpolate only in template literals.</strong> <code>&#39;Hello {name}&#39;</code> is now a literal string.
+Search migrated prompts for braces inside ordinary quotes.</li>
+<li><strong>Failures are exceptions.</strong> <code>catch</code> receives a <code>Failure</code> object rather than a dictionary;
+<code>line</code> and <code>command</code> are filled in only when the failure ends the document. <code>success</code> is
+implemented by throwing, so a catch-all must rethrow what it does not handle. Any other
+uncaught JavaScript exception ends the document as <code>runtime_error</code>.</li>
+<li><strong>Classes need no opt-in.</strong> <code>hydratable</code> is gone. A class type hydrates plain data into
+instances without running the constructor, unless the class has a static <code>fromJSON(data)</code>.</li>
+</ul>
+<h2 id="embedding-api">Embedding API<a class="heading-anchor" href="#embedding-api" aria-label="Link to Embedding API">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Embedding API reference table"><table>
+<thead>
+<tr>
+<th scope="col">SPL 1.x</th>
+<th scope="col">SPL 2.0</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>parse(source)</code> for SPL source</td>
+<td><code>parse(code, { language })</code> for JavaScript or TypeScript</td>
+</tr>
+<tr>
+<td><code>checkProgram</code>, <code>loadModules</code></td>
+<td><code>checkWorkflow(workflow, cwd)</code>; imports are native</td>
+</tr>
+<tr>
+<td><code>encodeJson</code>, <code>decodeTypedJson</code>, <code>schemaForType</code>, <code>validateType</code>, <code>validateValue</code>, <code>testValue</code>, <code>project</code></td>
+<td><code>JSON.stringify</code>, <code>Type.parseJson</code>, <code>Type.schema</code>, <code>Type.parse</code>, <code>Type.is</code>, <code>Type.data</code></td>
+</tr>
+<tr>
+<td><code>run(program, { source })</code> naming codegen caches</td>
+<td><code>run(workflow, { file })</code>; <code>source</code> still labels failure payloads</td>
+</tr>
+<tr>
+<td>Language only available inside workflows</td>
+<td><code>import { ask, struct, ... } from &#39;spl-lang&#39;</code> in any Node.js program</td>
+</tr>
+</tbody></table>
+</div>
+<p><code>parseMarkdown</code>, <code>run</code>, <code>ExecutionSession</code>, <code>Logger</code>, <code>AiBackend</code>, <code>Trace</code>, <code>Pin</code> and the backend
+interfaces keep their shapes. See <a href="cli.html#embedding">Embedding</a>.</p>
+<h2 id="editor">Editor<a class="heading-anchor" href="#editor" aria-label="Link to Editor">#</a></h2>
+<p>The VS Code extension no longer ships an SPL grammar, <code>.spl</code> language, snippets for SPL
+statements or a Markdown preview highlighter. Fences get JavaScript and TypeScript language
+features from the TypeScript language service, and notebook code cells are JavaScript or
+TypeScript cells. See the <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/vscode/README.md">extension guide</a>.</p>
+<h2 id="checklist">Checklist<a class="heading-anchor" href="#checklist" aria-label="Link to Checklist">#</a></h2>
+<ol>
+<li>Change every <code>spl</code> fence to <code>js</code> and translate its code with the tables above.</li>
+<li>Add <code>await</code> to every model call, tool, <code>human</code>, <code>restrict</code> and <code>codegen</code>.</li>
+<li>Turn interpolated strings into template literals and <code>$args</code>/<code>$env</code> into <code>args</code>/<code>env</code>.</li>
+<li>Rewrite enums, structs, classes and aliases with the type builder; replace annotations on
+variables with <code>parse</code> calls where the check matters.</li>
+<li>Convert <code>.spl</code> modules to <code>.js</code> modules with <code>export</code>, and make import paths relative to the
+folder you run <code>spl</code> from.</li>
+<li>Run <code>spl workflow.md --check</code>, then record new traces and pins.</li>
+</ol>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Migration.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
     <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="examples.html"><span>Previous</span><strong>Examples</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><div></div></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#blocks-and-dictionaries">Blocks and dictionaries</a></li><li class="toc-level-2"><a href="#opt-into-typed-contracts">Opt into typed contracts</a></li><li class="toc-level-2"><a href="#reusable-type-aliases">Reusable type aliases</a></li><li class="toc-level-2"><a href="#numeric-representations-and-conversions">Numeric representations and conversions</a></li><li class="toc-level-2"><a href="#class-schemas-versus-structural-data">Class schemas versus structural data</a></li><li class="toc-level-2"><a href="#persistent-mutation-contracts-and-projection">Persistent mutation contracts and projection</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#before-and-after">Before and after</a></li><li class="toc-level-2"><a href="#documents-and-modules">Documents and modules</a></li><li class="toc-level-2"><a href="#statements">Statements</a></li><li class="toc-level-2"><a href="#values-and-expressions">Values and expressions</a></li><li class="toc-level-2"><a href="#library-calls">Library calls</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-2"><a href="#blockquotes">Blockquotes</a></li><li class="toc-level-2"><a href="#behavior-differences">Behavior differences</a></li><li class="toc-level-2"><a href="#embedding-api">Embedding API</a></li><li class="toc-level-2"><a href="#editor">Editor</a></li><li class="toc-level-2"><a href="#checklist">Checklist</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

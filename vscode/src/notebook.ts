@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { isWorkflowMarkdown } from '../../lang/src/markdown.js';
 import {
-    decodeWorkflow, encodeWorkflow, parseWorkflowCell, NOTEBOOK_TYPE, DEFAULT_FRONTMATTER,
+    CELL_LANGUAGES, decodeWorkflow, encodeWorkflow, fenceLanguage, parseWorkflowCell, NOTEBOOK_TYPE, DEFAULT_FRONTMATTER,
     type WorkflowCell,
 } from './notebookFormat';
 import { NotebookKernel } from './notebookKernel';
@@ -15,7 +15,7 @@ class WorkflowSerializer implements vscode.NotebookSerializer {
         const data = new vscode.NotebookData(workflow.cells.map(cell => {
             const result = new vscode.NotebookCellData(
                 cell.kind === 'markdown' ? vscode.NotebookCellKind.Markup : vscode.NotebookCellKind.Code,
-                cell.value, cell.kind === 'spl' ? 'spl' : 'markdown',
+                cell.value, cell.kind === 'code' ? CELL_LANGUAGES[cell.language ?? 'js'] : 'markdown',
             );
             result.metadata = cell;
             return result;
@@ -34,13 +34,14 @@ class WorkflowSerializer implements vscode.NotebookSerializer {
             eol: data.metadata?.eol ?? '\n',
             bom: data.metadata?.bom ?? '',
             cells: data.cells.map(cell => {
-                if (cell.kind === vscode.NotebookCellKind.Code && !['spl', 'markdown'].includes(cell.languageId)) {
-                    throw new Error(`Unsupported notebook cell language '${cell.languageId}'; use SPL or Markdown.`);
+                const language = cell.kind === vscode.NotebookCellKind.Code ? fenceLanguage(cell.languageId) : undefined;
+                if (cell.kind === vscode.NotebookCellKind.Code && !language && cell.languageId !== 'markdown') {
+                    throw new Error(`Unsupported notebook cell language '${cell.languageId}'; use JavaScript, TypeScript or Markdown.`);
                 }
                 return {
                     ...cell.metadata,
-                    kind: cell.kind === vscode.NotebookCellKind.Markup ? 'markdown'
-                        : cell.languageId === 'spl' ? 'spl' : 'natural',
+                    kind: cell.kind === vscode.NotebookCellKind.Markup ? 'markdown' : language ? 'code' : 'natural',
+                    language,
                     value: cell.value,
                 } satisfies WorkflowCell;
             }),
@@ -83,7 +84,7 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
     const runtimeDiagnostics = vscode.languages.createDiagnosticCollection('spl-notebook-runtime');
     const sessions = new Map<vscode.NotebookDocument, Session>();
     const controller = vscode.notebooks.createNotebookController('spl-runtime', NOTEBOOK_TYPE, 'SPL Runtime');
-    controller.supportedLanguages = ['spl', 'markdown'];
+    controller.supportedLanguages = ['javascript', 'typescript', 'markdown'];
     controller.supportsExecutionOrder = true;
     controller.description = 'Shared variables and functions per notebook';
     let requestId = 0;
@@ -113,9 +114,8 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
                 parseWorkflowCell(cell.document.getText(), cell.document.languageId, frontmatter(notebook));
                 syntaxDiagnostics.delete(cell.document.uri);
             } catch (error) {
-                if (error instanceof SplSyntaxError && cell.document.languageId === 'spl' &&
-                    !error.message.includes('frontmatter')) {
-                    // The language server owns ordinary SPL parser diagnostics.
+                if (error instanceof SplSyntaxError && error.message.includes('built-in type stripping')) {
+                    // The editor's own Node.js may be too old to check TypeScript cells; the notebook runtime decides.
                     syntaxDiagnostics.delete(cell.document.uri);
                     continue;
                 }
@@ -143,8 +143,11 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
         }
         let session = sessions.get(notebook);
         if (!session || session.kernel.isStopped) {
-            const folder = notebook.uri.scheme === 'file' ? path.dirname(notebook.uri.fsPath)
-                : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+            // Imports and relative paths resolve against the workspace folder, as in the editor and
+            // when running `spl` from the project root; a loose file falls back to its own folder.
+            const folder = vscode.workspace.getWorkspaceFolder?.(notebook.uri)?.uri.fsPath
+                ?? (notebook.uri.scheme === 'file' ? path.dirname(notebook.uri.fsPath)
+                    : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd());
             session = {
                 kernel: new NotebookKernel(
                     context.asAbsolutePath('out/notebookWorker.cjs'), folder,
@@ -251,7 +254,7 @@ export function registerNotebooks(context: Pick<vscode.ExtensionContext, 'subscr
                     execution.start(started);
                     execution.executionOrder = ++current.order;
                     await execution.clearOutput();
-                    log(`[info] Running ${cell.document.languageId === 'spl' ? 'SPL' : 'instruction'} cell`);
+                    log(`[info] Running ${cell.document.languageId === 'markdown' ? 'instruction' : cell.document.languageId} cell`);
                     if (cell.document.isClosed || notebook.isClosed) throw new Error('The cell or notebook was closed before execution.');
                     runtimeDiagnostics.delete(cell.document.uri);
                     const version = cell.document.version;

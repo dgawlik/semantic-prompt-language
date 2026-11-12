@@ -10,17 +10,15 @@ import { AuthError, login, logout, parseProvider, type Provider } from './auth.j
 import { Failure, SplSyntaxError } from './errors.js';
 import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
-import { parseMarkdown } from './markdown.js';
-import { run, type RunResult } from './interpreter.js';
-import { encodeJson, runtimeError } from './values.js';
+import { parseMarkdown, type Workflow } from './markdown.js';
+import { checkWorkflow, run, type RunResult } from './workflow.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
 import { Trace, TraceError, fingerprint } from './trace.js';
 import { CliLogging, canInteract } from './cli-logging.js';
 import { formatEvent, sanitize, terminalColor } from './log-format.js';
 import { Pin } from './pin.js';
-import { isModuleSources, linkModules, loadModules } from './modules.js';
 
-const HELP = `spl - Semantic Prompt Language interpreter
+const HELP = `spl - Semantic Prompt Language: executable Markdown workflows in JavaScript
 
 Usage: spl <workflow.md> [options]
        spl login <provider>    configure an API key and default provider: openai | anthropic | google
@@ -41,7 +39,7 @@ Options:
   --silent                suppress all logs; only the result is printed
   --model <id>            model override (takes precedence over frontmatter)
   --provider <name>       openai | anthropic | google; model IDs may use provider/model
-  --arg <value>           script argument exposed in $args (repeatable; also --arg=value)
+  --arg <value>           script argument exposed in args (repeatable; also --arg=value)
   --human <answer>        answer a human question without prompting (repeatable, in question order)
                           Remaining questions read one line from stdin; prompts go to stderr.
   --mcp <file.json>       MCP servers in VS Code mcp.json format
@@ -51,8 +49,8 @@ Options:
                           Choose another JSONL file to restart.
   --pin                   on success, save <workflow>.locked.md with responses in double blockquotes
                           Locked workflows replay without models, tools, stores or human prompts.
-  --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
-  --check                 validate script/import syntax and any --mcp config without executing
+  --cwd <dir>             base directory for imports, relative paths and restrictions (default: current directory)
+  --check                 validate fences, controls, relative imports and any --mcp config without executing
   -v, --version           print version
   -h, --help              print this help
 
@@ -62,7 +60,11 @@ Provider environment:
   SPL_PROVIDER selects a default; SPL_HOME overrides the saved-credentials folder.
   Environment keys override saved keys. Login configures API keys, not OAuth.
 
-The script result (the value of 'success' or 'return', or the failure payload) is written to stdout.
+js fences run as native JavaScript (ts fences have their types erased) with the spl-lang library
+already imported: ask, think, agent, human, restrict, enforce, forbid, success, fail and more.
+Blockquotes run as agent commands on the same shared scope.
+
+The script result (the value passed to success(), or the failure payload) is written to stdout.
 Normal runs ask for human input directly, even with --silent.
 Exit codes: 0 success, 1 uncaught script failure, 2 syntax or usage error,
 70 internal/infrastructure error.`;
@@ -188,7 +190,7 @@ async function main(): Promise<number> {
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
     const file = positionals[0];
-    if (!/\.md$/i.test(file)) usageError('only .md workflows are executable; wrap SPL in a fenced spl block and add extension/version frontmatter');
+    if (!/\.md$/i.test(file)) usageError('only .md workflows are executable; put JavaScript in a fenced js block and add extension/version frontmatter');
     let source: string;
     try {
         source = fs.readFileSync(file, 'utf8');
@@ -196,7 +198,7 @@ async function main(): Promise<number> {
         return usageError(`cannot read '${file}': ${(e as Error).message}`);
     }
 
-    let program;
+    let program: Workflow;
     try {
         program = parseMarkdown(source);
     } catch (e) {
@@ -223,23 +225,9 @@ async function main(): Promise<number> {
         return usageError((e as Error).message);
     }
     if (values.check) {
-        try {
-            if (program.body.some(stmt => stmt.t === 'import')) {
-                if (program.markdown?.lock) {
-                    const entry = program.markdown.lock.entries[0];
-                    if (!entry || entry.request !== JSON.stringify({ kind: 'modules' })
-                        || !('value' in entry.outcome) || !isModuleSources(entry.outcome.value)) {
-                        throw runtimeError('locked workflow is missing its module sources');
-                    }
-                    linkModules(program, entry.outcome.value, path.resolve(file));
-                } else loadModules(program, path.resolve(file), cwd);
-            }
-        } catch (error) {
-            if (!(error instanceof Failure)) throw error;
-            new Logger('error').error(`${error.source ?? file}:${error.line}: ${error.reason}`);
-            return 2;
-        }
-        return 0;
+        const problems = checkWorkflow(program, cwd);
+        for (const problem of problems) new Logger('error').error(`${file}:${problem.line}:${problem.column}: ${problem.message}`);
+        return problems.length ? 2 : 0;
     }
 
     let backend: LlmBackend;
@@ -316,7 +304,7 @@ async function main(): Promise<number> {
         }
         process.stderr.write(sanitize(question) + '\n> ');
         const answer = await answers!.next();
-        if (answer.done) throw runtimeError('cannot read human input: stdin ended; supply an answer with --human');
+        if (answer.done) throw new Failure('runtime_error', 'cannot read human input: stdin ended; supply an answer with --human');
         return answer.value;
     };
     process.on('SIGINT', interrupt);
@@ -324,8 +312,7 @@ async function main(): Promise<number> {
     try {
         try {
             result = await run(program, {
-                backend, logger, trace,
-                source: program.body.some(stmt => stmt.t === 'import' || stmt.t === 'natural' && stmt.codegen) ? path.resolve(file) : undefined,
+                backend, logger, trace, file: path.resolve(file),
                 cwd: locked && values.cwd === undefined ? undefined : cwd,
                 model: values.model, args: values.arg, human, pin,
             });
@@ -366,7 +353,7 @@ async function main(): Promise<number> {
     }
     if (result.hasValue) {
         const v = result.value;
-        process.stdout.write((typeof v === 'string' ? v : encodeJson(v, 2)) + '\n');
+        process.stdout.write((typeof v === 'string' ? v : JSON.stringify(v, null, 2) ?? 'null') + '\n');
     }
     return 0;
 }

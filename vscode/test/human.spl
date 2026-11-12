@@ -1,4 +1,0 @@
-# SYNTAX TEST "source.spl"
-let answer = human 'Review this draft'
-#            ^^^^^ keyword.other.human.spl
-#            ^^^^^ - meta.command.spl

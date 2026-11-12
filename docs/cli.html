@@ -7,11 +7,11 @@
 the outcome through its exit code. Requires Node.js &gt;=24.15.0.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=f87de69cf3fa">
-<link rel="stylesheet" href="assets/style.css?v=f87de69cf3fa">
+<link rel="icon" type="image/png" href="assets/icon.png?v=6bad2bd86bcd">
+<link rel="stylesheet" href="assets/style.css?v=6bad2bd86bcd">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=f87de69cf3fa"></script>
-<script defer src="assets/site.js?v=f87de69cf3fa"></script>
+<script defer src="assets/search-index.js?v=6bad2bd86bcd"></script>
+<script defer src="assets/site.js?v=6bad2bd86bcd"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -23,13 +23,13 @@ the outcome through its exit code. Requires Node.js &gt;=24.15.0.">
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v1.17.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>CLI &amp; runtime</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">The language</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Language</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="grammar.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>Grammar</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Typing migration</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>CLI &amp; runtime</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>CLI &amp; runtime</span><span class="reading-time">13 min read</span></div>
+    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>CLI &amp; runtime</span><span class="reading-time">16 min read</span></div>
     <header class="page-heading"><h1>CLI &amp; runtime</h1><div class="lead"><p><code>spl</code> runs one Markdown workflow, prints its result on stdout and logs on stderr, and reports
 the outcome through its exit code. Requires Node.js &gt;=24.15.0.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#pinned-workflows">Pinned workflows</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li></ul></nav></details>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#pinned-workflows">Pinned workflows</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#runtime-limits">Runtime limits</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li><li class="toc-level-3"><a href="#interactive-sessions">Interactive sessions</a></li></ul></nav></details>
     <article class="prose"><h2 id="usage">Usage<a class="heading-anchor" href="#usage" aria-label="Link to Usage">#</a></h2>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-1">spl &lt;workflow.md&gt; [options] [--arg value ...]
 spl &lt;workflow.md&gt; --trace run.jsonl
@@ -45,7 +45,7 @@ spl <span class="hljs-built_in">logout</span> [openai|anthropic|google]
 </thead>
 <tbody><tr>
 <td><code>--arg &lt;value&gt;</code></td>
-<td>Script argument exposed as <code>$args[i]</code>; repeatable, also <code>--arg=value</code></td>
+<td>Script argument exposed as <code>args[i]</code>; repeatable, also <code>--arg=value</code></td>
 </tr>
 <tr>
 <td><code>--human &lt;answer&gt;</code></td>
@@ -61,11 +61,11 @@ spl <span class="hljs-built_in">logout</span> [openai|anthropic|google]
 </tr>
 <tr>
 <td><code>--cwd &lt;dir&gt;</code></td>
-<td>Base folder for paths, restrictions, tools and agents (default: current)</td>
+<td>Base folder for imports, relative paths, restrictions, tools and agents (default: current)</td>
 </tr>
 <tr>
 <td><code>--check</code></td>
-<td>Validate frontmatter, syntax and <code>--mcp</code> config without running</td>
+<td>Validate frontmatter, fences, blockquote controls, relative imports and <code>--mcp</code> config without running</td>
 </tr>
 <tr>
 <td><code>--log-level &lt;level&gt;</code></td>
@@ -89,7 +89,7 @@ spl <span class="hljs-built_in">logout</span> [openai|anthropic|google]
 </tr>
 <tr>
 <td><code>--pin</code></td>
-<td>Save a successful workflow as self-contained <a href="#pinned-workflows">locked Markdown</a></td>
+<td>Save a successful workflow with its recorded effects as <a href="#pinned-workflows">locked Markdown</a></td>
 </tr>
 <tr>
 <td><code>-v</code>, <code>--version</code> / <code>-h</code>, <code>--help</code></td>
@@ -97,8 +97,13 @@ spl <span class="hljs-built_in">logout</span> [openai|anthropic|google]
 </tr>
 </tbody></table>
 </div>
-<p>Each <code>--arg</code> is one string; use <code>--arg=--value</code> for values starting with a dash.</p>
-<p>Normal runs handle <code>human</code> expressions and blockquote <code>ask_human</code> questions directly. The shell
+<p>Each <code>--arg</code> is one string; use <code>--arg=--value</code> for values starting with a dash. Only <code>.md</code>
+workflows are executable.</p>
+<p><code>--check</code> compiles every <code>js</code> and <code>ts</code> fence, parses <code>@CTL</code> and <code>@CODEGEN</code>, and verifies that
+static relative <code>import</code> declarations point at existing files under <code>--cwd</code>. Dynamic
+<code>import(&#39;./x.js&#39;)</code> calls and package names are not checked. It runs no code and calls no model,
+so it cannot find errors that only appear at run time, such as a misspelled variable.</p>
+<p>Normal runs handle <code>human</code> calls and blockquote <code>ask_human</code> questions directly. The shell
 prints each question on stderr and reads one line from stdin, preserving whitespace except the
 line ending. Repeat <code>--human</code> to supply answers in question order without prompting:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-2">spl lang/examples/color-poem.md
@@ -110,9 +115,10 @@ normally, even with <code>--silent</code>. EOF without an answer is a script fai
 With <code>--trace</code>, recorded answers replay without prompting or consuming supplied <code>--human</code> values;
 those values answer only new questions.</p>
 <h2 id="output-and-exit-codes">Output and exit codes<a class="heading-anchor" href="#output-and-exit-codes" aria-label="Link to Output and exit codes">#</a></h2>
-<p>stdout gets the <code>success</code> value: strings as-is, everything else as JSON. An uncaught failure prints
-its <a href="safety.html#failure-payload">payload</a> instead. stderr gets logs, including every model prompt and
-response, plus committed variable-state changes with <code>--log-level debug</code>.
+<p>stdout gets the <code>success</code> value: strings as-is, everything else as JSON. A workflow that ends
+without calling <code>success</code> prints nothing. An uncaught failure prints its
+<a href="safety.html#failure-payload">payload</a> instead. stderr gets logs, including every model prompt and
+response, plus changes to shared variables with <code>--log-level debug</code>.
 Use <code>--silent</code> when logs could expose sensitive data.</p>
 <p>Each event has one header, without repeated continuation badges, panels or timestamps:</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Output and exit codes reference table"><table>
@@ -160,14 +166,13 @@ Use <code>--silent</code> when logs could expose sensitive data.</p>
 </tr>
 </tbody></table>
 </div>
-<p>Generic embedding messages have a <code>- message</code> header. Explicit script logs keep their
+<p>Generic embedding messages have a <code>- message</code> header. Explicit <code>log(...)</code> calls keep their
 <code>[info|error|debug] log:</code> prefix for embedding/notebook compatibility.
-State logs identify each affected binding&#39;s defining scope, previous value (<code>&lt;unbound&gt;</code> on
-initialization) and new value. Parameters, loop/handler bindings, closures and shared mutations
-are included. A shared mutation is one event listing all affected aliases. Same-value assignments,
-no-op methods, reads, scope exits and initial runtime/store baselines do not create events.
-Automatic executed-source and control-flow step traces no longer appear at any verbosity.
-Historical trace reconstruction is suppressed; newly completed steps remain visible.</p>
+State logs cover the shared top-level bindings: each event names the binding, its previous value
+(<code>&lt;unbound&gt;</code> on initialization) and its new value. Bindings are compared after every top-level
+statement and agent action, so a change made inside a function or loop is reported when that
+statement finishes. Local variables, unchanged values and imported modules are not reported.
+During trace replay, reconstruction is silent; newly completed steps remain visible.</p>
 <p>Terminal stdin and stderr enable an isolated BetterTUI view on stderr, even when stdout is piped.
 Event headers are bold when terminal styling is enabled. An animated trailing loading character
 remains visible while the workflow runs, including while waiting for model output. It disappears
@@ -178,31 +183,26 @@ Up/Down selects a payload in the viewport or scrolls text; Enter/Space toggles a
 Page Up/Down scrolls; Home/End reaches the ends. Other folds and selection survive arrival/resize.
 The view initially follows new output. Scrolling away from the bottom pauses following, not
 execution; scrolling back to the bottom with arrows, Page Down or End resumes following.
-Enter/Space never jumps to an off-screen selection, and End reaches the output tail even when
-text or a streaming preview extends beyond the last payload.
 Expanded JSON uses two-space indentation and preserves original numeric/string tokens and duplicate
 keys. Primitives and malformed JSON remain readable without misleading fold controls.</p>
-<p>Model responses and available reasoning stream live in this view by default; <code>hide=True</code> suppresses reasoning.
+<p>Model responses and available reasoning stream live in this view by default; <code>hide: true</code> suppresses reasoning.
 Partial JSON is shown as text until the authoritative response arrives, when normal formatting
 and folding apply. Streaming previews are separate from immutable log events, so the final
 transcript contains each complete response once. Redirected logs remain expanded and append-only.
 <code>--silent</code> also suppresses streaming previews.</p>
-<p><code>@CODEGEN</code> responses appear as expanded SPL code with line numbers, preserved indentation and
+<p><code>@CODEGEN</code> responses appear as JavaScript code with line numbers, preserved indentation and
 syntax colors when terminal color is enabled. The same display handles incomplete streaming
-code and definitions reused from cache; reasoning remains ordinary text. Generated codegen
-instructions and binding context start folded, leaving the requested function description visible.
-Plain logs and the final transcript retain the original SPL source without line-number gutters,
-with syntax colors when terminal color is enabled.</p>
+code and definitions reused from cache. Generated codegen instructions and binding context start
+folded, leaving the requested function description visible. Plain logs and the final transcript
+retain the source without line-number gutters.</p>
 <p>Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
 stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
 append-only output without changing workflow results. Non-terminal stdin/stderr, <code>TERM=dumb</code>,
 embedded sinks, silent, help/version, auth and check-only never acquire the UI.
 Before a human prompt, the interactive renderer exits and restores the terminal; subsequent logs
 remain append-only so only the shell reads the answer. Supplied <code>--human</code> answers do not stop the UI.
-Before native rendering, the child queries cursor visibility and alternate-screen state.
-Unsupported queries or an already-active alternate screen select diagnosed append-only output;
-SPL does not clear an existing application&#39;s alternate screen. The parent owns the input-mode
-snapshot and cursor restoration before native code runs, including after a child crash.
+If terminal-mode queries are unsupported or an alternate screen is already active, SPL diagnoses
+the limitation and uses append-only output without taking over that screen.
 Message, label and value controls are sanitized rather than executed as terminal instructions.</p>
 <p>Colors are enabled automatically when stderr is a terminal, and disabled for redirected output
 or <code>TERM=dumb</code>. Set <code>NO_COLOR=1</code> to disable color, or <code>FORCE_COLOR=1</code> to enable it when redirecting;
@@ -224,9 +224,7 @@ Custom logger sinks default to plain text; <code>new Logger(&#39;info&#39;, sink
 explicitly enables styling. Non-JSON values such as errors, bigints and circular objects use
 Node&#39;s inspect format instead of losing error details or failing JSON serialization.
 An additive <code>eventSink</code> option delivers detached readonly events instead of strings, never both.
-Neither library imports nor custom sinks load BetterTUI or start a process. Automatic observation
-uses non-invoking snapshots: callable identities, cycle references and accessor placeholders,
-without running getters, serializers or custom inspectors.</p>
+Neither library imports nor custom sinks load BetterTUI or start a process.</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Output and exit codes reference table"><table>
 <thead>
 <tr>
@@ -244,7 +242,7 @@ without running getters, serializers or custom inspectors.</p>
 </tr>
 <tr>
 <td><code>2</code></td>
-<td>Syntax or usage error</td>
+<td>Syntax or usage error, including a failed <code>--check</code> and a trace that does not match</td>
 </tr>
 <tr>
 <td><code>70</code></td>
@@ -257,34 +255,44 @@ without running getters, serializers or custom inspectors.</p>
 spl flow.md --trace run.jsonl --silent  <span class="hljs-comment"># resume or replay the same run</span>
 spl flow.md --trace next-run.jsonl     <span class="hljs-comment"># start a fresh run</span>
 </code></pre></figure>
-<p><code>--trace</code> is the only CLI persistence and replay option. A missing file starts a run; an existing
-file reconstructs local variables, functions, loops and shared mutations from its recorded external
-inputs, then continues at the first unrecorded step. Records are appended and flushed durably:
-existing bytes are never rewritten. A completed success or failure replays deterministically,
-prints the same result and leaves the trace unchanged. To restart, choose a different JSONL file.</p>
-<p>The version 2 JSONL journal records model requests, raw responses and failures (including repairs,
-reasoning, sampling and token budgets), blockquote decisions, explicit file/shell/web tool outcomes,
-human answers, <code>@CODEGEN</code> definitions and the terminal result. Completed effects are not executed again: replay never
-contacts model providers or MCP, re-reads files, repeats writes/commands/network calls, or prompts
-for recorded answers. It does not recreate side effects if their files have been removed or changed.</p>
+<p><code>--trace</code> is the only CLI persistence and replay option. A missing file starts a run. With an
+existing file, the workflow&#39;s JavaScript runs again from the top while every recorded effect
+returns its recorded result, which rebuilds variables, functions and loops; execution then
+continues live at the first unrecorded effect. Records are appended and flushed durably:
+existing bytes are never rewritten. A completed success or failure replays, prints the same
+result and leaves the trace unchanged. To restart, choose a different JSONL file.</p>
+<p>The version 2 JSONL journal records the effects of the library: model requests, raw responses
+and failures (including repairs, reasoning, sampling and token budgets), blockquote decisions,
+<code>readFile</code>/<code>writeFile</code>/<code>webFetch</code>/<code>webSearch</code>/<code>shell</code> outcomes, restrictions, human answers,
+generated <code>@CODEGEN</code> code, accessed environment values and the final result. Completed effects
+are not executed again: replay never contacts model providers or MCP, re-reads files through the
+tools, repeats writes, commands or network calls, or prompts for recorded answers. It does not
+recreate side effects if their files have been removed or changed.</p>
+<p><strong>Only library effects are replayed.</strong> Plain JavaScript is executed again on every run. Anything
+your code does through Node.js APIs directly, such as <code>node:fs</code>, <code>fetch</code>, <code>child_process</code>,
+<code>Date.now()</code> or <code>Math.random()</code>, is neither recorded nor suppressed. If such a value changes
+and flows into a prompt or tool argument, the request no longer matches the journal and the run
+stops with <code>trace effect history mismatch</code>.</p>
+<p>Helper modules are part of that plain JavaScript. They are imported natively again on replay
+and their source is not recorded: an edited helper can change the replayed result, and a deleted
+one makes the replay fail.</p>
 <p>Source, runtime, working directory and model/provider/MCP configuration must match. Arguments are
 retained; omitting <code>--arg</code> reuses them, while explicitly different arguments fail. Requests must
 match exactly and in order; malformed, mismatched and unused history fail without falling back
-to live work. Legacy trace and generation-recording formats are not accepted.</p>
+to live work.</p>
 <p>After an interruption, a recorded human question or tool-free generation request can continue.
 If a write, shell command or agent was interrupted between its durable intent and outcome, its
 side effects may already have occurred: SPL reports an unresolved effect instead of repeating it.
 Truncated final records likewise require manual recovery; SPL never truncates the log to guess.
 Only one process can write a trace at a time; a lock from a terminated process is reclaimed.</p>
-<p>For <a href="llm-commands.html#code-generation"><code>@CODEGEN</code> blockquotes</a>, traced runs also save friendly
-<code>&lt;workflow&gt;.&lt;function&gt;.spl</code> sibling files with a top-level description hash. New traced runs
-reuse matching definitions automatically, without imports or generation calls. Existing JSONL
-replay uses recorded definitions regardless of later cache edits or removal.</p>
-<p>Human input still uses stdin or repeatable <code>--human</code> flags; there are no suspension envelopes,
-answer IDs or waiting exit codes. The former <code>--store</code>, <code>--store-module</code>, <code>--record</code>, <code>--replay</code>,
-<code>--checkpoint</code>, <code>--resume</code>, <code>--answer-for</code>, <code>--answer</code> and <code>--answer-file</code> options are removed.</p>
+<p>For <a href="llm-commands.html#code-generation">code generation</a>, traced runs also save
+<code>&lt;workflow&gt;.&lt;function&gt;.js</code> sibling files with a description hash on the first line. New traced
+runs reuse matching files without generation calls. Replay of an existing JSONL file uses its
+recorded code regardless of later cache edits or removal.</p>
+<p>Calls that run concurrently, such as <code>Promise.all(items.map(item =&gt; ask(...)))</code>, are recorded
+one at a time in call order when a trace or pin is active, so they replay deterministically.</p>
 <p><strong>Keep traces private.</strong> They include prompts, responses, human answers and tool results.
-<code>$env</code> access captures the environment snapshot for deterministic reconstruction; a blockquote
+Reading <code>env</code> captures the environment snapshot for deterministic reconstruction; a blockquote
 <code>get_env</code> records only the requested value. These may contain secrets. New files use owner-only
 permissions where supported. Trace logging is not a transaction system or a sandbox.</p>
 <h2 id="pinned-workflows">Pinned workflows<a class="heading-anchor" href="#pinned-workflows" aria-label="Link to Pinned workflows">#</a></h2>
@@ -297,16 +305,20 @@ never overwritten. <code>--check --pin</code> only validates and writes nothing.
 do not produce a locked workflow.</p>
 <p>The locked document retains the original Markdown and appends a versioned JSON execution journal
 inside a double blockquote (<code>&gt;&gt;</code>) with a <code>spl-lock</code> fence. It includes every returned model response
-(including repair attempts and reasoning), blockquote runtime decisions, explicit tool outcomes and
-human answers. This block is data, never another instruction to a model.</p>
+(including repair attempts and reasoning), blockquote runtime decisions, tool outcomes, generated
+code and human answers. This block is data, never another instruction to a model.</p>
 <p>The runtime recognizes the journal automatically, including through the embedding <code>run</code> API.
-Locked workflows are standalone; <code>ExecutionSession</code> rejects them instead of mixing pinned inputs with retained state.
-It substitutes recorded answers and reconstructs shared state deterministically: no model/provider
-or MCP calls, file/network/shell operations, repeated writes, variable-store access or human prompts.
-The initial variable-store snapshot, script arguments, CLI model override and working directory are
-retained. When <code>$env</code> or a blockquote environment tool is used, the environment snapshot is retained
-as well. Replay checks source identity, execution options, request order and complete journal
-consumption; missing, malformed, mismatched or unused entries fail without falling back to live calls.</p>
+Locked workflows run on their own; <code>ExecutionSession</code> rejects them instead of mixing pinned inputs with retained state.
+The JavaScript runs again while recorded effects return their recorded results: no model/provider
+or MCP calls, no library file/network/shell operations, no variable-store access and no human prompts.
+The script arguments, CLI model override and working directory are retained. When <code>env</code> or a
+blockquote environment tool is used, the environment snapshot is retained as well. Replay checks
+source identity, execution options, request order and complete journal consumption; missing,
+malformed, mismatched or unused entries fail without falling back to live calls.
+As with traces, only library effects are pinned. Code that calls Node.js APIs directly runs
+again, and helper modules are imported from disk again. A locked workflow that imports local
+helpers is therefore not self-contained: it needs those files, an edited helper changes the
+result and a deleted one fails. Keep everything a locked workflow must reproduce in its fences.</p>
 <p>Pinning cannot be combined with <code>--trace</code>. Locked workflows also
 reject MCP configuration and supplied human answers. Explicit argument, model or working-directory
 overrides must match the pinned values. To change the workflow or its inputs, run the original file
@@ -341,14 +353,14 @@ performs all requested actions; locked replay does not repeat those actions or r
 <li><code>${workspaceFolder}</code> expands to <code>--cwd</code>; <code>${env:NAME}</code> reads the environment and fails if missing.
 Keep secrets in the environment, not the file. Other VS Code variables and settings are rejected.</li>
 </ul>
-<p>Use the server names in <a href="safety.html#restrictions"><code>restrict mcp</code></a>, and <code>--check</code> to validate the
+<p>Use the server names in <a href="safety.html#restrictions"><code>restrict({ mcp })</code></a>, and <code>--check</code> to validate the
 file without starting servers. Only load configurations you trust.</p>
 <h2 id="models-and-authentication">Models and authentication<a class="heading-anchor" href="#models-and-authentication" aria-label="Link to Models and authentication">#</a></h2>
 <p>Every model call uses the official OpenAI, Anthropic or Google client in a fresh conversation.
 See <a href="getting-started.html#install">Getting started</a> for API-key login and environment variables.
 A call without credentials, or a provider/model access error, fails with <code>llm_error</code>.
-Deterministic workflows, check-only operations and replay do not initialize providers or MCP.</p>
-<p>Model precedence is unchanged: CLI <code>--model</code>, per-call <code>model</code>, frontmatter <code>model</code>, provider default.
+Workflows without model calls, check-only operations and replay do not initialize providers or MCP.</p>
+<p>Model precedence: CLI <code>--model</code>, per-call <code>model</code>, frontmatter <code>model</code>, provider default.
 IDs may be bare (<code>claude-sonnet-4-5</code>, <code>gemini-2.5-flash</code>, <code>gpt-4.1</code>) or qualified
 (<code>anthropic/claude-sonnet-4-5</code>). Recognizable bare IDs infer their provider; custom IDs can be
 qualified or used with <code>--provider</code>. Unknown models are passed unchanged to the selected provider
@@ -358,54 +370,139 @@ then <code>SPL_PROVIDER</code>, then the saved login default, then a single conf
 An explicit provider conflicting with the model&#39;s provider is an error. Multiple configured
 providers without a selection are an error, not an arbitrary choice.
 Defaults are <code>gpt-4.1</code> (OpenAI), <code>claude-sonnet-4-5</code> (Anthropic), and <code>gemini-2.5-flash</code> (Google).</p>
-<p>SPL reasoning levels map to OpenAI reasoning effort, Anthropic thinking budgets/adaptive effort,
+<p>Reasoning levels map to OpenAI reasoning effort, Anthropic thinking budgets/adaptive effort,
 and Google thinking budgets/levels. Unsupported recognized combinations warn and use the model
 default; effective provider, model and reasoning effort are retained in traces. Runtime tools
 execute sequentially, MCP results remain traceable, and timeout/cancellation never accepts a
 partial answer. Failed actions are not automatically retried.
 Live output remains non-reproducible; contain variance with schemas, assertions and traces.</p>
+<h2 id="runtime-limits">Runtime limits<a class="heading-anchor" href="#runtime-limits" aria-label="Link to Runtime limits">#</a></h2>
+<ul>
+<li><strong>One thread.</strong> Fences run as ordinary JavaScript on the main thread. A long synchronous loop
+blocks log rendering, timers and Ctrl+C handling until it yields. Put <code>await</code> points in long
+loops, or move heavy work to a worker thread or child process.</li>
+<li><strong>Await library calls.</strong> A model call or tool that is not awaited keeps running in the
+background, and if it fails the rejected promise crashes the process instead of producing a
+failure payload.</li>
+<li><strong>Replay covers library effects only.</strong> Traces and locked workflows do not record Node.js APIs
+called directly or the source of helper modules; see <a href="#traces-and-replay">Traces and replay</a>.</li>
+<li><strong><code>restrict</code> is not a sandbox.</strong> It governs the library&#39;s tools, agents and MCP servers; see
+<a href="safety.html#restrictions">Restrictions</a>.</li>
+</ul>
 <h2 id="embedding">Embedding<a class="heading-anchor" href="#embedding" aria-label="Link to Embedding">#</a></h2>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-7"><span class="hljs-keyword">import</span> { parseMarkdown, run, <span class="hljs-title class_">Logger</span>, <span class="hljs-title class_">AiBackend</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;spl-lang&#x27;</span>;
-<span class="hljs-keyword">import</span> fs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:fs&#x27;</span>;
+<p>The package that provides the CLI is also the library. Besides the
+<a href="language.html#the-library-in-nodejs-programs">workflow functions</a>, it exports what is needed to
+run whole documents from a program.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-7" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-7"><span class="hljs-keyword">import</span> fs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;node:fs&#x27;</span>;
+<span class="hljs-keyword">import</span> { parseMarkdown, run, <span class="hljs-title class_">Logger</span>, <span class="hljs-title class_">AiBackend</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;spl-lang&#x27;</span>;
 
 <span class="hljs-keyword">const</span> logger = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Logger</span>(<span class="hljs-string">&#x27;silent&#x27;</span>);
 <span class="hljs-keyword">const</span> backend = <span class="hljs-keyword">new</span> <span class="hljs-title class_">AiBackend</span>({ logger, <span class="hljs-attr">cwd</span>: process.<span class="hljs-title function_">cwd</span>(), <span class="hljs-attr">timeoutMs</span>: <span class="hljs-number">300_000</span> });
 <span class="hljs-keyword">try</span> {
-  <span class="hljs-keyword">const</span> program = <span class="hljs-title function_">parseMarkdown</span>(fs.<span class="hljs-title function_">readFileSync</span>(<span class="hljs-string">&#x27;flow.md&#x27;</span>, <span class="hljs-string">&#x27;utf8&#x27;</span>));
-  <span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> <span class="hljs-title function_">run</span>(program, { backend, logger, <span class="hljs-attr">source</span>: <span class="hljs-string">&#x27;flow.md&#x27;</span>, <span class="hljs-attr">cwd</span>: process.<span class="hljs-title function_">cwd</span>(), <span class="hljs-attr">args</span>: [<span class="hljs-string">&#x27;first&#x27;</span>] });
-  <span class="hljs-keyword">if</span> (result.<span class="hljs-property">status</span> === <span class="hljs-string">&#x27;success&#x27;</span>) <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(result.<span class="hljs-property">value</span>);
-  <span class="hljs-keyword">else</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(result.<span class="hljs-property">failure</span>);
+    <span class="hljs-keyword">const</span> workflow = <span class="hljs-title function_">parseMarkdown</span>(fs.<span class="hljs-title function_">readFileSync</span>(<span class="hljs-string">&#x27;flow.md&#x27;</span>, <span class="hljs-string">&#x27;utf8&#x27;</span>));
+    <span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> <span class="hljs-title function_">run</span>(workflow, { backend, logger, <span class="hljs-attr">file</span>: <span class="hljs-string">&#x27;flow.md&#x27;</span>, <span class="hljs-attr">cwd</span>: process.<span class="hljs-title function_">cwd</span>(), <span class="hljs-attr">args</span>: [<span class="hljs-string">&#x27;first&#x27;</span>] });
+    <span class="hljs-keyword">if</span> (result.<span class="hljs-property">status</span> === <span class="hljs-string">&#x27;success&#x27;</span>) <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(result.<span class="hljs-property">value</span>);
+    <span class="hljs-keyword">else</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(result.<span class="hljs-property">failure</span>);
 } <span class="hljs-keyword">finally</span> {
-  <span class="hljs-keyword">await</span> backend.<span class="hljs-title function_">close</span>();
+    <span class="hljs-keyword">await</span> backend.<span class="hljs-title function_">close</span>();
 }
 </code></pre></figure>
-<p><code>run</code> returns <code>success</code> (with <code>value</code>) or <code>failure</code> (with <code>failure</code>).
-Options include <code>backend</code>, <code>logger</code>, <code>cwd</code>, <code>args</code> (default <code>[]</code>, never <code>process.argv</code>),
-<code>store</code> (embedding-only bindings/snapshots), <code>source</code>, <code>model</code>, <code>human</code> and <code>trace</code>.
-For <a href="language.html#modules">local module imports</a>, <code>source</code> is the importing file path or file URL;
-without a file source, imports resolve from <code>cwd</code>. <code>loadModules(program, source, cwd)</code> links and
-validates imports without executing them; pass its graph as the fourth argument of <code>checkProgram</code>
-to include module contracts in embedding preflight. The CLI&#39;s <code>--check</code> validates dependency
-syntax and named exports without executing module code.
-Bundled standard library imports such as <code>import { Document } from &#39;markdown&#39;</code> are available
-regardless of <code>source</code> or <code>cwd</code>, and their SPL source is included in traces and pinned workflows.
-A <code>human(question, line)</code> handler returns a string or
-<code>Promise&lt;string&gt;</code> for both human expressions and blockquote <code>ask_human</code> calls. Embedded runs never
-read stdin themselves; provide this handler when requesting new human input.
-Use <code>Trace.open(file, { source: program.lines.join(&#39;\n&#39;), runtime: &#39;your-runtime-id&#39;, cwd, args, configuration })</code>
+<p><code>parseMarkdown</code> compiles every fence and throws <code>SplSyntaxError</code> (with <code>line</code> and <code>col</code>) for
+invalid documents. <code>run</code> resolves to <code>{ status: &#39;success&#39;, value, hasValue }</code> or
+<code>{ status: &#39;failure&#39;, failure }</code>; <code>hasValue</code> is <code>false</code> when the document ended without <code>success</code>.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Embedding reference table"><table>
+<thead>
+<tr>
+<th scope="col"><code>run</code> option</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>backend</code>, <code>logger</code></td>
+<td>Required: the model backend and the log destination</td>
+</tr>
+<tr>
+<td><code>cwd</code></td>
+<td>Working directory for imports, relative paths, restrictions and tools (default: process directory)</td>
+</tr>
+<tr>
+<td><code>args</code></td>
+<td>Script arguments (default <code>[]</code>, never <code>process.argv</code>)</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>Overrides frontmatter and per-call models, like <code>--model</code></td>
+</tr>
+<tr>
+<td><code>human</code></td>
+<td><code>(question, line) =&gt; string</code> or a promise of one; answers <code>human</code> and <code>ask_human</code></td>
+</tr>
+<tr>
+<td><code>file</code></td>
+<td>Path of the workflow document; names generated-code caches</td>
+</tr>
+<tr>
+<td><code>source</code>, <code>sourceVersion</code></td>
+<td>URI and version reported as <code>source</code> and <code>source_version</code> in failure payloads</td>
+</tr>
+<tr>
+<td><code>trace</code>, <code>pin</code></td>
+<td>An open <code>Trace</code> or <code>Pin</code> to record and replay effects</td>
+</tr>
+<tr>
+<td><code>store</code></td>
+<td>Embedding-only initial bindings and final snapshot; not available with a trace</td>
+</tr>
+</tbody></table>
+</div>
+<p>Embedded runs never read stdin themselves; provide a <code>human</code> handler when a workflow asks for
+input. <code>parse(code, { language, model })</code> wraps plain JavaScript (or <code>&#39;ts&#39;</code>) as a one-fence
+workflow, <code>parseInstruction(text)</code> wraps one blockquote, and <code>checkWorkflow(workflow, cwd)</code>
+returns the missing-import problems that <code>--check</code> reports.</p>
+<p>Use <code>Trace.open(file, { source: workflow.lines.join(&#39;\n&#39;), runtime: &#39;your-runtime-id&#39;, cwd, args, configuration })</code>
 and pass the result as <code>trace</code>. After execution and backend cleanup, call <code>trace.finish(result)</code>;
-always call <code>trace.close()</code> in <code>finally</code>. The same file automatically resumes or replays.
-Trace runs cannot use an embedding variable store; local state is reconstructed from history.
-A custom backend implements <code>call(request)</code> and <code>close()</code>;
-only requests of kind <code>agent</code> may run tools. Raw <code>parse</code> and <code>run</code> still accept plain SPL source.
+always call <code>trace.close()</code> in <code>finally</code>. The same file automatically resumes or replays.</p>
+<p>A custom backend implements <code>call(request)</code> and <code>close()</code>, which makes offline tests simple:</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-8"><span class="hljs-keyword">import</span> { parse, run, <span class="hljs-title class_">Logger</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;spl-lang&#x27;</span>;
+
+<span class="hljs-keyword">const</span> backend = {
+    <span class="hljs-keyword">async</span> <span class="hljs-title function_">call</span>(<span class="hljs-params">request</span>) { <span class="hljs-keyword">return</span> { <span class="hljs-attr">text</span>: <span class="hljs-string">&#x27;4&#x27;</span>, <span class="hljs-attr">effective</span>: {} }; },
+    <span class="hljs-keyword">async</span> <span class="hljs-title function_">close</span>(<span class="hljs-params"></span>) {},
+};
+<span class="hljs-keyword">const</span> workflow = <span class="hljs-title function_">parse</span>(<span class="hljs-string">&quot;success(await ask(&#x27;2 + 2?&#x27;, { fmt: &#x27;integer&#x27; }));&quot;</span>);
+<span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> <span class="hljs-title function_">run</span>(workflow, { backend, <span class="hljs-attr">logger</span>: <span class="hljs-keyword">new</span> <span class="hljs-title class_">Logger</span>(<span class="hljs-string">&#x27;silent&#x27;</span>) });
+</code></pre></figure>
+<p><code>request.prompt</code> is the fully assembled prompt and <code>request.kind</code> is <code>ask</code>, <code>think</code> or <code>agent</code>;
+only <code>agent</code> requests may run tools. For blockquotes the request has <code>naturalLanguage: true</code>,
+the <code>runtimeTools</code> definitions and <code>invokeAction({ name, arguments })</code> to perform a tool call.
 <code>AiBackend</code> accepts an optional <code>provider</code> alongside <code>logger</code>, <code>cwd</code>, <code>timeoutMs</code> and <code>mcpServers</code>.
-The previous <code>CopilotBackend</code> export is an alias for embedding compatibility, not a Copilot connection.</p>
+The <code>CopilotBackend</code> export is an alias of <code>AiBackend</code> kept for existing imports, not a Copilot connection.</p>
+<h3 id="interactive-sessions">Interactive sessions<a class="heading-anchor" href="#interactive-sessions" aria-label="Link to Interactive sessions">#</a></h3>
+<p><code>ExecutionSession</code> keeps one shared scope across calls, for notebooks and REPLs. Each call runs
+one cell; unlike <code>run</code>, the value of a cell&#39;s final expression is returned.</p>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-9" aria-label="Copy js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="js code example"><code class="language-js" id="code-9"><span class="hljs-keyword">import</span> { <span class="hljs-title class_">ExecutionSession</span>, parse, <span class="hljs-title class_">Logger</span> } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;spl-lang&#x27;</span>;
+
+<span class="hljs-keyword">const</span> backend = { <span class="hljs-keyword">async</span> <span class="hljs-title function_">call</span>(<span class="hljs-params"></span>) { <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Error</span>(<span class="hljs-string">&#x27;no model in this example&#x27;</span>); }, <span class="hljs-keyword">async</span> <span class="hljs-title function_">close</span>(<span class="hljs-params"></span>) {} };
+<span class="hljs-keyword">const</span> logger = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Logger</span>(<span class="hljs-string">&#x27;silent&#x27;</span>);
+<span class="hljs-keyword">const</span> session = <span class="hljs-keyword">new</span> <span class="hljs-title class_">ExecutionSession</span>();
+
+<span class="hljs-keyword">await</span> session.<span class="hljs-title function_">run</span>(<span class="hljs-title function_">parse</span>(<span class="hljs-string">&#x27;let count = 2;\nfunction double() { return count * 2; }&#x27;</span>), { backend, logger });
+<span class="hljs-keyword">await</span> session.<span class="hljs-title function_">run</span>(<span class="hljs-title function_">parse</span>(<span class="hljs-string">&#x27;count += 1;&#x27;</span>), { backend, logger });
+<span class="hljs-keyword">const</span> result = <span class="hljs-keyword">await</span> session.<span class="hljs-title function_">run</span>(<span class="hljs-title function_">parse</span>(<span class="hljs-string">&#x27;double()&#x27;</span>), { backend, logger, <span class="hljs-attr">source</span>: <span class="hljs-string">&#x27;cell:3&#x27;</span> });
+<span class="hljs-comment">// result: { status: &#x27;success&#x27;, value: 6, hasValue: true }</span>
+</code></pre></figure>
+<p>Calls must not overlap. A failure keeps the changes made before it; nothing is replayed.
+<code>source</code> and <code>sourceVersion</code> are remembered by the functions a cell defines and returned in
+failure payloads, so a host can locate an error in the cell that defined the failing function.
+Sessions do not accept <code>store</code>, <code>trace</code> or <code>pin</code>. The host owns backend cleanup and cancellation;
+the VS Code notebook runs each session in a separate process so that even an endless loop can be
+stopped.</p>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/CLI.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
-    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="safety.html"><span>Previous</span><strong>Guards & failures</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="grammar.html"><span>Next</span><strong>Grammar</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
+    <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="safety.html"><span>Previous</span><strong>Guards & failures</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="reference.html"><span>Next</span><strong>API reference</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#pinned-workflows">Pinned workflows</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small script.</strong><p>Keep deterministic code, model calls, and guards visible in one readable workflow.</p><a href="getting-started.html">Write your first script <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#pinned-workflows">Pinned workflows</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#runtime-limits">Runtime limits</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li><li class="toc-level-3"><a href="#interactive-sessions">Interactive sessions</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

@@ -12,41 +12,20 @@ Target languages come from the arguments.
 
     spl examples/translate-docs.md --arg en --arg de --arg pl
 
-```spl
-let source = read_file('./examples/data/product-update.md')
-let languages = list($args)
-if len(languages) == 0:
-    languages = ['en', 'de', 'pl']
-let URL_CHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~:/?#=&%+@'
-def link_in(word):
-    let start = word.find('https://')
-    if start < 0:
-        start = word.find('@')
-        while start > 0 and word[start - 1] in URL_CHARS:
-            start -= 1
-    let end = start
-    while end < len(word) and word[end] in URL_CHARS:
-        end += 1
-    let link = word[start:end]
-    while len(link) > 0 and link[-1] in '.,;:!?':
-        link = link[:-1]
-    return link
-def protected(text):
-    let found = []
-    let parts = text.split('`')
-    for i in range(1, len(parts), 2):
-        found.append('`' + parts[i] + '`')
-    for word in text.split():
-        if 'https://' in word or '@' in word:
-            found.append(link_in(word))
-    return found
-def headings(text):
-    let levels = []
-    for line in text.splitlines():
-        if line.startswith('#'):
-            levels.append(len(line.split(' ')[0]))
-    return levels
-let keep = protected(source)
+```js
+const source = await readFile('./examples/data/product-update.md');
+const languages = args.length ? [...args] : ['en', 'de', 'pl'];
+
+/** Code spans, URLs and e-mail addresses that a translation must keep verbatim. */
+function protectedTokens(text) {
+    const spans = text.match(/`[^`]+`/g) ?? [];
+    const links = text.match(/https:\/\/[\w\-.~:/?#=&%+@]+|[\w\-.+]+@[\w\-.]+/g) ?? [];
+    return [...spans, ...links.map(link => link.replace(/[.,;:!?]+$/, ''))];
+}
+
+const headings = text => text.split(/\r?\n/).filter(line => line.startsWith('#')).map(line => line.split(' ')[0].length);
+
+const keep = protectedTokens(source);
 ```
 
 > @CTL(enforce=[
@@ -55,17 +34,20 @@ let keep = protected(source)
 > ])
 >
 > Translate @source into every language code in @languages.
-> Save a dict mapping each language code to its translated Markdown to @translations
+> Save an object mapping each language code to its translated Markdown to @translations
 
-```spl
-for lang in languages:
-    assert lang in translations "missing translation for '{lang}'"
-    let text = translations[lang]
-    for token in keep:
-        assert token in text "{lang}: lost {token}"
-    assert headings(text) == headings(source) "{lang}: heading structure changed"
-restrict './out/translations':
-    for lang in languages:
-        write_file('./out/translations/product-update.{lang}.md', translations[lang])
-success languages
+```js
+for (const language of languages) {
+    const text = translations[language];
+    assert(typeof text === 'string', `missing translation for '${language}'`);
+    for (const token of keep) assert(text.includes(token), `${language}: lost ${token}`);
+    assert(String(headings(text)) === String(headings(source)), `${language}: heading structure changed`);
+}
+
+await restrict('./out/translations', async () => {
+    for (const language of languages) {
+        await writeFile(`./out/translations/product-update.${language}.md`, translations[language]);
+    }
+});
+success(languages);
 ```

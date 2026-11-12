@@ -25,6 +25,7 @@ automatically. With multiple providers, select one with `--provider`, `SPL_PROVI
 such as `--model google/gemini-2.5-flash`, or a saved login default.
 See [Models and authentication](CLI.md#models-and-authentication) for precedence and defaults.
 
+Workflows without model calls, `--check` and replay need no credentials.
 
 ## Write a workflow
 
@@ -38,10 +39,8 @@ version: 1
 
 # Greeting
 
-```spl
-let name = $args[0]
-if name == None:
-    name = 'world'
+```js
+const name = args[0] ?? 'world';
 ```
 
 > Write a one-line greeting for @name and return it with @success
@@ -51,67 +50,102 @@ if name == None:
 spl greet.md --arg Ada
 ```
 
+The fence is JavaScript and runs first. The blockquote is sent to the model as an agent command;
+`@name` refers to the variable the fence declared, and `@success` asks the agent to end the run
+with a result, which the CLI prints on stdout.
+
 ## Document structure
 
 * **Frontmatter** must declare `extension: semantic-prompt-language` and `version: 1`.
   Optional `model` sets the default model; optional `preamble` is added to every model request.
   Unknown fields are errors.
-* **`spl` fences** are complete SPL units; a block or statement cannot span two fences.
-* **Blockquotes** are natural-language steps; see [Natural language & models](LLM-commands.md#blockquotes).
-* **Everything else** (headings, prose, other code fences) is commentary.
+* **`js` fences** (also `javascript` and `mjs`) run as native JavaScript. **`ts` fences**
+  (`typescript`, `mts`) have their type annotations erased first. Each fence must be complete
+  JavaScript on its own; a statement cannot span two fences.
+* **Blockquotes** are natural-language steps run by an agent; see
+  [Natural language & models](LLM-commands.md#blockquotes). Every top-level blockquote runs, so
+  do not use one for commentary.
+* **Everything else** (headings, prose, fences in other languages) is commentary. Add `ignore`
+  or `no-run` after the language (` ```js ignore `) to show JavaScript without running it.
 
-Fences and blockquotes run in document order in one shared scope. Indented SPL blocks create
-lexical child scopes. Blocks use `:` plus a newline and exactly four spaces per level, with `pass` for
-an empty body. Use `object:` for dictionaries (`object()` when empty); old braces and inline suites
-are no longer accepted. See the [typing migration guide](Migration.md) and
-[block syntax and migration](Language.md#block-syntax-and-migration).
-`success`, `fail` and a top-level `return`
-end the whole document.
+Fences and blockquotes run in document order in one shared scope. `success(value)` or an
+uncaught failure ends the whole document.
+
+## JavaScript in five rules
+
+Workflow code is ordinary JavaScript. These rules cover what is specific to workflows;
+[Workflow code](Language.md) explains each one.
+
+1. **The library is already in scope.** `ask`, `agent`, `restrict`, `struct`, `readFile`,
+   `success` and the rest need no `import`. Everything else is imported as usual:
+   `import fs from 'node:fs'`, `import { helper } from './helper.js'`.
+2. **One shared scope.** Top-level `const`, `let`, `function`, `class` and imports are visible in
+   later fences and to blockquote agents. Redeclaring a name in a later fence rebinds it, even
+   when it was a `const`.
+3. **Always `await`.** Model calls, tools, `human`, `restrict` and `codegen` return promises.
+   Top-level `await` works in every fence. A call that is not awaited can crash the process
+   when it fails, and a long synchronous loop blocks logs and Ctrl+C until it yields: fences
+   run on the main thread.
+4. **Paths and imports resolve against the working directory** (`--cwd`, by default the folder
+   you run `spl` from), not the folder of the workflow file. `import.meta.url`, `.filename` and
+   `.dirname` describe the workflow file.
+5. **The runtime only governs its own library.** `restrict`, traces and pins cover `readFile`,
+   `shell`, agents and MCP tools, not `node:fs` or `fetch` calls made by your code, and not the
+   helper modules you import.
 
 ## The iteration loop
 
 ```bash
-spl flow.md --check               # frontmatter and syntax, no model
+spl flow.md --check               # frontmatter, fences, controls and imports, no model
 spl flow.md --trace run.jsonl     # record an append-only execution history
 spl flow.md --trace run.jsonl     # resume automatically, or replay the completed run
 spl flow.md --trace next.jsonl    # start a fresh run
 ```
 
 Replay needs the same model requests in the same order. After changing a prompt, record a new
-trace. Explicit tool calls still run during replay; see [traces and replay](CLI.md#traces-and-replay).
+trace. Recorded model calls, tools and human answers are not repeated during replay; your own
+JavaScript runs again. See [traces and replay](CLI.md#traces-and-replay).
 
+## Use the library without Markdown
+
+The same functions are a normal Node.js package. Install `spl-lang` in a project and import what
+you need; see [the library in Node.js programs](Language.md#the-library-in-nodejs-programs).
+
+```js
+import { ask, struct, str, enumOf } from 'spl-lang';
+
+const Triage = struct('Triage', { label: enumOf('bug', 'feature'), reason: str });
+const triage = await ask('Classify: the app crashes on start', { schema: Triage, repairs: 1 });
+console.log(triage.label);
+```
 
 ## VS Code extension
 
 Install from Marketplace: **[SPL](https://marketplace.visualstudio.com/items?itemName=spl-lang.spl-lang-vscode)**
 
-The extension in `vscode/` adds parser/type-checker diagnostics, completions, hover, go to
-definition (F12), references (Shift+F12), safe rename (F2), signature help, document symbols,
-open-document workspace symbol search, folding and semantic highlighting. It supports workflow
-Markdown, standalone `.spl` editor files and SPL notebook cells; ordinary Markdown keeps its
-normal language behavior. Type `splworkflow` for a new workflow document. SPL fences and `@name`
-markers are highlighted in the editor, and SPL fences also receive Markdown preview highlighting.
+The extension in `vscode/` turns workflow Markdown into a JavaScript editing experience. Inside
+`js` and `ts` fences it runs the TypeScript language service, with the library declared as
+globals: completions, hover, signature help, go to definition (F12), references (Shift+F12),
+rename (F2), highlights and document symbols work across all fences of a document. Diagnostics
+report frontmatter, `@CTL` and JavaScript syntax errors exactly as the runtime compiles them,
+missing relative imports, and type errors inside `ts` fences.
 
-In the Markdown text editor, navigation and rename share top-level declarations across SPL
-fences and blockquote references, while respecting inner lexical scopes. Raw strings, escaped
-interpolations and commentary are not rewritten. Rename rejects identifier conflicts and
-reference capture. The language server only analyzes source and never calls models or tools.
+In blockquotes, `@` completes shared variables, functions, library functions and markers;
+`@validate[` completes declared types; `@CTL(` completes its settings. Names an agent saves
+(`save to @invoice`, `-> @result`) are declared for later fences. Type `splworkflow` for a new
+workflow document. Ordinary Markdown keeps its normal behavior.
 
-Static analysis does not infer names introduced by natural-language actions or dynamic member
-types. References and rename stay inside the current document; workspace symbols cover open
-documents only. Notebook analysis is per cell, independent of shared runtime execution state.
-Use the Markdown text editor for static navigation across fences. The CLI still runs Markdown
-workflows, not standalone `.spl` scratch files.
-See the [extension guide](../vscode/README.md#language-server) for features, shortcuts,
-analysis boundaries and development instructions.
+**SPL: Open as Notebook** runs fences and blockquotes as notebook cells in one session.
+The language server only analyzes source and never calls models or tools.
+See the [extension guide](../vscode/README.md) for features, shortcuts and limits.
 
-Or install from repository:
+Or install from the repository:
 
 ```bash
 cd vscode
 npm install
 npm run package
-code --install-extension spl-lang-vscode-1.13.1.vsix
+code --install-extension spl-lang-vscode-2.0.0.vsix
 ```
 
 ## Run the tests
@@ -121,5 +155,4 @@ cd lang
 npm test
 ```
 
-Tests are offline. To include authenticated live tests in PowerShell, run
-`$env:SPL_LIVE_TESTS='1'; npm test`, then remove the variable.
+Tests are offline and never contact a model.

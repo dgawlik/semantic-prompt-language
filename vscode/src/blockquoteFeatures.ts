@@ -1,7 +1,8 @@
 import { CompletionItemKind, type CompletionItem, type Range } from 'vscode-languageserver/node';
 import type { TextDocument } from 'vscode-languageserver-textdocument';
-import type { NaturalControls, RestrictKind } from '../../lang/src/ast.js';
+import type { NaturalControls } from '../../lang/src/controls.js';
 import type { MarkdownBlock } from '../../lang/src/markdown.js';
+import type { RestrictKind } from '../../lang/src/restrict.js';
 import type { Help } from './catalog';
 
 export const controlHelp: Record<keyof NaturalControls, Help> = {
@@ -60,8 +61,8 @@ export function scanControls(text: string): { tokens: ControlToken[]; end: numbe
         const from = at;
         const raw = text[at] === 'r' && /['"]/.test(text[at + 1] ?? '');
         if (raw) at++;
-        if (text[at] === "'" || text[at] === '"') {
-            const quote = text.startsWith(text[at].repeat(3), at) ? text[at].repeat(3) : text[at];
+        if (text[at] === "'" || text[at] === '"' || text[at] === '`') {
+            const quote = text[at] !== '`' && text.startsWith(text[at].repeat(3), at) ? text[at].repeat(3) : text[at];
             at += quote.length;
             const contentFrom = at;
             while (at < text.length && !text.startsWith(quote, at)) {

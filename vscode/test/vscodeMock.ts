@@ -13,7 +13,6 @@ class Emitter<T> {
     fire(value: T) { for (const listener of this.listeners) listener(value); }
     dispose() { this.listeners.clear(); }
 }
-export { Emitter as EventEmitter };
 export class Position {
     constructor(public line: number, public character: number) {}
 }
@@ -26,37 +25,17 @@ export class SnippetString {
 export class MarkdownString {
     constructor(public value: string) {}
 }
+export const CompletionItemKind = { Function: 2, Variable: 5, Property: 9, Value: 11, Keyword: 13 };
 export class CompletionItem {
     detail?: string;
     documentation?: string | MarkdownString;
-    filterText?: string;
     sortText?: string;
     range?: Range;
     insertText?: string | SnippetString;
     constructor(public label: string, public kind?: number) {}
 }
-export class SemanticTokens {
-    constructor(public data: Uint32Array) {}
-}
-export class SemanticTokensLegend {
-    constructor(public tokenTypes: string[], public tokenModifiers: string[]) {}
-}
-export class SemanticTokensBuilder {
-    private entries: number[][] = [];
-    push(line: number, character: number, length: number, type: number, flags: number) {
-        this.entries.push([line, character, length, type, flags]);
-    }
-    build() {
-        let line = 0;
-        let character = 0;
-        const data = this.entries.flatMap(([nextLine, nextCharacter, length, type, flags]) => {
-            const entry = [nextLine - line, nextLine === line ? nextCharacter - character : nextCharacter, length, type, flags];
-            line = nextLine;
-            character = nextCharacter;
-            return entry;
-        });
-        return new SemanticTokens(new Uint32Array(data));
-    }
+export class Hover {
+    constructor(public contents: MarkdownString, public range?: Range) {}
 }
 export class Diagnostic {
     source?: string;
@@ -88,14 +67,36 @@ export class TextDocument {
     version = 1;
     isClosed = false;
     constructor(public uri: Uri, public languageId: string, private value: string) {}
-    getText() { return this.value; }
+    get lineCount() { return this.value.split('\n').length; }
+    getText(range?: Range) {
+        return range ? this.value.slice(this.offsetAt(range.start), this.offsetAt(range.end)) : this.value;
+    }
     setText(value: string) { this.value = value; this.version++; }
+    offsetAt(position: Position) {
+        return this.value.split('\n').slice(0, position.line).reduce((offset, line) => offset + line.length + 1, 0) + position.character;
+    }
+    positionAt(offset: number) {
+        const lines = this.value.slice(0, offset).split('\n');
+        return new Position(lines.length - 1, lines[lines.length - 1].length);
+    }
     validatePosition(position: Position) {
         const lines = this.value.split('\n');
         const line = Math.min(position.line, lines.length - 1);
         return new Position(line, Math.min(position.character, lines[line].length));
     }
-    lineAt(line: number) { return { range: new Range(new Position(line, 0), new Position(line, this.value.split('\n')[line].length)) }; }
+    lineAt(line: number) {
+        const text = this.value.split('\n')[line];
+        return { text, range: new Range(new Position(line, 0), new Position(line, text.length)) };
+    }
+    getWordRangeAtPosition(position: Position, pattern: RegExp) {
+        for (const match of this.lineAt(position.line).text.matchAll(new RegExp(pattern.source, 'g'))) {
+            const end = match.index + match[0].length;
+            if (match.index <= position.character && position.character <= end) {
+                return new Range(new Position(position.line, match.index), new Position(position.line, end));
+            }
+        }
+        return undefined;
+    }
 }
 export class NotebookDocument {
     isClosed = false;
@@ -109,6 +110,7 @@ export class NotebookDocument {
         }));
     }
     getCells() { return this.cells; }
+    removeCell(cell: Cell) { this.cells = this.cells.filter(item => item !== cell); }
 }
 type Cell = ReturnType<NotebookDocument['getCells']>[number];
 class Execution {
@@ -180,14 +182,22 @@ export const workspace = {
         closed.fire(notebook);
     },
     changeText(document: TextDocument, value: string) { document.setText(value); textChanged.fire({ document }); },
+    removeCell(notebook: NotebookDocument, cell: Cell) {
+        notebook.removeCell(cell);
+        changed.fire({ notebook, contentChanges: [{ removedCells: [cell] }] });
+    },
+    async openTextDocument(uri: Uri) {
+        const document = window.activeTextEditor?.document;
+        if (document?.uri !== uri) throw new Error(`Cannot open ${uri}`);
+        return document;
+    },
 };
 export const diagnostics = new Map<string, Map<string, Diagnostic[]>>();
 export const completionProviders: { selector: unknown; triggers: string[]; provider: {
     provideCompletionItems(document: TextDocument, position: Position): CompletionItem[];
 } }[] = [];
-export const semanticProviders: { selector: unknown; legend: SemanticTokensLegend; provider: {
-    onDidChangeSemanticTokens: (listener: () => void) => Disposable;
-    provideDocumentSemanticTokens(document: TextDocument): SemanticTokens | undefined;
+export const hoverProviders: { selector: unknown; provider: {
+    provideHover(document: TextDocument, position: Position): Hover | undefined;
 } }[] = [];
 export const languages = {
     registerCompletionItemProvider(selector: unknown, provider: typeof completionProviders[number]['provider'], ...triggers: string[]) {
@@ -195,12 +205,10 @@ export const languages = {
         completionProviders.push(entry);
         return new Disposable(() => completionProviders.splice(completionProviders.indexOf(entry), 1));
     },
-    registerDocumentSemanticTokensProvider(
-        selector: unknown, provider: typeof semanticProviders[number]['provider'], legend: SemanticTokensLegend,
-    ) {
-        const entry = { selector, provider, legend };
-        semanticProviders.push(entry);
-        return new Disposable(() => semanticProviders.splice(semanticProviders.indexOf(entry), 1));
+    registerHoverProvider(selector: unknown, provider: typeof hoverProviders[number]['provider']) {
+        const entry = { selector, provider };
+        hoverProviders.push(entry);
+        return new Disposable(() => hoverProviders.splice(hoverProviders.indexOf(entry), 1));
     },
     createDiagnosticCollection(name: string) {
         const items = new Map<string, Diagnostic[]>();
@@ -226,12 +234,13 @@ export const window: {
     showInformationMessage: async text => { messages.push(text); },
 };
 export const registeredCommands = new Map<string, () => unknown>();
+export const executedCommands: unknown[][] = [];
 export const commands = {
     registerCommand(name: string, handler: () => unknown) {
         registeredCommands.set(name, handler);
         return new Disposable(() => { registeredCommands.delete(name); });
     },
-    async executeCommand() {},
+    async executeCommand(...command: unknown[]) { executedCommands.push(command); },
 };
 export const installedExtensions = new Map<string, { activate(): Promise<unknown> }>();
 export const extensions = {
@@ -256,5 +265,6 @@ export function reset() {
     diagnostics.clear();
     installedExtensions.clear();
     completionProviders.length = 0;
-    semanticProviders.length = 0;
+    hoverProviders.length = 0;
+    executedCommands.length = 0;
 }

@@ -1,7 +1,6 @@
 import type { StatusCode } from './errors.js';
 import { validateRandomness, validateTokens, type LlmRequest, type LlmResponse } from './llm.js';
 import { isRuntimeAction } from './agent.js';
-import type { Value } from './values.js';
 
 export function traceRequest(req: LlmRequest) {
     return {
@@ -25,7 +24,7 @@ export function isResponse(value: unknown): value is LlmResponse {
         && !('spl' in value);
 }
 
-export function isToolValue(value: unknown): value is Value {
+export function isToolValue(value: unknown): boolean {
     return value === null || typeof value === 'string' || typeof value === 'boolean'
         || (typeof value === 'number' && Number.isFinite(value))
         || (Array.isArray(value) && value.every(isToolValue))

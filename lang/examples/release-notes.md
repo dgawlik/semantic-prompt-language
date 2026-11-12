@@ -11,24 +11,24 @@ Collects commits since the latest tag, writes user-facing notes and prepends the
 
     spl examples/release-notes.md --cwd path/to/project --arg 1.4.0
 
-```spl
-let version = $args[0]
-if version == None:
-    fail 'Pass the release version, e.g. --arg 1.4.0'
-let range = 'HEAD'
-let since = 'the first commit'
-let commits = ''
-restrict exec 'git':
-    try:
-        let tag = shell('git describe --tags --abbrev=0').strip()
-        range = '{tag}..HEAD'
-        since = tag
-    except no_tag:
-        log('No tags yet, using the whole history')
-    commits = shell('git log --no-merges --oneline {range}').strip()
-if commits == '':
-    success 'Nothing to release since {since}'
-log("{len(commits.splitlines())} commit(s) since {since}")
+```js
+const version = args[0] ?? fail('Pass the release version, e.g. --arg 1.4.0');
+let range = 'HEAD';
+let since = 'the first commit';
+
+const commits = await restrict({ exec: 'git' }, async () => {
+    try {
+        since = (await shell('git describe --tags --abbrev=0')).trim();
+        range = `${since}..HEAD`;
+    } catch (error) {
+        if (!(error instanceof Failure)) throw error;
+        log('No tags yet, using the whole history');
+    }
+    return (await shell(`git log --no-merges --oneline ${range}`)).trim();
+});
+
+if (commits === '') success(`Nothing to release since ${since}`);
+log(`${commits.split('\n').length} commit(s) since ${since}`);
 ```
 
 > @CTL(
@@ -40,25 +40,21 @@ log("{len(commits.splitlines())} commit(s) since {since}")
 > write Markdown release notes for @version. Start with the heading `## <version>`, use `###` for sections
 > and one bullet per change. Save to @notes
 
-```spl
-notes = notes.strip()
-assert notes.startswith('## {version}') "notes must start with '## {version}'"
-let sections = 0
-for line in notes.splitlines():
-    if line.startswith('### '):
-        sections += 1
-assert sections > 0 'notes have no sections'
-let changelog = '# Changelog\n'
-try:
-    changelog = read_file('./CHANGELOG.md')
-except missing:
-    log('Creating CHANGELOG.md')
-let lines = changelog.splitlines()
-let body = notes
-let rest = '\n'.join(lines[1:]).strip()
-if rest != '':
-    body = '{notes}\n\n{rest}'
-restrict './CHANGELOG.md':
-    write_file('./CHANGELOG.md', '{lines[0]}\n\n{body}\n')
-success notes
+```js
+notes = notes.trim();
+assert(notes.startsWith(`## ${version}`), `notes must start with '## ${version}'`);
+assert(notes.split('\n').some(line => line.startsWith('### ')), 'notes have no sections');
+
+let changelog = '# Changelog\n';
+try {
+    changelog = await readFile('./CHANGELOG.md');
+} catch (error) {
+    if (!(error instanceof Failure)) throw error;
+    log('Creating CHANGELOG.md');
+}
+const [title, ...rest] = changelog.split('\n');
+const body = [notes, rest.join('\n').trim()].filter(Boolean).join('\n\n');
+
+await restrict('./CHANGELOG.md', () => writeFile('./CHANGELOG.md', `${title}\n\n${body}\n`));
+success(notes);
 ```
