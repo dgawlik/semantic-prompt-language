@@ -10,7 +10,7 @@ import { compileCell } from '../../lang/src/cell.js';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { missingImport } from '../../lang/src/imports.js';
 import { blockquoteText, controlCompletions, controlHelp, scanControls } from './blockquoteFeatures';
-import { callable, library, markers } from './catalog';
+import { callable, library, markers, tags } from './catalog';
 import type { TypeScriptProject } from './typescriptService';
 import { analyzeWorkflow, blockquoteAt, codeBlockAt, type Marker, type WorkflowAnalysis } from './workflow';
 
@@ -226,8 +226,11 @@ function blockquoteCompletions(context: WorkflowContext, position: Position): Co
     const quote = blockquoteText(document, block);
     const at = document.offsetAt(position) - quote.from;
     const range = (from: number, to: number): Range => ({ start: document.positionAt(quote.from + from), end: document.positionAt(quote.from + to) });
-    const controls = controlCompletions(quote.text, at, range, analysis.model);
+    const tag = block.spl?.tag;
+    const controls = controlCompletions(quote.text, at, range, analysis.model, tag);
     if (controls) return controls;
+    // A description is literal text, and nothing completes inside the tags themselves.
+    if (tag === 'codegen' || block.spl && (position.line < block.spl.headerEndLine || block.spl.closed && position.line + 1 === block.endLine)) return [];
     const before = quote.text.slice(0, at);
     const schema = /(?<![\w@\\])@validate[ \t]*\[[ \t]*([A-Za-z_$][\w$]*)?$/i.exec(before);
     const reference = /(?<![\w@\\])@([A-Za-z_$][\w$]*)?$/.exec(before);
@@ -254,7 +257,8 @@ function blockquoteCompletions(context: WorkflowContext, position: Position): Co
     if (!schema) {
         const opening = !before.slice(0, reference!.index).trim();
         for (const [name, help] of Object.entries(markers)) {
-            if ((name === 'ctl' || name === 'codegen') && !opening && !(name === 'codegen' && scanControls(quote.text)?.closed)) continue;
+            // Settings and generated code are tags in a `.spl` file, not markers.
+            if ((name === 'ctl' || name === 'codegen') && (tag || !opening && !(name === 'codegen' && scanControls(quote.text)?.closed))) continue;
             items.push({
                 label: help.signature.slice(1).split(/[\s(['.]/)[0], kind: CompletionItemKind.Keyword,
                 detail: help.signature, documentation: help.description, sortText: `1${name}`,
@@ -265,10 +269,26 @@ function blockquoteCompletions(context: WorkflowContext, position: Position): Co
     return items;
 }
 
+/** Blocks to start between the blocks of a `.spl` file: typing `{` or a tag name on a line of its own. */
+function tagCompletions(analysis: WorkflowAnalysis, position: Position): CompletionItem[] {
+    const { document, spl } = analysis;
+    if (!spl || position.line < spl.start || spl.blocks.some(block => position.line + 1 >= block.line && position.line + 1 <= block.endLine)) return [];
+    const line = document.getText({ start: { line: position.line, character: 0 }, end: { line: position.line + 1, character: 0 } }).replace(/\r?\n$/, '');
+    const typed = /^[ \t]*(\{?[A-Za-z]*)$/.exec(line.slice(0, position.character));
+    // The editor closes a typed brace; the completion replaces the pair.
+    if (!typed || !/^\}?[ \t]*$/.test(line.slice(position.character))) return [];
+    const range = { start: { line: position.line, character: position.character - typed[1].length }, end: { line: position.line, character: line.trimEnd().length } };
+    return Object.entries(tags).filter(([name]) => name !== 'lock').map(([name, help], index) => ({
+        label: `{${name}}`, kind: CompletionItemKind.Snippet, detail: help.signature, documentation: help.description,
+        filterText: `{${name}`, sortText: String(index), insertTextFormat: InsertTextFormat.Snippet,
+        textEdit: { range, newText: `{${help.insert}` },
+    }));
+}
+
 export function completions(context: WorkflowContext, position: Position, trigger?: CompletionContext): CompletionItem[] {
     const { analysis, project, file, virtual } = context;
     if (blockquoteAt(analysis, position)) return blockquoteCompletions(context, position);
-    if (!codeBlockAt(analysis, position)) return [];
+    if (!codeBlockAt(analysis, position)) return tagCompletions(analysis, position);
     const character = trigger?.triggerKind === CompletionTriggerKind.TriggerCharacter ? trigger.triggerCharacter : undefined;
     if (character && !TS_TRIGGERS.has(character)) return [];
     const offset = virtual.offsetAt(position);
@@ -319,15 +339,22 @@ export function hover(context: WorkflowContext, position: Position): Hover | nul
         if (!info) return null;
         return { ...code(ts.displayPartsToString(info.displayParts), documentation(info.documentation, info.tags)), range: span(virtual, info.textSpan.start, info.textSpan.length) };
     }
+    const described = (help: { signature: string; description: string } | undefined): Hover | null =>
+        help ? { contents: { kind: MarkupKind.Markdown, value: `\`${help.signature}\`\n\n${help.description}` } } : null;
+    const section = analysis.spl?.blocks.find(block => position.line + 1 === block.line || block.closed && position.line + 1 === block.endLine);
+    if (section) {
+        const line = analysis.document.getText({ start: { line: position.line, character: 0 }, end: { line: position.line + 1, character: 0 } });
+        const name = /^[ \t]*\{\/?/.exec(line)?.[0].length;
+        if (name !== undefined && position.character >= name && position.character <= name + section.tag.length) return described(tags[section.tag]);
+    }
     const block = blockquoteAt(analysis, position);
     if (!block) return null;
     const marker = markerAt(analysis, position);
     if (!marker) {
         const quote = blockquoteText(analysis.document, block);
         const at = analysis.document.offsetAt(position) - quote.from;
-        const token = scanControls(quote.text)?.tokens.find(token => token.kind === 'name' && token.from <= at && at <= token.to);
-        const help = token && Object.hasOwn(controlHelp, token.value) ? controlHelp[token.value as keyof typeof controlHelp] : undefined;
-        return help ? { contents: { kind: MarkupKind.Markdown, value: `\`${help.signature}\`\n\n${help.description}` } } : null;
+        const token = scanControls(quote.text, block.spl?.tag)?.tokens.find(token => token.kind === 'name' && token.from <= at && at <= token.to);
+        return described(token && Object.hasOwn(controlHelp, token.value) ? controlHelp[token.value as keyof typeof controlHelp] : undefined);
     }
     const range = { start: { line: marker.line, character: marker.character - 1 }, end: { line: marker.line, character: marker.character + marker.name.length } };
     const binding = sharedBindings(context, new Set([marker.name]))[0];

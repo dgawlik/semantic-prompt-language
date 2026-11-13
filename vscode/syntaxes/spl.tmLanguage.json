@@ -1,0 +1,470 @@
+{
+  "name": "SPL",
+  "scopeName": "source.spl",
+  "patterns": [
+    {
+      "include": "#frontmatter"
+    },
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#javascript"
+    },
+    {
+      "include": "#typescript"
+    },
+    {
+      "include": "#agent"
+    },
+    {
+      "include": "#codegen"
+    },
+    {
+      "include": "#lock"
+    }
+  ],
+  "repository": {
+    "frontmatter": {
+      "begin": "\\A(?=---[ \\t]*$)",
+      "end": "^(---|\\.\\.\\.)[ \\t]*$",
+      "applyEndPatternLast": 1,
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.frontmatter.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "\\A(---)[ \\t]*$",
+          "while": "^(?!(?:---|\\.\\.\\.)[ \\t]*$)",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.frontmatter.begin.spl"
+            }
+          },
+          "contentName": "meta.embedded.block.frontmatter",
+          "patterns": [
+            {
+              "include": "source.yaml"
+            }
+          ]
+        }
+      ]
+    },
+    "comment": {
+      "begin": "^[ \\t]*((\\{)(comment)(\\}))[ \\t]*$",
+      "end": "^[ \\t]*((\\{/)(comment)(\\}))[ \\t]*$",
+      "name": "comment.block.spl",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.comment.begin.spl"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.comment.end.spl"
+        }
+      }
+    },
+    "javascript": {
+      "begin": "^[ \\t]*((\\{)(js)(?:[ \\t]+(ignore|no-run))?[ \\t]*(\\}))[ \\t]*$",
+      "end": "^[ \\t]*((\\{/)(js)(\\}))[ \\t]*$",
+      "name": "meta.block.js.spl",
+      "beginCaptures": {
+        "1": {
+          "name": "meta.tag.spl"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.spl"
+        },
+        "3": {
+          "name": "entity.name.tag.spl"
+        },
+        "5": {
+          "name": "punctuation.definition.tag.end.spl"
+        },
+        "4": {
+          "name": "storage.modifier.spl"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "meta.tag.spl"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.spl"
+        },
+        "3": {
+          "name": "entity.name.tag.spl"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "(^|\\G)",
+          "while": "(^|\\G)(?![ \\t]*\\{/js\\}[ \\t]*$)",
+          "contentName": "meta.embedded.block.javascript",
+          "patterns": [
+            {
+              "include": "source.js"
+            }
+          ]
+        }
+      ]
+    },
+    "typescript": {
+      "begin": "^[ \\t]*((\\{)(ts)(?:[ \\t]+(ignore|no-run))?[ \\t]*(\\}))[ \\t]*$",
+      "end": "^[ \\t]*((\\{/)(ts)(\\}))[ \\t]*$",
+      "name": "meta.block.ts.spl",
+      "beginCaptures": {
+        "1": {
+          "name": "meta.tag.spl"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.spl"
+        },
+        "3": {
+          "name": "entity.name.tag.spl"
+        },
+        "5": {
+          "name": "punctuation.definition.tag.end.spl"
+        },
+        "4": {
+          "name": "storage.modifier.spl"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "meta.tag.spl"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.spl"
+        },
+        "3": {
+          "name": "entity.name.tag.spl"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "(^|\\G)",
+          "while": "(^|\\G)(?![ \\t]*\\{/ts\\}[ \\t]*$)",
+          "contentName": "meta.embedded.block.typescript",
+          "patterns": [
+            {
+              "include": "source.ts"
+            }
+          ]
+        }
+      ]
+    },
+    "lock": {
+      "begin": "^[ \\t]*((\\{)(lock)[ \\t]*(\\}))[ \\t]*$",
+      "end": "^[ \\t]*((\\{/)(lock)(\\}))[ \\t]*$",
+      "name": "meta.block.lock.spl",
+      "beginCaptures": {
+        "1": {
+          "name": "meta.tag.spl"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.spl"
+        },
+        "3": {
+          "name": "entity.name.tag.spl"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.spl"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "meta.tag.spl"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.spl"
+        },
+        "3": {
+          "name": "entity.name.tag.spl"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "(^|\\G)",
+          "while": "(^|\\G)(?![ \\t]*\\{/lock\\}[ \\t]*$)",
+          "contentName": "meta.embedded.block.json",
+          "patterns": [
+            {
+              "include": "source.json"
+            }
+          ]
+        }
+      ]
+    },
+    "agent": {
+      "begin": "^(?=[ \\t]*\\{agent(?:[\\s}]|$))",
+      "end": "^[ \\t]*((\\{/)(agent)(\\}))[ \\t]*$",
+      "name": "meta.block.agent.spl",
+      "endCaptures": {
+        "1": {
+          "name": "meta.tag.spl"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.spl"
+        },
+        "3": {
+          "name": "entity.name.tag.spl"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "(^|\\G)",
+          "while": "(^|\\G)(?![ \\t]*\\{/agent\\}[ \\t]*$)",
+          "patterns": [
+            {
+              "begin": "\\G[ \\t]*(\\{)(agent)(?=[\\s}]|$)",
+              "end": "\\}",
+              "name": "meta.tag.spl",
+              "beginCaptures": {
+                "1": {
+                  "name": "punctuation.definition.tag.begin.spl"
+                },
+                "2": {
+                  "name": "entity.name.tag.spl"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.tag.end.spl"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#settings"
+                }
+              ]
+            },
+            {
+              "begin": "^(?=[ \\t]*\\S)",
+              "end": "$",
+              "name": "string.unquoted.agent.spl",
+              "patterns": [
+                {
+                  "match": "(?<![\\w@\\\\])(@validate)[ \\t]*(\\[)[ \\t]*([A-Za-z_$][\\w$]*)[ \\t]*(\\])",
+                  "name": "meta.embedded.inline.spl",
+                  "captures": {
+                    "1": {
+                      "name": "variable.other.reference.spl"
+                    },
+                    "2": {
+                      "name": "punctuation.section.brackets.begin.spl"
+                    },
+                    "3": {
+                      "name": "entity.name.type.spl"
+                    },
+                    "4": {
+                      "name": "punctuation.section.brackets.end.spl"
+                    }
+                  }
+                },
+                {
+                  "match": "(?<![\\w@\\\\])@[A-Za-z_]\\w*",
+                  "name": "meta.embedded.inline.spl variable.other.reference.spl"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "codegen": {
+      "begin": "^(?=[ \\t]*\\{codegen(?:[\\s}]|$))",
+      "end": "^[ \\t]*((\\{/)(codegen)(\\}))[ \\t]*$",
+      "name": "meta.block.codegen.spl",
+      "endCaptures": {
+        "1": {
+          "name": "meta.tag.spl"
+        },
+        "2": {
+          "name": "punctuation.definition.tag.begin.spl"
+        },
+        "3": {
+          "name": "entity.name.tag.spl"
+        },
+        "4": {
+          "name": "punctuation.definition.tag.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "(^|\\G)",
+          "while": "(^|\\G)(?![ \\t]*\\{/codegen\\}[ \\t]*$)",
+          "patterns": [
+            {
+              "begin": "\\G[ \\t]*(\\{)(codegen)(?=[\\s}]|$)",
+              "end": "\\}",
+              "name": "meta.tag.spl",
+              "beginCaptures": {
+                "1": {
+                  "name": "punctuation.definition.tag.begin.spl"
+                },
+                "2": {
+                  "name": "entity.name.tag.spl"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.tag.end.spl"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#settings"
+                }
+              ]
+            },
+            {
+              "begin": "^(?=[ \\t]*\\S)",
+              "end": "$",
+              "name": "string.unquoted.codegen.spl",
+              "patterns": []
+            }
+          ]
+        }
+      ]
+    },
+    "settings": {
+      "patterns": [
+        {
+          "include": "#strings"
+        },
+        {
+          "match": "\\b(restrict|enforce|forbid|model|reasoning)(?=\\s*=)",
+          "name": "variable.parameter.modifier.spl"
+        },
+        {
+          "include": "#restriction-map"
+        },
+        {
+          "include": "#list"
+        },
+        {
+          "match": "=|,",
+          "name": "keyword.operator.spl"
+        }
+      ]
+    },
+    "restriction-map": {
+      "begin": "\\{",
+      "end": "\\}",
+      "name": "meta.mapping.spl",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.mapping.begin.spl"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.mapping.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "match": "(?:\\b(?:fs|exec|net|mcp)\\b|(['\"])(?:fs|exec|net|mcp)\\1)(?=\\s*:)",
+          "name": "variable.other.property.spl"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#list"
+        },
+        {
+          "match": ":|,",
+          "name": "keyword.operator.spl"
+        }
+      ]
+    },
+    "list": {
+      "begin": "\\[",
+      "end": "\\]",
+      "name": "meta.sequence.spl",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.sequence.begin.spl"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.sequence.end.spl"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#strings"
+        },
+        {
+          "match": ",",
+          "name": "keyword.operator.spl"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "begin": "\\br('''|\"\"\")",
+          "end": "\\1",
+          "name": "string.quoted.raw.spl"
+        },
+        {
+          "begin": "('''|\"\"\")",
+          "end": "\\1",
+          "name": "string.quoted.multi.spl",
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.spl"
+            }
+          ]
+        },
+        {
+          "begin": "\\br(['\"])",
+          "end": "\\1|$",
+          "name": "string.quoted.raw.spl"
+        },
+        {
+          "begin": "(['\"])",
+          "end": "\\1|$",
+          "name": "string.quoted.spl",
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.spl"
+            }
+          ]
+        },
+        {
+          "begin": "`",
+          "end": "`",
+          "name": "string.quoted.template.spl",
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.spl"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

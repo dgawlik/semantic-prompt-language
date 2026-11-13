@@ -23,9 +23,9 @@ const has = (tokens, text, scope) => tokens.some(token => token.text === text &&
 const spl = token => token.scopes.some(scope => /(?:^|\.)spl(?:\.|$)/.test(scope));
 
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-same(manifest.contributes.grammars, [{ scopeName: INJECTION, path: './syntaxes/markdown.tmLanguage.json', injectTo: ['text.html.markdown'] }],
-    'the extension contributes only the blockquote injection');
-same(manifest.contributes.languages, undefined, 'the spl language is gone');
+same(manifest.contributes.grammars.filter(grammar => !grammar.language), [{ scopeName: INJECTION, path: './syntaxes/markdown.tmLanguage.json', injectTo: ['text.html.markdown'] }],
+    'Markdown gets only the blockquote injection');
+same(manifest.contributes.languages.map(language => language.id), ['spl'], 'Markdown stays the language of Markdown workflows; .spl files have their own');
 same(JSON.parse(fs.readFileSync(path.join(root, 'syntaxes', 'markdown.tmLanguage.json'), 'utf8')).scopeName, INJECTION);
 for (const snippets of manifest.contributes.snippets) ok(fs.existsSync(path.join(root, snippets.path)), snippets.path);
 

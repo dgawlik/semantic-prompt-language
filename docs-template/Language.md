@@ -2,7 +2,8 @@
 
 Workflow code is native JavaScript running on Node.js, with the `spl-lang` library already in
 scope. This page covers what is specific to workflows: fences, the shared scope, imports, the
-library, types, the Markdown builder, inputs, logging, tools and errors.
+library, types, the Markdown builder, inputs, logging, tools and errors. Workflows are shown as
+Markdown; a [.spl file](#dedicated-spl-files) holds the same steps as blocks.
 
 ## Fences
 
@@ -34,6 +35,112 @@ log(sorted);
 * **Results.** The CLI prints only the value passed to [`success`](Safety.md#assertions-fail-and-success).
   The value of a fence's last expression is shown by notebooks and
   [interactive sessions](CLI.md#interactive-sessions), not by the CLI.
+
+## Dedicated .spl files
+
+The same workflow can be written without Markdown, as a `.spl` file made of blocks. A block opens
+with a tag on its own line and ends with the matching closing tag on its own line.
+
+`code-review.spl`
+
+````spl
+---
+model: 'gpt-6-luna'
+---
+
+{comment}
+
+An agent picks and reviews three files inside `./src`,
+a second step turns its notes into typed findings,
+and plain code decides whether the run fails.
+
+{/comment}
+
+
+{agent restrict={fs: ['./src'],
+       exec: ['git']},
+       forbid='suggesting purely stylistic changes'}
+
+List source files with `git ls-files src`.
+Then read the 3 files that are most likely
+to contain security problems or correctness bugs,
+and review only those. List each finding with its location,
+why it matters and a suggested fix. Save to @notes
+
+{/agent}
+
+{js}
+
+const Severity = enumOf('low', 'medium', 'high');
+
+const Item = struct('Item', {
+    severity: Severity,
+    title: str,
+    location: str.annotate({ desc: 'File path and line' }),
+    fix: str,
+});
+
+const Review = struct('Review', { findings: list(Item) });
+
+{/js}
+
+{agent}
+Convert @notes into structured finding @validate[Review] save to @review
+{/agent}
+
+{js}
+const groups = Object.groupBy(review.findings, finding => finding.severity);
+const high = groups.high ?? [];
+{/js}
+
+{agent restrict={fs: ['./reports']}, model='gpt-6.1-sol'}
+
+Convert @groups to a Markdown report and write it to './reports/review.md'
+
+{/agent}
+
+{js}
+if (high.length > 0)
+    fail(`${high.length} high severity finding(s), see ./reports/review.md`);
+success(review.findings.map(
+    finding => `${finding.severity}: ${finding.title} (${finding.location})`)
+        .join('\n'));
+{/js}
+````
+
+| Block | In Markdown |
+| --- | --- |
+| `{js}` ... `{/js}` | A `js` fence |
+| `{ts}` ... `{/ts}` | A `ts` fence |
+| `{js ignore}`, `{ts no-run}` | A fence marked `ignore` or `no-run`: shown, not run |
+| `{agent}` ... `{/agent}` | A blockquote: an [agent command](LLM-commands.md#blockquotes) |
+| `{agent restrict={fs: ['./src']}, model='m'}` | A blockquote that opens with [`@CTL(...)`](LLM-commands.md#controls): the same literal settings, written in the tag |
+| `{codegen}` ... `{/codegen}` | `@CODEGEN`: the body is the literal description of the [functions to generate](LLM-commands.md#code-generation) |
+| `{comment}` ... `{/comment}` | Headings and prose: commentary that never runs |
+| `{lock}` ... `{/lock}` | The journal of a [pinned workflow](CLI.md#pinned-workflows) |
+
+* **Same runtime.** Blocks run in document order in one shared scope, with the same library,
+  prompts, guards, traces and pins as a Markdown workflow. Everything else in this
+  documentation applies unchanged; read "fence" as `{js}` block and "blockquote" as `{agent}` block.
+* **Frontmatter is optional.** The file type identifies the workflow, so `extension` and
+  `version` are not needed. `model` and `preamble` work as in Markdown.
+* **Tags stand alone.** An opening or closing tag takes a whole line and may be indented. A
+  closing tag inside a line, for example in a string, is ordinary text, and a block ends only
+  with its own closing tag. Tag names are lowercase.
+* **Settings live in the tag.** `{agent ...}` and `{codegen ...}` take `restrict`, `enforce`,
+  `forbid`, `model` and `reasoning`, separated by commas and written as in `@CTL(...)`. The tag
+  may continue over several lines. `@CTL` and `@CODEGEN` markers are errors in a `.spl` file.
+* **Everything is in a block.** Text between blocks is a syntax error, which catches a
+  mistyped tag; write commentary in `{comment}`. Blocks do not nest, so a `{comment}` can show
+  other tags as text.
+* **Instructions are plain text.** Common indentation and blank lines around the text of an
+  `{agent}` or `{codegen}` block are removed. `@name` references and `@validate[Type]` work as
+  in blockquotes.
+* **Running.** `spl workflow.spl` accepts every option of the [CLI](CLI.md); `--pin` writes
+  `workflow.locked.spl` with the journal in a `{lock}` block.
+* **Editing.** The [VS Code extension](../vscode/README.md) colors the whole file and gives
+  `{js}` and `{ts}` blocks the JavaScript features of fences, `{agent}` blocks `@name`
+  completion and tags completion of their settings.
 
 ## One shared scope
 

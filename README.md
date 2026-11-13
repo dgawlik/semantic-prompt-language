@@ -67,6 +67,30 @@ Try [typed-data.md](lang/examples/typed-data.md) without a model or login. See
 [Types](docs-template/Language.md#types) for the schema builder and
 [Schemas and repairs](docs-template/LLM-commands.md#schemas-and-repairs) for typed generation.
 
+## Workflows without Markdown
+
+A `.spl` file holds the same steps as blocks instead of fences and blockquotes: `{js}` and `{ts}`
+for code, `{agent ...}` for agent commands with their settings in the tag, `{codegen}` for
+generated functions and `{comment}` for commentary. It runs on the same runtime, with the same
+guards, traces and pins.
+
+```spl
+---
+model: 'gpt-6-luna'
+---
+
+{js}
+const notes = await readFile('./notes.txt');
+{/js}
+
+{agent restrict={fs: ['./out']}, forbid='adding facts that are not in @notes'}
+Summarize @notes in three bullets and write them to './out/summary.md'
+{/agent}
+```
+
+Run it with `spl summary.spl`. See [Dedicated .spl files](docs-template/Language.md#dedicated-spl-files)
+and [code-review.spl](lang/examples/code-review.spl).
+
 ## Install
 
 ```sh
@@ -104,7 +128,7 @@ From a checkout: `cd lang`, `npm install`, then `node dist/cli.js examples/hi.md
 | Folder | Contents |
 | --- | --- |
 | [lang/](lang/README.md) | The `spl-lang` package: library, runtime, CLI, tests and [examples](lang/examples/) |
-| [vscode/](vscode/README.md) | VS Code extension: JavaScript language features in workflow Markdown and runnable notebooks |
+| [vscode/](vscode/README.md) | VS Code extension: JavaScript language features in workflow Markdown and `.spl` files, and runnable notebooks |
 | [docs-template/](docs-template/Introduction.md) | Documentation sources |
 | [docs/](docs/) | Generated documentation site (GitHub Pages) |
 
@@ -121,8 +145,8 @@ npm --prefix vscode test # extension tests
 ```
 
 Tests never contact a model. The [VS Code extension](vscode/README.md) reuses the TypeScript
-language service for `js` and `ts` fences, with the library declared as globals, and adds
-`@name` and `@CTL` support in blockquotes. Editor analysis is offline and never executes workflows.
+language service for `js` and `ts` fences and `{js}` and `{ts}` blocks, with the library declared
+as globals, and adds `@name` and `@CTL` support in blockquotes and `{agent}` blocks. Editor analysis is offline and never executes workflows.
 
 To change the documentation, edit [docs-template/](docs-template/Introduction.md), then regenerate
 and verify the site. Commit the generated `docs/` files with the sources.

@@ -1,48 +1,57 @@
 # Build AI workflows in minutes, not hours
 
-Turn Markdown into runnable AI workflows: natural-language steps alongside native JavaScript,
+Choose between Markdown and SPL format and turn them into runnable AI workflows: natural-language steps alongside native JavaScript,
 checked model output, guards and human approval.
 
 `hi.md`
 
-````markdown
----
-extension: 'semantic-prompt-language'
-version: 1
-model: 'gpt-6-luna'
-preamble: 'Be concise.'
----
+```spl 
+{comment}
+Prose like this is commentary. Only {js} and {agent} scopes run,
+top to bottom, in one shared scope.
+{/comment}
 
-# Hello, SPL
+{js}
+const topics = [
+    'recursion', 
+    'closures', 
+    'regular expressions'
+];
 
-Prose like this is commentary. Only `js` fences and blockquotes run, top to bottom, in one shared scope.
-The library (`ask`, `struct`, `writeFile`, `markdown`, ...) is already imported in every fence.
-
-```js
-const Topic = enumOf('recursion', 'closures', 'regular expressions');
-const topics = ['recursion', 'closures', 'regular expressions'];
+const Topic = enumOf(...topics);
 
 const Card = struct('Card', {
     term: Topic,
-    definition: str.annotate({ desc: 'One line about' }),
-    description: str.annotate({ desc: 'A paragraph about' }),
+    definition: str.annotate({ desc: 'A line with definition of' }),
+    description: str.annotate({ desc: 'Several sentences about' }),
 });
 
-const cards = await Promise.all(topics.map(topic =>
-    ask(`A one-sentence flashcard about ${topic}`, { schema: Card, repairs: 1 })));
-```
+let cards = [];
+for (const topic of topics) {
+    let card = await ask(
+        `A one-sentence flashcard about ${topic}`, 
+        { schema: Card, 
+          repairs: 1 
+    });
+    cards.push(card);
+}
+    
+{/js}
 
-> Pick the item of @cards whose card a beginner would find hardest. Save that item to @hardest
+{agent model='gpt-6.1-sol', reasoning='high'}
+Pick the item of @cards whose card a beginner would find hardest. 
+Save that item to @hardest
+{/agent}
 
-```js
+{js}
 const doc = markdown.document()
     .heading(hardest.term, 3)
     .paragraph(markdown.bold(hardest.definition))
     .paragraph(hardest.description);
 
 await writeFile('./out/hardest-card.md', doc.toString());
+{/js}
 ```
-````
 
 * `js` fences are native JavaScript on Node.js. The `spl-lang` library is already imported, so
   `ask`, `struct`, `writeFile` and `markdown` need no `import`.

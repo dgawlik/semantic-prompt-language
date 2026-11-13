@@ -220,6 +220,10 @@ statements or a Markdown preview highlighter. Fences get JavaScript and TypeScri
 features from the TypeScript language service, and notebook code cells are JavaScript or
 TypeScript cells. See the [extension guide](../vscode/README.md).
 
+The `.spl` file extension now names the [block format](Language.md#dedicated-spl-files) for
+JavaScript workflows, which the extension colors and completes. It is not the 1.x language: a
+1.x script in a `.spl` file is rejected with a syntax error.
+
 ## Checklist
 
 1. Change every `spl` fence to `js` and translate its code with the tables above.

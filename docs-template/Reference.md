@@ -26,6 +26,20 @@ Unknown fields are syntax errors. After the frontmatter, blocks run in document 
 | Top-level blockquote | Agent command; `@CODEGEN` generates functions instead |
 | Double blockquote with a `spl-lock` fence | The journal of a [pinned workflow](CLI.md#pinned-workflows) |
 
+A [`.spl` file](Language.md#dedicated-spl-files) holds the same workflow as blocks. Frontmatter is
+optional there and needs neither `extension` nor `version`. Each tag stands on its own line, and
+text outside blocks is a syntax error.
+
+| Block of a `.spl` file | Treatment |
+| --- | --- |
+| `{js}` ... `{/js}` | Runs as JavaScript |
+| `{ts}` ... `{/ts}` | Types are erased, then it runs as JavaScript |
+| `{js ignore}`, `{js no-run}`, likewise for `ts` | Not run |
+| `{agent restrict=..., enforce=..., forbid=..., model=..., reasoning=...}` ... `{/agent}` | Agent command; the optional settings are those of `@CTL` |
+| `{codegen ...}` ... `{/codegen}` | Generates functions from the description; accepts the settings of `{agent}` |
+| `{comment}` ... `{/comment}` | Commentary |
+| `{lock}` ... `{/lock}` | The journal of a [pinned workflow](CLI.md#pinned-workflows) |
+
 Fences are compiled as ES-module code in strict mode: top-level `await`, `import`, `import()`
 and `import.meta.url`, `.filename`, `.dirname` are available; top-level `return`,
 `export default` and `export { ... }` are not. `import.meta` describes the workflow file, while
@@ -239,7 +253,7 @@ See [Failure payload](Safety.md#failure-payload) for the JSON shape and exit cod
 
 | Import | Contents |
 | --- | --- |
-| `spl-lang` | The library globals, `configure`, the type classes and `Infer`, plus the embedding API: `parseMarkdown`, `parse`, `parseInstruction`, `run`, `ExecutionSession`, `checkWorkflow`, `Logger`, `AiBackend`, `Trace`, `Pin`, `loadMcpConfig` and their types |
+| `spl-lang` | The library globals, `configure`, the type classes and `Infer`, plus the embedding API: `parseMarkdown`, `parseSpl`, `parse`, `parseInstruction`, `run`, `ExecutionSession`, `checkWorkflow`, `Logger`, `AiBackend`, `Trace`, `Pin`, `loadMcpConfig` and their types |
 | `spl-lang/markdown` | The Markdown builder: `Document`, `document`, `bold`, `italic`, `code`, `link`, `image`, `escape` |
 | `spl-lang/globals` | Types only: the fence globals as ambient declarations |
 

@@ -1,0 +1,46 @@
+
+{comment}
+Prose like this is commentary. Only {js} and {agent} scopes run,
+top to bottom, in one shared scope.
+{/comment}
+
+{js}
+const topics = [
+    'recursion', 
+    'closures', 
+    'regular expressions'
+];
+
+const Topic = enumOf(...topics);
+
+const Card = struct('Card', {
+    term: Topic,
+    definition: str.annotate({ desc: 'A line with definition of' }),
+    description: str.annotate({ desc: 'Several sentences about' }),
+});
+
+let cards = [];
+for (const topic of topics) {
+    let card = await ask(
+        `A one-sentence flashcard about ${topic}`, 
+        { schema: Card, 
+          repairs: 1 
+    });
+    cards.push(card);
+}
+    
+{/js}
+
+{agent model='gpt-6.1-sol', reasoning='high'}
+Pick the item of @cards whose card a beginner would find hardest. 
+Save that item to @hardest
+{/agent}
+
+{js}
+const doc = markdown.document()
+    .heading(hardest.term, 3)
+    .paragraph(markdown.bold(hardest.definition))
+    .paragraph(hardest.description);
+
+await writeFile('./out/hardest-card.md', doc.toString());
+{/js}

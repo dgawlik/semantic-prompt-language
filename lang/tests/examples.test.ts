@@ -4,7 +4,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LlmBackend, LlmRequest, RuntimeAction } from '../src/llm.js';
-import { parseMarkdown } from '../src/markdown.js';
+import { parseMarkdown, type Workflow } from '../src/markdown.js';
+import { parseSpl } from '../src/spl.js';
 import { Trace } from '../src/trace.js';
 import { checkWorkflow, run, type RunOptions, type RunResult } from '../src/workflow.js';
 import { NoLlm, acting, action, backend, cleanTemp, collecting, scripted, silent, tempDir, text } from './helpers.js';
@@ -14,8 +15,9 @@ const dir = path.join(lang, 'examples');
 const load = (name: string): string => fs.readFileSync(path.join(dir, name), 'utf8');
 const workflows = fs.readdirSync(dir, { recursive: true, encoding: 'utf8' })
     .map(name => name.replaceAll('\\', '/'))
-    .filter(name => name.endsWith('.md') && !name.startsWith('data/'))
+    .filter(name => /\.(?:md|spl)$/.test(name) && !name.startsWith('data/'))
     .sort();
+const parseExample = (name: string): Workflow => (name.endsWith('.spl') ? parseSpl : parseMarkdown)(load(name));
 
 afterEach(() => {
     vi.unstubAllEnvs();
@@ -31,7 +33,7 @@ function scratch(): string {
 
 function example(name: string, options: Partial<RunOptions> = {}): Promise<RunResult> {
     const cwd = options.cwd ?? scratch();
-    return run(parseMarkdown(load(name)), {
+    return run(parseExample(name), {
         backend: new NoLlm(), logger: silent, cwd, file: path.join(cwd, path.basename(name)), ...options,
     });
 }
@@ -64,12 +66,12 @@ function model(replies: string[], ...commands: Step[][]): LlmBackend & { asks: L
 
 describe('examples', () => {
     it('finds the shipped workflows, including subfolders but not the sample data', () => {
-        expect(workflows).toEqual(expect.arrayContaining(['hi.md', 'basics.md', 'deterministic/node.md', 'imports/run.md']));
+        expect(workflows).toEqual(expect.arrayContaining(['hi.md', 'basics.md', 'code-review.spl', 'deterministic/node.md', 'imports/run.md']));
         expect(workflows).not.toContain('data/product-update.md');
     });
 
     it.each(workflows)('%s parses and passes the static checks', name => {
-        const workflow = parseMarkdown(load(name));
+        const workflow = parseExample(name);
         expect(workflow.steps.length).toBeGreaterThan(0);
         expect(checkWorkflow(workflow, lang)).toEqual([]);
     });
@@ -404,10 +406,10 @@ describe('examples with scripted models', () => {
         [action('load_variable', { name: 'groups' }), results => action('write_file', { path: './reports/review.md', content: `# Review\n\n${Object.keys(results[0] as object).join(', ')}\n` })],
     ];
 
-    it('code-review.md turns agent notes into typed findings and a report inside the allowed folder', async () => {
+    it.each(['code-review.md', 'code-review.spl'])('%s turns agent notes into typed findings and a report inside the allowed folder', async name => {
         const cwd = scratch();
         const llm = model([], ...review('medium', 'low', 'medium'));
-        expect(await example('code-review.md', { cwd, backend: llm })).toEqual({
+        expect(await example(name, { cwd, backend: llm })).toEqual({
             status: 'success', hasValue: true,
             value: 'medium: A medium problem (src/app.js:12)\nlow: A low problem (src/app.js:12)\nmedium: A medium problem (src/app.js:12)',
         });
@@ -417,11 +419,11 @@ describe('examples with scripted models', () => {
         expect(llm.quotes[0].prompt).toContain('- Avoid: suggesting purely stylistic changes');
     });
 
-    it('code-review.md fails on high severity findings and rejects unknown severities', async () => {
-        expect(await example('code-review.md', { backend: model([], ...review('low', 'high')) })).toMatchObject({
+    it.each(['code-review.md', 'code-review.spl'])('%s fails on high severity findings and rejects unknown severities', async name => {
+        expect(await example(name, { backend: model([], ...review('low', 'high')) })).toMatchObject({
             status: 'failure', failure: { status_code: 'explicit_failure', reason: '1 high severity finding(s), see ./reports/review.md' },
         });
-        expect(await example('code-review.md', { backend: model([], ...review('critical')) })).toMatchObject({
+        expect(await example(name, { backend: model([], ...review('critical')) })).toMatchObject({
             status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringContaining('expected "low" | "medium" | "high", got "critical"') },
         });
     });

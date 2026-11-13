@@ -1,9 +1,15 @@
 import { CompletionItemKind, type CompletionItem, type Range } from 'vscode-languageserver/node';
 import type { TextDocument } from 'vscode-languageserver-textdocument';
-import type { NaturalControls } from '../../lang/src/controls.js';
+import { scanSettings, type ControlToken, type NaturalControls } from '../../lang/src/controls.js';
 import type { MarkdownBlock } from '../../lang/src/markdown.js';
 import type { RestrictKind } from '../../lang/src/restrict.js';
+import type { SplBlock } from '../../lang/src/spl.js';
 import type { Help } from './catalog';
+
+export type { ControlToken };
+
+/** A fence or blockquote of a Markdown workflow, or a block of a `.spl` file, which then carries its tag. */
+export type WorkflowBlock = MarkdownBlock & { spl?: SplBlock };
 
 export const controlHelp: Record<keyof NaturalControls, Help> = {
     restrict: { signature: "restrict={fs: ['./src'], exec: ['git']}", description: 'Narrow fs, exec, net or mcp permissions before the agent runs. Each restriction needs at least one entry.' },
@@ -20,68 +26,58 @@ const restrictionHelp: Record<RestrictKind, string> = {
     mcp: 'Allowed MCP server names or server/tool selectors.',
 };
 
-interface ControlTokenBase {
-    value: string;
-    from: number;
-    to: number;
-}
-
-export type ControlToken = ControlTokenBase & (
-    { kind: 'marker' | 'name' | 'punctuation' } |
-    { kind: 'string'; quote: string; contentFrom: number; closed: boolean }
-);
-
-export function blockquoteText(document: TextDocument, block: MarkdownBlock): { text: string; from: number } {
+/** The text of an instruction block at document positions, with the syntax around it blanked. */
+export function blockquoteText(document: TextDocument, block: WorkflowBlock): { text: string; from: number } {
     const start = { line: block.line - 1, character: 0 };
-    return {
-        from: document.offsetAt(start),
-        text: document.getText({ start, end: { line: block.endLine, character: 0 } })
-            .replace(/^ {0,3}(?:>[ \t]?)+/gm, prefix => ' '.repeat(prefix.length)),
-    };
+    const from = document.offsetAt(start);
+    const text = document.getText({ start, end: { line: block.endLine, character: 0 } });
+    if (!block.spl) return { from, text: text.replace(/^ {0,3}(?:>[ \t]?)+/gm, prefix => ' '.repeat(prefix.length)) };
+    if (!block.spl.closed) return { from, text };
+    const closing = document.offsetAt({ line: block.endLine - 1, character: 0 }) - from;
+    return { from, text: text.slice(0, closing) + text.slice(closing).replace(/[^\r\n]/g, ' ') };
 }
 
-// Keep incomplete strings and groups usable while the user is typing.
-export function scanControls(text: string): { tokens: ControlToken[]; end: number; closed: boolean } | undefined {
+export interface ControlScan {
+    /** The marker and its opening delimiter, then every setting token. */
+    tokens: ControlToken[];
+    /** Offset from which settings may be written. */
+    start: number;
+    end: number;
+    closed: boolean;
+}
+
+/**
+ * Finds the settings that open an instruction: `@CTL(...)` in a blockquote, or the opening tag of
+ * a `.spl` block when `tag` names it. Incomplete strings and groups stay usable while the user is typing.
+ */
+export function scanControls(text: string, tag?: string): ControlScan | undefined {
+    if (tag) {
+        const header = new RegExp(`^\\s*\\{(${tag})(?=[\\s}]|$)`).exec(text);
+        if (!header) return undefined;
+        const open = header[0].indexOf('{');
+        const settings = scanSettings(text, header[0].length);
+        return {
+            ...settings, start: header[0].length + 1,
+            tokens: [
+                { kind: 'marker', value: tag, from: open + 1, to: header[0].length },
+                { kind: 'punctuation', value: '{', from: open, to: open + 1 },
+                ...settings.tokens,
+            ],
+        };
+    }
     const header = /^\s*(@CTL)\s*\(/i.exec(text);
     if (!header) return undefined;
     const marker = header[0].indexOf('@');
     const open = header[0].lastIndexOf('(');
-    const tokens: ControlToken[] = [
-        { kind: 'marker', value: text.slice(marker, marker + 4), from: marker, to: marker + 4 },
-        { kind: 'punctuation', value: '(', from: open, to: open + 1 },
-    ];
-    let depth = 1;
-    let at = open + 1;
-    while (at < text.length) {
-        if (/\s/.test(text[at])) { at++; continue; }
-        if (text[at] === '#') {
-            while (at < text.length && text[at] !== '\n') at++;
-            continue;
-        }
-        const from = at;
-        const raw = text[at] === 'r' && /['"]/.test(text[at + 1] ?? '');
-        if (raw) at++;
-        if (text[at] === "'" || text[at] === '"' || text[at] === '`') {
-            const quote = text[at] !== '`' && text.startsWith(text[at].repeat(3), at) ? text[at].repeat(3) : text[at];
-            at += quote.length;
-            const contentFrom = at;
-            while (at < text.length && !text.startsWith(quote, at)) {
-                at += !raw && text[at] === '\\' ? Math.min(2, text.length - at) : 1;
-            }
-            const closed = at < text.length;
-            const value = text.slice(contentFrom, at);
-            if (closed) at += quote.length;
-            tokens.push({ kind: 'string', value, from, to: at, quote, contentFrom, closed });
-        } else {
-            const name = /^[A-Za-z_]\w*/.exec(text.slice(at));
-            const value = name?.[0] ?? text[at];
-            at += value.length;
-            tokens.push({ kind: name ? 'name' : 'punctuation', value, from, to: at });
-            if ('([{'.includes(value)) depth++;
-            else if (')]}'.includes(value) && --depth === 0) return { tokens, end: at, closed: true };
-        }
-    }
-    return { tokens, end: at, closed: false };
+    const settings = scanSettings(text, open + 1);
+    return {
+        ...settings, start: open + 1,
+        tokens: [
+            { kind: 'marker', value: text.slice(marker, marker + 4), from: marker, to: marker + 4 },
+            { kind: 'punctuation', value: '(', from: open, to: open + 1 },
+            ...settings.tokens,
+        ],
+    };
 }
 
 export function scanCodegen(text: string): ControlToken[] | undefined {
@@ -99,10 +95,10 @@ export function scanCodegen(text: string): ControlToken[] | undefined {
 }
 
 export function controlCompletions(
-    text: string, at: number, range: (from: number, to: number) => Range, model?: string,
+    text: string, at: number, range: (from: number, to: number) => Range, model?: string, tag?: string,
 ): CompletionItem[] | undefined {
-    const controls = scanControls(text);
-    if (!controls || at <= controls.tokens[1].from || (controls.closed && at >= controls.end)) return undefined;
+    const controls = scanControls(text, tag);
+    if (!controls || at < controls.start || (controls.closed && at >= controls.end)) return undefined;
     const current = controls.tokens.find(token => token.from < at && at <= token.to &&
         (token.kind === 'name' || token.kind === 'string'));
     const before = controls.tokens.filter(token => token.from < (current?.from ?? at));
@@ -115,15 +111,17 @@ export function controlCompletions(
     }
     const frame = stack.at(-1);
     if (!frame) return [];
+    // The outermost group holds the settings; a brace group inside it is a restriction map.
+    const settings = stack.length === 1;
     const segment = before.slice(Math.max(frame.from + 1, before.findLastIndex(token => token.value === ',') + 1));
-    const separator = frame.open === '{' ? ':' : '=';
+    const separator = settings ? '=' : ':';
     const assignment = segment.findIndex(token => token.value === separator);
     const replacement = range(current?.from ?? at, current?.to ?? at);
-    if (frame.open === '[') return [];
+    if (!settings && frame.open !== '{') return [];
     if (assignment >= 0) {
         const setting = segment[assignment - 1]?.value;
-        const values = frame.open === '(' && setting === 'reasoning' ? ['low', 'medium', 'high'] :
-            frame.open === '(' && setting === 'model' && model ? [model] : [];
+        const values = settings && setting === 'reasoning' ? ['low', 'medium', 'high'] :
+            settings && setting === 'model' && model ? [model] : [];
         return values.map(value => ({
             label: value, kind: CompletionItemKind.Value,
             textEdit: current?.kind === 'string'
@@ -132,8 +130,7 @@ export function controlCompletions(
                 : { range: replacement, newText: `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'` },
         }));
     }
-    if (frame.open !== '(' && frame.open !== '{') return [];
-    const catalog = frame.open === '(' ? controlHelp : restrictionHelp;
+    const catalog = settings ? controlHelp : restrictionHelp;
     const used = new Set(controls.tokens.filter((token, i, tokens) =>
         token !== current && tokens[i + 1]?.value === separator).map(token => token.value));
     const tail = text.slice(current?.to ?? at);

@@ -11,6 +11,7 @@ import { Failure, SplSyntaxError } from './errors.js';
 import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
 import { parseMarkdown, type Workflow } from './markdown.js';
+import { parseSpl } from './spl.js';
 import { checkWorkflow, run, type RunResult } from './workflow.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
 import { Trace, TraceError, fingerprint } from './trace.js';
@@ -20,7 +21,7 @@ import { Pin } from './pin.js';
 
 const HELP = `spl - Semantic Prompt Language: executable Markdown workflows in JavaScript
 
-Usage: spl <workflow.md> [options]
+Usage: spl <workflow.md | workflow.spl> [options]
        spl login <provider>    configure an API key and default provider: openai | anthropic | google
        spl logout [provider]   remove saved credentials (environment variables are unchanged)
 
@@ -48,6 +49,7 @@ Options:
                           Reuse the same path to resume; completed runs replay without external work.
                           Choose another JSONL file to restart.
   --pin                   on success, save <workflow>.locked.md with responses in double blockquotes
+                          (<workflow>.locked.spl with a {lock} block for a .spl workflow).
                           Locked workflows replay without models, tools, stores or human prompts.
   --cwd <dir>             base directory for imports, relative paths and restrictions (default: current directory)
   --check                 validate fences, controls, relative imports and any --mcp config without executing
@@ -63,6 +65,10 @@ Provider environment:
 js fences run as native JavaScript (ts fences have their types erased) with the spl-lang library
 already imported: ask, think, agent, human, restrict, enforce, forbid, success, fail and more.
 Blockquotes run as agent commands on the same shared scope.
+
+A .spl file holds the same workflow in blocks, each tag on its own line and closed by {/name}:
+{js} and {ts} are code, {agent restrict={...}, model='...'} is an agent command with its settings,
+{codegen} describes functions to generate and {comment} is commentary. Frontmatter is optional.
 
 The script result (the value passed to success(), or the failure payload) is written to stdout.
 Normal runs ask for human input directly, even with --silent.
@@ -190,7 +196,10 @@ async function main(): Promise<number> {
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
     const file = positionals[0];
-    if (!/\.md$/i.test(file)) usageError('only .md workflows are executable; put JavaScript in a fenced js block and add extension/version frontmatter');
+    const format = /\.spl$/i.test(file) ? 'spl' : 'md';
+    if (format === 'md' && !/\.md$/i.test(file)) {
+        usageError('only .md and .spl workflows are executable; put JavaScript in a fenced js block and add extension/version frontmatter, or in a {js} block of a .spl file');
+    }
     let source: string;
     try {
         source = fs.readFileSync(file, 'utf8');
@@ -200,7 +209,7 @@ async function main(): Promise<number> {
 
     let program: Workflow;
     try {
-        program = parseMarkdown(source);
+        program = format === 'spl' ? parseSpl(source) : parseMarkdown(source);
     } catch (e) {
         if (e instanceof SplSyntaxError) {
             new Logger('error').error(e.format(file));
@@ -209,12 +218,12 @@ async function main(): Promise<number> {
         throw e;
     }
     const locked = program.markdown?.lock !== undefined;
-    if (/\.locked\.md$/i.test(file) && !locked) usageError('locked workflow is missing its execution journal');
+    if (/\.locked\.(?:md|spl)$/i.test(file) && !locked) usageError('locked workflow is missing its execution journal');
     if (locked && (values.pin || [values.trace, values.mcp, values.human]
         .some(value => value !== undefined))) {
         usageError('locked workflows cannot use --pin, --trace, --mcp, or --human');
     }
-    const lockedFile = file.replace(/\.md$/i, '.locked.md');
+    const lockedFile = file.replace(/\.(?:md|spl)$/i, `.locked.${format}`);
     if (values.pin && !values.check && fs.existsSync(lockedFile)) {
         usageError(`cannot pin: '${lockedFile}' already exists; move or remove it first`);
     }
@@ -345,7 +354,7 @@ async function main(): Promise<number> {
     }
     if (pin) {
         try {
-            fs.writeFileSync(lockedFile, pin.toMarkdown(source), { flag: 'wx', mode: 0o600 });
+            fs.writeFileSync(lockedFile, format === 'spl' ? pin.toSpl(source) : pin.toMarkdown(source), { flag: 'wx', mode: 0o600 });
         } catch (error) {
             new Logger('error').error(`spl: cannot save pinned workflow '${lockedFile}': ${error instanceof Error ? error.message : String(error)}`);
             return 70;

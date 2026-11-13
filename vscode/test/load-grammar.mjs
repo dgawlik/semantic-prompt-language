@@ -32,15 +32,20 @@ const markdown = {
     ],
 };
 
+let engine;
+/** The regular expression engine VS Code tokenizes with; its WebAssembly module loads once. */
+function onigLib() {
+    engine ??= oniguruma.loadWASM(fs.readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm')).buffer).then(() => ({
+        createOnigScanner: (p) => new oniguruma.OnigScanner(p),
+        createOnigString: (s) => new oniguruma.OnigString(s),
+    }));
+    return engine;
+}
+
 /** Loads the stand-in Markdown grammar with the extension's blockquote injection applied. */
 export async function loadGrammar() {
-    const wasm = fs.readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm')).buffer;
-    await oniguruma.loadWASM(wasm);
     const registry = new vsctm.Registry({
-        onigLib: Promise.resolve({
-            createOnigScanner: (p) => new oniguruma.OnigScanner(p),
-            createOnigString: (s) => new oniguruma.OnigString(s),
-        }),
+        onigLib: onigLib(),
         getInjections: (scope) => scope === markdown.scopeName ? [INJECTION] : [],
         loadGrammar: async (scope) => {
             if (scope === markdown.scopeName) return markdown;
@@ -50,6 +55,38 @@ export async function loadGrammar() {
         },
     });
     return registry.loadGrammar(markdown.scopeName);
+}
+
+// Stand-ins for the grammars a `.spl` file embeds. The JavaScript one has constructs that span
+// lines, as the real grammar does: a block must end at its closing tag even inside one of them.
+const embedded = {
+    'source.js': {
+        scopeName: 'source.js',
+        patterns: [
+            { begin: '/\\*', end: '\\*/', name: 'comment.block.js' },
+            { begin: '`', end: '`', name: 'string.template.js' },
+            { begin: "'", end: "'|$", name: 'string.quoted.single.js' },
+            { match: '\\b(?:const|let|await|function|return)\\b', name: 'keyword.js' },
+        ],
+    },
+    'source.ts': { scopeName: 'source.ts', patterns: [{ match: '\\b(?:const|interface|number)\\b', name: 'keyword.ts' }] },
+    'source.yaml': { scopeName: 'source.yaml', patterns: [{ match: '^[\\w-]+(?=:)', name: 'entity.name.tag.yaml' }, { begin: "'", end: "'", name: 'string.quoted.single.yaml' }] },
+    'source.json': { scopeName: 'source.json', patterns: [{ begin: '"', end: '"', name: 'string.quoted.double.json' }] },
+};
+export const SPL = 'source.spl';
+
+/** Loads the grammar of `.spl` files with stand-ins for the languages it embeds. */
+export async function loadSplGrammar() {
+    const registry = new vsctm.Registry({
+        onigLib: onigLib(),
+        loadGrammar: async (scope) => {
+            if (Object.hasOwn(embedded, scope)) return embedded[scope];
+            if (scope !== SPL) return null;
+            const file = path.join(root, 'syntaxes', 'spl.tmLanguage.json');
+            return vsctm.parseRawGrammar(fs.readFileSync(file, 'utf8'), file);
+        },
+    });
+    return registry.loadGrammar(SPL);
 }
 
 /** Tokenizes consecutive lines: each line with its tokens and the depth of the constructs still open after it. */

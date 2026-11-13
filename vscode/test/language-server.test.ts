@@ -214,6 +214,169 @@ test('document symbols list the declarations of every fence', () => {
     assert.deepEqual(symbols[0].children?.map(item => item.name), ['label']);
 });
 
+// ---- .spl files: the same workflow in {js}, {ts}, {agent}, {codegen} and {comment} blocks ----
+
+const splUri = pathToFileURL(path.join(base, 'workflow.spl')).href;
+const block = (tag: string, body: string, settings = '') => `{${tag}${settings && ` ${settings}`}}\n${body}\n{/${tag}}`;
+const js = (code: string) => block('js', code);
+let previousSpl: WorkflowContext | undefined;
+
+/** Opens a `.spl` document; `|` marks the cursor and is removed. */
+function openSpl(marked: string): { context: WorkflowContext; position: Position; source: string } {
+    const cursor = marked.indexOf('|');
+    const source = cursor < 0 ? marked : marked.slice(0, cursor) + marked.slice(cursor + 1);
+    const document = TextDocument.create(splUri, 'spl', ++version, source);
+    previousSpl = workflowContext(document, project, previousSpl);
+    assert.ok(previousSpl, 'a .spl document is a workflow');
+    return { context: previousSpl, position: document.positionAt(Math.max(0, cursor)), source };
+}
+const splAt = (source: string, text: string, offset = 0): Position => {
+    const index = source.indexOf(text);
+    assert.ok(index >= 0, `'${text}' not found`);
+    return TextDocument.create(splUri, 'spl', 0, source).positionAt(index + offset);
+};
+const splLabels = (body: string) => {
+    const { context, position } = openSpl(body);
+    return completions(context, position).map(item => item.label);
+};
+const splHover = (body: string): string => {
+    const { context, position } = openSpl(body);
+    const result = hover(context, position);
+    return result && typeof result.contents === 'object' && 'value' in result.contents ? result.contents.value : '';
+};
+
+test('.spl files are workflows by their type, with or without frontmatter', () => {
+    const plain = analyzeWorkflow(TextDocument.create(splUri, 'spl', 1, js('const a = 1;')));
+    assert.equal(plain.workflow, true);
+    assert.deepEqual(plain.blocks.map(item => [item.kind, item.line, item.endLine]), [['code', 2, 2]]);
+    assert.equal(analyzeWorkflow(TextDocument.create(splUri, 'plaintext', 1, js('const a = 1;'))).workflow, true, 'the file name is enough');
+    assert.equal(analyzeWorkflow(TextDocument.create('untitled:Untitled-1', 'spl', 1, '')).workflow, true, 'so is the language of an unsaved file');
+    const full = analyzeWorkflow(TextDocument.create(splUri, 'spl', 1, `---\nmodel: test-model\n---\n\n${block('comment', js('const hidden = 1;'))}\n\n${block('js', 'const shown = 1;', 'ignore')}\n\n${block('agent', 'Save to @out')}\n\n${block('ts', 'const n: number = 1;')}`));
+    assert.equal(full.model, 'test-model');
+    assert.equal(full.language, 'ts');
+    assert.deepEqual(full.blocks.map(item => [item.kind, item.spl?.tag]), [['natural', 'agent'], ['code', 'ts']]);
+    assert.deepEqual(full.spl?.blocks.map(item => item.tag), ['comment', 'js', 'agent', 'ts']);
+    assert.deepEqual(full.diagnostics, []);
+});
+
+test('js and ts blocks of a .spl file complete, hover and check like fences', () => {
+    const names = splLabels(`${js('const notes = "raw";\nfunction shout(text) { return text.toUpperCase(); }')}\n\n${block('comment', js('const hidden = 1;'))}\n\n${js('|')}`);
+    for (const name of ['ask', 'agent', 'restrict', 'struct', 'markdown', 'notes', 'shout', 'console', 'JSON']) assert.ok(names.includes(name), name);
+    assert.ok(!names.includes('hidden'), 'commentary declares nothing');
+    assert.ok(splLabels(js('const title = await ask("Title?");\ntitle.|')).includes('toUpperCase'));
+    assert.ok(splLabels(js("import { twice } from './helpers.js';\ntwice(1).|")).includes('toFixed'));
+    assert.ok(splLabels(js("await ask('x', { | })")).includes('repairs'));
+    assert.match(splHover(js('await as|k("x");')), /const ask[\s\S]*Asks the model for a value/);
+    assert.deepEqual(splLabels(block('js', 'const shown = 1;\nsho|', 'ignore')), [], 'blocks that do not run are not analyzed');
+
+    const help = openSpl(js("await writeFile('./out.txt', |)"));
+    assert.equal(signatureHelp(help.context, help.position)?.activeParameter, 1);
+
+    const typed = openSpl(`${js('const loose = 1;\nloose.missing();')}\n\n${block('ts', "const count: number = 'three';")}`);
+    const found = diagnostics(typed.context);
+    assert.deepEqual(found.map(item => [item.source, item.range.start]), [['ts', splAt(typed.source, 'count: number')]]);
+    assert.match(found[0].message, /Type 'string' is not assignable to type 'number'/);
+});
+
+test('.spl diagnostics report structure, tag settings and JavaScript problems at their positions', () => {
+    const broken = openSpl(`---\nmodel: ''\n---\nstray text\n\n${js('const a = ;')}\n\n${block('agent', '@CTL(model="m") Go', 'model=42')}\n\n{python}\n\n${js("import { x } from './missing.js';")}\n\n{js}\nreturn 1;`);
+    const found = diagnostics(broken.context);
+    assert.deepEqual(found.map(item => [item.range.start.line, item.range.start.character, item.message]), [
+        [1, 0, 'frontmatter model must be a non-empty string'],
+        [3, 0, 'text outside a block; wrap commentary in {comment} and {/comment}'],
+        [9, 13, '{agent}: expected a literal string'],
+        [10, 0, '@CTL is not used in .spl files; write the settings in the tag: {agent restrict=..., model=...}'],
+        [13, 0, 'unknown block {python}; expected {js}, {ts}, {agent}, {codegen} or {comment}'],
+        [19, 0, 'unterminated {js} block; close it with {/js}'],
+        [6, 10, 'Unexpected token'],
+        [20, 0, "'return' outside of function"],
+        [16, 0, `cannot find module './missing.js' (imports resolve against the working directory ${base})`],
+    ]);
+    assert.ok(found.every(item => item.severity === DiagnosticSeverity.Error && item.source === 'spl'));
+    assert.deepEqual(found[4].range, { start: { line: 13, character: 0 }, end: { line: 13, character: 8 } }, 'a tag is underlined as a whole');
+    assert.equal(broken.context.analysis.blocks.length, 4, 'blocks stay usable while the document has problems');
+});
+
+test('agent blocks complete shared names, library functions and markers', () => {
+    const body = `${js("const notes = 'raw';\nconst Review = struct('Review', { score: int });\nfunction shout(text) { return text; }")}\n\n${block('agent', 'Summarize @|')}\n\n${js('const later = 1;')}`;
+    const names = splLabels(body);
+    for (const name of ['notes', 'Review', 'shout', 'readFile', 'ask', 'success', 'fail', 'validate', 'env', 'args']) assert.ok(names.includes(name), name);
+    for (const name of ['later', 'struct', 'restrict', 'CTL', 'CODEGEN', 'console']) assert.ok(!names.includes(name), name);
+    assert.deepEqual(splLabels(`${js("const notes = 'raw';\nconst Review = struct('Review', { score: int });")}\n\n${block('agent', 'Save it. @validate[|')}`), ['Review']);
+    assert.ok(!splLabels(block('agent', '@|')).includes('CTL'), 'settings are written in the tag');
+    assert.deepEqual(splLabels(block('agent', 'Mention notes|')), [], 'only @ refers to shared names');
+    assert.deepEqual(splLabels(block('codegen', 'Define answer() using @|')), [], 'a description is literal');
+    assert.deepEqual(splLabels(`${js('const notes = 1;')}\nStray @|`), []);
+});
+
+test('agent and codegen tags complete their settings, restriction kinds and values', () => {
+    const all = ['enforce', 'forbid', 'model', 'reasoning', 'restrict'];
+    assert.deepEqual(splLabels('{agent |}\nGo\n{/agent}').sort(), all);
+    assert.deepEqual(splLabels('{codegen |}\nDefine f()\n{/codegen}').sort(), all);
+    assert.deepEqual(splLabels("{agent model='m', |\n}\nGo\n{/agent}").sort(), ['enforce', 'forbid', 'reasoning', 'restrict']);
+    assert.deepEqual(splLabels("{agent restrict={fs: ['./src'], |}}\nGo\n{/agent}").sort(), ['exec', 'mcp', 'net']);
+    assert.deepEqual(splLabels("{agent restrict={fs: ['|']}}\nGo\n{/agent}"), []);
+    assert.deepEqual(splLabels("{agent reasoning='|'}\nGo\n{/agent}"), ['low', 'medium', 'high']);
+    assert.deepEqual(splLabels("---\nmodel: test-model\n---\n{agent model='|'}\nGo\n{/agent}"), ['test-model']);
+    assert.deepEqual(splLabels('{agent|}\nGo\n{/agent}'), [], 'settings start after the tag name');
+    assert.deepEqual(splLabels("{agent model='m'}|\nGo\n{/agent}"), []);
+
+    const typing = openSpl("{agent restrict={fs: ['./src'], ex|\nList files\n{/agent}\n\n{js}\nconst kept = 1;\n{/js}");
+    const [exec] = completions(typing.context, typing.position).filter(item => item.label === 'exec');
+    assert.deepEqual(exec.textEdit, { range: { start: { line: 0, character: 32 }, end: { line: 0, character: 34 } }, newText: 'exec:' });
+    assert.deepEqual(typing.context.analysis.blocks.map(item => item.kind), ['natural', 'code'], 'an unfinished tag does not swallow later blocks');
+
+    assert.match(splHover("{agent restrict={fs: ['./src']}, reas|oning='high'}\nGo\n{/agent}"), /reasoning='low' \| 'medium' \| 'high'/);
+    assert.match(splHover('{ag|ent}\nGo\n{/agent}'), /\{agent restrict=[\s\S]*agent command in plain language/);
+    assert.match(splHover('{js}\nconst a = 1;\n{/j|s}'), /\{js\} \.\.\. \{\/js\}/);
+    assert.match(splHover('{comment}\nNotes\n{/comm|ent}'), /never executed/);
+    assert.equal(splHover('{agent}\nJust pro|se\n{/agent}'), '');
+});
+
+test('typing a brace between blocks offers the blocks of a .spl file', () => {
+    const { context, position } = openSpl(`---\nmodel: m\n---\n\n${js('const a = 1;')}\n\n{|}\n`);
+    const items = completions(context, position);
+    assert.deepEqual(items.map(item => item.label), ['{js}', '{ts}', '{agent}', '{codegen}', '{comment}']);
+    assert.deepEqual(items[2].textEdit, { range: { start: { line: 8, character: 0 }, end: { line: 8, character: 2 } }, newText: '{agent}\n$0\n{/agent}' });
+    assert.equal(items[2].filterText, '{agent');
+    assert.deepEqual(splLabels(`${js('const a = 1;')}\n\n  {ag|`), ['{js}', '{ts}', '{agent}', '{codegen}', '{comment}']);
+    assert.equal(splLabels(`${js('const a = 1;')}\n\n|`).length, 5);
+    for (const body of ['---\nmodel: |\n---\n', '{comment}\n{|}\n{/comment}', '{agent}\n{|}\n{/agent}', `${js('const a = 1;')}\ntext {|}`, '{js}|']) {
+        assert.ok(!splLabels(body).includes('{agent}'), body);
+    }
+});
+
+test('values saved by agent blocks are visible to later blocks, typed through @validate', () => {
+    const body = `${js("const Invoice = struct('Invoice', { vendor: str, total: int });")}\n\n${block('agent', 'Extract it. @validate[Invoice] save to @invoice,\nand a note -> @note', "restrict={fs: ['./in']},\n       model='m'")}\n\n${js('invoice.|')}`;
+    const members = splLabels(body);
+    assert.ok(members.includes('vendor') && members.includes('total'));
+    const { context, source } = openSpl(body.replace('|', 'vendor;\nnote;'));
+    assert.deepEqual(context.analysis.ambient.map(item => [item.name, item.schema]), [['invoice', 'Invoice'], ['note', undefined]]);
+    assert.deepEqual(definition(context, splAt(source, 'invoice.vendor', 2)),
+        [{ uri: splUri, range: { start: splAt(source, '@invoice', 1), end: splAt(source, '@invoice', 8) } }]);
+    assert.match(splHover(body.replace('invoice.|', 'inv|oice;')), /let invoice: \{\s*vendor: string;\s*total: number;?\s*\}/);
+    assert.match(splHover(`${js('const x = 1;')}\n\n${block('agent', 'Save to @inv|oice')}`), /Saved by a blockquote agent/);
+    assert.deepEqual(openSpl(`${block('codegen', 'Define f() and save to @generated')}\n\n${block('agent', 'Go', "forbid='saving to @quoted'")}`).context.analysis.ambient, [],
+        'descriptions and settings are literal');
+});
+
+test('definitions, references, rename and symbols connect the blocks of a .spl file and @markers', () => {
+    const body = `${js('const notes = "raw";\nfunction inner() { const notes = 1; return notes; }')}\n\n${block('agent', 'Summarize @notes and save to @summary')}\n\n${js('log(notes, summary);')}`;
+    const { context, source } = openSpl(body);
+    const declaration = { uri: splUri, range: { start: splAt(source, 'notes'), end: splAt(source, 'notes', 5) } };
+    assert.deepEqual(definition(context, splAt(source, '@notes', 3)), [declaration]);
+    assert.deepEqual(definition(context, splAt(source, 'log(notes', 5)), [declaration]);
+    assert.deepEqual(references(context, splAt(source, 'log(notes', 5)).map(item => item.range.start),
+        [splAt(source, 'notes'), splAt(source, '@notes', 1), splAt(source, 'log(notes', 4)]);
+    assert.equal(documentHighlights(context, splAt(source, '@notes', 2)).length, 3);
+    assert.equal(references(context, splAt(source, 'const notes = 1', 7)).length, 2, 'a local shadow does not reach markers');
+    const edit = rename(context, splAt(source, 'notes'), 'draft');
+    assert.equal(edit?.changes?.[splUri].length, 3);
+    assert.equal(rename(context, splAt(source, '@summary', 2), 'digest')?.changes?.[splUri].length, 2);
+    assert.equal(prepareRename(context, splAt(source, 'log(notes')), null, 'library names cannot be renamed');
+    assert.deepEqual(documentSymbols(context).map(item => [item.name, item.kind]), [['inner', SymbolKind.Function], ['notes', SymbolKind.Constant]]);
+});
+
 test('the server speaks LSP end to end', { timeout: 60_000 }, async t => {
     const child = spawn(process.execPath, [path.resolve(__dirname, '..', 'server.cjs'), '--stdio'], { stdio: ['pipe', 'pipe', 'inherit'] });
     const connection = createProtocolConnection(new StreamMessageReader(child.stdout), new StreamMessageWriter(child.stdin));
@@ -275,6 +438,25 @@ test('the server speaks LSP end to end', { timeout: 60_000 }, async t => {
     assert.ok(symbols?.some(item => item.name === 'value'));
     const edit = await connection.sendRequest(RenameRequest.type, { textDocument: { uri: document }, position: position('value = '), newName: 'result' });
     assert.equal(edit?.changes?.[document].length, 3);
+
+    const flow = pathToFileURL(path.join(base, 'docs', 'flow.spl')).href;
+    const spl = "---\nmodel: test-model\n---\n\n{js}\nimport { twice } from './helpers.js';\nconst value = twice(2);\nvalue.\ntoFixed;\n{/js}\n\n{agent reasoning=''}\nUse @value and @\n{/agent}\n\n{js}\nconst = 1;\n{/js}\n";
+    await connection.sendNotification(DidOpenTextDocumentNotification.type, { textDocument: { uri: flow, languageId: 'spl', version: 7, text: spl } });
+    const reported = (await nextDiagnostics(7)).diagnostics;
+    assert.deepEqual(reported.map(item => [item.range.start.line, item.message]), [[11, '{agent}: reasoning must be low, medium, or high'], [16, 'Unexpected token']]);
+    const inSpl = (needle: string, offset = 0) => TextDocument.create(flow, 'spl', 7, spl).positionAt(spl.indexOf(needle) + offset);
+    const listed = async (position: Position, triggerCharacter?: string) => {
+        const result = await connection.sendRequest(CompletionRequest.type, {
+            textDocument: { uri: flow }, position,
+            ...(triggerCharacter ? { context: { triggerKind: CompletionTriggerKind.TriggerCharacter, triggerCharacter } } : {}),
+        });
+        return (Array.isArray(result) ? result : result?.items ?? []).map(item => item.label);
+    };
+    assert.ok((await listed(inSpl('value.\n', 6), '.')).includes('toFixed'), 'js blocks complete through the TypeScript service');
+    assert.ok((await listed(inSpl('and @', 5), '@')).includes('value'), 'agent blocks complete shared names');
+    assert.deepEqual(await listed(inSpl("reasoning=''", 11), "'"), ['low', 'medium', 'high']);
+    const jump = await connection.sendRequest(DefinitionRequest.type, { textDocument: { uri: flow }, position: inSpl('@value', 2) });
+    assert.deepEqual(jump, [{ uri: flow, range: { start: inSpl('value = '), end: inSpl('value = ', 5) } }]);
 
     await connection.sendRequest(ShutdownRequest.type);
     await connection.sendNotification(ExitNotification.type);

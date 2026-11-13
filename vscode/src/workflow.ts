@@ -4,7 +4,8 @@ import { compileCell, FENCE_LANGUAGES, type CellLanguage } from '../../lang/src/
 import { parseNatural } from '../../lang/src/controls.js';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { extractMarkdown, isWorkflowMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
-import { blockquoteText, scanCodegen, scanControls } from './blockquoteFeatures';
+import { scanSpl, type SplBlock } from '../../lang/src/spl.js';
+import { blockquoteText, scanCodegen, scanControls, type WorkflowBlock } from './blockquoteFeatures';
 import { library, markers } from './catalog';
 
 /** A `@name` in a blockquote. */
@@ -13,8 +14,8 @@ export interface Marker {
     /** Position of the name, after the `@`. */
     line: number;
     character: number;
-    /** The blockquote it belongs to. */
-    block: MarkdownBlock;
+    /** The blockquote or agent block it belongs to. */
+    block: WorkflowBlock;
     /** `@validate[Schema]` naming the type of the value saved to this marker. */
     schema?: string;
     /** The instruction saves a value to this name. */
@@ -35,7 +36,9 @@ export interface WorkflowAnalysis {
     /** The document opted in with SPL frontmatter. */
     workflow: boolean;
     model?: string;
-    blocks: MarkdownBlock[];
+    blocks: WorkflowBlock[];
+    /** Present for `.spl` files: every block, including commentary, and the first line after the frontmatter. */
+    spl?: { blocks: SplBlock[]; start: number };
     markers: Marker[];
     /** Names agents may save that no fence declares. */
     ambient: AmbientName[];
@@ -59,7 +62,7 @@ function problem(error: SplSyntaxError, document: TextDocument): Diagnostic {
     const line = Math.min(Math.max(0, error.line - 1), document.lineCount - 1);
     const text = document.getText({ start: { line, character: 0 }, end: { line: line + 1, character: 0 } }).replace(/\r?\n$/, '');
     const character = Math.min(Math.max(0, error.col - 1), text.length);
-    const word = /^[\w$@]+/.exec(text.slice(character))?.[0].length ?? 1;
+    const word = /^(?:\{\/?[\w-]+\}?|[\w$@]+)/.exec(text.slice(character))?.[0].length ?? 1;
     return { range: range(line, character, Math.max(1, word)), severity: DiagnosticSeverity.Error, source: 'spl', message: error.message };
 }
 
@@ -99,11 +102,11 @@ function scanBlocks(lines: string[]): MarkdownBlock[] {
     return blocks;
 }
 
-export function codeBlockAt(analysis: WorkflowAnalysis, position: Position): MarkdownBlock | undefined {
+export function codeBlockAt(analysis: WorkflowAnalysis, position: Position): WorkflowBlock | undefined {
     return analysis.blocks.find(block => block.kind === 'code' && position.line + 1 >= block.line && position.line + 1 <= block.endLine);
 }
 
-export function blockquoteAt(analysis: WorkflowAnalysis, position: Position): MarkdownBlock | undefined {
+export function blockquoteAt(analysis: WorkflowAnalysis, position: Position): WorkflowBlock | undefined {
     return analysis.blocks.find(block => block.kind === 'natural' && position.line + 1 >= block.line && position.line + 1 <= block.endLine);
 }
 
@@ -130,13 +133,31 @@ export function declaredNames(blocks: readonly MarkdownBlock[]): Set<string> {
     return names;
 }
 
+/** `.spl` files are workflows by their type; Markdown opts in with frontmatter. */
+export function isSplDocument(document: TextDocument): boolean {
+    return document.languageId === 'spl' || /\.spl$/i.test(document.uri.replace(/[?#].*$/, ''));
+}
+
 export function analyzeWorkflow(document: TextDocument): WorkflowAnalysis {
     const source = document.getText();
     const lines = source.replace(/^\uFEFF/, '').split(/\r?\n/);
-    const empty: WorkflowAnalysis = {
-        document, workflow: false, blocks: [], markers: [], ambient: [], diagnostics: [], language: 'js', virtual: '', mirrored: 0,
-    };
-    if (!isWorkflowMarkdown(source)) return empty;
+    if (isSplDocument(document)) {
+        const scanned = scanSpl(source);
+        const blocks = scanned.blocks.flatMap((block): WorkflowBlock[] => {
+            if (block.tag === 'agent' || block.tag === 'codegen') return [{ kind: 'natural', text: block.text, line: block.line, endLine: block.endLine, spl: block }];
+            if (block.tag !== 'js' && block.tag !== 'ts' || block.ignored) return [];
+            return [{
+                kind: 'code', language: block.tag, text: block.text, spl: block,
+                line: block.headerEndLine + 1, endLine: block.closed ? block.endLine - 1 : block.endLine,
+            }];
+        });
+        const diagnostics = scanned.problems.map(item => problem(new SplSyntaxError(item.message, item.line, item.column), document));
+        const start = lines[0] === '---' ? lines.findIndex((line, index) => index > 0 && /^(---|\.\.\.)\s*$/.test(line)) + 1 || lines.length : 0;
+        return { ...analyzeBlocks(document, lines, blocks, diagnostics, scanned.model), spl: { blocks: scanned.blocks, start } };
+    }
+    if (!isWorkflowMarkdown(source)) {
+        return { document, workflow: false, blocks: [], markers: [], ambient: [], diagnostics: [], language: 'js', virtual: '', mirrored: 0 };
+    }
     const diagnostics: Diagnostic[] = [];
     let blocks: MarkdownBlock[];
     let model: string | undefined;
@@ -149,6 +170,13 @@ export function analyzeWorkflow(document: TextDocument): WorkflowAnalysis {
         diagnostics.push(problem(error, document));
         blocks = scanBlocks(lines);
     }
+    return analyzeBlocks(document, lines, blocks, diagnostics, model);
+}
+
+/** Checks the code, collects the `@name` markers and builds the virtual module of a workflow in either format. */
+function analyzeBlocks(
+    document: TextDocument, lines: string[], blocks: WorkflowBlock[], diagnostics: Diagnostic[], model: string | undefined,
+): WorkflowAnalysis {
     const language: CellLanguage = blocks.some(block => block.language === 'ts') ? 'ts' : 'js';
     const masked = lines.map(line => ' '.repeat(line.length));
     for (const block of blocks) {
@@ -167,15 +195,18 @@ export function analyzeWorkflow(document: TextDocument): WorkflowAnalysis {
     const markerList: Marker[] = [];
     for (const block of blocks) {
         if (block.kind !== 'natural') continue;
-        try {
-            parseNatural(block.text, block.line);
-        } catch (error) {
-            if (!(error instanceof SplSyntaxError)) throw error;
-            diagnostics.push(problem(error, document));
+        // The tag and instruction of a `.spl` block were checked when its structure was read.
+        if (!block.spl) {
+            try {
+                parseNatural(block.text, block.line);
+            } catch (error) {
+                if (!(error instanceof SplSyntaxError)) throw error;
+                diagnostics.push(problem(error, document));
+            }
         }
         const quote = blockquoteText(document, block);
-        if (scanCodegen(quote.text)) continue;
-        const controls = scanControls(quote.text);
+        if (block.spl ? block.spl.tag === 'codegen' : scanCodegen(quote.text)) continue;
+        const controls = scanControls(quote.text, block.spl?.tag);
         const text = controls ? quote.text.slice(0, controls.end).replace(/[^\r\n]/g, ' ') + quote.text.slice(controls.end) : quote.text;
         const found: (Marker & { at: number })[] = [];
         const schemas: { name: string; at: number }[] = [];

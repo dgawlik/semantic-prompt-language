@@ -85,6 +85,11 @@ success(rating);
 * Annotations such as `minimum` are advice for the model, not constraints: the assertion above
   enforces the score. `schema` and `@validate` check the shape.
 
+A `.spl` file holds the same workflow as blocks, each tag on its own line, and needs no
+frontmatter: `{js}` and `{ts}` are code, `{agent restrict={fs: ['./out']}, model='m'}` is an agent
+command with the settings of `@CTL`, `{codegen}` describes functions to generate and `{comment}`
+is commentary. Run it with `spl workflow.spl`; try `spl examples/code-review.spl --check`.
+
 See [Workflow code](../docs-template/Language.md), [Natural language & models](../docs-template/LLM-commands.md)
 and [Guards & failures](../docs-template/Safety.md).
 
@@ -142,6 +147,7 @@ and human answers without contacting providers/MCP, repeating tool effects or pr
 Arguments, model overrides and any accessed environment snapshot are pinned too.
 Helper modules are not: a locked workflow that imports local helpers still needs those files,
 and an edited helper changes the replayed result.
+A `.spl` workflow is pinned to `workflow.locked.spl`, with the journal in a `{lock}` block.
 Existing locked files are never overwritten. Pinning cannot be combined with `--trace`.
 Keep traces and locked files private: they contain captured responses and external inputs.
 

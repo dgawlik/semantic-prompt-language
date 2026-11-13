@@ -1,8 +1,8 @@
 {
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
-  "description": "Executable Markdown workflows: JavaScript fences with the SPL library, natural-language steps and notebooks",
-  "version": "2.0.0",
+  "description": "Executable workflows in Markdown and .spl files: JavaScript with the SPL library, natural-language steps and notebooks",
+  "version": "2.1.0",
   "publisher": "spl-lang",
    "icon": "icon.png",
   "license": "ISC",
@@ -25,6 +25,7 @@
   },
   "activationEvents": [
     "onLanguage:markdown",
+    "onLanguage:spl",
     "onNotebook:spl-workflow"
   ],
   "categories": [
@@ -39,6 +40,14 @@
     "copilot"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "spl",
+        "aliases": ["SPL", "Semantic Prompt Language", "spl"],
+        "extensions": [".spl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
     "notebooks": [
       {
         "type": "spl-workflow",
@@ -77,12 +86,27 @@
         "injectTo": [
           "text.html.markdown"
         ]
+      },
+      {
+        "language": "spl",
+        "scopeName": "source.spl",
+        "path": "./syntaxes/spl.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.javascript": "javascript",
+          "meta.embedded.block.typescript": "typescript",
+          "meta.embedded.block.frontmatter": "yaml",
+          "meta.embedded.block.json": "json"
+        }
       }
     ],
     "snippets": [
       {
         "language": "markdown",
         "path": "./snippets/markdown.code-snippets"
+      },
+      {
+        "language": "spl",
+        "path": "./snippets/spl.code-snippets"
       }
     ]
   },
@@ -90,7 +114,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "vscode:prepublish": "npm run typecheck && npm run build",
-    "test": "npm run typecheck && node build.mjs --test && node --test out/test/language-server.test.cjs out/test/notebook.test.cjs out/test/notebook-ui.test.cjs && node test/run-assertions.mjs && node test/check-examples.mjs",
+    "test": "npm run typecheck && node build.mjs --test && node --test out/test/language-server.test.cjs out/test/notebook.test.cjs out/test/notebook-ui.test.cjs && node test/run-assertions.mjs && node test/check-examples.mjs && node test/spl-grammar.mjs",
     "package": "vsce package --skip-license"
   },
   "dependencies": {

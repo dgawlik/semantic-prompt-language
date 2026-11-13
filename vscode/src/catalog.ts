@@ -59,3 +59,13 @@ export const markers: Record<string, Help & { insert: string }> = {
     env: { insert: 'env.${1:NAME}', signature: '@env.NAME', description: 'One read-only environment variable, read by the agent with get_env.' },
     args: { insert: 'args', signature: '@args', description: 'The script arguments supplied with --arg.' },
 };
+
+/** Blocks of a `.spl` file, by tag name. `insert` continues after the opening brace. */
+export const tags: Record<string, Help & { insert: string }> = {
+    js: { insert: 'js}\n$0\n{/js}', signature: '{js} ... {/js}', description: 'JavaScript that runs natively with the spl-lang library in scope. Top-level declarations are shared with later blocks and with agents. `{js ignore}` shows code without running it.' },
+    ts: { insert: 'ts}\n$0\n{/ts}', signature: '{ts} ... {/ts}', description: 'TypeScript whose types are erased before it runs; it shares the scope of the `{js}` blocks. `{ts ignore}` shows code without running it.' },
+    agent: { insert: 'agent}\n$0\n{/agent}', signature: "{agent restrict={fs: ['./src']}, enforce='...', forbid='...', model='...', reasoning='high'} ... {/agent}", description: 'An agent command in plain language that acts on the shared scope: `@name` refers to a shared variable or function. The optional settings are literal and applied by the runtime before the agent starts.' },
+    codegen: { insert: 'codegen}\n${0:Define name(args), returning ...}\n{/codegen}', signature: "{codegen model='...'} description {/codegen}", description: 'Generates JavaScript functions from the literal description and defines them in the shared scope, instead of running an agent command. Accepts the settings of `{agent}`.' },
+    comment: { insert: 'comment}\n$0\n{/comment}', signature: '{comment} ... {/comment}', description: 'Commentary: never executed and never shown to a model.' },
+    lock: { insert: 'lock}\n$0\n{/lock}', signature: '{lock} ... {/lock}', description: 'The execution journal of a workflow pinned with `--pin`. A locked workflow replays without models, tools or prompts.' },
+};

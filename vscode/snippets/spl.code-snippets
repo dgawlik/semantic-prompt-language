@@ -1,0 +1,29 @@
+{
+  "SPL workflow": {
+    "prefix": "splworkflow",
+    "body": [
+      "---",
+      "model: '${1:model-name}'",
+      "---",
+      "",
+      "{js}",
+      "const ${2:answer} = ${3:await ask('${4:Prompt}')};",
+      "{/js}",
+      "",
+      "{agent}",
+      "Return @${2:answer} using @success.",
+      "{/agent}",
+      "$0"
+    ],
+    "description": "An executable .spl workflow with shared JavaScript and natural-language steps"
+  },
+  "SPL agent with settings": {
+    "prefix": "splagent",
+    "body": [
+      "{agent restrict={fs: ['${1:./src}']}, enforce='${2:Be concise}', forbid='${3:Unsupported claims}', model='${4:model-name}', reasoning='${5|low,medium,high|}'}",
+      "${0:Instruction}",
+      "{/agent}"
+    ],
+    "description": "An agent block with grouped restrictions, guidance, model and reasoning settings"
+  }
+}

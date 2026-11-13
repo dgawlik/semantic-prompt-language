@@ -153,4 +153,10 @@ export class Pin {
             .split('\n').map(line => `>> ${line}`).join('\n');
         return `${source}\n\n${journal}\n`;
     }
+
+    /** The `.spl` form of a locked workflow: the source followed by its journal in a `{lock}` block. */
+    toSpl(source: string): string {
+        validatePinSource(this.data, source, 1);
+        return `${source}\n\n{lock}\n${JSON.stringify(this.data, null, 2)}\n{/lock}\n`;
+    }
 }

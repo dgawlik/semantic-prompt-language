@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { compileCell, FENCE_LANGUAGES } from '../src/cell.js';
 import { parseMarkdown } from '../src/markdown.js';
+import { parseSpl } from '../src/spl.js';
 import { header } from './helpers.js';
 
 const root = path.resolve(__dirname, '..', '..');
@@ -73,8 +74,7 @@ describe('documentation site', () => {
             }
         });
 
-        it(`${file} does not present the removed language`, () => {
-            expect(html).not.toContain('class="language-spl"');
+        it(`${file} does not present the grammar of the removed language`, () => {
             expect(html).not.toContain('class="language-ebnf"');
         });
 
@@ -93,6 +93,12 @@ describe('documentation site', () => {
                     expect(parsed.steps.length).toBeGreaterThan(0);
                 });
             }
+            // `spl` names the block format of .spl files; a listing in the removed 1.x language does not parse.
+            if (block.language === 'spl') {
+                it(`${file} .spl listing ${index + 1} parses`, () => {
+                    expect(parseSpl(block.text).steps.length).toBeGreaterThan(0);
+                });
+            }
             if (block.example) {
                 it(`${file} embeds the current ${block.example}`, () => {
                     expect(decodeURIComponent(block.example!)).not.toContain('..');
@@ -104,7 +110,7 @@ describe('documentation site', () => {
 
     it('shows shipped examples from their files', () => {
         const embedded = pages.flatMap(file => [...fs.readFileSync(path.join(docs, file), 'utf8').matchAll(/data-file="([^"]+)"/g)].map(match => match[1]));
-        for (const name of ['hi.md', 'codegen.md', 'types.md', 'extract-invoice.md', 'triage-issues.md']) expect(embedded).toContain(name);
+        for (const name of ['hi.md', 'codegen.md', 'types.md', 'extract-invoice.md', 'triage-issues.md', 'code-review.spl']) expect(embedded).toContain(name);
     });
 
     it('has a Markdown page for every HTML documentation page', () => {
@@ -160,10 +166,6 @@ describe('documentation sources', () => {
             }
         });
 
-        it(`${file} has no fences in the removed language`, () => {
-            expect(fences(markdown).map(fence => fence.language)).not.toContain('spl');
-        });
-
         fences(markdown).forEach((fence, index) => {
             const language = Object.hasOwn(FENCE_LANGUAGES, fence.language) ? FENCE_LANGUAGES[fence.language] : undefined;
             if (language) {
@@ -174,6 +176,12 @@ describe('documentation sources', () => {
             if (fence.language === 'markdown') {
                 it(`${file} workflow listing ${index + 1} parses`, () => {
                     expect(parseMarkdown(workflow(fence.text)).steps.length).toBeGreaterThan(0);
+                });
+            }
+            // An `spl` fence shows a .spl file; the removed 1.x language does not parse as one.
+            if (fence.language === 'spl') {
+                it(`${file} .spl listing ${index + 1} parses`, () => {
+                    expect(parseSpl(fence.text).steps.length).toBeGreaterThan(0);
                 });
             }
         });
@@ -196,11 +204,64 @@ describe('documentation sources', () => {
 describe('documentation syntax highlighting', () => {
     const highlight = (text: string, language = 'markdown'): string => hljs.highlight(text, { language }).value;
 
-    it('registers the languages used by the documentation and not the removed ones', () => {
-        for (const name of ['js', 'javascript', 'ts', 'typescript', 'bash', 'powershell', 'json', 'markdown']) {
+    it('registers the languages used by the documentation and not the removed grammar notation', () => {
+        for (const name of ['js', 'javascript', 'ts', 'typescript', 'bash', 'powershell', 'json', 'markdown', 'spl']) {
             expect(hljs.getLanguage(name), name).toBeTruthy();
         }
-        for (const name of ['spl', 'ebnf']) expect(hljs.getLanguage(name), name).toBeFalsy();
+        expect(hljs.getLanguage('ebnf')).toBeFalsy();
+    });
+
+    it('highlights the blocks of a .spl file: tags, settings, instructions and embedded code', () => {
+        const text = `---
+model: 'm'
+---
+
+{comment}
+Shown as text: {js} and @name
+{/comment}
+
+{js}
+const notes = await ask('Notes?');
+{/js}
+
+{agent restrict={fs: ['./src'], exec: 'git'},
+       forbid='mentioning @literal or model=', reasoning='high'}
+Inspect @notes and @env.HOME; @validate[Schema] save to @result, then @success
+{/agent}
+
+{ts no-run}
+const total: number = 1;
+{/ts}
+
+{codegen model='m'}
+Define double(value) using @literal
+{/codegen}
+
+Stray @outside and model='x'
+`;
+        const html = highlight(text, 'spl');
+        expect(html).toContain('<span class="hljs-comment">{comment}\nShown as text: {js} and @name\n{/comment}</span>');
+        for (const tag of ['{js}', '{/js}', '{agent', '{/agent}', '{ts no-run}', '{/ts}', '{codegen', '{/codegen}']) {
+            expect(html, tag).toContain(`<span class="hljs-meta">${tag}</span>`);
+        }
+        expect(html).toContain('<span class="language-javascript">');
+        expect(html).toContain('<span class="hljs-title function_">ask</span>');
+        expect(html).toContain('<span class="language-typescript">');
+        expect(html).toContain('<span class="hljs-built_in">number</span>');
+        for (const name of ['restrict', 'forbid', 'reasoning', 'fs', 'exec']) expect(html, name).toContain(`<span class="hljs-attr">${name}</span>`);
+        expect(html.match(/<span class="hljs-attr">model<\/span>/g)).toHaveLength(2);
+        for (const name of ['@notes', '@env.HOME', '@result']) expect(html, name).toContain(`<span class="hljs-variable">${name}</span>`);
+        for (const name of ['@validate', '@success']) expect(html, name).toContain(`<span class="hljs-keyword">${name}</span>`);
+        for (const name of ['@literal', '@outside', '@name']) expect(html, name).not.toContain(`>${name}</span>`);
+        expect(decode(html)).toBe(text);
+    });
+
+    it('ends a .spl block only at its own closing tag on a line of its own', () => {
+        const text = "{js}\nconst text = `\n{/agent}\n  {/js} trailing`;\nconst inline = '{/js}';\n{/js}\n\n{agent}\nSave to @result\n{/agent}";
+        const html = highlight(text, 'spl');
+        expect(html.match(/<span class="hljs-meta">\{\/js\}<\/span>/g)).toHaveLength(1);
+        expect(html).toContain('<span class="hljs-variable">@result</span>');
+        expect(decode(html)).toBe(text);
     });
 
     it('highlights JavaScript workflow code with the library as ordinary calls', () => {
@@ -315,6 +376,14 @@ describe('documentation syntax highlighting', () => {
             const html = highlight(text);
             expect(decode(html), file).toBe(text);
             if (/^```js\r?$/m.test(text)) expect(html, file).toContain('<span class="language-javascript">');
+        }
+        const blocks = fs.readdirSync(examples, { recursive: true, encoding: 'utf8' }).filter(name => name.endsWith('.spl'));
+        expect(blocks).toContain('code-review.spl');
+        for (const file of blocks) {
+            const text = fs.readFileSync(path.join(examples, file), 'utf8');
+            const html = highlight(text, 'spl');
+            expect(decode(html), file).toBe(text);
+            if (/^\{js\}\r?$/m.test(text)) expect(html, file).toContain('<span class="language-javascript">');
         }
     });
 

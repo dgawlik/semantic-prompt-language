@@ -32,6 +32,7 @@ These run offline, without credentials.
 | Example | Shows |
 | --- | --- |
 | [code-review.md](../lang/examples/code-review.md) | A restricted review agent, typed findings and a run that fails CI on high-severity findings |
+| [code-review.spl](../lang/examples/code-review.spl) | The same review as a [`.spl` file](Language.md#dedicated-spl-files): blocks instead of fences and blockquotes |
 | [release-notes.md](../lang/examples/release-notes.md) | User-facing notes from `git log` prepended to `CHANGELOG.md` |
 | [triage-issues.md](../lang/examples/triage-issues.md) | Enums and a named list type; labeling GitHub issues with `gh` after human approval |
 | [codegen.md](../lang/examples/codegen.md) | Generating functions with `@CODEGEN` and `codegen()`, cached with `--trace` |

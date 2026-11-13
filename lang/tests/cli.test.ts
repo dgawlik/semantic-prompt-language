@@ -561,7 +561,7 @@ describe('cli', () => {
     it('prints help and the package version', () => {
         const help = run(['-h', path.join(dir, 'missing.md')]);
         expect(help).toMatchObject({ code: 0, err: '' });
-        expect(help.out).toMatch(/^spl - Semantic Prompt Language: executable Markdown workflows in JavaScript\n\nUsage: spl <workflow\.md> \[options\]\n/);
+        expect(help.out).toMatch(/^spl - Semantic Prompt Language: executable Markdown workflows in JavaScript\n\nUsage: spl <workflow\.md \| workflow\.spl> \[options\]\n/);
         expect(help.out).toContain('Exit codes: 0 success, 1 uncaught script failure, 2 syntax or usage error,\n70 internal/infrastructure error.\n');
         for (const flag of ['--version', '-v']) expect(run([flag])).toEqual({ code: 0, out: `${VERSION}\n`, err: '' });
     });
@@ -636,13 +636,16 @@ registerHooks({ resolve(specifier, context, next) { if (specifier.startsWith('@b
     });
 
     it('rejects raw scripts and Markdown without the exact opt-in', () => {
-        for (const name of ['legacy.spl', 'script.js']) {
-            const raw = path.join(dir, name);
-            fs.writeFileSync(raw, 'success(42);');
-            const result = run([raw, '--check']);
-            expect(result).toMatchObject({ code: 2, out: '' });
-            expect(result.err).toContain('only .md workflows are executable; put JavaScript in a fenced js block');
-        }
+        const raw = path.join(dir, 'script.js');
+        fs.writeFileSync(raw, 'success(42);');
+        const result = run([raw, '--check']);
+        expect(result).toMatchObject({ code: 2, out: '' });
+        expect(result.err).toContain('only .md and .spl workflows are executable; put JavaScript in a fenced js block');
+        const legacy = path.join(dir, 'legacy.spl');
+        fs.writeFileSync(legacy, 'success(42);');
+        expect(run([legacy, '--check'])).toEqual({
+            code: 2, out: '', err: `x error ${legacy}:1:1: syntax error: text outside a block; wrap commentary in {comment} and {/comment}\n`,
+        });
         const file = path.join(dir, 'ordinary.md');
         for (const [source, reason] of [
             ['# Notes\n\n```js\nsuccess(42);\n```', 'Markdown workflows require YAML frontmatter'],
@@ -901,7 +904,8 @@ ${quote("@CTL(restrict={fs: ['./src'], exec: 'git'}, enforce='Be concise', model
         expect(help).toContain('--cwd <dir>             base directory for imports, relative paths and restrictions');
         expect(help).toContain('--check                 validate fences, controls, relative imports and any --mcp config without executing');
         expect(help).toContain('the value passed to success()');
-        expect(help).not.toMatch(/\$args|\$env|spl fence|\.spl\b/);
+        expect(help).not.toMatch(/\$args|\$env|spl fence/);
+        expect(help).toContain('A .spl file holds the same workflow in blocks');
     });
 
     it('requires a valid login provider and stores keys without echoing them', () => {

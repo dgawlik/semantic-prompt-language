@@ -1,0 +1,63 @@
+---
+model: 'gpt-6-luna'
+---
+
+{comment}
+
+An agent picks and reviews three files inside `./src`,
+a second step turns its notes into typed findings,
+and plain code decides whether the run fails.
+
+{/comment}
+
+
+{agent restrict={fs: ['./src'],
+       exec: ['git']},
+       enforce='not reaching outside repo',
+       forbid='suggesting purely stylistic changes'}
+
+List source files with `git ls-files src`.
+Then read the 3 files that are most likely
+to contain security problems or correctness bugs,
+and review only those. List each finding with its location,
+why it matters and a suggested fix. Save to @notes
+
+{/agent}
+
+{js}
+
+const Severity = enumOf('low', 'medium', 'high');
+
+const Item = struct('Item', {
+    severity: Severity,
+    title: str,
+    location: str.annotate({ desc: 'File path and line' }),
+    fix: str,
+});
+
+const Review = struct('Review', { findings: list(Item) });
+
+{/js}
+
+{agent}
+Convert @notes into structured finding @validate[Review] save to @review
+{/agent}
+
+{js}
+const groups = Object.groupBy(review.findings, finding => finding.severity);
+const high = groups.high ?? [];
+{/js}
+
+{agent restrict={fs: ['./reports']}, model='gpt-6.1-sol'}
+
+Convert @groups to a Markdown report and write it to './reports/review.md'
+
+{/agent}
+
+{js}
+if (high.length > 0)
+    fail(`${high.length} high severity finding(s), see ./reports/review.md`);
+success(review.findings.map(
+    finding => `${finding.severity}: ${finding.title} (${finding.location})`)
+        .join('\n'));
+{/js}

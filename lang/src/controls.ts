@@ -19,7 +19,7 @@ export interface NaturalBlock {
 const RESTRICTION_KINDS: readonly RestrictKind[] = ['fs', 'exec', 'net', 'mcp'];
 const ESCAPES: Record<string, string> = { n: '\n', t: '\t', r: '\r', 0: '\0', b: '\b', f: '\f', v: '\v' };
 
-/** Reads the literal settings of `@CTL(...)` and the `@CODEGEN` description; values are never evaluated. */
+/** Reads the literal settings of `@CTL(...)` or a block tag and the `@CODEGEN` description; values are never evaluated. */
 class Scanner {
     pos = 0;
 
@@ -27,6 +27,8 @@ class Scanner {
         private readonly text: string,
         private readonly line: number,
         private readonly marker: string,
+        /** What an unfinished construct is called in messages. */
+        private readonly unit = `${marker} block`,
     ) {}
 
     fail(message: string, at = this.pos): never {
@@ -55,7 +57,7 @@ class Scanner {
     }
 
     expect(value: string): void {
-        if (!this.take(value)) this.fail(this.pos >= this.text.length ? `unterminated ${this.marker} block` : `expected '${value}'`);
+        if (!this.take(value)) this.fail(this.pos >= this.text.length ? `unterminated ${this.unit}` : `expected '${value}'`);
     }
 
     name(): string | undefined {
@@ -132,13 +134,18 @@ class Scanner {
     }
 
     controls(): NaturalControls {
-        const controls: NaturalControls = {};
         this.expect('(');
-        while (!this.take(')')) {
+        return this.settings(')');
+    }
+
+    /** Settings up to their closing delimiter, which is consumed. */
+    settings(close: string): NaturalControls {
+        const controls: NaturalControls = {};
+        while (!this.take(close)) {
             this.skip();
             const start = this.pos;
             const name = this.name();
-            if (!name) this.fail(this.pos >= this.text.length ? 'unterminated @CTL block' : 'expected a setting name');
+            if (!name) this.fail(this.pos >= this.text.length ? `unterminated ${this.unit}` : 'expected a setting name');
             if (Object.hasOwn(controls, name)) this.fail(`duplicate setting '${name}'`, start);
             this.expect('=');
             switch (name) {
@@ -161,9 +168,93 @@ class Scanner {
                 }
                 default: this.fail(`unknown setting '${name}'`, start);
             }
-            if (!this.at(')')) this.expect(',');
+            if (!this.at(close)) this.expect(',');
         }
         return controls;
+    }
+}
+
+interface ControlTokenBase {
+    value: string;
+    from: number;
+    to: number;
+}
+
+export type ControlToken = ControlTokenBase & (
+    { kind: 'marker' | 'name' | 'punctuation' } |
+    { kind: 'string'; quote: string; contentFrom: number; closed: boolean }
+);
+
+/**
+ * Tokenizes literal settings from `at`, just inside their opening delimiter, up to the matching
+ * closing one. Lenient, for text that is still being typed: an unterminated group ends with the
+ * text, and an unterminated one-line string with its line.
+ */
+export function scanSettings(text: string, at: number): { tokens: ControlToken[]; end: number; closed: boolean } {
+    const tokens: ControlToken[] = [];
+    let depth = 1;
+    while (at < text.length) {
+        if (/\s/.test(text[at])) { at++; continue; }
+        if (text[at] === '#') {
+            while (at < text.length && text[at] !== '\n') at++;
+            continue;
+        }
+        const from = at;
+        const raw = text[at] === 'r' && /['"]/.test(text[at + 1] ?? '');
+        if (raw) at++;
+        if (text[at] === "'" || text[at] === '"' || text[at] === '`') {
+            const quote = text[at] !== '`' && text.startsWith(text[at].repeat(3), at) ? text[at].repeat(3) : text[at];
+            const multiline = quote.length === 3 || quote === '`';
+            at += quote.length;
+            const contentFrom = at;
+            while (at < text.length && !text.startsWith(quote, at) && (multiline || text[at] !== '\n')) {
+                at += !raw && text[at] === '\\' ? Math.min(2, text.length - at) : 1;
+            }
+            const closed = text.startsWith(quote, at);
+            const value = text.slice(contentFrom, at);
+            if (closed) at += quote.length;
+            tokens.push({ kind: 'string', value, from, to: at, quote, contentFrom, closed });
+        } else {
+            const name = /^[A-Za-z_]\w*/.exec(text.slice(at));
+            const value = name?.[0] ?? text[at];
+            at += value.length;
+            tokens.push({ kind: name ? 'name' : 'punctuation', value, from, to: at });
+            if ('([{'.includes(value)) depth++;
+            else if (')]}'.includes(value) && --depth === 0) return { tokens, end: at, closed: true };
+        }
+    }
+    return { tokens, end: at, closed: false };
+}
+
+/** Reads the settings of a block tag such as `{agent model='m'}`, from just after the tag name through the closing brace. */
+export function parseTagControls(text: string, line: number, tag: string, at: number): { controls?: NaturalControls; end: number } {
+    const scanner = new Scanner(text, line, `{${tag}}`, `{${tag}} tag`);
+    scanner.pos = at;
+    const controls = scanner.settings('}');
+    return { end: scanner.pos, ...(Object.keys(controls).length ? { controls } : {}) };
+}
+
+const position = (text: string, line: number, at: number): [number, number] => {
+    const before = text.slice(0, at);
+    return [line + before.split('\n').length - 1, at - before.lastIndexOf('\n')];
+};
+
+/** Checks the instruction of an `{agent}` block, whose settings live in the tag rather than in markers. */
+export function checkTagInstruction(text: string, line: number): void {
+    const removed = /(?<![\w@\\])@(restrict|enforce|forbid|human)\b/i.exec(text);
+    if (removed) {
+        const message = removed[1].toLowerCase() === 'human'
+            ? '@Human has been removed; request human input in plain language'
+            : `@${removed[1]} has been removed; use {agent restrict=..., enforce=..., forbid=...}`;
+        throw new SplSyntaxError(message, ...position(text, line, removed.index));
+    }
+    const controls = /(?<![\w@\\])@CTL\b/i.exec(text);
+    if (controls) {
+        throw new SplSyntaxError('@CTL is not used in .spl files; write the settings in the tag: {agent restrict=..., model=...}', ...position(text, line, controls.index));
+    }
+    const codegen = /(?<![\w@\\])@CODEGEN\b/i.exec(text);
+    if (codegen) {
+        throw new SplSyntaxError('@CODEGEN is not used in .spl files; write the description in a {codegen} block', ...position(text, line, codegen.index));
     }
 }
 

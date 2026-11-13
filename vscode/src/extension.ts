@@ -10,8 +10,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerNotebooks(context);
     const outputChannel = vscode.window.createOutputChannel('SPL Language Server');
     context.subscriptions.push(outputChannel);
-    // Workflow Markdown files: JavaScript features inside fences come from the TypeScript language
-    // service running in the server; notebook cells use VS Code's own JavaScript support.
+    // Workflow Markdown and .spl files: JavaScript features inside fences and {js} blocks come from the
+    // TypeScript language service running in the server; notebook cells use VS Code's own JavaScript support.
     client = new LanguageClient(
         'spl',
         'SPL Language Server',
@@ -20,7 +20,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             transport: TransportKind.ipc,
         },
         {
-            documentSelector: [{ language: 'markdown', scheme: 'file' }, { language: 'markdown', scheme: 'untitled' }],
+            documentSelector: ['markdown', 'spl'].flatMap(language => [{ language, scheme: 'file' }, { language, scheme: 'untitled' }]),
             outputChannel,
         },
     );

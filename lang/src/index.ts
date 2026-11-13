@@ -9,8 +9,9 @@ export {
 export { Type, StructType, isType, type Infer, type InferShape, type Shape, type Annotations, type JsonSchema, type TypeKind } from './types.js';
 export { Failure, SuccessSignal, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
 
-// Running Markdown workflows and embedding the runtime.
+// Running workflows and embedding the runtime.
 export { parse, parseInstruction, parseMarkdown, extractMarkdown, isWorkflowMarkdown, type Workflow, type MarkdownDocument, type MarkdownBlock } from './markdown.js';
+export { parseSpl, scanSpl, type SplBlock, type SplDocument, type SplProblem, type SplTag } from './spl.js';
 export { run, ExecutionSession, checkWorkflow, type RunOptions, type RunResult, type WorkflowProblem } from './workflow.js';
 export { Runtime, type RuntimeOptions, type GenerateOptions, type HumanHandler } from './runtime.js';
 export { compileCell, type CompiledCell, type CellDeclaration, type CellLanguage } from './cell.js';

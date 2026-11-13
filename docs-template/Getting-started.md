@@ -71,6 +71,9 @@ with a result, which the CLI prints on stdout.
 Fences and blockquotes run in document order in one shared scope. `success(value)` or an
 uncaught failure ends the whole document.
 
+A workflow can also be a [`.spl` file](Language.md#dedicated-spl-files), which holds the same
+steps as `{js}`, `{agent}` and `{comment}` blocks instead of fences, blockquotes and prose.
+
 ## JavaScript in five rules
 
 Workflow code is ordinary JavaScript. These rules cover what is specific to workflows;
@@ -134,6 +137,9 @@ In blockquotes, `@` completes shared variables, functions, library functions and
 `@validate[` completes declared types; `@CTL(` completes its settings. Names an agent saves
 (`save to @invoice`, `-> @result`) are declared for later fences. Type `splworkflow` for a new
 workflow document. Ordinary Markdown keeps its normal behavior.
+
+`.spl` files are colored as a whole and get the same features: JavaScript IntelliSense in `{js}`
+and `{ts}` blocks, `@` completion in `{agent}` blocks and completion of tag settings.
 
 **SPL: Open as Notebook** runs fences and blockquotes as notebook cells in one session.
 The language server only analyzes source and never calls models or tools.

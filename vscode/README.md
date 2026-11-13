@@ -6,6 +6,8 @@ Editing and running executable SPL workflows: Markdown files whose `js` and `ts`
 native JavaScript with the `spl-lang` library in scope, and whose blockquotes are agent commands.
 Language features turn on when a Markdown file's frontmatter declares
 `extension: semantic-prompt-language`; other Markdown files keep their normal behavior.
+[`.spl` files](#spl-files) hold the same workflows as blocks and get the same features, with
+coloring for the whole file.
 
 ## Features
 
@@ -35,7 +37,10 @@ Language features turn on when a Markdown file's frontmatter declares
   grammars. The extension colors blockquote instructions, `@name` references, and the settings,
   keys and strings of `@CTL(...)` and `@CODEGEN`. Blockquote coloring also applies to ordinary
   Markdown files.
-* **Snippets**: `splworkflow` for a new document and `splctl` for blockquote controls.
+* **`.spl` files.** Whole-file coloring, JavaScript IntelliSense in `{js}` and `{ts}` blocks,
+  `@name` completion in `{agent}` blocks and completion of tag settings; see [.spl files](#spl-files).
+* **Snippets**: `splworkflow` for a new document and `splctl` for blockquote controls; in `.spl`
+  files, `splworkflow` and `splagent`.
 * **Native notebooks** for workflow Markdown: run fences and blockquotes as cells in one
   session, with streamed model responses, results, brief live logs and errors in cell outputs.
 * **Copilot inline context** for notebook code cells: the library's functions and a checked
@@ -91,6 +96,39 @@ other files are not renamed. Ranges use UTF-16 positions and preserve CRLF docum
 * In a blockquote, `@` offers fence declarations above it; fences below have not run yet.
 * References and rename stay inside the document.
 * Fences marked `ignore` or `no-run`, and fences in other languages, are not analyzed.
+
+## .spl files
+
+A `.spl` file is a workflow written as blocks instead of Markdown: `{js}` and `{ts}` for code,
+`{agent ...}` for agent commands with their settings in the tag, `{codegen}` for generated
+functions and `{comment}` for commentary. The [language guide](../docs-template/Language.md#dedicated-spl-files)
+describes the format. The extension registers the `spl` language for these files; no
+frontmatter is needed to turn the features on.
+
+* **Coloring for the whole file.** Frontmatter is colored as YAML and `{js}` and `{ts}` blocks
+  by VS Code's JavaScript and TypeScript grammars, so comment toggling, bracket matching and
+  snippets inside them are those of the embedded language. Tags, the settings of `{agent}` and
+  `{codegen}` tags, instructions, `@name` references and `@validate[Type]` have their own
+  colors, `{comment}` blocks are comments and a `{lock}` journal is JSON. A block ends at its
+  closing tag even while the code inside it is unfinished.
+* **Code blocks** behave like fences: completions, hover, signature help, definition,
+  references, rename and document symbols across all blocks, JavaScript syntax errors as the
+  runtime reports them, missing relative imports, and type errors in `{ts}` blocks.
+* **Agent blocks.** `@` completes shared variables and functions declared above, names saved
+  by earlier agents, library functions an agent can call and the markers `@validate`,
+  `@success`, `@fail`, `@env.NAME` and `@args`; `@validate[` completes declared types. Names an
+  instruction saves are declared for later blocks, typed through `@validate[Type]`.
+* **Tags.** Inside `{agent ...}` and `{codegen ...}`, settings, restriction kinds and reasoning
+  values complete, and `model=` offers the frontmatter model. Hover explains tags and settings.
+  Between blocks, typing `{` offers the blocks with their closing tags.
+* **Diagnostics** cover the structure as well: text outside blocks, unknown or unterminated
+  blocks, invalid tag settings, and `@CTL` or `@CODEGEN` markers, which a `.spl` file writes as
+  tags.
+* **Folding** follows the blocks.
+
+A tag that is still being typed ends before the next closing tag, so the blocks below it stay
+analyzed. `{js ignore}` and `{ts no-run}` blocks are colored but not analyzed. Notebooks open
+Markdown workflows only.
 
 ## Notebook workflows
 
@@ -169,8 +207,9 @@ changing its inherited environment.
 
 SPL 2.0 replaced the custom SPL language with JavaScript, and the extension followed:
 
-* The `.spl` language, its TextMate grammar, language configuration and snippets are gone.
-  `spl` fences are reported as errors with a migration hint.
+* The 1.x `.spl` language, its TextMate grammar, language configuration and snippets are gone.
+  `spl` fences are reported as errors with a migration hint. The `.spl` extension now names the
+  [block format](#spl-files) for JavaScript workflows.
 * The custom parser and type checker behind diagnostics, completions, semantic highlighting and
   folding were replaced by the TypeScript language service; fence coloring is VS Code's own.
 * The Markdown preview highlighter for SPL fences was removed; the preview highlights `js`
@@ -203,12 +242,13 @@ npm test
 * `src/extension.ts` starts the client and registers notebooks; `src/server.ts` is the language
   server.
 * `src/workflow.ts` analyzes a document: fences, blockquote markers, names saved by agents and
-  the virtual module text. It reuses `compileCell`, `parseNatural` and `extractMarkdown` from
-  `../lang/src`, bundled into `out/` by `build.mjs`.
+  the virtual module text. It reuses `compileCell`, `parseNatural`, `extractMarkdown` and, for
+  `.spl` files, `scanSpl` from `../lang/src`, bundled into `out/` by `build.mjs`.
 * `src/typescriptService.ts` keeps one TypeScript language service per working directory and
   resolves `spl-lang` to the bundled declarations.
 * `src/languageFeatures.ts` maps editor requests to the TypeScript service and to blockquote
-  features; `src/blockquoteFeatures.ts` scans and completes `@CTL(...)`.
+  features; `src/blockquoteFeatures.ts` scans and completes `@CTL(...)` and the settings of
+  `.spl` tags.
 * `src/catalog.ts` holds the library names and help shown in blockquotes and notebook cells; it
   must match `library()` in `../lang/src/library.ts`.
 * `src/copilotContext.ts` supplies the notebook library context to Copilot inline completions.
@@ -218,5 +258,7 @@ npm test
   `ExecutionSession`; `src/notebookLanguageFeatures.ts` adds completions and hover in cells.
 * `build.mjs` also copies the declarations the server gives to TypeScript into `out/spl-types`,
   `out/ts-lib` and `out/types`.
-* `syntaxes/markdown.tmLanguage.json` is the blockquote injection grammar; `test/` covers the
-  language server, the notebook format and UI, and the grammar against every example.
+* `syntaxes/markdown.tmLanguage.json` is the blockquote injection grammar and
+  `syntaxes/spl.tmLanguage.json` the grammar of `.spl` files, whose brackets and folding are in
+  `language-configuration.json`; `test/` covers the language server, the notebook format and UI,
+  and both grammars against every example.

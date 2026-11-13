@@ -52,11 +52,11 @@ export function isWorkflowMarkdown(source: string): boolean {
     return isMap(document.contents) && document.get('extension') === EXTENSION;
 }
 
-/** Splits a workflow into frontmatter settings, executable fences and blockquotes without compiling them. */
-export function extractMarkdown(source: string): MarkdownDocument {
-    const normalized = source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-    const lines = normalized.split('\n');
-    if (lines[0] !== '---') throw new SplSyntaxError('Markdown workflows require YAML frontmatter', 1, 1);
+/**
+ * Reads the YAML settings between the leading `---` lines. Markdown opts in with `extension` and
+ * `version`; where the file type already identifies a workflow they are optional but still checked.
+ */
+export function readFrontmatter(lines: readonly string[], optIn = true): { end: number; model?: string; preamble?: string } {
     const end = lines.findIndex((line, i) => i > 0 && /^(---|\.\.\.)\s*$/.test(line));
     if (end < 0) throw new SplSyntaxError('unterminated YAML frontmatter', 1, 1);
     const yaml = parseDocument(lines.slice(1, end).join('\n'), { uniqueKeys: true });
@@ -71,13 +71,15 @@ export function extractMarkdown(source: string): MarkdownDocument {
         if (!(error instanceof Error)) throw error;
         throw new SplSyntaxError(`invalid frontmatter: ${error.message}`, 2, 1);
     }
+    // A header without settings is valid where nothing has to be declared.
+    if (!optIn && metadata == null) return { end };
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
         throw new SplSyntaxError('frontmatter must be a mapping', 2, 1);
     }
-    if (!('extension' in metadata) || metadata.extension !== EXTENSION) {
+    if ((optIn || 'extension' in metadata) && (!('extension' in metadata) || metadata.extension !== EXTENSION)) {
         throw new SplSyntaxError(`frontmatter requires extension: ${EXTENSION}`, 2, 1);
     }
-    if (!('version' in metadata) || metadata.version !== 1) {
+    if ((optIn || 'version' in metadata) && (!('version' in metadata) || metadata.version !== 1)) {
         throw new SplSyntaxError('frontmatter requires version: 1', 2, 1);
     }
     for (const key of Object.keys(metadata)) {
@@ -93,6 +95,15 @@ export function extractMarkdown(source: string): MarkdownDocument {
     if (preamble !== undefined && typeof preamble !== 'string') {
         throw new SplSyntaxError('frontmatter preamble must be a string', 2, 1);
     }
+    return { end, model, preamble };
+}
+
+/** Splits a workflow into frontmatter settings, executable fences and blockquotes without compiling them. */
+export function extractMarkdown(source: string): MarkdownDocument {
+    const normalized = source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+    const lines = normalized.split('\n');
+    if (lines[0] !== '---') throw new SplSyntaxError('Markdown workflows require YAML frontmatter', 1, 1);
+    const { end, model, preamble } = readFrontmatter(lines);
     const masked = lines.map((line) => ' '.repeat(line.length));
     const body = lines.slice(end + 1).join('\n');
     const blocks: MarkdownBlock[] = [];

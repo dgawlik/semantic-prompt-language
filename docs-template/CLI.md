@@ -1,12 +1,14 @@
 # CLI & runtime
 
-`spl` runs one Markdown workflow, prints its result on stdout and logs on stderr, and reports
-the outcome through its exit code. Requires Node.js >=24.15.0.
+`spl` runs one workflow, a Markdown document or a [`.spl` file](Language.md#dedicated-spl-files),
+prints its result on stdout and logs on stderr, and reports the outcome through its exit code.
+Requires Node.js >=24.15.0.
 
 ## Usage
 
 ```bash
 spl <workflow.md> [options] [--arg value ...]
+spl <workflow.spl> [options] [--arg value ...]
 spl <workflow.md> --trace run.jsonl
 spl login <openai|anthropic|google>
 spl logout [openai|anthropic|google]
@@ -29,10 +31,11 @@ spl logout [openai|anthropic|google]
 | `-v`, `--version` / `-h`, `--help` | Version / usage |
 
 Each `--arg` is one string; use `--arg=--value` for values starting with a dash. Only `.md`
-workflows are executable.
+and `.spl` workflows are executable, and every option applies to both.
 
 `--check` compiles every `js` and `ts` fence, parses `@CTL` and `@CODEGEN`, and verifies that
-static relative `import` declarations point at existing files under `--cwd`. Dynamic
+static relative `import` declarations point at existing files under `--cwd`. For a `.spl` file
+it checks the blocks and the settings of their tags in the same way. Dynamic
 `import('./x.js')` calls and package names are not checked. It runs no code and calls no model,
 so it cannot find errors that only appear at run time, such as a misspelled variable.
 
@@ -239,6 +242,9 @@ reject MCP configuration and supplied human answers. Explicit argument, model or
 overrides must match the pinned values. To change the workflow or its inputs, run the original file
 with `--pin` again after moving or removing the old locked file.
 
+A `.spl` workflow is pinned the same way: `spl flow.spl --pin` creates `flow.locked.spl`, which
+keeps the original blocks and appends the journal in a `{lock}` block.
+
 **Keep locked files private.** Responses, human answers, file contents, initial variables and any
 accessed environment snapshot can contain secrets. Pinning is not a sandbox: the original run still
 performs all requested actions; locked replay does not repeat those actions or recreate their effects.
@@ -338,7 +344,8 @@ try {
 ```
 
 `parseMarkdown` compiles every fence and throws `SplSyntaxError` (with `line` and `col`) for
-invalid documents. `run` resolves to `{ status: 'success', value, hasValue }` or
+invalid documents. `parseSpl` does the same for the text of a [`.spl` file](Language.md#dedicated-spl-files)
+and returns the same kind of workflow. `run` resolves to `{ status: 'success', value, hasValue }` or
 `{ status: 'failure', failure }`; `hasValue` is `false` when the document ended without `success`.
 
 | `run` option | Meaning |
