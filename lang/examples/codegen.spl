@@ -1,0 +1,17 @@
+{comment} 
+asks the model for JavaScript functions and defines them in the shared scope.
+With `--trace`, the code is saved next to this file as `codegen.sieve.js` 
+and reused on later runs.
+    spl examples/codegen.md --trace sieve.jsonl
+{/comment}
+
+{codegen}
+Generate sieve(number) sieve of eratosthenes function that returns primes until given number'
+{/codegen}
+
+{js}
+log(sieve(100));
+
+const slugify = await codegen('slugify(title): lowercase, trim, and replace runs of non-alphanumeric characters with single dashes');
+success(slugify('  Hello, Generated World!  '));
+{/js}

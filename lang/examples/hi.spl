@@ -2,38 +2,26 @@
 {comment}
 Prose like this is commentary. Only {js} and {agent} scopes run,
 top to bottom, in one shared scope.
+The agent selects a topic and saves a validated Card; the final {js}
+block only renders it as Markdown.
 {/comment}
 
 {js}
-const topics = [
-    'recursion', 
-    'closures', 
-    'regular expressions'
-];
-
+const topics = ['recursion', 'closures', 'regular expressions'];
 const Topic = enumOf(...topics);
-
 const Card = struct('Card', {
     term: Topic,
     definition: str.annotate({ desc: 'A line with definition of' }),
     description: str.annotate({ desc: 'Several sentences about' }),
 });
-
-let cards = [];
-for (const topic of topics) {
-    let card = await ask(
-        `A one-sentence flashcard about ${topic}`, 
-        { schema: Card, 
-          repairs: 1 
-    });
-    cards.push(card);
-}
-    
 {/js}
 
+
 {agent model='gpt-6.1-sol', reasoning='high'}
-Pick the item of @cards whose card a beginner would find hardest. 
-Save that item to @hardest
+Pick the item of @topics that a beginner would find hardest.
+Create a flashcard for that topic with term set to the selected topic,
+a one-line definition and a description of several sentences.
+@validate[Card] save the flashcard to variable @hardest
 {/agent}
 
 {js}

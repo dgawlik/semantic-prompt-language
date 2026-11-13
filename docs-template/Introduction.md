@@ -9,38 +9,26 @@ checked model output, guards and human approval.
 {comment}
 Prose like this is commentary. Only {js} and {agent} scopes run,
 top to bottom, in one shared scope.
+The agent selects a topic and saves a validated Card; the final {js}
+block only renders it as Markdown.
 {/comment}
 
 {js}
-const topics = [
-    'recursion', 
-    'closures', 
-    'regular expressions'
-];
-
+const topics = ['recursion', 'closures', 'regular expressions'];
 const Topic = enumOf(...topics);
-
 const Card = struct('Card', {
     term: Topic,
     definition: str.annotate({ desc: 'A line with definition of' }),
     description: str.annotate({ desc: 'Several sentences about' }),
 });
-
-let cards = [];
-for (const topic of topics) {
-    let card = await ask(
-        `A one-sentence flashcard about ${topic}`, 
-        { schema: Card, 
-          repairs: 1 
-    });
-    cards.push(card);
-}
-    
 {/js}
 
+
 {agent model='gpt-6.1-sol', reasoning='high'}
-Pick the item of @cards whose card a beginner would find hardest. 
-Save that item to @hardest
+Pick the item of @topics that a beginner would find hardest.
+Create a flashcard for that topic with term set to the selected topic,
+a one-line definition and a description of several sentences.
+@validate[Card] save the flashcard to variable @hardest
 {/agent}
 
 {js}
@@ -71,29 +59,25 @@ does the same and returns the function.
 
 `codegen.md`
 
-````markdown
----
-extension: 'semantic-prompt-language'
-version: 1
-model: 'gpt-6-luna'
----
-
-# Generate a function, then use it
-
-`@CODEGEN` asks the model for JavaScript functions and defines them in the shared scope.
-With `--trace`, the code is saved next to this file as `codegen.sieve.js` and reused on later runs.
-
+```spl 
+{comment} 
+asks the model for JavaScript functions and defines them in the shared scope.
+With `--trace`, the code is saved next to this file as `codegen.sieve.js` 
+and reused on later runs.
     spl examples/codegen.md --trace sieve.jsonl
+{/comment}
 
-> @CODEGEN 'Generate sieve(number) sieve of eratosthenes function that returns primes until given number'
+{codegen}
+Generate sieve(number) sieve of eratosthenes function that returns primes until given number'
+{/codegen}
 
-```js
+{js}
 log(sieve(100));
 
 const slugify = await codegen('slugify(title): lowercase, trim, and replace runs of non-alphanumeric characters with single dashes');
 success(slugify('  Hello, Generated World!  '));
+{/js}
 ```
-````
 
 With `--trace`, the generated code is also saved beside the workflow, here as `codegen.sieve.js`.
 Its first line hashes the description, and later traced runs reuse a matching file without
@@ -104,14 +88,7 @@ calling the model:
 ```js
 // @CODEGEN sha256:0bf6d0586753d772a87e4af0b9177236e64e481f18c5345569e6a82e3ff35427
 function sieve(number) {
-    if (number < 2) return [];
-    const flags = new Array(number + 1).fill(true);
-    flags[0] = flags[1] = false;
-    for (let divisor = 2; divisor * divisor <= number; divisor++) {
-        if (!flags[divisor]) continue;
-        for (let multiple = divisor * divisor; multiple <= number; multiple += divisor) flags[multiple] = false;
-    }
-    return flags.flatMap((prime, candidate) => prime ? [candidate] : []);
+   ...
 }
 ```
 
@@ -145,9 +122,7 @@ for (let i = 0; i < 4; i++) {
 }
 
 for (const n of numbers) log(Number.isInteger(n) ? `Integer: ${n}` : `Float: ${n}`);
-```
 
-```js
 const Person = struct('Person', {
     firstName: str,
     lastName: str,

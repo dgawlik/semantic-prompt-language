@@ -7,11 +7,11 @@
 checked model output, guards and human approval.">
 <meta name="color-scheme" content="light dark">
 <title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=39cbb6817a83">
-<link rel="stylesheet" href="assets/style.css?v=39cbb6817a83">
+<link rel="icon" type="image/png" href="assets/icon.png?v=b3d21ffe3bdb">
+<link rel="stylesheet" href="assets/style.css?v=b3d21ffe3bdb">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=39cbb6817a83"></script>
-<script defer src="assets/site.js?v=39cbb6817a83"></script>
+<script defer src="assets/search-index.js?v=b3d21ffe3bdb"></script>
+<script defer src="assets/site.js?v=b3d21ffe3bdb"></script>
 </head>
 <body data-page="index">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -33,38 +33,26 @@ checked model output, guards and human approval.</p></div><div class="hero-actio
     <article class="prose"><figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">hi.md</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy hi.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="hi.md code example"><code class="language-spl" data-file="hi.md" id="code-1"><span class="hljs-comment">{comment}
 Prose like this is commentary. Only {js} and {agent} scopes run,
 top to bottom, in one shared scope.
+The agent selects a topic and saves a validated Card; the final {js}
+block only renders it as Markdown.
 {/comment}</span>
 
 <span class="hljs-meta">{js}</span><span class="language-javascript">
-<span class="hljs-keyword">const</span> topics = [
-    <span class="hljs-string">&#x27;recursion&#x27;</span>, 
-    <span class="hljs-string">&#x27;closures&#x27;</span>, 
-    <span class="hljs-string">&#x27;regular expressions&#x27;</span>
-];
-
+<span class="hljs-keyword">const</span> topics = [<span class="hljs-string">&#x27;recursion&#x27;</span>, <span class="hljs-string">&#x27;closures&#x27;</span>, <span class="hljs-string">&#x27;regular expressions&#x27;</span>];
 <span class="hljs-keyword">const</span> <span class="hljs-title class_">Topic</span> = <span class="hljs-title function_">enumOf</span>(...topics);
-
 <span class="hljs-keyword">const</span> <span class="hljs-title class_">Card</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Card&#x27;</span>, {
     <span class="hljs-attr">term</span>: <span class="hljs-title class_">Topic</span>,
     <span class="hljs-attr">definition</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;A line with definition of&#x27;</span> }),
     <span class="hljs-attr">description</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;Several sentences about&#x27;</span> }),
 });
-
-<span class="hljs-keyword">let</span> cards = [];
-<span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> topic <span class="hljs-keyword">of</span> topics) {
-    <span class="hljs-keyword">let</span> card = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(
-        <span class="hljs-string">`A one-sentence flashcard about <span class="hljs-subst">${topic}</span>`</span>, 
-        { <span class="hljs-attr">schema</span>: <span class="hljs-title class_">Card</span>, 
-          <span class="hljs-attr">repairs</span>: <span class="hljs-number">1</span> 
-    });
-    cards.<span class="hljs-title function_">push</span>(card);
-}
-    
 </span><span class="hljs-meta">{/js}</span>
 
+
 <span class="hljs-meta">{agent</span> <span class="hljs-attr">model</span>=<span class="hljs-string">&#x27;gpt-6.1-sol&#x27;</span>, <span class="hljs-attr">reasoning</span>=<span class="hljs-string">&#x27;high&#x27;</span><span class="hljs-meta">}</span><span class="hljs-quote">
-Pick the item of <span class="hljs-variable">@cards</span> whose card a beginner would find hardest. 
-Save that item to <span class="hljs-variable">@hardest</span>
+Pick the item of <span class="hljs-variable">@topics</span> that a beginner would find hardest.
+Create a flashcard for that topic with term set to the selected topic,
+a one-line definition and a description of several sentences.
+<span class="hljs-keyword">@validate</span>[Card] save the flashcard to variable <span class="hljs-variable">@hardest</span>
 <span class="hljs-meta">{/agent}</span></span>
 
 <span class="hljs-meta">{js}</span><span class="language-javascript">
@@ -91,41 +79,30 @@ the next fence uses <code>hardest</code> as an ordinary variable.</li>
 <p><code>@CODEGEN</code> asks the model for JavaScript functions and defines them in the shared scope. Later
 fences and blockquotes call them like any other function. In code, <code>await codegen(description)</code>
 does the same and returns the function.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">codegen.md</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy codegen.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="codegen.md code example"><code class="language-markdown" data-file="codegen.md" id="code-2">---
-extension: &#x27;semantic-prompt-language&#x27;
-version: 1
-<span class="hljs-section">model: &#x27;gpt-6-luna&#x27;
----</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">codegen.md</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy codegen.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="codegen.md code example"><code class="language-spl" data-file="codegen.md" id="code-2"><span class="hljs-comment">{comment} 
+asks the model for JavaScript functions and defines them in the shared scope.
+With `--trace`, the code is saved next to this file as `codegen.sieve.js` 
+and reused on later runs.
+    spl examples/codegen.md --trace sieve.jsonl
+{/comment}</span>
 
-<span class="hljs-section"># Generate a function, then use it</span>
+<span class="hljs-meta">{codegen</span><span class="hljs-meta">}</span><span class="hljs-quote">
+Generate sieve(number) sieve of eratosthenes function that returns primes until given number&#x27;
+<span class="hljs-meta">{/codegen}</span></span>
 
-<span class="hljs-code">`@CODEGEN`</span> asks the model for JavaScript functions and defines them in the shared scope.
-With <span class="hljs-code">`--trace`</span>, the code is saved next to this file as <span class="hljs-code">`codegen.sieve.js`</span> and reused on later runs.
-
-<span class="hljs-code">    spl examples/codegen.md --trace sieve.jsonl
-</span>
-<span class="hljs-quote">&gt; <span class="hljs-keyword">@CODEGEN</span> &#x27;Generate sieve(number) sieve of eratosthenes function that returns primes until given number&#x27;</span>
-
-<span class="hljs-meta">```js</span><span class="language-javascript">
+<span class="hljs-meta">{js}</span><span class="language-javascript">
 <span class="hljs-title function_">log</span>(<span class="hljs-title function_">sieve</span>(<span class="hljs-number">100</span>));
 
 <span class="hljs-keyword">const</span> slugify = <span class="hljs-keyword">await</span> <span class="hljs-title function_">codegen</span>(<span class="hljs-string">&#x27;slugify(title): lowercase, trim, and replace runs of non-alphanumeric characters with single dashes&#x27;</span>);
 <span class="hljs-title function_">success</span>(<span class="hljs-title function_">slugify</span>(<span class="hljs-string">&#x27;  Hello, Generated World!  &#x27;</span>));
-</span><span class="hljs-meta">```</span>
+</span><span class="hljs-meta">{/js}</span>
 </code></pre></figure>
 <p>With <code>--trace</code>, the generated code is also saved beside the workflow, here as <code>codegen.sieve.js</code>.
 Its first line hashes the description, and later traced runs reuse a matching file without
 calling the model:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">codegen.sieve.js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy codegen.sieve.js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="codegen.sieve.js code example"><code class="language-js" id="code-3"><span class="hljs-comment">// @CODEGEN sha256:0bf6d0586753d772a87e4af0b9177236e64e481f18c5345569e6a82e3ff35427</span>
 <span class="hljs-keyword">function</span> <span class="hljs-title function_">sieve</span>(<span class="hljs-params">number</span>) {
-    <span class="hljs-keyword">if</span> (number &lt; <span class="hljs-number">2</span>) <span class="hljs-keyword">return</span> [];
-    <span class="hljs-keyword">const</span> flags = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Array</span>(number + <span class="hljs-number">1</span>).<span class="hljs-title function_">fill</span>(<span class="hljs-literal">true</span>);
-    flags[<span class="hljs-number">0</span>] = flags[<span class="hljs-number">1</span>] = <span class="hljs-literal">false</span>;
-    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">let</span> divisor = <span class="hljs-number">2</span>; divisor * divisor &lt;= number; divisor++) {
-        <span class="hljs-keyword">if</span> (!flags[divisor]) <span class="hljs-keyword">continue</span>;
-        <span class="hljs-keyword">for</span> (<span class="hljs-keyword">let</span> multiple = divisor * divisor; multiple &lt;= number; multiple += divisor) flags[multiple] = <span class="hljs-literal">false</span>;
-    }
-    <span class="hljs-keyword">return</span> flags.<span class="hljs-title function_">flatMap</span>(<span class="hljs-function">(<span class="hljs-params">prime, candidate</span>) =&gt;</span> prime ? [candidate] : []);
+   ...
 }
 </code></pre></figure>
 <p>See <a href="llm-commands.html#code-generation">Code generation</a> for validation and cache rules.</p>
@@ -152,9 +129,7 @@ This sample shows how to describe model output with types.
 }
 
 <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> n <span class="hljs-keyword">of</span> numbers) <span class="hljs-title function_">log</span>(<span class="hljs-title class_">Number</span>.<span class="hljs-title function_">isInteger</span>(n) ? <span class="hljs-string">`Integer: <span class="hljs-subst">${n}</span>`</span> : <span class="hljs-string">`Float: <span class="hljs-subst">${n}</span>`</span>);
-</span><span class="hljs-meta">```</span>
 
-<span class="hljs-meta">```js</span><span class="language-javascript">
 <span class="hljs-keyword">const</span> <span class="hljs-title class_">Person</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Person&#x27;</span>, {
     <span class="hljs-attr">firstName</span>: str,
     <span class="hljs-attr">lastName</span>: str,

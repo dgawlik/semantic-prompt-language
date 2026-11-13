@@ -112,6 +112,53 @@ describe('examples without a model', () => {
 });
 
 describe('examples with scripted models', () => {
+    it.each(['recursion', 'closures', 'regular expressions'])('hi.spl creates and saves a Card about %s entirely through the blockquote', async topic => {
+        const cwd = scratch();
+        const card = { term: topic, definition: `${topic} in one line`, description: `A paragraph about ${topic}.` };
+        const llm = model([], [
+            action('load_variable', { name: 'Card' }),
+            action('load_variable', { name: 'topics' }),
+            save('hardest', card, 'Card'),
+        ]);
+        expect(await example('hi.spl', { cwd, backend: llm })).toEqual({ status: 'success', value: null, hasValue: false });
+        expect(written(cwd, 'out/hardest-card.md')).toBe(`### ${topic}\n\n**${card.definition}**\n\n${card.description}\n`);
+        expect(llm.results[0]).toMatchObject([
+            {
+                type: 'object',
+                required: ['term', 'definition', 'description'],
+                properties: {
+                    term: { type: 'string', enum: ['recursion', 'closures', 'regular expressions'] },
+                    definition: { type: 'string' },
+                    description: { type: 'string' },
+                },
+            },
+            ['recursion', 'closures', 'regular expressions'],
+            card,
+        ]);
+        expect(llm.quotes).toHaveLength(1);
+        expect(llm.quotes[0]).toMatchObject({ model: 'gpt-6.1-sol', reasoningEffort: 'high' });
+        expect(llm.quotes[0].prompt).toContain('Create a flashcard for that topic with term set to the selected topic');
+        expect(llm.quotes[0].prompt).toContain('@validate[Card] save the flashcard to variable @hardest');
+        expect(llm.asks).toHaveLength(0);
+    });
+
+    it.each([
+        [{ term: 'algebra', definition: 'A definition.', description: 'A description.' }, 'hardest.term: expected "recursion" | "closures" | "regular expressions"'],
+        [{ term: 'recursion', definition: 'A definition.' }, "hardest: missing required field 'description' of Card"],
+    ])('hi.spl rejects an invalid Card %j before writing Markdown', async (card, reason) => {
+        const cwd = scratch();
+        const llm = model([], [save('hardest', card, 'Card')]);
+        expect(await example('hi.spl', { cwd, backend: llm })).toMatchObject({
+            status: 'failure',
+            failure: {
+                status_code: 'validation_failed',
+                reason: expect.stringContaining(reason),
+            },
+        });
+        expect(llm.asks).toHaveLength(0);
+        expect(fs.existsSync(path.join(cwd, 'out', 'hardest-card.md'))).toBe(false);
+    });
+
     it('hi.md asks for typed flashcards, lets an agent pick one and writes it as Markdown', async () => {
         const cwd = scratch();
         const calls: LlmRequest[] = [];
