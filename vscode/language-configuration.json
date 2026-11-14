@@ -25,5 +25,11 @@
       "start": "^\\s*\\{(?:js|ts|agent|codegen|comment|lock)(?=[\\s}]|$)",
       "end": "^\\s*\\{/(?:js|ts|agent|codegen|comment|lock)\\}\\s*$"
     }
-  }
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*(?:if|elif|else|while)(?![\\w$]).*:\\s*$",
+      "action": { "indent": "indent" }
+    }
+  ]
 }

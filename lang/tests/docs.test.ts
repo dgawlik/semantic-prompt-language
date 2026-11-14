@@ -264,6 +264,17 @@ Stray @outside and model='x'
         expect(decode(html)).toBe(text);
     });
 
+    it('highlights .spl control keywords and JavaScript conditions', () => {
+        const text = "if _switch == 'color':\n    {js}\n    let result = 1\n    {/js}\nelif count > 1:\n    {agent}\n    Use @count\n    {/agent}\nelse:\n    {js}\n    let result = 2\n    {/js}\nwhile i < 3:\n    {js}\n    i++\n    {/js}\niffy:";
+        const html = highlight(text, 'spl');
+        for (const keyword of ['if', 'elif', 'else', 'while']) expect(html, keyword).toContain(`<span class="hljs-keyword">${keyword}</span>`);
+        expect(html).not.toContain('<span class="hljs-keyword">iffy</span>');
+        expect(html).toContain('<span class="hljs-string">&#x27;color&#x27;</span>');
+        expect(html).toContain('<span class="hljs-number">3</span>');
+        expect(html).toContain('<span class="hljs-variable">@count</span>');
+        expect(decode(html)).toBe(text);
+    });
+
     it('highlights JavaScript workflow code with the library as ordinary calls', () => {
         const text = "const answer = await ask(`Rate ${args[0]}`, { fmt: 'integer', repairs: 1 });\nsuccess(answer);";
         const html = highlight(text, 'js');

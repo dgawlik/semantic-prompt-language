@@ -1,0 +1,16 @@
+
+{js}
+let answer = enforce('Answer in Chinese', async () => {
+    return await ask('Short office story', 
+        { tokens: 256, model: 'gpt-6-luna' })
+})
+{/js}
+
+{agent model='gpt-6-luna', enforce="Answer in Polish"}
+Translate the answer to Polish.
+Save to -> @polishAnswer
+{/agent}
+
+{js}
+success([answer, polishAnswer])
+{/js}

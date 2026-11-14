@@ -101,7 +101,8 @@ other files are not renamed. Ranges use UTF-16 positions and preserve CRLF docum
 
 A `.spl` file is a workflow written as blocks instead of Markdown: `{js}` and `{ts}` for code,
 `{agent ...}` for agent commands with their settings in the tag, `{codegen}` for generated
-functions and `{comment}` for commentary. The [language guide](../docs-template/Language.md#dedicated-spl-files)
+functions and `{comment}` for commentary. Indented `if`, `elif`, `else` and `while` lines choose
+and repeat blocks. The [language guide](../docs-template/Language.md#dedicated-spl-files)
 describes the format. The extension registers the `spl` language for these files; no
 frontmatter is needed to turn the features on.
 
@@ -109,22 +110,26 @@ frontmatter is needed to turn the features on.
   by VS Code's JavaScript and TypeScript grammars, so comment toggling, bracket matching and
   snippets inside them are those of the embedded language. Tags, the settings of `{agent}` and
   `{codegen}` tags, instructions, `@name` references and `@validate[Type]` have their own
-  colors, `{comment}` blocks are comments and a `{lock}` journal is JSON. A block ends at its
-  closing tag even while the code inside it is unfinished.
+  colors, `{comment}` blocks are comments and a `{lock}` journal is JSON. Control keywords are
+  colored and their conditions use the JavaScript grammar. A block ends at its closing tag even
+  while the code inside it is unfinished.
 * **Code blocks** behave like fences: completions, hover, signature help, definition,
   references, rename and document symbols across all blocks, JavaScript syntax errors as the
   runtime reports them, missing relative imports, and type errors in `{ts}` blocks.
+* **Control lines.** Conditions complete shared variables, members and library names, and
+  support hover and definition. Between blocks, `if`, `elif`, `else` and `while` complete as
+  snippets; Enter after a control line indents its body.
 * **Agent blocks.** `@` completes shared variables and functions declared above, names saved
   by earlier agents, library functions an agent can call and the markers `@validate`,
   `@success`, `@fail`, `@env.NAME` and `@args`; `@validate[` completes declared types. Names an
   instruction saves are declared for later blocks, typed through `@validate[Type]`.
 * **Tags.** Inside `{agent ...}` and `{codegen ...}`, settings, restriction kinds and reasoning
-  values complete, and `model=` offers the frontmatter model. Hover explains tags and settings.
-  Between blocks, typing `{` offers the blocks with their closing tags.
+  values complete, and `model=` offers the frontmatter model. Hover explains tags, settings and
+  control keywords. Between blocks, typing `{` offers the blocks with their closing tags.
 * **Diagnostics** cover the structure as well: text outside blocks, unknown or unterminated
-  blocks, invalid tag settings, and `@CTL` or `@CODEGEN` markers, which a `.spl` file writes as
-  tags.
-* **Folding** follows the blocks.
+  blocks, invalid tag settings, malformed or unmatched control lines and their conditions, and
+  `@CTL` or `@CODEGEN` markers, which a `.spl` file writes as tags.
+* **Folding** follows the blocks and indented control bodies.
 
 A tag that is still being typed ends before the next closing tag, so the blocks below it stay
 analyzed. `{js ignore}` and `{ts no-run}` blocks are colored but not analyzed. Notebooks open

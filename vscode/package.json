@@ -2,7 +2,7 @@
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
   "description": "Executable workflows in Markdown and .spl files: JavaScript with the SPL library, natural-language steps and notebooks",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "publisher": "spl-lang",
    "icon": "icon.png",
   "license": "ISC",
@@ -93,6 +93,7 @@
         "path": "./syntaxes/spl.tmLanguage.json",
         "embeddedLanguages": {
           "meta.embedded.block.javascript": "javascript",
+          "meta.embedded.expression.javascript": "javascript",
           "meta.embedded.block.typescript": "typescript",
           "meta.embedded.block.frontmatter": "yaml",
           "meta.embedded.block.json": "json"

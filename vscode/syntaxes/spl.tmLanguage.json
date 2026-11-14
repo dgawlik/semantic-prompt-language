@@ -22,9 +22,51 @@
     },
     {
       "include": "#lock"
+    },
+    {
+      "include": "#control"
     }
   ],
   "repository": {
+    "control": {
+      "patterns": [
+        {
+          "match": "^[ \\t]*(else)(?![\\w$])[ \\t]*(:)?[ \\t]*$",
+          "name": "meta.control.spl",
+          "captures": {
+            "1": {
+              "name": "keyword.control.conditional.spl"
+            },
+            "2": {
+              "name": "punctuation.separator.colon.spl"
+            }
+          }
+        },
+        {
+          "match": "^[ \\t]*(?:(if|elif)|(while))(?![\\w$])[ \\t]*(.*?)[ \\t]*(:)?[ \\t]*$",
+          "name": "meta.control.spl",
+          "captures": {
+            "1": {
+              "name": "keyword.control.conditional.spl"
+            },
+            "2": {
+              "name": "keyword.control.loop.spl"
+            },
+            "3": {
+              "name": "meta.embedded.expression.javascript",
+              "patterns": [
+                {
+                  "include": "source.js"
+                }
+              ]
+            },
+            "4": {
+              "name": "punctuation.separator.colon.spl"
+            }
+          }
+        }
+      ]
+    },
     "frontmatter": {
       "begin": "\\A(?=---[ \\t]*$)",
       "end": "^(---|\\.\\.\\.)[ \\t]*$",

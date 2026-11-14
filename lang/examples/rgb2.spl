@@ -1,0 +1,14 @@
+
+{js}
+let rgbString = await human('What color is it?')
+{/js}
+
+{agent model='gpt-6-luna', reasoning='low'}
+Find common name for @rgbString.
+Don't search the web, give approximation.
+Save to -> @colorName
+{/agent}
+
+{js}
+success(colorName)
+{/js}

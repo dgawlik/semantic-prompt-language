@@ -12,6 +12,7 @@ Generate sieve(number) sieve of eratosthenes function that returns primes until 
 {js}
 log(sieve(100));
 
-const slugify = await codegen('slugify(title): lowercase, trim, and replace runs of non-alphanumeric characters with single dashes');
+const slugify = await codegen('slugify(title): lowercase, trim, and replace' + 
+' runs of non-alphanumeric characters with single dashes');
 success(slugify('  Hello, Generated World!  '));
 {/js}

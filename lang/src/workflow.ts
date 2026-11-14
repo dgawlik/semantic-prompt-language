@@ -1,3 +1,4 @@
+import type { CompiledCell } from './cell.js';
 import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
 import { missingImport, provideModules } from './imports.js';
 import * as packageModule from './index.js';
@@ -5,7 +6,7 @@ import * as markdownModule from './markdown-lib.js';
 import { attachWorkspace, library } from './library.js';
 import type { LlmBackend } from './llm.js';
 import type { Logger } from './logger.js';
-import type { Workflow } from './markdown.js';
+import type { Step, Workflow } from './markdown.js';
 import { runNatural } from './natural.js';
 import { Pin, PinError } from './pin.js';
 import { isToolValue } from './recording.js';
@@ -74,14 +75,32 @@ async function execute(workflow: Workflow, opts: RunOptions, workspace: Workspac
         workspace.bind(runtime);
         executing = true;
         let last: unknown;
-        await runtime.run(async () => {
-            for (const step of workflow.steps) {
+        const test = async (condition: CompiledCell, line: number): Promise<boolean> => {
+            current = { line, command: (workflow.lines[line - 1] ?? '').trim() };
+            last = undefined;
+            return Boolean(await workspace.execute(condition, file, runtime));
+        };
+        const perform = async (steps: readonly Step[]): Promise<void> => {
+            for (const step of steps) {
+                if (step.kind === 'if') {
+                    for (const branch of step.branches) {
+                        if (branch.condition && !await test(branch.condition, branch.line)) continue;
+                        await perform(branch.steps);
+                        break;
+                    }
+                    continue;
+                }
+                if (step.kind === 'while') {
+                    while (await test(step.condition, step.line)) await perform(step.steps);
+                    continue;
+                }
                 current = { line: step.line, command: (workflow.lines[step.line - 1] ?? '').trim() };
                 last = undefined;
                 if (step.kind === 'code') last = await workspace.execute(step.cell, file, runtime);
                 else await runNatural(step, workspace, runtime.root);
             }
-        });
+        };
+        await runtime.run(() => perform(workflow.steps));
         trace?.assertConsumed();
         if (interactive && last !== undefined) return { status: 'success', value: last, hasValue: true };
         return { status: 'success', value: null, hasValue: false };
@@ -159,12 +178,18 @@ export interface WorkflowProblem {
 /** Static checks beyond syntax: relative imports must point at existing files. Nothing is executed. */
 export function checkWorkflow(workflow: Workflow, cwd: string): WorkflowProblem[] {
     const problems: WorkflowProblem[] = [];
-    for (const step of workflow.steps) {
-        if (step.kind !== 'code') continue;
-        for (const item of step.cell.imports) {
-            const missing = missingImport(cwd, item.specifier);
-            if (missing) problems.push({ line: item.line, column: item.column, message: `cannot find module '${item.specifier}' (resolved to ${missing})` });
+    const check = (steps: readonly Step[]): void => {
+        for (const step of steps) {
+            if (step.kind === 'if') for (const branch of step.branches) check(branch.steps);
+            else if (step.kind === 'while') check(step.steps);
+            else if (step.kind === 'code') {
+                for (const item of step.cell.imports) {
+                    const missing = missingImport(cwd, item.specifier);
+                    if (missing) problems.push({ line: item.line, column: item.column, message: `cannot find module '${item.specifier}' (resolved to ${missing})` });
+                }
+            }
         }
-    }
+    };
+    check(workflow.steps);
     return problems;
 }

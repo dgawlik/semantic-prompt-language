@@ -120,6 +120,10 @@
     .control-list span, .control-card > p:last-child { color: var(--muted); }
     .control-card > p:last-child { margin-top: 1rem; font-size: .88rem; }
 
+    .flow { border-bottom: 1px solid var(--line); }
+    .flow .code-head a { color: var(--green); text-underline-offset: .2em; }
+    .flow .stack-grid { margin-top: 1rem; }
+
     .reliability { background: #e9ebe3; }
     .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem; }
     .feature-card { padding: 1.5rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--paper); }
@@ -190,6 +194,7 @@
         <ul>
           <li><a href="#approach">How it works</a></li>
           <li><a href="#walkthrough">Example</a></li>
+          <li><a href="#control-flow">Control flow</a></li>
           <li><a href="#reliability">Reliability</a></li>
           <li><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub</a></li>
           <li><a href="#get-started" class="nav-cta">Get started</a></li>
@@ -304,6 +309,70 @@ a one-line definition and a description of several sentences.
             </ul>
             <p>Restrictions are not an OS sandbox; direct Node.js APIs are outside their scope.</p>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section flow" id="control-flow" aria-labelledby="flow-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">New / Conditional blocks in .spl</p>
+            <h2 id="flow-title">Branch on data.<br><span class="editorial">Repeat until done.</span></h2>
+          </div>
+          <p class="section-intro">Between blocks, <code>if</code>, <code>elif</code>, <code>else</code> and <code>while</code> lines choose and repeat whole blocks. A control line ends with <code>:</code>, and its body is every following block indented further than the line.</p>
+        </div>
+        <div class="code-panel">
+          <div class="code-head"><span>lang/examples/conditional-workflows.spl</span><a href="../lang/examples/conditional-workflows.spl">Open example &nearr;</a></div>
+          <pre><code><span class="spl-block">{js}</span>
+<span class="kw">let</span> _switch = args[0]
+<span class="kw">let</span> i = 0
+<span class="spl-block">{/js}</span>
+
+<span class="kw">if</span> _switch == <span class="str">'color'</span>:
+    <span class="spl-block">{js}</span>
+    <span class="kw">let</span> result = <span class="kw">await</span> <span class="fn">ask</span>(<span class="str">'What is your favorite color?'</span>, { tokens: 256, model: <span class="str">'gpt-6-luna'</span> })
+    <span class="spl-block">{/js}</span>
+<span class="kw">elif</span> _switch == <span class="str">'food'</span>:
+    <span class="spl-block">{js}</span>
+    <span class="kw">let</span> result = <span class="kw">await</span> <span class="fn">ask</span>(<span class="str">'What is your favorite food?'</span>, { tokens: 256, model: <span class="str">'gpt-6-luna'</span> })
+    <span class="spl-block">{/js}</span>
+<span class="kw">else</span>:
+    <span class="spl-block">{js}</span>
+    <span class="kw">let</span> result = <span class="kw">await</span> <span class="fn">ask</span>(<span class="str">'What is your favorite hobby?'</span>, { tokens: 256, model: <span class="str">'gpt-6-luna'</span> })
+    <span class="spl-block">{/js}</span>
+
+<span class="kw">while</span> i &lt; 2:
+    <span class="spl-block">{js}</span>
+    <span class="kw">let</span> result = <span class="kw">await</span> <span class="fn">agent</span>(<span class="str">`increment number ${i}`</span>, { tokens: 256, model: <span class="str">'gpt-6-luna'</span> })
+    i++
+    <span class="spl-block">{/js}</span>
+
+<span class="spl-block">{js}</span>
+<span class="fn">success</span>({result, i})
+<span class="spl-block">{/js}</span></code></pre>
+        </div>
+        <div class="stack-grid">
+          <article class="stack-card">
+            <span class="label">01 / Choose</span>
+            <h3><code>if</code> &middot; <code>elif</code> &middot; <code>else</code></h3>
+            <p>Runs the first body whose condition is truthy. <code>elif</code> and <code>else</code> line up with their <code>if</code>; <code>else</code> has no condition.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">02 / Repeat</span>
+            <h3><code>while</code></h3>
+            <p>Runs its body again for as long as the condition stays truthy.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">03 / Decide</span>
+            <h3>Conditions are JavaScript.</h3>
+            <p>Expressions run in the shared scope, read values saved by code or agents, and may use <code>await</code>.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">04 / Share</span>
+            <h3>Still one scope.</h3>
+            <p>Bodies hold <code>{js}</code>, <code>{ts}</code>, <code>{agent}</code>, <code>{codegen}</code>, <code>{comment}</code> blocks and nested control lines. <code>result</code> stays visible after the branch.</p>
+          </article>
         </div>
       </div>
     </section>

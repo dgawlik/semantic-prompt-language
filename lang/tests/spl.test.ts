@@ -203,6 +203,76 @@ describe('.spl block tags', () => {
     });
 });
 
+describe('.spl control flow', () => {
+    const indent = (text: string, by = '    '): string => text.split('\n').map(line => line && by + line).join('\n');
+
+    it('runs if, elif, else and while bodies in the shared scope', async () => {
+        const source = [
+            js('let choice = args[0];\nlet count = 0;\nlet seen = [];'),
+            "if choice === 'a':",
+            indent(js("let result = 'first';")),
+            "elif choice === 'b':",
+            indent(js("let result = 'second';")),
+            'else:',
+            indent(js("let result = 'other';")),
+            '',
+            'while count < 3:',
+            indent(js('count++;')),
+            indent('if count % 2:'),
+            indent(js('seen.push(count);'), '        '),
+            '',
+            js('success({ result, count, seen });'),
+        ].join('\n');
+        expect(scanSpl(source).body.map(node => node.kind)).toEqual(['block', 'if', 'while', 'block']);
+        expect(parseSpl(source).steps.map(step => [step.kind, step.line])).toEqual([['code', 2], ['if', 6], ['while', 19], ['code', 29]]);
+        for (const [choice, result] of [['a', 'first'], ['b', 'second'], ['z', 'other']]) {
+            expect(await exec(source, { args: [choice] })).toEqual({ status: 'success', value: { result, count: 3, seen: [1, 3] }, hasValue: true });
+        }
+    });
+
+    it('awaits conditions and repeats agent blocks until a condition changes', async () => {
+        let quotes = 0;
+        const prompts: string[] = [];
+        const model = backend(async request => {
+            if (!request.naturalLanguage) return { text: 'yes', effective: {} };
+            prompts.push(request.prompt);
+            await request.invokeAction!(action('save_variable', { name: 'done', value: ++quotes === 2 }));
+            return { text: 'Done.', effective: {} };
+        });
+        const source = [
+            js('let tries = 0;\nlet done = false;'),
+            "if (await ask('Start?')) === 'yes':",
+            indent('while !done:'),
+            indent(js('tries++;'), '        '),
+            indent(agent('Decide whether attempt @tries is enough\nand save it to @done'), '        '),
+            js('success(tries);'),
+        ].join('\n');
+        expect(await exec(source, { backend: model })).toEqual({ status: 'success', value: 2, hasValue: true });
+        expect(prompts.every(prompt => prompt.includes('Blockquote:\nDecide whether attempt @tries is enough\nand save it to @done'))).toBe(true);
+    });
+
+    it('reports a failing condition at its control line', async () => {
+        const source = `${js('let value = 1;')}\nif value.missing.name:\n  ${js('fail("unreachable");').replace(/\n/g, '\n  ')}`;
+        expect(await exec(source)).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', line: 4, command: 'if value.missing.name:' },
+        });
+        expect(() => parseSpl(`while ready ===:\n  ${js('ready = false;').replace(/\n/g, '\n  ')}`))
+            .toThrow(expect.objectContaining({ name: 'SplSyntaxError', message: 'Unexpected token', line: 1, col: 16 }));
+    });
+
+    it.each([
+        ['if ready:', "1:1 expected an indented block after 'if'"],
+        ['if:\n  {js}\n  {/js}', "1:3 expected a condition after 'if'"],
+        ['if ready\n  {js}\n  {/js}', "1:9 expected ':' at the end of the 'if' line"],
+        ['else:\n  {js}\n  {/js}', "1:1 'else' without a matching 'if'"],
+        ['if a:\n  {js}\n  {/js}\nelse b:\n  {js}\n  {/js}', "4:6 'else' takes no condition; use 'elif'"],
+        ['if a:\n  {js}\n  {/js}\nelse:\n  {js}\n  {/js}\nelif b:\n  {js}\n  {/js}', "7:1 'elif' without a matching 'if'"],
+        ['while a:\n{js}\n{/js}', "1:1 expected an indented block after 'while'"],
+    ])('rejects control flow %j', (source, expected) => {
+        expect(problems(source)[0]).toBe(expected);
+    });
+});
+
 /** The same workflow in both formats; `{comment}` stands in for Markdown prose. */
 const MARKDOWN = `---
 extension: semantic-prompt-language

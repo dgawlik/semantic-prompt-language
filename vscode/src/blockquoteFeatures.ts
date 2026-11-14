@@ -3,13 +3,16 @@ import type { TextDocument } from 'vscode-languageserver-textdocument';
 import { scanSettings, type ControlToken, type NaturalControls } from '../../lang/src/controls.js';
 import type { MarkdownBlock } from '../../lang/src/markdown.js';
 import type { RestrictKind } from '../../lang/src/restrict.js';
-import type { SplBlock } from '../../lang/src/spl.js';
+import type { SplBlock, SplControl } from '../../lang/src/spl.js';
 import type { Help } from './catalog';
 
 export type { ControlToken };
 
-/** A fence or blockquote of a Markdown workflow, or a block of a `.spl` file, which then carries its tag. */
-export type WorkflowBlock = MarkdownBlock & { spl?: SplBlock };
+/**
+ * A fence or blockquote of a Markdown workflow, or a block of a `.spl` file, which then carries its tag.
+ * The condition of a `.spl` control line is a one-line code block that covers only the expression.
+ */
+export type WorkflowBlock = MarkdownBlock & { spl?: SplBlock; condition?: SplControl };
 
 export const controlHelp: Record<keyof NaturalControls, Help> = {
     restrict: { signature: "restrict={fs: ['./src'], exec: ['git']}", description: 'Narrow fs, exec, net or mcp permissions before the agent runs. Each restriction needs at least one entry.' },

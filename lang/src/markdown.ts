@@ -33,10 +33,33 @@ export interface CodeStep {
 
 export type NaturalStep = NaturalBlock & { kind: 'natural' };
 
+/** One branch of an `if` in a `.spl` file; `else` has no condition. */
+export interface BranchStep {
+    /** A compiled JavaScript expression evaluated in the shared scope. */
+    condition?: CompiledCell;
+    line: number;
+    steps: Step[];
+}
+
+export interface IfStep {
+    kind: 'if';
+    line: number;
+    branches: BranchStep[];
+}
+
+export interface WhileStep {
+    kind: 'while';
+    line: number;
+    condition: CompiledCell;
+    steps: Step[];
+}
+
+export type Step = CodeStep | NaturalStep | IfStep | WhileStep;
+
 /** A parsed, runnable document: fences and blockquotes in order. */
 export interface Workflow {
     model?: string;
-    steps: (CodeStep | NaturalStep)[];
+    steps: Step[];
     /** Source lines, for failure reports. */
     lines: string[];
     /** Present for Markdown documents; plain code has no preamble or lock. */

@@ -88,7 +88,8 @@ success(rating);
 A `.spl` file holds the same workflow as blocks, each tag on its own line, and needs no
 frontmatter: `{js}` and `{ts}` are code, `{agent restrict={fs: ['./out']}, model='m'}` is an agent
 command with the settings of `@CTL`, `{codegen}` describes functions to generate and `{comment}`
-is commentary. Run it with `spl workflow.spl`; try `spl examples/code-review.spl --check`.
+is commentary. Indented `if`, `elif`, `else` and `while` lines with JavaScript conditions choose
+and repeat blocks. Run it with `spl workflow.spl`; try `spl examples/code-review.spl --check`.
 
 See [Workflow code](../docs-template/Language.md), [Natural language & models](../docs-template/LLM-commands.md)
 and [Guards & failures](../docs-template/Safety.md).

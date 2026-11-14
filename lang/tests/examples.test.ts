@@ -112,6 +112,20 @@ describe('examples without a model', () => {
 });
 
 describe('examples with scripted models', () => {
+    it.each([
+        ['color', 'What is your favorite color?'],
+        ['food', 'What is your favorite food?'],
+        ['music', 'What is your favorite hobby?'],
+    ])('conditional-workflows.spl chooses the %s branch and loops with shared variables', async (choice, question) => {
+        const llm = scripted('first answer', 'one', 'two', 'three');
+        expect(await example('conditional-workflows.spl', { backend: llm, args: [choice] })).toEqual({
+            status: 'success', value: { result: 'three', i: 3 }, hasValue: true,
+        });
+        expect(llm.calls.map(call => call.kind)).toEqual(['ask', 'agent', 'agent', 'agent']);
+        expect(llm.calls[0].prompt).toContain(question);
+        expect(llm.calls.slice(1).map(call => call.prompt.match(/increment number \d/)?.[0])).toEqual(['increment number 0', 'increment number 1', 'increment number 2']);
+    });
+
     it.each(['recursion', 'closures', 'regular expressions'])('hi.spl creates and saves a Card about %s entirely through the blockquote', async topic => {
         const cwd = scratch();
         const card = { term: topic, definition: `${topic} in one line`, description: `A paragraph about ${topic}.` };

@@ -4,7 +4,7 @@ import { compileCell, FENCE_LANGUAGES, type CellLanguage } from '../../lang/src/
 import { parseNatural } from '../../lang/src/controls.js';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { extractMarkdown, isWorkflowMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
-import { scanSpl, type SplBlock } from '../../lang/src/spl.js';
+import { compileCondition, scanSpl, type SplBlock, type SplControl } from '../../lang/src/spl.js';
 import { blockquoteText, scanCodegen, scanControls, type WorkflowBlock } from './blockquoteFeatures';
 import { library, markers } from './catalog';
 
@@ -37,8 +37,8 @@ export interface WorkflowAnalysis {
     workflow: boolean;
     model?: string;
     blocks: WorkflowBlock[];
-    /** Present for `.spl` files: every block, including commentary, and the first line after the frontmatter. */
-    spl?: { blocks: SplBlock[]; start: number };
+    /** Present for `.spl` files: every block and control line, including commentary, and the first line after the frontmatter. */
+    spl?: { blocks: SplBlock[]; controls: SplControl[]; start: number };
     markers: Marker[];
     /** Names agents may save that no fence declares. */
     ambient: AmbientName[];
@@ -103,7 +103,12 @@ function scanBlocks(lines: string[]): MarkdownBlock[] {
 }
 
 export function codeBlockAt(analysis: WorkflowAnalysis, position: Position): WorkflowBlock | undefined {
-    return analysis.blocks.find(block => block.kind === 'code' && position.line + 1 >= block.line && position.line + 1 <= block.endLine);
+    return analysis.blocks.find(block => {
+        if (block.kind !== 'code' || position.line + 1 < block.line || position.line + 1 > block.endLine) return false;
+        if (!block.condition) return true;
+        const start = block.condition.conditionColumn! - 1;
+        return position.character >= start && position.character <= start + block.text.length;
+    });
 }
 
 export function blockquoteAt(analysis: WorkflowAnalysis, position: Position): WorkflowBlock | undefined {
@@ -151,9 +156,14 @@ export function analyzeWorkflow(document: TextDocument): WorkflowAnalysis {
                 line: block.headerEndLine + 1, endLine: block.closed ? block.endLine - 1 : block.endLine,
             }];
         });
+        for (const control of scanned.controls) {
+            if (control.condition === undefined) continue;
+            blocks.push({ kind: 'code', language: 'js', text: control.condition, line: control.line, endLine: control.line, condition: control });
+        }
+        blocks.sort((a, b) => a.line - b.line);
         const diagnostics = scanned.problems.map(item => problem(new SplSyntaxError(item.message, item.line, item.column), document));
         const start = lines[0] === '---' ? lines.findIndex((line, index) => index > 0 && /^(---|\.\.\.)\s*$/.test(line)) + 1 || lines.length : 0;
-        return { ...analyzeBlocks(document, lines, blocks, diagnostics, scanned.model), spl: { blocks: scanned.blocks, start } };
+        return { ...analyzeBlocks(document, lines, blocks, diagnostics, scanned.model), spl: { blocks: scanned.blocks, controls: scanned.controls, start } };
     }
     if (!isWorkflowMarkdown(source)) {
         return { document, workflow: false, blocks: [], markers: [], ambient: [], diagnostics: [], language: 'js', virtual: '', mirrored: 0 };
@@ -181,6 +191,23 @@ function analyzeBlocks(
     const masked = lines.map(line => ' '.repeat(line.length));
     for (const block of blocks) {
         if (block.kind !== 'code') continue;
+        if (block.condition) {
+            // `if x:` becomes ` ; x;`, so the condition is a standalone statement at its own position.
+            const { column, keyword, conditionColumn } = block.condition;
+            const line = lines[block.line - 1];
+            const at = conditionColumn! - 1;
+            const end = at + block.text.length;
+            masked[block.line - 1] = (' '.repeat(column + keyword.length - 2) + ';').padEnd(at) + block.text + ';'
+                + ' '.repeat(Math.max(0, line.length - end - 1));
+            if (!block.text.trim()) continue;
+            try {
+                compileCondition(block.condition);
+            } catch (error) {
+                if (!(error instanceof SplSyntaxError)) throw error;
+                diagnostics.push(problem(error, document));
+            }
+            continue;
+        }
         for (let line = block.line; line <= block.endLine; line++) masked[line - 1] = lines[line - 1];
         // TypeScript reports its own syntax errors; JavaScript is checked exactly as the runtime compiles it.
         if (block.language !== 'js') continue;

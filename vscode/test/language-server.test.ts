@@ -340,10 +340,39 @@ test('typing a brace between blocks offers the blocks of a .spl file', () => {
     assert.deepEqual(items[2].textEdit, { range: { start: { line: 8, character: 0 }, end: { line: 8, character: 2 } }, newText: '{agent}\n$0\n{/agent}' });
     assert.equal(items[2].filterText, '{agent');
     assert.deepEqual(splLabels(`${js('const a = 1;')}\n\n  {ag|`), ['{js}', '{ts}', '{agent}', '{codegen}', '{comment}']);
-    assert.equal(splLabels(`${js('const a = 1;')}\n\n|`).length, 5);
+    assert.deepEqual(splLabels(`${js('const a = 1;')}\n\n|`), ['{js}', '{ts}', '{agent}', '{codegen}', '{comment}', 'if', 'elif', 'else', 'while']);
     for (const body of ['---\nmodel: |\n---\n', '{comment}\n{|}\n{/comment}', '{agent}\n{|}\n{/agent}', `${js('const a = 1;')}\ntext {|}`, '{js}|']) {
         assert.ok(!splLabels(body).includes('{agent}'), body);
     }
+});
+
+test('.spl control lines complete, hover and check their JavaScript conditions', () => {
+    const keywords = openSpl(`${js('let i = 0;')}\n\n  wh|`);
+    const loop = completions(keywords.context, keywords.position).find(item => item.label === 'while');
+    assert.deepEqual(loop?.textEdit, { range: { start: { line: 4, character: 2 }, end: { line: 4, character: 4 } }, newText: 'while ${1:condition}:\n\t$0' });
+    assert.ok(!splLabels(`${js('let i = 0;')}\n\n{|}`).includes('if'), 'a brace starts a block');
+
+    const body = `${js("let _switch = args[0];\nlet i = 0;")}\n\nif _sw|itch == 'color':\n    ${js("let result = await ask('Color?');").replace(/\n/g, '\n    ')}\nelif _switch == 'food':\n    ${js("let result = await ask('Food?');").replace(/\n/g, '\n    ')}\nelse:\n    ${js("let result = await ask('Hobby?');").replace(/\n/g, '\n    ')}\n\nwhile i < 3:\n    ${js('i++;').replace(/\n/g, '\n    ')}\n\n${js('success({ result, i });')}`;
+    const names = splLabels(body);
+    for (const name of ['_switch', 'i', 'args', 'ask']) assert.ok(names.includes(name), name);
+    assert.ok(splLabels(body.replace('_sw|itch', '_switch').replace('{ result, i }', '{ res| }')).includes('result'), 'variables of nested blocks are shared');
+    assert.ok(splLabels(body.replace("_sw|itch == 'color'", '_switch.|')).includes('toUpperCase'), 'conditions complete members');
+    assert.match(splHover(body), /let _switch: string/);
+    assert.match(splHover(body.replace('_sw|itch', '_switch').replace('wh', 'w|h')), /while condition:[\s\S]*Run the indented blocks/);
+    const { context, source } = openSpl(body.replace('|', ''));
+    assert.deepEqual(diagnostics(context), []);
+    assert.deepEqual(definition(context, splAt(source, 'i < 3')), [{ uri: splUri, range: { start: splAt(source, 'i = 0'), end: splAt(source, 'i = 0', 1) } }]);
+    assert.deepEqual(context.analysis.blocks.filter(item => item.condition).map(item => [item.line, item.text]), [[6, "_switch == 'color'"], [10, "_switch == 'food'"], [19, 'i < 3']]);
+
+    const broken = openSpl(`${js('let ready = true;')}\nif ready\n${js('ready;')}\nelse ready:\n${js('ready;')}\nwhile ready ===:\n  ${js('ready = false;')}`);
+    assert.deepEqual(diagnostics(broken.context).map(item => [item.range.start.line, item.range.start.character, item.message]), [
+        [3, 0, "expected an indented block after 'if'"],
+        [3, 8, "expected ':' at the end of the 'if' line"],
+        [7, 0, "'else' without a matching 'if'"],
+        [7, 0, "expected an indented block after 'else'"],
+        [7, 5, "'else' takes no condition; use 'elif'"],
+        [11, 15, 'Unexpected token'],
+    ]);
 });
 
 test('values saved by agent blocks are visible to later blocks, typed through @validate', () => {

@@ -60,6 +60,14 @@ export const markers: Record<string, Help & { insert: string }> = {
     args: { insert: 'args', signature: '@args', description: 'The script arguments supplied with --arg.' },
 };
 
+/** Control-flow lines of a `.spl` file. `insert` is a snippet for the whole line and the start of its body. */
+export const keywords: Record<string, Help & { insert: string }> = {
+    if: { insert: 'if ${1:condition}:\n\t$0', signature: 'if condition:', description: 'Run the indented blocks below when the JavaScript condition is truthy. The condition sees the shared scope, including variables declared by earlier `{js}` blocks and saved by agents.' },
+    elif: { insert: 'elif ${1:condition}:\n\t$0', signature: 'elif condition:', description: 'Another branch of the `if` above, at the same indentation: its indented blocks run when every earlier condition was falsy and this one is truthy.' },
+    else: { insert: 'else:\n\t$0', signature: 'else:', description: 'The last branch of the `if` above, at the same indentation: its indented blocks run when no condition was truthy.' },
+    while: { insert: 'while ${1:condition}:\n\t$0', signature: 'while condition:', description: 'Run the indented blocks below again and again while the JavaScript condition is truthy. Variables changed by the blocks are seen by the next test.' },
+};
+
 /** Blocks of a `.spl` file, by tag name. `insert` continues after the opening brace. */
 export const tags: Record<string, Help & { insert: string }> = {
     js: { insert: 'js}\n$0\n{/js}', signature: '{js} ... {/js}', description: 'JavaScript that runs natively with the spl-lang library in scope. Top-level declarations are shared with later blocks and with agents. `{js ignore}` shows code without running it.' },

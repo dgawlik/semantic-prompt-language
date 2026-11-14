@@ -28,7 +28,8 @@ Unknown fields are syntax errors. After the frontmatter, blocks run in document 
 
 A [`.spl` file](Language.md#dedicated-spl-files) holds the same workflow as blocks. Frontmatter is
 optional there and needs neither `extension` nor `version`. Each tag stands on its own line, and
-text outside blocks is a syntax error.
+other text outside blocks is a syntax error. [Control lines](Language.md#control-flow) choose and
+repeat indented blocks.
 
 | Block of a `.spl` file | Treatment |
 | --- | --- |
@@ -39,6 +40,8 @@ text outside blocks is a syntax error.
 | `{codegen ...}` ... `{/codegen}` | Generates functions from the description; accepts the settings of `{agent}` |
 | `{comment}` ... `{/comment}` | Commentary |
 | `{lock}` ... `{/lock}` | The journal of a [pinned workflow](CLI.md#pinned-workflows) |
+| `if condition:`, `elif condition:`, `else:` | Run the first indented body whose JavaScript condition is truthy |
+| `while condition:` | Repeat the indented body while its JavaScript condition is truthy |
 
 Fences are compiled as ES-module code in strict mode: top-level `await`, `import`, `import()`
 and `import.meta.url`, `.filename`, `.dirname` are available; top-level `return`,

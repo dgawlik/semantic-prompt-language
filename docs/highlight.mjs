@@ -61,6 +61,11 @@ hljs.registerLanguage('spl', () => {
         begin: new RegExp(`^[ \\t]*\\{${tag}(?=[\\s}])`), end: /\}/, beginScope: 'meta', endScope: 'meta', contains: settings,
         starts: { scope: 'quote', end: line(`\\{/${tag}\\}`), endScope: 'meta', contains },
     });
+    // Control lines: a keyword, then a JavaScript condition up to the closing colon.
+    const control = [
+        { begin: [/^[ \t]*/, /(?:if|elif|while)(?![\w$])/], beginScope: { 2: 'keyword' }, end: /(?=:[ \t]*\r?$)|\r?$/, subLanguage: 'javascript' },
+        { match: [/^[ \t]*/, /else(?![\w$])/], scope: { 2: 'keyword' } },
+    ];
     return {
         name: 'SPL',
         contains: [
@@ -68,6 +73,7 @@ hljs.registerLanguage('spl', () => {
             { scope: 'comment', begin: line('\\{comment\\}'), end: line('\\{/comment\\}') },
             code('js', 'javascript'), code('ts', 'typescript'), code('lock', 'json'),
             instruction('agent', [marker, reference]), instruction('codegen', []),
+            ...control,
         ],
     };
 });

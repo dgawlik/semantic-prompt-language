@@ -1,0 +1,16 @@
+
+{js}
+let RGB = struct('RGB', {
+    r: int.describe('Red component'),
+    g: int.describe('Green component'),
+    b: int.describe('Blue component'),
+})
+
+let colorString = await human('What color is it?')
+
+let color = await ask(`Convert users color (${colorString}) to RGB`, {
+    schema: RGB
+})
+
+success(JSON.stringify(color))
+{/js}

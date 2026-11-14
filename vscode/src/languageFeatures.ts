@@ -10,7 +10,7 @@ import { compileCell } from '../../lang/src/cell.js';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { missingImport } from '../../lang/src/imports.js';
 import { blockquoteText, controlCompletions, controlHelp, scanControls } from './blockquoteFeatures';
-import { callable, library, markers, tags } from './catalog';
+import { callable, keywords, library, markers, tags } from './catalog';
 import type { TypeScriptProject } from './typescriptService';
 import { analyzeWorkflow, blockquoteAt, codeBlockAt, type Marker, type WorkflowAnalysis } from './workflow';
 
@@ -269,7 +269,7 @@ function blockquoteCompletions(context: WorkflowContext, position: Position): Co
     return items;
 }
 
-/** Blocks to start between the blocks of a `.spl` file: typing `{` or a tag name on a line of its own. */
+/** Blocks and control lines to start between the blocks of a `.spl` file: typing `{`, a tag name or a keyword on a line of its own. */
 function tagCompletions(analysis: WorkflowAnalysis, position: Position): CompletionItem[] {
     const { document, spl } = analysis;
     if (!spl || position.line < spl.start || spl.blocks.some(block => position.line + 1 >= block.line && position.line + 1 <= block.endLine)) return [];
@@ -278,11 +278,16 @@ function tagCompletions(analysis: WorkflowAnalysis, position: Position): Complet
     // The editor closes a typed brace; the completion replaces the pair.
     if (!typed || !/^\}?[ \t]*$/.test(line.slice(position.character))) return [];
     const range = { start: { line: position.line, character: position.character - typed[1].length }, end: { line: position.line, character: line.trimEnd().length } };
-    return Object.entries(tags).filter(([name]) => name !== 'lock').map(([name, help], index) => ({
+    const blocks = Object.entries(tags).filter(([name]) => name !== 'lock').map(([name, help], index): CompletionItem => ({
         label: `{${name}}`, kind: CompletionItemKind.Snippet, detail: help.signature, documentation: help.description,
         filterText: `{${name}`, sortText: String(index), insertTextFormat: InsertTextFormat.Snippet,
         textEdit: { range, newText: `{${help.insert}` },
     }));
+    if (typed[1].startsWith('{')) return blocks;
+    return [...blocks, ...Object.entries(keywords).map(([name, help], index): CompletionItem => ({
+        label: name, kind: CompletionItemKind.Keyword, detail: help.signature, documentation: help.description,
+        sortText: `k${index}`, insertTextFormat: InsertTextFormat.Snippet, textEdit: { range, newText: help.insert },
+    }))];
 }
 
 export function completions(context: WorkflowContext, position: Position, trigger?: CompletionContext): CompletionItem[] {
@@ -346,6 +351,10 @@ export function hover(context: WorkflowContext, position: Position): Hover | nul
         const line = analysis.document.getText({ start: { line: position.line, character: 0 }, end: { line: position.line + 1, character: 0 } });
         const name = /^[ \t]*\{\/?/.exec(line)?.[0].length;
         if (name !== undefined && position.character >= name && position.character <= name + section.tag.length) return described(tags[section.tag]);
+    }
+    const control = analysis.spl?.controls.find(item => item.line === position.line + 1);
+    if (control && position.character >= control.column - 1 && position.character <= control.column - 1 + control.keyword.length) {
+        return described(keywords[control.keyword]);
     }
     const block = blockquoteAt(analysis, position);
     if (!block) return null;

@@ -10,8 +10,8 @@ export { Type, StructType, isType, type Infer, type InferShape, type Shape, type
 export { Failure, SuccessSignal, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
 
 // Running workflows and embedding the runtime.
-export { parse, parseInstruction, parseMarkdown, extractMarkdown, isWorkflowMarkdown, type Workflow, type MarkdownDocument, type MarkdownBlock } from './markdown.js';
-export { parseSpl, scanSpl, type SplBlock, type SplDocument, type SplProblem, type SplTag } from './spl.js';
+export { parse, parseInstruction, parseMarkdown, extractMarkdown, isWorkflowMarkdown, type Workflow, type Step, type CodeStep, type NaturalStep, type IfStep, type WhileStep, type BranchStep, type MarkdownDocument, type MarkdownBlock } from './markdown.js';
+export { parseSpl, scanSpl, SPL_KEYWORDS, type SplBlock, type SplControl, type SplDocument, type SplKeyword, type SplNode, type SplProblem, type SplTag } from './spl.js';
 export { run, ExecutionSession, checkWorkflow, type RunOptions, type RunResult, type WorkflowProblem } from './workflow.js';
 export { Runtime, type RuntimeOptions, type GenerateOptions, type HumanHandler } from './runtime.js';
 export { compileCell, type CompiledCell, type CellDeclaration, type CellLanguage } from './cell.js';

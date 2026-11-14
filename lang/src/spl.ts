@@ -1,12 +1,16 @@
-import { compileCell, type CellLanguage } from './cell.js';
+import { compileCell, type CellLanguage, type CompiledCell } from './cell.js';
 import { checkTagInstruction, parseTagControls, scanSettings, type NaturalControls } from './controls.js';
 import { SplSyntaxError } from './errors.js';
-import { readFrontmatter, type CodeStep, type NaturalStep, type Workflow } from './markdown.js';
+import { readFrontmatter, type Step, type Workflow } from './markdown.js';
 import { parsePin, validatePinSource, type PinData } from './pin.js';
 
 /** Blocks of a `.spl` workflow. `js`, `ts`, `agent` and `codegen` run; `comment` is commentary; `lock` holds a pinned journal. */
 export const SPL_TAGS = ['js', 'ts', 'agent', 'codegen', 'comment', 'lock'] as const;
 export type SplTag = typeof SPL_TAGS[number];
+
+/** Control-flow lines between the blocks of a `.spl` workflow. */
+export const SPL_KEYWORDS = ['if', 'elif', 'else', 'while'] as const;
+export type SplKeyword = typeof SPL_KEYWORDS[number];
 
 export interface SplBlock {
     tag: SplTag;
@@ -32,10 +36,34 @@ export interface SplProblem {
     column: number;
 }
 
+/** An `if`, `elif`, `else` or `while` line. */
+export interface SplControl {
+    keyword: SplKeyword;
+    line: number;
+    /** 1-based column of the keyword. */
+    column: number;
+    /** Width of the indentation, with tabs advancing to the next multiple of four. */
+    indent: number;
+    /** The JavaScript condition as written; absent for `else`. */
+    condition?: string;
+    /** 1-based column where the condition starts. */
+    conditionColumn?: number;
+}
+
+/** Blocks and control flow nested by indentation. */
+export type SplNode =
+    | { kind: 'block'; block: SplBlock }
+    | { kind: 'if'; branches: { control: SplControl; body: SplNode[] }[] }
+    | { kind: 'while'; control: SplControl; body: SplNode[] };
+
 export interface SplDocument {
     model?: string;
     preamble?: string;
     blocks: SplBlock[];
+    /** Control-flow lines in document order. */
+    controls: SplControl[];
+    /** Blocks and control flow as a tree; the body of a control line is everything indented further. */
+    body: SplNode[];
     lock?: PinData;
     /** Everything wrong with the structure, in document order. A workflow with problems does not run. */
     problems: SplProblem[];
@@ -43,8 +71,55 @@ export interface SplDocument {
 
 const OPENING = /^[ \t]*\{([A-Za-z][\w-]*)(?=[\s}]|$)/;
 const CLOSING = /^[ \t]*\{\/([A-Za-z][\w-]*)\}[ \t]*$/;
+const CONTROL = /^([ \t]*)(if|elif|else|while)(?![\w$])(.*)$/;
 const LANGUAGES: Partial<Record<SplTag, CellLanguage>> = { js: 'js', ts: 'ts' };
 const isTag = (name: string): name is SplTag => (SPL_TAGS as readonly string[]).includes(name);
+
+function indentation(line: string): number {
+    let width = 0;
+    for (const char of /^[ \t]*/.exec(line)![0]) width = char === '\t' ? width + 4 - width % 4 : width + 1;
+    return width;
+}
+
+/** Nests blocks under the control lines above them: a body is every following item indented further. */
+function structure(items: { indent: number; node: SplNode | SplControl }[], problem: (message: string, line: number, column: number) => void): SplNode[] {
+    let index = 0;
+    const isControl = (value: SplNode | SplControl): value is SplControl => 'keyword' in value;
+    const body = (control: SplControl): SplNode[] => {
+        const nodes = suite(control.indent);
+        if (!nodes.length) problem(`expected an indented block after '${control.keyword}'`, control.line, control.column);
+        return nodes;
+    };
+    const suite = (parent: number): SplNode[] => {
+        const nodes: SplNode[] = [];
+        while (index < items.length && items[index].indent > parent) {
+            const item = items[index++].node;
+            if (!isControl(item)) {
+                nodes.push(item);
+                continue;
+            }
+            if (item.keyword === 'elif' || item.keyword === 'else') {
+                problem(`'${item.keyword}' without a matching 'if'`, item.line, item.column);
+                body(item);
+                continue;
+            }
+            if (item.keyword === 'while') {
+                nodes.push({ kind: 'while', control: item, body: body(item) });
+                continue;
+            }
+            const branches = [{ control: item, body: body(item) }];
+            while (index < items.length && branches.at(-1)!.control.keyword !== 'else') {
+                const next = items[index].node;
+                if (!isControl(next) || next.indent !== item.indent || next.keyword !== 'elif' && next.keyword !== 'else') break;
+                index++;
+                branches.push({ control: next, body: body(next) });
+            }
+            nodes.push({ kind: 'if', branches });
+        }
+        return nodes;
+    };
+    return suite(-1);
+}
 
 /** The text of an instruction or description: common indentation and surrounding blank lines removed. */
 export function splInstruction(text: string): string {
@@ -62,7 +137,8 @@ export function scanSpl(source: string): SplDocument {
     const lines = text.split('\n');
     const offsets: number[] = [];
     for (let index = 0, offset = 0; index < lines.length; offset += lines[index++].length + 1) offsets.push(offset);
-    const document: SplDocument = { blocks: [], problems: [] };
+    const document: SplDocument = { blocks: [], controls: [], body: [], problems: [] };
+    const items: { indent: number; node: SplNode | SplControl }[] = [];
     const problem = (message: string, line: number, column = 1): void => { document.problems.push({ message, line, column }); };
     const attempt = (action: () => void): boolean => {
         try {
@@ -96,6 +172,32 @@ export function scanSpl(source: string): SplDocument {
         if (!opening || !tag) {
             const column = line.length - line.trimStart().length + 1;
             const closing = CLOSING.exec(line);
+            const control = !opening && !closing ? CONTROL.exec(line) : null;
+            if (control) {
+                const keyword = control[2] as SplKeyword;
+                const item: SplControl = { keyword, line: number, column, indent: indentation(line) };
+                const rest = control[3];
+                const colon = /:[ \t]*$/.exec(rest);
+                const condition = (colon ? rest.slice(0, colon.index) : rest).trim();
+                const conditionColumn = column + keyword.length + rest.length - rest.trimStart().length;
+                if (keyword === 'else') {
+                    if (condition) problem("'else' takes no condition; use 'elif'", number, conditionColumn);
+                    else if (!colon) problem("expected ':' after 'else'", number, column + keyword.length);
+                } else {
+                    // The condition is kept while it is typed, so the editor can complete it.
+                    if (rest) {
+                        item.condition = condition;
+                        item.conditionColumn = conditionColumn;
+                    }
+                    if (!condition) problem(`expected a condition after '${keyword}'`, number, column + keyword.length);
+                    else if (!colon) problem(`expected ':' at the end of the '${keyword}' line`, number, column + line.trimStart().trimEnd().length);
+                }
+                document.controls.push(item);
+                items.push({ indent: item.indent, node: item });
+                stray = false;
+                index++;
+                continue;
+            }
             if (closing) problem(`{/${closing[1]}} does not close a block`, number, column);
             else if (opening) problem(`unknown block {${opening[1]}}; expected {js}, {ts}, {agent}, {codegen} or {comment}`, number, column);
             else if (line.trim() && !stray) problem('text outside a block; wrap commentary in {comment} and {/comment}', number, column);
@@ -150,6 +252,7 @@ export function scanSpl(source: string): SplDocument {
         block.endLine = block.closed ? close + 1 : Math.max(block.headerEndLine, close);
         block.text = lines.slice(headerIndex + 1, close).join('\n');
         document.blocks.push(block);
+        items.push({ indent: indentation(line), node: { kind: 'block', block } });
 
         if (tag === 'agent') attempt(() => checkTagInstruction(block.text, headerIndex + 2));
         else if (tag === 'codegen' && block.closed && !block.text.trim()) problem('{codegen}: description must not be empty', number, column);
@@ -164,31 +267,62 @@ export function scanSpl(source: string): SplDocument {
         const lock = document.lock;
         attempt(() => validatePinSource(lock, [...lines.slice(0, line - 1), ...lines.slice(endLine)].join('\n'), line));
     }
+    const structural: SplProblem[] = [];
+    document.body = structure(items, (message, line, column) => { structural.push({ message, line, column }); });
+    for (const item of structural) {
+        const at = document.problems.findIndex(other => other.line > item.line || other.line === item.line && other.column > item.column);
+        document.problems.splice(at < 0 ? document.problems.length : at, 0, item);
+    }
     return document;
 }
 
-/** Parses a `.spl` workflow. Every code block is compiled first, so syntax errors surface before anything runs. */
+/** Compiles a condition at its document position, so syntax errors point into the control line. */
+export function compileCondition(control: SplControl): CompiledCell {
+    const column = control.conditionColumn!;
+    const cell = compileCell(`${' '.repeat(column - 2)}(${control.condition})`, { line: control.line });
+    if (cell.statements.length !== 1 || cell.statements[0] !== 'ExpressionStatement') {
+        throw new SplSyntaxError(`expected a JavaScript expression after '${control.keyword}'`, control.line, column);
+    }
+    return cell;
+}
+
+function steps(nodes: readonly SplNode[]): Step[] {
+    return nodes.flatMap((node): Step[] => {
+        if (node.kind === 'if') {
+            return [{
+                kind: 'if', line: node.branches[0].control.line,
+                branches: node.branches.map(({ control, body }) => ({
+                    line: control.line, steps: steps(body),
+                    ...(control.keyword === 'else' ? {} : { condition: compileCondition(control) }),
+                })),
+            }];
+        }
+        if (node.kind === 'while') {
+            return [{ kind: 'while', line: node.control.line, condition: compileCondition(node.control), steps: steps(node.body) }];
+        }
+        const { block } = node;
+        const language = LANGUAGES[block.tag];
+        if (language) {
+            const line = block.headerEndLine + 1;
+            return block.ignored ? [] : [{ kind: 'code', line, cell: compileCell(block.text, { language, line }) }];
+        }
+        if (block.tag !== 'agent' && block.tag !== 'codegen') return [];
+        return [{
+            kind: 'natural', text: splInstruction(block.text), line: block.line,
+            ...(block.controls ? { controls: block.controls } : {}),
+            ...(block.tag === 'codegen' ? { codegen: true as const } : {}),
+        }];
+    });
+}
+
+/** Parses a `.spl` workflow. Every code block and condition is compiled first, so syntax errors surface before anything runs. */
 export function parseSpl(source: string): Workflow {
     const document = scanSpl(source);
     const [problem] = document.problems;
     if (problem) throw new SplSyntaxError(problem.message, problem.line, problem.column);
-    const steps: (CodeStep | NaturalStep)[] = [];
-    for (const block of document.blocks) {
-        const language = LANGUAGES[block.tag];
-        if (language) {
-            const line = block.headerEndLine + 1;
-            if (!block.ignored) steps.push({ kind: 'code', line, cell: compileCell(block.text, { language, line }) });
-        } else if (block.tag === 'agent' || block.tag === 'codegen') {
-            steps.push({
-                kind: 'natural', text: splInstruction(block.text), line: block.line,
-                ...(block.controls ? { controls: block.controls } : {}),
-                ...(block.tag === 'codegen' ? { codegen: true as const } : {}),
-            });
-        }
-    }
     return {
         model: document.model,
-        steps,
+        steps: steps(document.body),
         lines: source.split(/\r?\n/),
         markdown: { preamble: document.preamble, ...(document.lock ? { lock: document.lock } : {}) },
     };

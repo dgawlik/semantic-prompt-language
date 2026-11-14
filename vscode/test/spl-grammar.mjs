@@ -29,13 +29,17 @@ ok(manifest.activationEvents.includes('onLanguage:spl'), 'opening a .spl file st
 const contributed = manifest.contributes.grammars.find(item => item.language === 'spl');
 same([contributed.scopeName, contributed.path], [SPL, './syntaxes/spl.tmLanguage.json']);
 same(contributed.embeddedLanguages, {
-    [JS]: 'javascript', [TS]: 'typescript', 'meta.embedded.block.frontmatter': 'yaml', 'meta.embedded.block.json': 'json',
+    [JS]: 'javascript', 'meta.embedded.expression.javascript': 'javascript', [TS]: 'typescript',
+    'meta.embedded.block.frontmatter': 'yaml', 'meta.embedded.block.json': 'json',
 }, 'embedded code uses the comments, brackets and snippets of its own language');
 const configuration = JSON.parse(fs.readFileSync(path.join(root, language.configuration), 'utf8'));
 const folds = Object.fromEntries(Object.entries(configuration.folding.markers).map(([name, pattern]) => [name, new RegExp(pattern)]));
 for (const line of ['{js}', '  {ts ignore}', "{agent model='m',", '{codegen}', '{comment}', '{lock}']) ok(folds.start.test(line), line);
 for (const line of ['{/js}', '  {/agent}  ']) ok(folds.end.test(line) && !folds.start.test(line), line);
 for (const line of ['{json}', 'const a = {js};', '{ js }', '{/js} x']) ok(!folds.start.test(line) && !folds.end.test(line), line);
+const indent = new RegExp(configuration.onEnterRules.find(rule => rule.action.indent === 'indent').beforeText);
+for (const line of ['if ready:', '  elif count > 1 :', 'else:', '\twhile i < 3:']) ok(indent.test(line), `Enter indents after ${line}`);
+for (const line of ['if ready', 'iffy:', 'const a = 1:', '  {js}']) ok(!indent.test(line), `Enter keeps the indentation after ${line}`);
 
 // Frontmatter is YAML and ends at its closing line, also inside an unfinished YAML string.
 const header = tokenize("---\nmodel: 'unfinished\n---\n\ntext");
@@ -131,6 +135,24 @@ same([scoped(codegen[1].tokens, REFERENCE), scoped(codegen[1].tokens, SETTING), 
 const lock = tokenize('{lock}\n{ "format": "spl-lock", "unfinished\n{/lock}\n{js}');
 ok(all(lock[1].tokens, 'meta.embedded.block.json') && has(lock[1].tokens, 'format', 'string.quoted.double.json'));
 same([lock[2].depth, scoped(lock[3].tokens, TAG)], [1, ['js']]);
+
+// Control lines: keywords, a JavaScript condition and a colon; their bodies are ordinary blocks.
+const CONDITION = 'meta.embedded.expression.javascript';
+const control = tokenize("if _switch == 'color':\n    {js}\n    let result = 1\n    {/js}\nelif count > 1 :\nelse:\nwhile i < items.length:\n  {agent}\n  Use @i\n  {/agent}\niffy:\nif (ready)");
+const condition = tokens => scoped(tokens, CONDITION).join('');
+ok(has(control[0].tokens, 'if', 'keyword.control.conditional.spl') && has(control[0].tokens, ':', 'punctuation.separator.colon.spl'));
+same(condition(control[0].tokens), "_switch == 'color'", 'conditions are JavaScript');
+ok(has(control[0].tokens, 'color', 'string.quoted.single.js'), 'the JavaScript grammar colors the condition');
+ok(has(control[1].tokens, 'js', TAG) && all(control[2].tokens.filter(token => token.text.trim()), JS), 'indented blocks keep their highlighting');
+ok(has(control[4].tokens, 'elif', 'keyword.control.conditional.spl'));
+same(condition(control[4].tokens), 'count > 1');
+ok(has(control[5].tokens, 'else', 'keyword.control.conditional.spl') && has(control[5].tokens, ':', 'punctuation.separator.colon.spl'));
+ok(has(control[6].tokens, 'while', 'keyword.control.loop.spl'));
+same(condition(control[6].tokens), 'i < items.length');
+same(scoped(control[8].tokens, REFERENCE), ['@i']);
+ok(plain(control[10].tokens), 'a word that starts with a keyword is text');
+ok(has(control[11].tokens, 'if', 'keyword.control.conditional.spl'));
+same(condition(control[11].tokens), '(ready)', 'a condition is colored while its line is typed');
 console.log(`${checks} scope assertions passed`);
 
 /** Checks a workflow against its structure, which is found here without the grammar. */
@@ -145,7 +167,11 @@ function check(source) {
     for (; index < lines.length; index++) {
         const opening = /^[ \t]*\{(js|ts|agent|codegen|comment|lock)(?=[\s}]|$)/.exec(lines[index]);
         if (!opening) {
-            if (!tokenized[index].tokens.every(token => token.scopes.length === 1)) problem(index, 'text outside a block is highlighted');
+            const control = /^[ \t]*(if|elif|else|while)(?![\w$])/.exec(lines[index]);
+            if (control) {
+                const kind = control[1] === 'while' ? 'keyword.control.loop.spl' : 'keyword.control.conditional.spl';
+                if (!has(tokenized[index].tokens, control[1], kind)) problem(index, `${control[1]} is not highlighted`);
+            } else if (!tokenized[index].tokens.every(token => token.scopes.length === 1)) problem(index, 'text outside a block is highlighted');
             continue;
         }
         const tag = opening[1];

@@ -130,7 +130,7 @@ success(review.findings.map(
 * **Settings live in the tag.** `{agent ...}` and `{codegen ...}` take `restrict`, `enforce`,
   `forbid`, `model` and `reasoning`, separated by commas and written as in `@CTL(...)`. The tag
   may continue over several lines. `@CTL` and `@CODEGEN` markers are errors in a `.spl` file.
-* **Everything is in a block.** Text between blocks is a syntax error, which catches a
+* **Everything is in a block or a control line.** Other text between blocks is a syntax error, which catches a
   mistyped tag; write commentary in `{comment}`. Blocks do not nest, so a `{comment}` can show
   other tags as text.
 * **Instructions are plain text.** Common indentation and blank lines around the text of an
@@ -140,7 +140,55 @@ success(review.findings.map(
   `workflow.locked.spl` with the journal in a `{lock}` block.
 * **Editing.** The [VS Code extension](../vscode/README.md) colors the whole file and gives
   `{js}` and `{ts}` blocks the JavaScript features of fences, `{agent}` blocks `@name`
-  completion and tags completion of their settings.
+  completion and tags completion of their settings. Conditions of control lines complete,
+  hover and check like JavaScript.
+
+### Control flow
+
+Between blocks, `if`, `elif`, `else` and `while` lines choose and repeat blocks. A control line
+ends with `:`, and its body is every following block indented further than the line.
+
+`conditional-workflows.spl`
+
+```spl
+{js}
+let _switch = args[0]
+let i = 0
+{/js}
+
+if _switch == 'color':
+    {js}
+    let result = await ask('What is your favorite color?', { tokens: 256, model: 'gpt-6-luna' })
+    {/js}
+elif _switch == 'food':
+    {js}
+    let result = await ask('What is your favorite food?', { tokens: 256, model: 'gpt-6-luna' })
+    {/js}
+else:
+    {js}
+    let result = await ask('What is your favorite hobby?', { tokens: 256, model: 'gpt-6-luna' })
+    {/js}
+
+while i < 3:
+    {js}
+    let result = await agent(`increment number ${i}`, { tokens: 256, model: 'gpt-6-luna' })
+    i++
+    {/js}
+
+{js}
+success({result, i})
+{/js}
+```
+
+* **Conditions are JavaScript.** A condition is an expression evaluated in the shared scope, so
+  it reads variables declared by earlier `{js}` blocks and saved by agents, and may use `await`.
+  The branch or loop body runs when the value is truthy.
+* **Blocks still share one scope.** A top-level declaration in an indented `{js}` block is
+  shared like any other, so `result` above is available after the `if` and the loop. Each block
+  still runs as a whole, in document order.
+* **Bodies hold blocks.** A body may contain `{js}`, `{ts}`, `{agent}`, `{codegen}` and
+  `{comment}` blocks, as well as nested control lines. `elif` and `else` must have the same
+  indentation as their `if`; `else` has no condition.
 
 ## One shared scope
 
