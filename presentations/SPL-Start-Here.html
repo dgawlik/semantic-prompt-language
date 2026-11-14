@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Build AI workflows with Semantic Prompt Language: native JavaScript, natural-language agents and checked output in one readable file.">
+  <title>SPL / Start here</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f5f2ea;
+      --ink: #202923;
+      --muted: #596159;
+      --line: #d6d9cf;
+      --orange: #ff794c;
+      --green: #cce4a8;
+      --deep: #19251f;
+      --mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      --sans: "Segoe UI", Arial, sans-serif;
+      --serif: Georgia, "Times New Roman", serif;
+      --content: 1160px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+    body { margin: 0; background: #e6e9df; color: var(--ink); font: 1rem / 1.6 var(--sans); }
+    a { color: inherit; }
+    a:focus-visible { outline: 3px solid #ad390c; outline-offset: 4px; border-radius: 3px; }
+    code, pre { font-family: var(--mono); }
+    code { font-size: .9em; }
+    pre { margin: 0; overflow-x: auto; overflow-wrap: anywhere; white-space: pre-wrap; tab-size: 2; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2, h3 { line-height: 1.12; }
+    h1, h2 { letter-spacing: -.05em; }
+    h1 { max-width: 11ch; font-size: clamp(2.8rem, 1.8rem + 4vw, 4.8rem); font-weight: 650; text-wrap: balance; }
+    h2 { max-width: 18ch; font-size: clamp(2rem, 1.45rem + 2.4vw, 3.2rem); font-weight: 650; text-wrap: balance; }
+    h3 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.02em; }
+    p { max-width: 68ch; }
+
+    .skip-link { position: fixed; z-index: 5; top: 1rem; left: 1rem; translate: 0 -180%; padding: .7rem 1rem; background: var(--ink); color: white; }
+    .skip-link:focus { translate: 0; }
+    .wrap { width: min(var(--content), calc(100% - 3rem)); margin-inline: auto; }
+    .site-header { padding-block: 1rem; }
+    .header-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 2rem; }
+    .brand { display: inline-flex; align-items: center; gap: .7rem; color: var(--ink); text-decoration: none; }
+    .brand-icon { display: grid; width: 2rem; aspect-ratio: 1; place-items: center; border-radius: .55rem; background: var(--ink); color: var(--green); font: 700 .8rem var(--mono); }
+    .brand strong { font-size: 1rem; }
+    .brand span:last-child { color: var(--muted); font-size: .9rem; }
+    .site-nav ul { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .55rem; margin: 0; padding: 0; list-style: none; }
+    .site-nav a { display: inline-block; padding: .45rem .6rem; border-radius: .4rem; color: #424a43; font-size: .9rem; text-decoration: none; }
+    .site-nav a:hover { background: #ffffff80; color: var(--ink); }
+    .site-nav .nav-cta { background: var(--ink); color: var(--paper); }
+    .site-nav .nav-cta:hover { background: #354138; }
+
+    .hero { overflow: clip; background: var(--deep); color: var(--paper); }
+    .hero-inner { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(18rem, .95fr); align-items: center; gap: clamp(2rem, 6vw, 5rem); padding-block: clamp(4rem, 9vw, 7.5rem); }
+    .eyebrow, .label { font: 500 .75rem / 1.4 var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+    .eyebrow { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.2rem; color: #c5d3c2; }
+    .eyebrow::before { width: .45rem; height: .45rem; border-radius: 50%; background: var(--orange); content: ""; }
+    .hero h1 span, .editorial { color: var(--orange); font-family: var(--serif); font-weight: 400; font-style: italic; letter-spacing: -.055em; }
+    .hero-copy { margin-top: 1.4rem; color: #d3ddd0; font-size: clamp(1.05rem, .98rem + .35vw, 1.25rem); }
+    .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.8rem; }
+    .button { display: inline-flex; min-height: 2.9rem; align-items: center; justify-content: center; gap: .5rem; padding: .7rem 1rem; border: 1px solid transparent; border-radius: .55rem; background: var(--green); color: var(--ink); font-weight: 650; text-decoration: none; }
+    .button:hover { background: #d9edbd; }
+    .button-secondary { border-color: #ffffff55; background: transparent; color: var(--paper); }
+    .button-secondary:hover { background: #ffffff12; }
+    .chips { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.7rem; padding: 0; list-style: none; }
+    .chips li { padding: .4rem .7rem; border: 1px solid #ffffff35; border-radius: 50rem; color: #d6e0d1; font: .75rem var(--mono); }
+
+    .hero-visual { position: relative; min-width: 0; padding: 1.15rem; border: 1px solid #ffffff28; border-radius: 1rem; background: #ffffff08; box-shadow: 0 1.5rem 4rem #00000020; }
+    .visual-orbit { position: absolute; z-index: -1; top: -1.5rem; right: -1.5rem; width: 8rem; aspect-ratio: 1; border: 1px solid #ffffff24; border-radius: 50%; }
+    .visual-orbit::after { position: absolute; top: 1rem; right: .3rem; width: .65rem; aspect-ratio: 1; border-radius: 50%; background: var(--orange); content: ""; }
+    .visual-top { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; color: #c4d2c0; font: .75rem var(--mono); }
+    .visual-top span:last-child { color: var(--green); }
+    .code-card { overflow: hidden; border: 1px solid #ffffff20; border-radius: .7rem; background: #111b15; }
+    .code-card pre { padding: 1.1rem; color: #eff3ea; font-size: clamp(.72rem, .67rem + .2vw, .85rem); line-height: 1.75; }
+    .visual-top a { color: var(--green); text-underline-offset: .2em; }
+    .kw { color: #d4c3ff; }
+    .fn { color: #cfe8a9; }
+    .str { color: #ffba96; }
+    .type { color: #a2dcd6; }
+    .visual-result { display: flex; align-items: center; gap: .8rem; width: fit-content; max-width: 100%; margin: -1rem 0 0 auto; padding: .8rem 1rem; border-radius: .7rem; background: var(--green); color: var(--ink); box-shadow: 0 .6rem 1.5rem #0000002a; }
+    .check-mark { display: grid; width: 1.7rem; aspect-ratio: 1; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--ink); color: var(--green); font: 1rem var(--mono); }
+    .visual-result p { font-size: .85rem; line-height: 1.4; }
+
+    .section { padding-block: clamp(4rem, 8vw, 6.5rem); }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, .75fr); align-items: end; gap: 2rem; margin-bottom: 2.2rem; }
+    .section-heading .eyebrow { margin-bottom: .8rem; color: #63705d; }
+    .section-heading .eyebrow::before { background: #81976e; }
+    .section-intro { color: var(--muted); }
+    .idea-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+    .idea-card { min-width: 0; padding: clamp(1.25rem, 3vw, 1.8rem); border: 1px solid var(--line); border-radius: .9rem; background: #ffffff70; }
+    .step-number { display: block; margin-bottom: 1.15rem; color: #718267; font: italic 2rem var(--serif); }
+    .idea-card p { margin-top: .65rem; color: var(--muted); font-size: .95rem; }
+    .format-row { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1rem; }
+    .format-chip { display: flex; flex: 1 1 16rem; flex-wrap: wrap; align-items: baseline; gap: .6rem; padding: .8rem 1rem; border-radius: .6rem; background: #e7e9df; }
+    .format-chip strong { font: 700 .85rem var(--mono); }
+    .format-chip code { color: #465344; }
+    .format-chip span { color: var(--muted); font-size: .85rem; }
+
+    .walkthrough { background: var(--paper); }
+    .walkthrough-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(16rem, .92fr); gap: clamp(1.5rem, 5vw, 4rem); align-items: center; }
+    .walkthrough-copy .eyebrow { color: #63705d; }
+    .walkthrough-copy .eyebrow::before { background: #81976e; }
+    .walkthrough-copy > p { margin-top: 1rem; color: var(--muted); }
+    .code-panel { overflow: hidden; min-width: 0; border: 1px solid #2c3830; border-radius: .9rem; background: var(--ink); color: #eef3e8; }
+    .code-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem; padding: .85rem 1rem; border-bottom: 1px solid #ffffff20; color: #c0cebc; font: .72rem var(--mono); }
+    .code-head span:last-child { color: var(--green); }
+    .code-panel pre { padding: 1rem; font-size: clamp(.72rem, .68rem + .15vw, .82rem); line-height: 1.75; }
+    .schema-card { padding: clamp(1.4rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: .9rem; background: #e7eadf; }
+    .schema-card .label { color: var(--muted); font-size: .68rem; }
+    .schema-card h3 { margin-top: .5rem; font: italic 2rem var(--serif); }
+    .schema-fields { margin: 1rem 0 0; padding: 0; list-style: none; }
+    .schema-fields li { display: flex; justify-content: space-between; gap: 1rem; padding: .7rem 0; border-top: 1px solid #cbd2c2; font: .85rem var(--mono); }
+    .schema-fields span { color: #586850; text-align: end; }
+    .schema-card > p { margin-top: 1rem; color: var(--muted); font-size: .9rem; }
+    .type-family { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+    .type-family code { padding: .35rem .55rem; border: 1px solid var(--line); border-radius: .35rem; font-size: .75rem; }
+
+    .reliability { background: #e9ebe3; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem; }
+    .feature-card { padding: 1.5rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--paper); }
+    .feature-card .label { display: block; margin-bottom: .8rem; color: #65715f; font-size: .68rem; }
+    .feature-card p { margin-top: .65rem; color: var(--muted); font-size: .93rem; }
+    .caveat { margin-top: 1rem; padding: 1rem 1.2rem; border-left: 3px solid #b4491c; border-radius: 0 .5rem .5rem 0; background: #f1e5d8; font-size: .9rem; }
+
+    .stack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .85rem; }
+    .stack-card { padding: 1.25rem; border: 1px solid var(--line); border-radius: .8rem; background: #ffffff70; }
+    .stack-card .label { display: block; margin-bottom: .6rem; color: #65715f; font-size: .67rem; }
+    .stack-card p { margin-top: .5rem; color: var(--muted); font-size: .9rem; }
+
+    .get-started { background: var(--deep); color: var(--paper); }
+    .get-started .section-heading .eyebrow { color: #c5d3c2; }
+    .get-started .section-heading .eyebrow::before { background: var(--orange); }
+    .get-started .section-intro { color: #c5d0c2; }
+    .start-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(15rem, .95fr); gap: clamp(1.5rem, 5vw, 4rem); align-items: start; }
+    .terminal { padding: 1.2rem; border: 1px solid #ffffff24; border-radius: .8rem; background: #111b15; }
+    .terminal .label { display: block; margin-bottom: .8rem; color: #c0cebc; font-size: .68rem; }
+    .terminal pre { color: #eef3e8; font-size: .8rem; line-height: 1.8; }
+    .terminal code { overflow-wrap: anywhere; }
+    .start-steps { display: grid; gap: 1.2rem; margin: 0; padding: 0; list-style: none; }
+    .start-steps li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .8rem; align-items: start; }
+    .start-steps .number { display: grid; width: 1.8rem; aspect-ratio: 1; place-items: center; border-radius: 50%; background: #ffffff18; color: var(--orange); font: .75rem var(--mono); }
+    .start-steps p { margin-top: .2rem; color: #c5d0c2; font-size: .9rem; }
+    .start-steps a, .footer a { color: var(--green); text-underline-offset: .2em; }
+    .start-links { display: flex; flex-wrap: wrap; gap: .65rem 1rem; margin-top: 1.6rem; }
+    .start-links a { color: var(--green); text-underline-offset: .2em; }
+    .footer { padding-block: 1.3rem; background: #111b15; color: #c5d0c2; font-size: .82rem; }
+    .footer-inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .7rem 1.5rem; }
+
+    @media (max-width: 760px) {
+      .wrap { width: min(var(--content), calc(100% - 2rem)); }
+      .hero-inner, .walkthrough-grid, .start-grid { grid-template-columns: 1fr; }
+      .hero-inner { gap: 3rem; }
+      .hero-visual { width: min(100%, 34rem); margin-inline: auto; }
+      .section-heading { grid-template-columns: 1fr; gap: .8rem; }
+      .section-heading .section-intro { max-width: 60ch; }
+    }
+
+    @media (max-width: 420px) {
+      .brand span:last-child { font-size: .8rem; }
+      .site-nav { width: 100%; }
+      .site-nav ul { gap: .1rem .25rem; }
+      .site-nav a { padding-inline: .45rem; font-size: .82rem; }
+      .actions { align-items: stretch; flex-direction: column; }
+      .button { width: 100%; }
+      .schema-fields li { flex-wrap: wrap; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+    @media (forced-colors: active) {
+      .brand-icon, .button, .site-nav .nav-cta, .check-mark { border: 1px solid ButtonText; }
+      .chips li, .idea-card, .feature-card, .stack-card { border: 1px solid CanvasText; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#top" aria-label="SPL Start here">
+        <span class="brand-icon" aria-hidden="true">{ }</span>
+        <strong>SPL</strong><span>/ Start here</span>
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="#approach">How it works</a></li>
+          <li><a href="#walkthrough">Example</a></li>
+          <li><a href="#reliability">Reliability</a></li>
+          <li><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub</a></li>
+          <li><a href="#get-started" class="nav-cta">Get started</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="wrap hero-inner">
+        <div>
+          <p class="eyebrow">Semantic Prompt Language</p>
+          <h1 id="hero-title">Write the code.<br>Describe the <span>judgment.</span></h1>
+          <p class="hero-copy">Build AI workflows in one readable file. Use native JavaScript where you need precision, and natural language where you need a model.</p>
+          <div class="actions">
+            <a class="button" href="#get-started">Start building <span aria-hidden="true">&rarr;</span></a>
+            <a class="button button-secondary" href="https://dgawlik.github.io/semantic-prompt-language/">Explore the docs</a>
+          </div>
+          <ul class="chips" aria-label="SPL formats and integrations">
+            <li>Executable Markdown</li>
+            <li>.spl blocks</li>
+            <li>Node.js library</li>
+          </ul>
+        </div>
+        <div class="hero-visual" aria-label="Excerpt from the hi.spl flashcard workflow">
+          <div class="visual-orbit" aria-hidden="true"></div>
+          <div class="visual-top"><span>lang/examples/hi.spl</span><a href="../lang/examples/hi.spl">Open example &nearr;</a></div>
+          <div class="code-card">
+            <pre><code>{js}
+<span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>]
+<span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">enumOf</span>(...topics)
+<span class="kw">const</span> <span class="type">Card</span> = <span class="fn">struct</span>(<span class="str">'Card'</span>, {
+  term: <span class="type">Topic</span>,
+  definition: str.<span class="fn">describe</span>(<span class="str">'Definition one line'</span>),
+  description: str.<span class="fn">describe</span>(<span class="str">'Several sentences about'</span>),
+});
+{/js}
+
+{agent model='gpt-6.1-sol', reasoning='high'}
+Pick the item of @topics that a beginner would find hardest.
+Create a flashcard for that topic with term set to the selected topic,
+a one-line definition and a description of several sentences.
+@validate[Card] save the flashcard to variable @hardest
+{/agent}</code></pre>
+          </div>
+          <div class="visual-result">
+            <span class="check-mark" aria-hidden="true">&check;</span>
+            <p><strong>Checked data.</strong><br>Ready for ordinary JavaScript.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="approach" aria-labelledby="approach-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">The mental model</p>
+            <h2 id="approach-title">One document.<br><span class="editorial">One shared scope.</span></h2>
+          </div>
+          <p class="section-intro">SPL brings model-driven steps and deterministic code together. Everything runs top to bottom, so a value created in one step is ready for the next.</p>
+        </div>
+        <ol class="idea-grid">
+          <li class="idea-card">
+            <span class="step-number">01</span>
+            <h3>Set things up in code.</h3>
+            <p>Read inputs, declare types, import modules and calculate values with familiar JavaScript. Top-level <code>await</code> works.</p>
+          </li>
+          <li class="idea-card">
+            <span class="step-number">02</span>
+            <h3>Give the agent a task.</h3>
+            <p>Describe what needs judgment in natural language. Agent tools can load and save values in the workflow's shared scope.</p>
+          </li>
+          <li class="idea-card">
+            <span class="step-number">03</span>
+            <h3>Use the checked result.</h3>
+            <p>Validate the returned shape, assert business rules, format Markdown or write a file with ordinary code.</p>
+          </li>
+        </ol>
+        <div class="format-row" aria-label="Workflow file formats">
+          <div class="format-chip"><strong>.md</strong><code>```js ... ```</code><span>JavaScript, TypeScript and agent blockquotes</span></div>
+          <div class="format-chip"><strong>.spl</strong><code>{js} {agent}</code><span>Explicit workflow blocks, no frontmatter</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section walkthrough" id="walkthrough" aria-labelledby="walkthrough-title">
+      <div class="wrap walkthrough-grid">
+        <div class="walkthrough-copy">
+          <p class="eyebrow">A small workflow</p>
+          <h2 id="walkthrough-title">Give the model a contract.<br><span class="editorial">Get a useful result.</span></h2>
+          <p>Use JavaScript to define the shape, then ask an agent to produce a value that the runtime can validate. The same value is ready to use in the rest of your workflow.</p>
+          <div class="type-family" aria-label="Available type builders">
+            <code>enumOf</code><code>struct</code><code>list</code><code>union</code><code>nullable</code><code>typedef</code>
+          </div>
+        </div>
+        <div>
+          <div class="code-panel">
+            <div class="code-head"><span>{js} / define the shared inputs</span><span>01 &middot; Contract</span></div>
+            <pre><code><span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>]
+<span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">enumOf</span>(...topics)
+<span class="kw">const</span> <span class="type">Card</span> = <span class="fn">struct</span>(<span class="str">'Card'</span>, {
+  term: <span class="type">Topic</span>,
+  definition: str.<span class="fn">describe</span>(<span class="str">'Definition one line'</span>),
+  description: str.<span class="fn">describe</span>(<span class="str">'Several sentences about'</span>),
+});</code></pre>
+          </div>
+          <div class="schema-card">
+            <p class="label">Required shape / runtime checked</p>
+            <h3>Card</h3>
+            <ul class="schema-fields">
+              <li>term <span>one of three topics</span></li>
+              <li>definition <span>string</span></li>
+              <li>description <span>string</span></li>
+            </ul>
+            <p>Descriptions guide the model. The runtime validates the actual value.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reliability" id="reliability" aria-labelledby="reliability-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Keep the distinction visible</p>
+            <h2 id="reliability-title">Good instructions help.<br><span class="editorial">Checks make rules real.</span></h2>
+          </div>
+          <p class="section-intro">Model guidance is best effort. Use deterministic checks when a rule must hold, and keep a person in the loop when the result needs review.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <span class="label">01 / Validate</span>
+            <h3>Check the shape.</h3>
+            <p>Types and schemas verify fields and values. Use assertions in JavaScript for exact business rules.</p>
+          </article>
+          <article class="feature-card">
+            <span class="label">02 / Control</span>
+            <h3>Keep exact work exact.</h3>
+            <p>Use ordinary code and library tools for formatting, file operations and other deterministic effects.</p>
+          </article>
+          <article class="feature-card">
+            <span class="label">03 / Learn</span>
+            <h3>Trace and review.</h3>
+            <p>Check workflows before running them, record execution history and add human approval where it matters.</p>
+          </article>
+        </div>
+        <p class="caveat"><strong>Useful boundaries:</strong> valid shape does not guarantee correct facts. Prompt instructions are not deterministic checks, replay is not a promise of repeatability, and restrictions on library tools are not an operating-system sandbox.</p>
+      </div>
+    </section>
+
+    <section class="section" id="stack" aria-labelledby="stack-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">When you need more</p>
+            <h2 id="stack-title">Start in a document.<br><span class="editorial">Grow into your stack.</span></h2>
+          </div>
+          <p class="section-intro">Begin with a small workflow, then add editor support, reusable code, trusted tools or the Node.js library as your project grows.</p>
+        </div>
+        <div class="stack-grid">
+          <article class="stack-card">
+            <span class="label">01 / Editor</span>
+            <h3>VS Code</h3>
+            <p>Cross-block completions, type-aware outputs and notebook execution.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">02 / Reuse</span>
+            <h3>Code generation</h3>
+            <p>Generate shared JavaScript functions with <code>@CODEGEN</code> or <code>codegen()</code>.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">03 / Connect</span>
+            <h3>MCP tools</h3>
+            <p>Connect trusted servers and allowlist the tools available to agents.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">04 / Embed</span>
+            <h3>Node.js library</h3>
+            <p>Import from <code>spl-lang</code> or embed documents in an existing application.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section get-started" id="get-started" aria-labelledby="start-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Your first 30 minutes</p>
+            <h2 id="start-title">Start small.<br><span class="editorial">Then add a model.</span></h2>
+          </div>
+          <p class="section-intro">Explore types and regular JavaScript before spending a token. When you're ready, configure a provider and run a workflow.</p>
+        </div>
+        <div class="start-grid">
+          <div>
+            <div class="terminal">
+              <span class="label">Terminal / from the repository root</span>
+              <pre><code><span class="comment"># Install the CLI</span>
+npm install -g spl-lang
+
+<span class="comment"># Run a no-model example</span>
+spl lang/examples/typed-data.md
+
+<span class="comment"># Check before running</span>
+spl lang/examples/hi.spl --check
+
+<span class="comment"># Configure a provider, then run</span>
+spl login openai
+spl lang/examples/hi.spl --model gpt-4.1</code></pre>
+            </div>
+            <div class="start-links">
+              <a href="../docs-template/Getting-started.md">Read the setup guide &nearr;</a>
+              <a href="../lang/examples/hi.spl">Try the flashcard workflow &nearr;</a>
+              <a href="https://dgawlik.github.io/semantic-prompt-language/">Browse the documentation &nearr;</a>
+            </div>
+          </div>
+          <ol class="start-steps">
+            <li><span class="number">1</span><div><h3>Install on Node.js 24.15+.</h3><p>The CLI runs on Windows, macOS and Linux.</p></div></li>
+            <li><span class="number">2</span><div><h3>Run a no-model example.</h3><p>Learn types and ordinary JavaScript without provider credentials.</p></div></li>
+            <li><span class="number">3</span><div><h3>Configure an API key.</h3><p>Choose OpenAI, Anthropic or Google. Login sets up an API key; it is not subscription OAuth.</p></div></li>
+            <li><span class="number">4</span><div><h3>Check, then run.</h3><p><code>--check</code> validates without executing the workflow or calling a model.</p></div></li>
+          </ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>SPL / Semantic Prompt Language</span>
+      <a href="https://dgawlik.github.io/semantic-prompt-language/">Documentation &nearr;</a>
+    </div>
+  </footer>
+</body>
+</html>

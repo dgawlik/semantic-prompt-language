@@ -7,12 +7,12 @@ block only renders it as Markdown.
 {/comment}
 
 {js}
-const topics = ['recursion', 'closures', 'regular expressions'];
-const Topic = enumOf(...topics);
+const topics = ['recursion', 'closures']
+const Topic = enumOf(...topics)
 const Card = struct('Card', {
     term: Topic,
-    definition: str.annotate({ desc: 'A line with definition of' }),
-    description: str.annotate({ desc: 'Several sentences about' }),
+    definition: str.describe('Definition one line'),
+    description: str.describe('Several sentences about'),
 });
 {/js}
 

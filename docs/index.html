@@ -1,203 +1,428 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Choose between Markdown and SPL format and turn them into runnable AI workflows: natural-language steps alongside native JavaScript,
-checked model output, guards and human approval.">
-<meta name="color-scheme" content="light dark">
-<title>SPL - Semantic Prompt Language</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=b3d21ffe3bdb">
-<link rel="stylesheet" href="assets/style.css?v=b3d21ffe3bdb">
-<script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=b3d21ffe3bdb"></script>
-<script defer src="assets/site.js?v=b3d21ffe3bdb"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Build AI workflows with Semantic Prompt Language: native JavaScript, natural-language agents and checked output in one readable file.">
+  <title>SPL / Start here</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f5f2ea;
+      --ink: #202923;
+      --muted: #596159;
+      --line: #d6d9cf;
+      --orange: #ff794c;
+      --green: #cce4a8;
+      --deep: #19251f;
+      --mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      --sans: "Segoe UI", Arial, sans-serif;
+      --serif: Georgia, "Times New Roman", serif;
+      --content: 1160px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+    body { margin: 0; background: #e6e9df; color: var(--ink); font: 1rem / 1.6 var(--sans); }
+    a { color: inherit; }
+    a:focus-visible { outline: 3px solid #ad390c; outline-offset: 4px; border-radius: 3px; }
+    code, pre { font-family: var(--mono); }
+    code { font-size: .9em; }
+    pre { margin: 0; overflow-x: auto; overflow-wrap: anywhere; white-space: pre-wrap; tab-size: 2; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2, h3 { line-height: 1.12; }
+    h1, h2 { letter-spacing: -.05em; }
+    h1 { max-width: 11ch; font-size: clamp(2.8rem, 1.8rem + 4vw, 4.8rem); font-weight: 650; text-wrap: balance; }
+    h2 { max-width: 18ch; font-size: clamp(2rem, 1.45rem + 2.4vw, 3.2rem); font-weight: 650; text-wrap: balance; }
+    h3 { font-size: 1.2rem; font-weight: 600; letter-spacing: -.02em; }
+    p { max-width: 68ch; }
+
+    .skip-link { position: fixed; z-index: 5; top: 1rem; left: 1rem; translate: 0 -180%; padding: .7rem 1rem; background: var(--ink); color: white; }
+    .skip-link:focus { translate: 0; }
+    .wrap { width: min(var(--content), calc(100% - 3rem)); margin-inline: auto; }
+    .site-header { padding-block: 1rem; }
+    .header-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 2rem; }
+    .brand { display: inline-flex; align-items: center; gap: .7rem; color: var(--ink); text-decoration: none; }
+    .brand-icon { display: grid; width: 2rem; aspect-ratio: 1; place-items: center; border-radius: .55rem; background: var(--ink); color: var(--green); font: 700 .8rem var(--mono); }
+    .brand strong { font-size: 1rem; }
+    .brand span:last-child { color: var(--muted); font-size: .9rem; }
+    .site-nav ul { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .55rem; margin: 0; padding: 0; list-style: none; }
+    .site-nav a { display: inline-block; padding: .45rem .6rem; border-radius: .4rem; color: #424a43; font-size: .9rem; text-decoration: none; }
+    .site-nav a:hover { background: #ffffff80; color: var(--ink); }
+    .site-nav .nav-cta { background: var(--ink); color: var(--paper); }
+    .site-nav .nav-cta:hover { background: #354138; }
+
+    .hero { overflow: clip; background: var(--deep); color: var(--paper); }
+    .hero-inner { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(18rem, .95fr); align-items: center; gap: clamp(2rem, 6vw, 5rem); padding-block: clamp(4rem, 9vw, 7.5rem); }
+    .eyebrow, .label { font: 500 .75rem / 1.4 var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+    .eyebrow { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.2rem; color: #c5d3c2; }
+    .eyebrow::before { width: .45rem; height: .45rem; border-radius: 50%; background: var(--orange); content: ""; }
+    .hero h1 span, .editorial { color: var(--orange); font-family: var(--serif); font-weight: 400; font-style: italic; letter-spacing: -.055em; }
+    .hero-copy { margin-top: 1.4rem; color: #d3ddd0; font-size: clamp(1.05rem, .98rem + .35vw, 1.25rem); }
+    .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.8rem; }
+    .button { display: inline-flex; min-height: 2.9rem; align-items: center; justify-content: center; gap: .5rem; padding: .7rem 1rem; border: 1px solid transparent; border-radius: .55rem; background: var(--green); color: var(--ink); font-weight: 650; text-decoration: none; }
+    .button:hover { background: #d9edbd; }
+    .button-secondary { border-color: #ffffff55; background: transparent; color: var(--paper); }
+    .button-secondary:hover { background: #ffffff12; }
+    .chips { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.7rem; padding: 0; list-style: none; }
+    .chips li { padding: .4rem .7rem; border: 1px solid #ffffff35; border-radius: 50rem; color: #d6e0d1; font: .75rem var(--mono); }
+
+    .hero-visual { position: relative; min-width: 0; padding: 1.15rem; border: 1px solid #ffffff28; border-radius: 1rem; background: #ffffff08; box-shadow: 0 1.5rem 4rem #00000020; }
+    .visual-orbit { position: absolute; z-index: -1; top: -1.5rem; right: -1.5rem; width: 8rem; aspect-ratio: 1; border: 1px solid #ffffff24; border-radius: 50%; }
+    .visual-orbit::after { position: absolute; top: 1rem; right: .3rem; width: .65rem; aspect-ratio: 1; border-radius: 50%; background: var(--orange); content: ""; }
+    .visual-top { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; color: #c4d2c0; font: .75rem var(--mono); }
+    .visual-top span:last-child { color: var(--green); }
+    .code-card { overflow: hidden; border: 1px solid #ffffff20; border-radius: .7rem; background: #111b15; }
+    .code-card pre { padding: 1.1rem; color: #eff3ea; font-size: clamp(.72rem, .67rem + .2vw, .85rem); line-height: 1.75; }
+    .visual-top a { color: var(--green); text-underline-offset: .2em; }
+    .kw { color: #d4c3ff; }
+    .fn { color: #cfe8a9; }
+    .str { color: #ffba96; }
+    .type { color: #a2dcd6; }
+    .visual-result { display: flex; align-items: center; gap: .8rem; width: fit-content; max-width: 100%; margin: -1rem 0 0 auto; padding: .8rem 1rem; border-radius: .7rem; background: var(--green); color: var(--ink); box-shadow: 0 .6rem 1.5rem #0000002a; }
+    .check-mark { display: grid; width: 1.7rem; aspect-ratio: 1; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--ink); color: var(--green); font: 1rem var(--mono); }
+    .visual-result p { font-size: .85rem; line-height: 1.4; }
+
+    .section { padding-block: clamp(4rem, 8vw, 6.5rem); }
+    .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, .75fr); align-items: end; gap: 2rem; margin-bottom: 2.2rem; }
+    .section-heading .eyebrow { margin-bottom: .8rem; color: #63705d; }
+    .section-heading .eyebrow::before { background: #81976e; }
+    .section-intro { color: var(--muted); }
+    .idea-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+    .idea-card { min-width: 0; padding: clamp(1.25rem, 3vw, 1.8rem); border: 1px solid var(--line); border-radius: .9rem; background: #ffffff70; }
+    .step-number { display: block; margin-bottom: 1.15rem; color: #718267; font: italic 2rem var(--serif); }
+    .idea-card p { margin-top: .65rem; color: var(--muted); font-size: .95rem; }
+    .format-row { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1rem; }
+    .format-chip { display: flex; flex: 1 1 16rem; flex-wrap: wrap; align-items: baseline; gap: .6rem; padding: .8rem 1rem; border-radius: .6rem; background: #e7e9df; }
+    .format-chip strong { font: 700 .85rem var(--mono); }
+    .format-chip code { color: #465344; }
+    .format-chip span { color: var(--muted); font-size: .85rem; }
+
+    .walkthrough { background: var(--paper); }
+    .walkthrough-grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(16rem, .92fr); gap: clamp(1.5rem, 5vw, 4rem); align-items: center; }
+    .walkthrough-copy .eyebrow { color: #63705d; }
+    .walkthrough-copy .eyebrow::before { background: #81976e; }
+    .walkthrough-copy > p { margin-top: 1rem; color: var(--muted); }
+    .code-panel { overflow: hidden; min-width: 0; border: 1px solid #2c3830; border-radius: .9rem; background: var(--ink); color: #eef3e8; }
+    .code-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem; padding: .85rem 1rem; border-bottom: 1px solid #ffffff20; color: #c0cebc; font: .72rem var(--mono); }
+    .code-head span:last-child { color: var(--green); }
+    .code-panel pre { padding: 1rem; font-size: clamp(.72rem, .68rem + .15vw, .82rem); line-height: 1.75; }
+    .schema-card { padding: clamp(1.4rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: .9rem; background: #e7eadf; }
+    .schema-card .label { color: var(--muted); font-size: .68rem; }
+    .schema-card h3 { margin-top: .5rem; font: italic 2rem var(--serif); }
+    .schema-fields { margin: 1rem 0 0; padding: 0; list-style: none; }
+    .schema-fields li { display: flex; justify-content: space-between; gap: 1rem; padding: .7rem 0; border-top: 1px solid #cbd2c2; font: .85rem var(--mono); }
+    .schema-fields span { color: #586850; text-align: end; }
+    .schema-card > p { margin-top: 1rem; color: var(--muted); font-size: .9rem; }
+    .type-family { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+    .type-family code { padding: .35rem .55rem; border: 1px solid var(--line); border-radius: .35rem; font-size: .75rem; }
+
+    .reliability { background: #e9ebe3; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem; }
+    .feature-card { padding: 1.5rem; border: 1px solid var(--line); border-radius: .9rem; background: var(--paper); }
+    .feature-card .label { display: block; margin-bottom: .8rem; color: #65715f; font-size: .68rem; }
+    .feature-card p { margin-top: .65rem; color: var(--muted); font-size: .93rem; }
+    .caveat { margin-top: 1rem; padding: 1rem 1.2rem; border-left: 3px solid #b4491c; border-radius: 0 .5rem .5rem 0; background: #f1e5d8; font-size: .9rem; }
+
+    .stack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .85rem; }
+    .stack-card { padding: 1.25rem; border: 1px solid var(--line); border-radius: .8rem; background: #ffffff70; }
+    .stack-card .label { display: block; margin-bottom: .6rem; color: #65715f; font-size: .67rem; }
+    .stack-card p { margin-top: .5rem; color: var(--muted); font-size: .9rem; }
+
+    .get-started { background: var(--deep); color: var(--paper); }
+    .get-started .section-heading .eyebrow { color: #c5d3c2; }
+    .get-started .section-heading .eyebrow::before { background: var(--orange); }
+    .get-started .section-intro { color: #c5d0c2; }
+    .start-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(15rem, .95fr); gap: clamp(1.5rem, 5vw, 4rem); align-items: start; }
+    .terminal { padding: 1.2rem; border: 1px solid #ffffff24; border-radius: .8rem; background: #111b15; }
+    .terminal .label { display: block; margin-bottom: .8rem; color: #c0cebc; font-size: .68rem; }
+    .terminal pre { color: #eef3e8; font-size: .8rem; line-height: 1.8; }
+    .terminal code { overflow-wrap: anywhere; }
+    .start-steps { display: grid; gap: 1.2rem; margin: 0; padding: 0; list-style: none; }
+    .start-steps li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .8rem; align-items: start; }
+    .start-steps .number { display: grid; width: 1.8rem; aspect-ratio: 1; place-items: center; border-radius: 50%; background: #ffffff18; color: var(--orange); font: .75rem var(--mono); }
+    .start-steps p { margin-top: .2rem; color: #c5d0c2; font-size: .9rem; }
+    .start-steps a, .footer a { color: var(--green); text-underline-offset: .2em; }
+    .start-links { display: flex; flex-wrap: wrap; gap: .65rem 1rem; margin-top: 1.6rem; }
+    .start-links a { color: var(--green); text-underline-offset: .2em; }
+    .footer { padding-block: 1.3rem; background: #111b15; color: #c5d0c2; font-size: .82rem; }
+    .footer-inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .7rem 1.5rem; }
+
+    @media (max-width: 760px) {
+      .wrap { width: min(var(--content), calc(100% - 2rem)); }
+      .hero-inner, .walkthrough-grid, .start-grid { grid-template-columns: 1fr; }
+      .hero-inner { gap: 3rem; }
+      .hero-visual { width: min(100%, 34rem); margin-inline: auto; }
+      .section-heading { grid-template-columns: 1fr; gap: .8rem; }
+      .section-heading .section-intro { max-width: 60ch; }
+    }
+
+    @media (max-width: 420px) {
+      .brand span:last-child { font-size: .8rem; }
+      .site-nav { width: 100%; }
+      .site-nav ul { gap: .1rem .25rem; }
+      .site-nav a { padding-inline: .45rem; font-size: .82rem; }
+      .actions { align-items: stretch; flex-direction: column; }
+      .button { width: 100%; }
+      .schema-fields li { flex-wrap: wrap; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+    @media (forced-colors: active) {
+      .brand-icon, .button, .site-nav .nav-cta, .check-mark { border: 1px solid ButtonText; }
+      .chips li, .idea-card, .feature-card, .stack-card { border: 1px solid CanvasText; }
+    }
+  </style>
 </head>
-<body data-page="index">
-<a class="skip-link" href="#page">Skip to content</a>
-<header class="site-header">
-  <div class="header-inner">
-    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
-    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
-    <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
-  </div>
-</header>
-<div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.1.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>Introduction</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
-  <main id="page" tabindex="-1">
-    <div class="page-meta"><span>Start here</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>Introduction</span><span class="reading-time">5 min read</span></div>
-    <header class="page-heading introduction-heading"><p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Fast iteration. Explicit guards. Readable workflows.</p><h1>Build AI workflows in <em>minutes, not hours</em></h1><div class="lead"><p>Choose between Markdown and SPL format and turn them into runnable AI workflows: natural-language steps alongside native JavaScript,
-checked model output, guards and human approval.</p></div><div class="hero-actions"><a class="button-primary" href="getting-started.html">Start building <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="button-secondary" href="language.html">Write workflow code <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a></div><div class="hero-tags"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg>Node.js 24.15+</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>OpenAI, Anthropic, Google</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg>Visible boundaries</span></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#generate-reusable-functions">Generate reusable functions</a></li><li class="toc-level-2"><a href="#types-the-model-can-read">Types the model can read</a></li><li class="toc-level-2"><a href="#why-spl">Why SPL?</a></li><li class="toc-level-2"><a href="#how-a-run-works">How a run works</a></li><li class="toc-level-2"><a href="#non-goals">Non-goals</a></li><li class="toc-level-2"><a href="#where-next">Where next</a></li></ul></nav></details>
-    <article class="prose"><figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">hi.md</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy hi.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="hi.md code example"><code class="language-spl" data-file="hi.md" id="code-1"><span class="hljs-comment">{comment}
-Prose like this is commentary. Only {js} and {agent} scopes run,
-top to bottom, in one shared scope.
-The agent selects a topic and saves a validated Card; the final {js}
-block only renders it as Markdown.
-{/comment}</span>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#top" aria-label="SPL Start here">
+        <span class="brand-icon" aria-hidden="true">{ }</span>
+        <strong>SPL</strong><span>/ Start here</span>
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="#approach">How it works</a></li>
+          <li><a href="#walkthrough">Example</a></li>
+          <li><a href="#reliability">Reliability</a></li>
+          <li><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub</a></li>
+          <li><a href="#get-started" class="nav-cta">Get started</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
 
-<span class="hljs-meta">{js}</span><span class="language-javascript">
-<span class="hljs-keyword">const</span> topics = [<span class="hljs-string">&#x27;recursion&#x27;</span>, <span class="hljs-string">&#x27;closures&#x27;</span>, <span class="hljs-string">&#x27;regular expressions&#x27;</span>];
-<span class="hljs-keyword">const</span> <span class="hljs-title class_">Topic</span> = <span class="hljs-title function_">enumOf</span>(...topics);
-<span class="hljs-keyword">const</span> <span class="hljs-title class_">Card</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Card&#x27;</span>, {
-    <span class="hljs-attr">term</span>: <span class="hljs-title class_">Topic</span>,
-    <span class="hljs-attr">definition</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;A line with definition of&#x27;</span> }),
-    <span class="hljs-attr">description</span>: str.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;Several sentences about&#x27;</span> }),
+  <main id="main">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="wrap hero-inner">
+        <div>
+          <p class="eyebrow">Semantic Prompt Language</p>
+          <h1 id="hero-title">Write the code.<br>Describe the <span>judgment.</span></h1>
+          <p class="hero-copy">Build AI workflows in one readable file. Use native JavaScript where you need precision, and natural language where you need a model.</p>
+          <div class="actions">
+            <a class="button" href="#get-started">Start building <span aria-hidden="true">&rarr;</span></a>
+            <a class="button button-secondary" href="https://dgawlik.github.io/semantic-prompt-language/">Explore the docs</a>
+          </div>
+          <ul class="chips" aria-label="SPL formats and integrations">
+            <li>Executable Markdown</li>
+            <li>.spl blocks</li>
+            <li>Node.js library</li>
+          </ul>
+        </div>
+        <div class="hero-visual" aria-label="Excerpt from the hi.spl flashcard workflow">
+          <div class="visual-orbit" aria-hidden="true"></div>
+          <div class="visual-top"><span>lang/examples/hi.spl</span><a href="../lang/examples/hi.spl">Open example &nearr;</a></div>
+          <div class="code-card">
+            <pre><code>{js}
+<span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>]
+<span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">enumOf</span>(...topics)
+<span class="kw">const</span> <span class="type">Card</span> = <span class="fn">struct</span>(<span class="str">'Card'</span>, {
+  term: <span class="type">Topic</span>,
+  definition: str.<span class="fn">describe</span>(<span class="str">'Definition one line'</span>),
+  description: str.<span class="fn">describe</span>(<span class="str">'Several sentences about'</span>),
 });
-</span><span class="hljs-meta">{/js}</span>
+{/js}
 
-
-<span class="hljs-meta">{agent</span> <span class="hljs-attr">model</span>=<span class="hljs-string">&#x27;gpt-6.1-sol&#x27;</span>, <span class="hljs-attr">reasoning</span>=<span class="hljs-string">&#x27;high&#x27;</span><span class="hljs-meta">}</span><span class="hljs-quote">
-Pick the item of <span class="hljs-variable">@topics</span> that a beginner would find hardest.
+{agent model='gpt-6.1-sol', reasoning='high'}
+Pick the item of @topics that a beginner would find hardest.
 Create a flashcard for that topic with term set to the selected topic,
 a one-line definition and a description of several sentences.
-<span class="hljs-keyword">@validate</span>[Card] save the flashcard to variable <span class="hljs-variable">@hardest</span>
-<span class="hljs-meta">{/agent}</span></span>
+@validate[Card] save the flashcard to variable @hardest
+{/agent}</code></pre>
+          </div>
+          <div class="visual-result">
+            <span class="check-mark" aria-hidden="true">&check;</span>
+            <p><strong>Checked data.</strong><br>Ready for ordinary JavaScript.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-<span class="hljs-meta">{js}</span><span class="language-javascript">
-<span class="hljs-keyword">const</span> doc = markdown.<span class="hljs-title function_">document</span>()
-    .<span class="hljs-title function_">heading</span>(hardest.<span class="hljs-property">term</span>, <span class="hljs-number">3</span>)
-    .<span class="hljs-title function_">paragraph</span>(markdown.<span class="hljs-title function_">bold</span>(hardest.<span class="hljs-property">definition</span>))
-    .<span class="hljs-title function_">paragraph</span>(hardest.<span class="hljs-property">description</span>);
+    <section class="section" id="approach" aria-labelledby="approach-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">The mental model</p>
+            <h2 id="approach-title">One document.<br><span class="editorial">One shared scope.</span></h2>
+          </div>
+          <p class="section-intro">SPL brings model-driven steps and deterministic code together. Everything runs top to bottom, so a value created in one step is ready for the next.</p>
+        </div>
+        <ol class="idea-grid">
+          <li class="idea-card">
+            <span class="step-number">01</span>
+            <h3>Set things up in code.</h3>
+            <p>Read inputs, declare types, import modules and calculate values with familiar JavaScript. Top-level <code>await</code> works.</p>
+          </li>
+          <li class="idea-card">
+            <span class="step-number">02</span>
+            <h3>Give the agent a task.</h3>
+            <p>Describe what needs judgment in natural language. Agent tools can load and save values in the workflow's shared scope.</p>
+          </li>
+          <li class="idea-card">
+            <span class="step-number">03</span>
+            <h3>Use the checked result.</h3>
+            <p>Validate the returned shape, assert business rules, format Markdown or write a file with ordinary code.</p>
+          </li>
+        </ol>
+        <div class="format-row" aria-label="Workflow file formats">
+          <div class="format-chip"><strong>.md</strong><code>```js ... ```</code><span>JavaScript, TypeScript and agent blockquotes</span></div>
+          <div class="format-chip"><strong>.spl</strong><code>{js} {agent}</code><span>Explicit workflow blocks, no frontmatter</span></div>
+        </div>
+      </div>
+    </section>
 
-<span class="hljs-keyword">await</span> <span class="hljs-title function_">writeFile</span>(<span class="hljs-string">&#x27;./out/hardest-card.md&#x27;</span>, doc.<span class="hljs-title function_">toString</span>());
-</span><span class="hljs-meta">{/js}</span>
-</code></pre></figure>
-<ul>
-<li><code>js</code> fences are native JavaScript on Node.js. The <code>spl-lang</code> library is already imported, so
-<code>ask</code>, <code>struct</code>, <code>writeFile</code> and <code>markdown</code> need no <code>import</code>.</li>
-<li><code>struct</code> and <code>enumOf</code> describe the data a model must return. Annotations such as <code>desc</code> are
-written for the model to read.</li>
-<li><code>ask(prompt, { schema: Card, repairs: 1 })</code> validates each answer against <code>Card</code>, allows one
-repair attempt and returns a plain JavaScript object.</li>
-<li>The blockquote is an <strong>agent</strong> command. The model loads <code>cards</code> and saves <code>hardest</code> with tools;
-the next fence uses <code>hardest</code> as an ordinary variable.</li>
-<li><code>writeFile</code> is an exact tool: it never calls a model and obeys <a href="safety.html#restrictions">restrictions</a>.</li>
-</ul>
-<h2 id="generate-reusable-functions">Generate reusable functions<a class="heading-anchor" href="#generate-reusable-functions" aria-label="Link to Generate reusable functions">#</a></h2>
-<p><code>@CODEGEN</code> asks the model for JavaScript functions and defines them in the shared scope. Later
-fences and blockquotes call them like any other function. In code, <code>await codegen(description)</code>
-does the same and returns the function.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">codegen.md</span><span class="code-language">spl</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy codegen.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="codegen.md code example"><code class="language-spl" data-file="codegen.md" id="code-2"><span class="hljs-comment">{comment} 
-asks the model for JavaScript functions and defines them in the shared scope.
-With `--trace`, the code is saved next to this file as `codegen.sieve.js` 
-and reused on later runs.
-    spl examples/codegen.md --trace sieve.jsonl
-{/comment}</span>
+    <section class="section walkthrough" id="walkthrough" aria-labelledby="walkthrough-title">
+      <div class="wrap walkthrough-grid">
+        <div class="walkthrough-copy">
+          <p class="eyebrow">A small workflow</p>
+          <h2 id="walkthrough-title">Give the model a contract.<br><span class="editorial">Get a useful result.</span></h2>
+          <p>Use JavaScript to define the shape, then ask an agent to produce a value that the runtime can validate. The same value is ready to use in the rest of your workflow.</p>
+          <div class="type-family" aria-label="Available type builders">
+            <code>enumOf</code><code>struct</code><code>list</code><code>union</code><code>nullable</code><code>typedef</code>
+          </div>
+        </div>
+        <div>
+          <div class="code-panel">
+            <div class="code-head"><span>{js} / define the shared inputs</span><span>01 &middot; Contract</span></div>
+            <pre><code><span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>]
+<span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">enumOf</span>(...topics)
+<span class="kw">const</span> <span class="type">Card</span> = <span class="fn">struct</span>(<span class="str">'Card'</span>, {
+  term: <span class="type">Topic</span>,
+  definition: str.<span class="fn">describe</span>(<span class="str">'Definition one line'</span>),
+  description: str.<span class="fn">describe</span>(<span class="str">'Several sentences about'</span>),
+});</code></pre>
+          </div>
+          <div class="schema-card">
+            <p class="label">Required shape / runtime checked</p>
+            <h3>Card</h3>
+            <ul class="schema-fields">
+              <li>term <span>one of three topics</span></li>
+              <li>definition <span>string</span></li>
+              <li>description <span>string</span></li>
+            </ul>
+            <p>Descriptions guide the model. The runtime validates the actual value.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-<span class="hljs-meta">{codegen</span><span class="hljs-meta">}</span><span class="hljs-quote">
-Generate sieve(number) sieve of eratosthenes function that returns primes until given number&#x27;
-<span class="hljs-meta">{/codegen}</span></span>
+    <section class="section reliability" id="reliability" aria-labelledby="reliability-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Keep the distinction visible</p>
+            <h2 id="reliability-title">Good instructions help.<br><span class="editorial">Checks make rules real.</span></h2>
+          </div>
+          <p class="section-intro">Model guidance is best effort. Use deterministic checks when a rule must hold, and keep a person in the loop when the result needs review.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <span class="label">01 / Validate</span>
+            <h3>Check the shape.</h3>
+            <p>Types and schemas verify fields and values. Use assertions in JavaScript for exact business rules.</p>
+          </article>
+          <article class="feature-card">
+            <span class="label">02 / Control</span>
+            <h3>Keep exact work exact.</h3>
+            <p>Use ordinary code and library tools for formatting, file operations and other deterministic effects.</p>
+          </article>
+          <article class="feature-card">
+            <span class="label">03 / Learn</span>
+            <h3>Trace and review.</h3>
+            <p>Check workflows before running them, record execution history and add human approval where it matters.</p>
+          </article>
+        </div>
+        <p class="caveat"><strong>Useful boundaries:</strong> valid shape does not guarantee correct facts. Prompt instructions are not deterministic checks, replay is not a promise of repeatability, and restrictions on library tools are not an operating-system sandbox.</p>
+      </div>
+    </section>
 
-<span class="hljs-meta">{js}</span><span class="language-javascript">
-<span class="hljs-title function_">log</span>(<span class="hljs-title function_">sieve</span>(<span class="hljs-number">100</span>));
+    <section class="section" id="stack" aria-labelledby="stack-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">When you need more</p>
+            <h2 id="stack-title">Start in a document.<br><span class="editorial">Grow into your stack.</span></h2>
+          </div>
+          <p class="section-intro">Begin with a small workflow, then add editor support, reusable code, trusted tools or the Node.js library as your project grows.</p>
+        </div>
+        <div class="stack-grid">
+          <article class="stack-card">
+            <span class="label">01 / Editor</span>
+            <h3>VS Code</h3>
+            <p>Cross-block completions, type-aware outputs and notebook execution.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">02 / Reuse</span>
+            <h3>Code generation</h3>
+            <p>Generate shared JavaScript functions with <code>@CODEGEN</code> or <code>codegen()</code>.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">03 / Connect</span>
+            <h3>MCP tools</h3>
+            <p>Connect trusted servers and allowlist the tools available to agents.</p>
+          </article>
+          <article class="stack-card">
+            <span class="label">04 / Embed</span>
+            <h3>Node.js library</h3>
+            <p>Import from <code>spl-lang</code> or embed documents in an existing application.</p>
+          </article>
+        </div>
+      </div>
+    </section>
 
-<span class="hljs-keyword">const</span> slugify = <span class="hljs-keyword">await</span> <span class="hljs-title function_">codegen</span>(<span class="hljs-string">&#x27;slugify(title): lowercase, trim, and replace runs of non-alphanumeric characters with single dashes&#x27;</span>);
-<span class="hljs-title function_">success</span>(<span class="hljs-title function_">slugify</span>(<span class="hljs-string">&#x27;  Hello, Generated World!  &#x27;</span>));
-</span><span class="hljs-meta">{/js}</span>
-</code></pre></figure>
-<p>With <code>--trace</code>, the generated code is also saved beside the workflow, here as <code>codegen.sieve.js</code>.
-Its first line hashes the description, and later traced runs reuse a matching file without
-calling the model:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">codegen.sieve.js</span><span class="code-language">js</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy codegen.sieve.js code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="codegen.sieve.js code example"><code class="language-js" id="code-3"><span class="hljs-comment">// @CODEGEN sha256:0bf6d0586753d772a87e4af0b9177236e64e481f18c5345569e6a82e3ff35427</span>
-<span class="hljs-keyword">function</span> <span class="hljs-title function_">sieve</span>(<span class="hljs-params">number</span>) {
-   ...
-}
-</code></pre></figure>
-<p>See <a href="llm-commands.html#code-generation">Code generation</a> for validation and cache rules.</p>
-<h2 id="types-the-model-can-read">Types the model can read<a class="heading-anchor" href="#types-the-model-can-read" aria-label="Link to Types the model can read">#</a></h2>
-<p>Types are ordinary JavaScript values built with library functions. They validate data, turn JSON
-into JavaScript objects and render the JSON Schema that is sent to the model, including any
-annotations you attach.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">types.md</span><span class="code-language">markdown</span><button type="button" class="copy-button" data-copy="code-4" aria-label="Copy types.md code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="types.md code example"><code class="language-markdown" data-file="types.md" id="code-4">---
-extension: &#x27;semantic-prompt-language&#x27;
-version: 1
-<span class="hljs-section">model: &#x27;gpt-6-luna&#x27;
----</span>
+    <section class="section get-started" id="get-started" aria-labelledby="start-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Your first 30 minutes</p>
+            <h2 id="start-title">Start small.<br><span class="editorial">Then add a model.</span></h2>
+          </div>
+          <p class="section-intro">Explore types and regular JavaScript before spending a token. When you're ready, configure a provider and run a workflow.</p>
+        </div>
+        <div class="start-grid">
+          <div>
+            <div class="terminal">
+              <span class="label">Terminal / from the repository root</span>
+              <pre><code><span class="comment"># Install the CLI</span>
+npm install -g spl-lang
 
-<span class="hljs-section"># Types</span>
+<span class="comment"># Run a no-model example</span>
+spl lang/examples/typed-data.md
 
-This sample shows how to describe model output with types.
+<span class="comment"># Check before running</span>
+spl lang/examples/hi.spl --check
 
-<span class="hljs-meta">```js</span><span class="language-javascript">
-<span class="hljs-keyword">const</span> <span class="hljs-title class_">FloatOrInt</span> = <span class="hljs-title function_">union</span>(float, int).<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">description</span>: <span class="hljs-string">&#x27;Either float or int&#x27;</span> });
-
-<span class="hljs-keyword">const</span> numbers = [];
-<span class="hljs-keyword">for</span> (<span class="hljs-keyword">let</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">4</span>; i++) {
-    numbers.<span class="hljs-title function_">push</span>(<span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">&#x27;Sample number&#x27;</span>, { <span class="hljs-attr">tokens</span>: <span class="hljs-number">128</span>, <span class="hljs-attr">schema</span>: <span class="hljs-title class_">FloatOrInt</span> }));
-}
-
-<span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> n <span class="hljs-keyword">of</span> numbers) <span class="hljs-title function_">log</span>(<span class="hljs-title class_">Number</span>.<span class="hljs-title function_">isInteger</span>(n) ? <span class="hljs-string">`Integer: <span class="hljs-subst">${n}</span>`</span> : <span class="hljs-string">`Float: <span class="hljs-subst">${n}</span>`</span>);
-
-<span class="hljs-keyword">const</span> <span class="hljs-title class_">Person</span> = <span class="hljs-title function_">struct</span>(<span class="hljs-string">&#x27;Person&#x27;</span>, {
-    <span class="hljs-attr">firstName</span>: str,
-    <span class="hljs-attr">lastName</span>: str,
-    <span class="hljs-attr">age</span>: int.<span class="hljs-title function_">annotate</span>({ <span class="hljs-attr">desc</span>: <span class="hljs-string">&#x27;Age in years&#x27;</span> }),
-}).<span class="hljs-title function_">methods</span>({
-    <span class="hljs-title function_">toString</span>(<span class="hljs-params"></span>) { <span class="hljs-keyword">return</span> <span class="hljs-string">`<span class="hljs-subst">${<span class="hljs-variable language_">this</span>.firstName}</span> <span class="hljs-subst">${<span class="hljs-variable language_">this</span>.lastName}</span> at age <span class="hljs-subst">${<span class="hljs-variable language_">this</span>.age}</span>`</span>; },
-});
-
-<span class="hljs-keyword">const</span> person = <span class="hljs-keyword">await</span> <span class="hljs-title function_">ask</span>(<span class="hljs-string">&#x27;Sample person JSON with firstName, lastName and int age fields&#x27;</span>, { <span class="hljs-attr">schema</span>: <span class="hljs-title class_">Person</span> });
-
-<span class="hljs-title function_">success</span>(person.<span class="hljs-title function_">toString</span>());
-</span><span class="hljs-meta">```</span>
-</code></pre></figure>
-<p><code>union(float, int)</code> accepts either number. <code>.methods({...})</code> makes parsed answers instances with
-methods, so <code>person.toString()</code> works on the model&#39;s output. See <a href="language.html#types">Types</a>.</p>
-<h2 id="why-spl">Why SPL?<a class="heading-anchor" href="#why-spl" aria-label="Link to Why SPL?">#</a></h2>
-<ol>
-<li><strong>Short loops.</strong> One file, run directly. <code>--check</code> validates the document without a model, and
-<code>--trace run.jsonl</code> resumes recorded work and replays completed runs.</li>
-<li><strong>Plain JavaScript where it matters.</strong> Control flow, arithmetic and I/O are native code on
-Node.js, with the standard library and your own modules one <code>import</code> away.</li>
-<li><strong>Guards you can see.</strong> <code>fmt</code>, <code>schema</code> and <code>assert</code> check data; <code>restrict</code> limits what tools
-and agents may touch. Prompt guidance (<code>enforce</code>, <code>forbid</code>, <code>len</code>) is kept separate from validation.</li>
-<li><strong>Readable.</strong> Inputs, prompts, checks and outputs sit in one document, top to bottom.</li>
-<li><strong>Typed model output.</strong> Enums, structs, classes and named aliases describe what a model must
-return. Annotations advise the model; assertions check whether the content makes sense.</li>
-</ol>
-<h2 id="how-a-run-works">How a run works<a class="heading-anchor" href="#how-a-run-works" aria-label="Link to How a run works">#</a></h2>
-<ol>
-<li>Frontmatter opts the file in. Every fence is compiled first, so syntax errors fail before anything runs.</li>
-<li>Fences and blockquotes execute in document order in one shared scope.</li>
-<li>A fence runs as JavaScript with top-level <code>await</code>. <code>ask</code>, <code>think</code> and <code>agent</code> call the official
-OpenAI, Anthropic and Google clients, one fresh conversation per call.</li>
-<li>A blockquote sends its text, the visible bindings and the runtime tools to an agent. The model
-calls tools to load and save shared variables, invoke functions, read environment values and
-ask a person. The <code>@CODEGEN</code> form generates function declarations instead.</li>
-<li><code>success(value)</code> ends the run and prints the value on stdout. Logs go to stderr. An uncaught
-failure prints a JSON payload and exits with code 1.</li>
-</ol>
-<h2 id="non-goals">Non-goals<a class="heading-anchor" href="#non-goals" aria-label="Link to Non-goals">#</a></h2>
-<ul>
-<li>A custom programming language. Workflow code is JavaScript; the earlier SPL syntax is
-<a href="migration.html">gone</a>.</li>
-<li>A sandbox. <code>restrict</code> governs the library&#39;s tools, agents and MCP servers, not Node.js APIs
-that your own code calls.</li>
-<li>Reproducible model output. Use <a href="cli.html#traces-and-replay">traces</a> and
-<a href="cli.html#pinned-workflows">pins</a> to replay a recorded run.</li>
-</ul>
-<h2 id="where-next">Where next<a class="heading-anchor" href="#where-next" aria-label="Link to Where next">#</a></h2>
-<ul>
-<li><a href="getting-started.html">Getting started</a>: install, sign in, run and iterate.</li>
-<li><a href="language.html">Workflow code</a>: fences, the shared scope, imports, types and the library.</li>
-<li><a href="llm-commands.html">Natural language &amp; models</a>: blockquotes, <code>ask</code>, <code>think</code>, <code>agent</code> and output validation.</li>
-<li><a href="safety.html">Guards &amp; failures</a>: restrictions, assertions, failures and human input.</li>
-<li><a href="cli.html">CLI &amp; runtime</a>: options, traces, pins, MCP and embedding.</li>
-<li><a href="reference.html">API reference</a>: every global, option and blockquote tool on one page.</li>
-<li><a href="examples.html">Examples</a>: runnable workflows.</li>
-<li><a href="migration.html">Migrating from 1.x</a>: the old syntax and its JavaScript replacement.</li>
-</ul>
-</article>
-    <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Introduction.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
-    <nav class="page-pagination" aria-label="Previous and next pages"><div></div><a class="page-link next" href="getting-started.html"><span>Next</span><strong>Getting started</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
-    <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
+<span class="comment"># Configure a provider, then run</span>
+spl login openai
+spl lang/examples/hi.spl --model gpt-4.1</code></pre>
+            </div>
+            <div class="start-links">
+              <a href="../docs-template/Getting-started.md">Read the setup guide &nearr;</a>
+              <a href="../lang/examples/hi.spl">Try the flashcard workflow &nearr;</a>
+              <a href="https://dgawlik.github.io/semantic-prompt-language/">Browse the documentation &nearr;</a>
+            </div>
+          </div>
+          <ol class="start-steps">
+            <li><span class="number">1</span><div><h3>Install on Node.js 24.15+.</h3><p>The CLI runs on Windows, macOS and Linux.</p></div></li>
+            <li><span class="number">2</span><div><h3>Run a no-model example.</h3><p>Learn types and ordinary JavaScript without provider credentials.</p></div></li>
+            <li><span class="number">3</span><div><h3>Configure an API key.</h3><p>Choose OpenAI, Anthropic or Google. Login sets up an API key; it is not subscription OAuth.</p></div></li>
+            <li><span class="number">4</span><div><h3>Check, then run.</h3><p><code>--check</code> validates without executing the workflow or calling a model.</p></div></li>
+          </ol>
+        </div>
+      </div>
+    </section>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#generate-reusable-functions">Generate reusable functions</a></li><li class="toc-level-2"><a href="#types-the-model-can-read">Types the model can read</a></li><li class="toc-level-2"><a href="#why-spl">Why SPL?</a></li><li class="toc-level-2"><a href="#how-a-run-works">How a run works</a></li><li class="toc-level-2"><a href="#non-goals">Non-goals</a></li><li class="toc-level-2"><a href="#where-next">Where next</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
-</div>
-<dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
-<p class="visually-hidden" id="announcement" role="status"></p>
-<noscript><p class="noscript-note">Search, code copying, and the theme switch need JavaScript. All documentation and navigation work without it.</p></noscript>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>SPL / Semantic Prompt Language</span>
+      <a href="https://dgawlik.github.io/semantic-prompt-language/">Documentation &nearr;</a>
+    </div>
+  </footer>
 </body>
 </html>
