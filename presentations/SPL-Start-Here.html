@@ -80,6 +80,10 @@
     .fn { color: #cfe8a9; }
     .str { color: #ffba96; }
     .type { color: #a2dcd6; }
+    .spl-block { color: #ffba96; }
+    .spl-attribute { color: #a2dcd6; }
+    .spl-reference { color: #d4c3ff; }
+    .spl-directive { color: #cfe8a9; }
     .visual-result { display: flex; align-items: center; gap: .8rem; width: fit-content; max-width: 100%; margin: -1rem 0 0 auto; padding: .8rem 1rem; border-radius: .7rem; background: var(--green); color: var(--ink); box-shadow: 0 .6rem 1.5rem #0000002a; }
     .check-mark { display: grid; width: 1.7rem; aspect-ratio: 1; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--ink); color: var(--green); font: 1rem var(--mono); }
     .visual-result p { font-size: .85rem; line-height: 1.4; }
@@ -108,15 +112,13 @@
     .code-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem 1rem; padding: .85rem 1rem; border-bottom: 1px solid #ffffff20; color: #c0cebc; font: .72rem var(--mono); }
     .code-head span:last-child { color: var(--green); }
     .code-panel pre { padding: 1rem; font-size: clamp(.72rem, .68rem + .15vw, .82rem); line-height: 1.75; }
-    .schema-card { padding: clamp(1.4rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: .9rem; background: #e7eadf; }
-    .schema-card .label { color: var(--muted); font-size: .68rem; }
-    .schema-card h3 { margin-top: .5rem; font: italic 2rem var(--serif); }
-    .schema-fields { margin: 1rem 0 0; padding: 0; list-style: none; }
-    .schema-fields li { display: flex; justify-content: space-between; gap: 1rem; padding: .7rem 0; border-top: 1px solid #cbd2c2; font: .85rem var(--mono); }
-    .schema-fields span { color: #586850; text-align: end; }
-    .schema-card > p { margin-top: 1rem; color: var(--muted); font-size: .9rem; }
-    .type-family { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
-    .type-family code { padding: .35rem .55rem; border: 1px solid var(--line); border-radius: .35rem; font-size: .75rem; }
+    .control-card { padding: clamp(1.4rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: .9rem; background: #e7eadf; }
+    .control-card .label { color: var(--muted); font-size: .68rem; }
+    .control-list { display: grid; gap: .75rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+    .control-list li { display: grid; grid-template-columns: minmax(6rem, .45fr) 1fr; gap: .75rem; padding-top: .7rem; border-top: 1px solid #cbd2c2; font-size: .88rem; }
+    .control-list code { font: .82rem var(--mono); }
+    .control-list span, .control-card > p:last-child { color: var(--muted); }
+    .control-card > p:last-child { margin-top: 1rem; font-size: .88rem; }
 
     .reliability { background: #e9ebe3; }
     .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem; }
@@ -165,7 +167,6 @@
       .site-nav a { padding-inline: .45rem; font-size: .82rem; }
       .actions { align-items: stretch; flex-direction: column; }
       .button { width: 100%; }
-      .schema-fields li { flex-wrap: wrap; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -218,7 +219,7 @@
           <div class="visual-orbit" aria-hidden="true"></div>
           <div class="visual-top"><span>lang/examples/hi.spl</span><a href="../lang/examples/hi.spl">Open example &nearr;</a></div>
           <div class="code-card">
-            <pre><code>{js}
+            <pre><code><span class="spl-block">{js}</span>
 <span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>]
 <span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">enumOf</span>(...topics)
 <span class="kw">const</span> <span class="type">Card</span> = <span class="fn">struct</span>(<span class="str">'Card'</span>, {
@@ -226,14 +227,14 @@
   definition: str.<span class="fn">describe</span>(<span class="str">'Definition one line'</span>),
   description: str.<span class="fn">describe</span>(<span class="str">'Several sentences about'</span>),
 });
-{/js}
+<span class="spl-block">{/js}</span>
 
-{agent model='gpt-6.1-sol', reasoning='high'}
-Pick the item of @topics that a beginner would find hardest.
+<span class="spl-block">{agent</span> <span class="spl-attribute">model</span>=<span class="str">'gpt-6.1-sol'</span>, <span class="spl-attribute">reasoning</span>=<span class="str">'high'</span><span class="spl-block">}</span>
+Pick the item of <span class="spl-reference">@topics</span> that a beginner would find hardest.
 Create a flashcard for that topic with term set to the selected topic,
 a one-line definition and a description of several sentences.
-@validate[Card] save the flashcard to variable @hardest
-{/agent}</code></pre>
+<span class="spl-directive">@validate</span>[<span class="type">Card</span>] save the flashcard to variable <span class="spl-reference">@hardest</span>
+<span class="spl-block">{/agent}</span></code></pre>
           </div>
           <div class="visual-result">
             <span class="check-mark" aria-hidden="true">&check;</span>
@@ -279,33 +280,29 @@ a one-line definition and a description of several sentences.
     <section class="section walkthrough" id="walkthrough" aria-labelledby="walkthrough-title">
       <div class="wrap walkthrough-grid">
         <div class="walkthrough-copy">
-          <p class="eyebrow">A small workflow</p>
-          <h2 id="walkthrough-title">Give the model a contract.<br><span class="editorial">Get a useful result.</span></h2>
-          <p>Use JavaScript to define the shape, then ask an agent to produce a value that the runtime can validate. The same value is ready to use in the rest of your workflow.</p>
-          <div class="type-family" aria-label="Available type builders">
-            <code>enumOf</code><code>struct</code><code>list</code><code>union</code><code>nullable</code><code>typedef</code>
-          </div>
+          <p class="eyebrow">Prompt controls &amp; permissions</p>
+          <h2 id="walkthrough-title">Guide the answer.<br><span class="editorial">Limit the effects.</span></h2>
+          <p>Use <code>ask</code> to get a model response. Wrap it in <code>enforce</code> and <code>forbid</code> to shape the prompt, then use <code>restrict</code> to scope library tool actions.</p>
         </div>
         <div>
           <div class="code-panel">
-            <div class="code-head"><span>{js} / define the shared inputs</span><span>01 &middot; Contract</span></div>
-            <pre><code><span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>]
-<span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">enumOf</span>(...topics)
-<span class="kw">const</span> <span class="type">Card</span> = <span class="fn">struct</span>(<span class="str">'Card'</span>, {
-  term: <span class="type">Topic</span>,
-  definition: str.<span class="fn">describe</span>(<span class="str">'Definition one line'</span>),
-  description: str.<span class="fn">describe</span>(<span class="str">'Several sentences about'</span>),
-});</code></pre>
+            <div class="code-head"><span>{js} / guide a response, scope a write</span><span>ask &middot; restrict</span></div>
+            <pre><code><span class="kw">const</span> answer = <span class="kw">await</span> <span class="fn">enforce</span>(
+  <span class="str">'Answer in one sentence'</span>,
+  () =&gt; <span class="fn">forbid</span>(<span class="str">'jokes'</span>,
+    () =&gt; <span class="kw">ask</span>(<span class="str">'Explain recursion'</span>)));
+
+<span class="kw">await</span> <span class="fn">restrict</span>(<span class="str">'./out'</span>, () =&gt;
+  <span class="fn">writeFile</span>(<span class="str">'./out/recursion.txt'</span>, answer));</code></pre>
           </div>
-          <div class="schema-card">
-            <p class="label">Required shape / runtime checked</p>
-            <h3>Card</h3>
-            <ul class="schema-fields">
-              <li>term <span>one of three topics</span></li>
-              <li>definition <span>string</span></li>
-              <li>description <span>string</span></li>
+          <div class="control-card">
+            <p class="label">What each wrapper does</p>
+            <ul class="control-list">
+              <li><code>ask</code><span>Returns a model answer; it has no tools.</span></li>
+              <li><code>enforce / forbid</code><span>Add prompt guidance. They do not validate the answer.</span></li>
+              <li><code>restrict</code><span>Limits SPL library tools and agents while its callback runs.</span></li>
             </ul>
-            <p>Descriptions guide the model. The runtime validates the actual value.</p>
+            <p>Restrictions are not an OS sandbox; direct Node.js APIs are outside their scope.</p>
           </div>
         </div>
       </div>
