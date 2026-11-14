@@ -1,0 +1,15 @@
+
+
+{agent model="gpt-6-luna", reasoning="low"}
+Give an answer for everything as int.
+Save the answer to @response
+{/agent}
+
+{js}
+if (int.is(response)) {
+    success("Everything works as planned")
+} else {
+    fail("Response is not an integer")
+}
+{/js}
+
