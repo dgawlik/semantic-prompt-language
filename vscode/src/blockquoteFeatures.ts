@@ -22,6 +22,12 @@ export const controlHelp: Record<keyof NaturalControls, Help> = {
     reasoning: { signature: "reasoning='low' | 'medium' | 'high'", description: 'Reasoning effort for this blockquote agent; defaults to medium.' },
 };
 
+/** Settings of a `.spl` tag: the controls plus the block alias. */
+export const tagHelp: Record<keyof NaturalControls | 'alias', Help> = {
+    ...controlHelp,
+    alias: { signature: "alias='name'", description: "Name this block so go('name') can continue the workflow here. Letters, digits, _ and -; unique in the file." },
+};
+
 const restrictionHelp: Record<RestrictKind, string> = {
     fs: 'Allowed filesystem paths, relative to the workflow working directory.',
     exec: 'Allowed executable names.',
@@ -133,7 +139,7 @@ export function controlCompletions(
                 : { range: replacement, newText: `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'` },
         }));
     }
-    const catalog = settings ? controlHelp : restrictionHelp;
+    const catalog = settings ? tag ? tagHelp : controlHelp : restrictionHelp;
     const used = new Set(controls.tokens.filter((token, i, tokens) =>
         token !== current && tokens[i + 1]?.value === separator).map(token => token.value));
     const tail = text.slice(current?.to ?? at);

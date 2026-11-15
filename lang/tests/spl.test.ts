@@ -122,7 +122,14 @@ const total: number = count;
         ['{js}\nsuccess(1);', '1:1 unterminated {js} block; close it with {/js}'],
         ['{js}\nsuccess(1);\n{/ts}', '1:1 unterminated {js} block; close it with {/js}'],
         ['{js} success(1);\n{/js}', '1:6 expected a line break after the {js} tag'],
-        ['{js skip}\n{/js}', '1:1 expected {js}, {js ignore} or {js no-run}'],
+        ['{js skip}\n{/js}', '1:1 expected {js}, {js alias="name"}, {js ignore} or {js no-run}'],
+        ['{js alias=check}\n{/js}', '1:1 expected {js}, {js alias="name"}, {js ignore} or {js no-run}'],
+        ['{js alias="1st"}\n{/js}', '1:11 {js}: alias must start with a letter or _ and contain only letters, digits, _ and -'],
+        ["{ts no-run alias='a'}\n{/ts}", '1:1 {ts}: a block marked ignore or no-run never runs, so it cannot have an alias'],
+        ["{agent alias='a', alias='b'}\n{/agent}", "1:19 {agent}: duplicate setting 'alias'"],
+        ["{agent alias='a b'}\n{/agent}", '1:8 {agent}: alias must start with a letter or _ and contain only letters, digits, _ and -'],
+        ['{js alias="a"}\n{/js}\n  {codegen alias="a"}\nDefine f()\n{/codegen}', "3:3 duplicate alias 'a'; it is already used on line 1"],
+        ['{comment alias="a"}\n{/comment}', '1:1 expected {comment}'],
         ['{comment loud}\n{/comment}', '1:1 expected {comment}'],
         ['{agent} Do it\n{/agent}', '1:9 expected a line break after the {agent} tag'],
         ['{agent\nDo it\n{/agent}', "2:4 {agent}: expected '='"],
@@ -270,6 +277,74 @@ describe('.spl control flow', () => {
         ['while a:\n{js}\n{/js}', "1:1 expected an indented block after 'while'"],
     ])('rejects control flow %j', (source, expected) => {
         expect(problems(source)[0]).toBe(expected);
+    });
+});
+
+describe('.spl block aliases and go()', () => {
+    const indent = (text: string, by = '    '): string => text.split('\n').map(line => line && by + line).join('\n');
+
+    it('reads aliases from js, ts, agent and codegen tags', () => {
+        const steps = parseSpl([
+            block('js', 'let a = 1;', 'alias="first"'),
+            block('ts', 'let b: number = 2;', "alias='typed-2'"),
+            agent('Do it', "model='m', alias='_ask'"),
+            block('codegen', 'Define f()', 'alias="gen"'),
+            js('success(1);'),
+        ].join('\n')).steps;
+        expect(steps.map(step => 'alias' in step ? step.alias : undefined)).toEqual(['first', 'typed-2', '_ask', 'gen', undefined]);
+        expect(steps[2]).toEqual({ kind: 'natural', line: 7, text: 'Do it', controls: { model: 'm' }, alias: '_ask' });
+        expect(scanSpl(block('js', '', 'alias="x"')).blocks[0]).toMatchObject({ tag: 'js', alias: 'x' });
+    });
+
+    it('continues at an earlier or later block and keeps the shared scope', async () => {
+        const source = [
+            js('let tries = 0;'),
+            block('js', 'tries++;', 'alias="again"'),
+            js("if (tries < 3) go('again');\ngo('end');"),
+            js("fail('skipped');"),
+            block('js', 'success(tries);', 'alias="end"'),
+        ].join('\n');
+        expect(await exec(source)).toEqual({ status: 'success', value: 3, hasValue: true });
+    });
+
+    it('enters if branches and while bodies at the target', async () => {
+        const source = [
+            js('let seen = [];\nlet n = 0;'),
+            'while n < 2:',
+            indent(js("seen.push('top' + n);")),
+            indent(block('js', "seen.push('inside' + n);\nn++;", 'alias="inside"')),
+            'if false:',
+            indent(block('js', "seen.push('branch');", 'alias="branch"')),
+            js("if (!seen.includes('branch')) go('branch');\nif (n < 5) {\n  n = 4;\n  go('inside');\n}\nsuccess(seen);"),
+        ].join('\n');
+        expect(await exec(source)).toEqual({
+            status: 'success', value: ['top0', 'inside0', 'top1', 'inside1', 'branch', 'inside4'], hasValue: true,
+        });
+    });
+
+    it('continues from functions called by agent blocks', async () => {
+        let commands = 0;
+        const model = backend(async request => {
+            if (++commands === 1) await request.invokeAction!(action('call_function', { name: 'retry', args: [] }));
+            return { text: 'Done.', effective: {} };
+        });
+        const source = [
+            js("let attempts = 0;\nfunction retry() { go('count'); }"),
+            block('js', 'attempts++;', 'alias="count"'),
+            agent('Call @retry once'),
+            js('success(attempts);'),
+        ].join('\n');
+        expect(await exec(source, { backend: model })).toEqual({ status: 'success', value: 2, hasValue: true });
+        expect(commands).toBe(2);
+    });
+
+    it('fails at the go() call for an unknown alias', async () => {
+        expect(await exec(`${block('js', '', 'alias="known"')}\n${js("\ngo('missing');")}`)).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', line: 6, command: "go('missing');", reason: expect.stringContaining("no block has the alias 'missing'") },
+        });
+        expect(await exec(js('go(42);'))).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', reason: "go() requires a block alias, such as go('draft')" },
+        });
     });
 });
 

@@ -3,7 +3,7 @@ import { AGENT_TOOLS, actionArguments } from './agent.js';
 import { codegenHeader, codegenSignature, compileCodegen, isCodegenSource, readCodegenCache, saveCodegenCache, unwrapCode, type CodegenSource } from './codegen.js';
 import type { CompiledCell } from './cell.js';
 import type { NaturalBlock, NaturalControls } from './controls.js';
-import { Failure, SuccessSignal } from './errors.js';
+import { Failure, GoSignal, SuccessSignal } from './errors.js';
 import { buildPromptParts, type LlmRequest, type LlmResponse, type RuntimeAction } from './llm.js';
 import type { ModelInteraction } from './log-events.js';
 import { PinError } from './pin.js';
@@ -136,7 +136,7 @@ export async function runNatural(block: NaturalBlock, workspace: Workspace, pare
         try {
             value = describeValue(await act(action, workspace, local, line));
         } catch (error) {
-            if (error instanceof SuccessSignal || error instanceof TraceError || error instanceof PinError) throw error;
+            if (error instanceof SuccessSignal || error instanceof GoSignal || error instanceof TraceError || error instanceof PinError) throw error;
             // Errors thrown by workflow functions keep their own kind instead of looking like model failures.
             throw runtime.failure(error);
         } finally {

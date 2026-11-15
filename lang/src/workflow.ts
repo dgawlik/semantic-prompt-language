@@ -1,5 +1,5 @@
 import type { CompiledCell } from './cell.js';
-import { Failure, SuccessSignal, type FailurePayload } from './errors.js';
+import { Failure, GoSignal, SuccessSignal, type FailurePayload } from './errors.js';
 import { missingImport, provideModules } from './imports.js';
 import * as packageModule from './index.js';
 import * as markdownModule from './markdown-lib.js';
@@ -44,16 +44,27 @@ export type RunResult =
 
 let anonymous = 0;
 
+/** Where each aliased block sits: step indices, with the branch index after each `if`. */
+function aliasTargets(steps: readonly Step[], path: readonly number[] = [], targets = new Map<string, readonly number[]>()): Map<string, readonly number[]> {
+    steps.forEach((step, index) => {
+        if (step.kind === 'if') step.branches.forEach((branch, at) => aliasTargets(branch.steps, [...path, index, at], targets));
+        else if (step.kind === 'while') aliasTargets(step.steps, [...path, index], targets);
+        else if (step.alias) targets.set(step.alias, [...path, index]);
+    });
+    return targets;
+}
+
 // `import ... from 'spl-lang'` in workflow code and helper modules resolves to this running copy.
 provideModules({ 'spl-lang': packageModule, 'spl-lang/markdown': markdownModule });
 
 async function execute(workflow: Workflow, opts: RunOptions, workspace: Workspace, interactive: boolean): Promise<RunResult> {
     const { logger, trace, pin } = opts;
     const store = opts.store ?? new MemoryStore();
+    const targets = aliasTargets(workflow.steps);
     const runtime = new Runtime({
         backend: opts.backend, logger, cwd: opts.cwd, model: opts.model, defaultModel: workflow.model,
         args: opts.args, trace, pin, human: opts.human, markdown: workflow.markdown, source: opts.file ?? opts.source,
-        sources: workspace.sources,
+        sources: workspace.sources, aliases: targets.keys(),
     });
     attachWorkspace(runtime, workspace);
     // The engine reports this name in stack traces; it maps frames back to document lines.
@@ -80,9 +91,19 @@ async function execute(workflow: Workflow, opts: RunOptions, workspace: Workspac
             last = undefined;
             return Boolean(await workspace.execute(condition, file, runtime));
         };
-        const perform = async (steps: readonly Step[]): Promise<void> => {
-            for (const step of steps) {
+        // `resume` is the path of a `go()` target: the first index picks a step, and an `if` or
+        // `while` on that path is entered at the target instead of testing its condition first.
+        const perform = async (steps: readonly Step[], resume: readonly number[] = []): Promise<void> => {
+            const [start = 0, ...inner] = resume;
+            for (let index = start; index < steps.length; index++) {
+                const step = steps[index];
+                const within = index === start ? inner : [];
                 if (step.kind === 'if') {
+                    if (within.length) {
+                        const [branch, ...rest] = within;
+                        await perform(step.branches[branch].steps, rest);
+                        continue;
+                    }
                     for (const branch of step.branches) {
                         if (branch.condition && !await test(branch.condition, branch.line)) continue;
                         await perform(branch.steps);
@@ -91,6 +112,7 @@ async function execute(workflow: Workflow, opts: RunOptions, workspace: Workspac
                     continue;
                 }
                 if (step.kind === 'while') {
+                    if (within.length) await perform(step.steps, within);
                     while (await test(step.condition, step.line)) await perform(step.steps);
                     continue;
                 }
@@ -100,7 +122,21 @@ async function execute(workflow: Workflow, opts: RunOptions, workspace: Workspac
                 else await runNatural(step, workspace, runtime.root);
             }
         };
-        await runtime.run(() => perform(workflow.steps));
+        await runtime.run(async () => {
+            let resume: readonly number[] = [];
+            for (;;) {
+                try {
+                    await perform(workflow.steps, resume);
+                    return;
+                } catch (error) {
+                    if (!(error instanceof GoSignal)) throw error;
+                    const target = targets.get(error.alias);
+                    if (!target) throw new Failure('runtime_error', `go(): no block has the alias '${error.alias}'`);
+                    if (!runtime.replaying) logger.info(`go: continuing at '${error.alias}' (line ${current?.line ?? 0})`);
+                    resume = target;
+                }
+            }
+        });
         trace?.assertConsumed();
         if (interactive && last !== undefined) return { status: 'success', value: last, hasValue: true };
         return { status: 'success', value: null, hasValue: false };

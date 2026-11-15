@@ -1,0 +1,17 @@
+{js}
+let error = ""
+{/js}
+
+{agent alias="prime"}
+What is an answer to everything?
+Save to -> @response
+If @error is not empty, repair
+{/agent}
+
+{js alias="check"}
+if (int.is(response)) {
+    success(response)
+}
+error = `Response is not an integer: ${JSON.stringify(response)}`
+go('prime')
+{/js}

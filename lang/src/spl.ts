@@ -1,5 +1,5 @@
 import { compileCell, type CellLanguage, type CompiledCell } from './cell.js';
-import { checkTagInstruction, parseTagControls, scanSettings, type NaturalControls } from './controls.js';
+import { ALIAS, ALIAS_MESSAGE, checkTagInstruction, parseTagControls, scanSettings, type NaturalControls } from './controls.js';
 import { SplSyntaxError } from './errors.js';
 import { readFrontmatter, type Step, type Workflow } from './markdown.js';
 import { parsePin, validatePinSource, type PinData } from './pin.js';
@@ -28,6 +28,8 @@ export interface SplBlock {
     controls?: NaturalControls;
     /** `{js ignore}` and `{js no-run}`: shown but not run. */
     ignored?: true;
+    /** `alias="name"` in the tag: the name `go()` continues at. */
+    alias?: string;
 }
 
 export interface SplProblem {
@@ -164,6 +166,7 @@ export function scanSpl(source: string): SplDocument {
 
     let stray = false;
     let journal: SplBlock | undefined;
+    const aliases = new Map<string, number>();
     while (index < lines.length) {
         const line = lines[index];
         const number = index + 1;
@@ -220,16 +223,29 @@ export function scanSpl(source: string): SplDocument {
                 const parsed = parseTagControls(header, 1, tag, start);
                 headerEnd = parsed.end;
                 if (parsed.controls) block.controls = parsed.controls;
+                if (parsed.alias !== undefined) block.alias = parsed.alias;
             });
             if (!valid) headerEnd = scanSettings(header, start).end;
         } else {
-            const rest = (LANGUAGES[tag] ? /^(?:[ \t]+(ignore|no-run))?[ \t]*\}/ : /^[ \t]*\}/).exec(line.slice(opening[0].length));
+            const after = line.slice(opening[0].length);
+            const rest = (LANGUAGES[tag]
+                ? /^(?:[ \t]+(ignore|no-run)|[ \t]+alias[ \t]*=[ \t]*(?:"([^"\n]*)"|'([^'\n]*)'))?[ \t]*\}/
+                : /^[ \t]*\}/).exec(after);
             if (rest) {
                 headerEnd = start + rest[0].length;
                 if (rest[1]) block.ignored = true;
+                const alias = rest[2] ?? rest[3];
+                if (alias !== undefined) {
+                    if (ALIAS.test(alias)) block.alias = alias;
+                    else problem(`{${tag}}: ${ALIAS_MESSAGE}`, number, opening[0].length + rest[0].search(/["']/) + 1);
+                }
             } else {
                 valid = false;
-                problem(LANGUAGES[tag] ? `expected {${tag}}, {${tag} ignore} or {${tag} no-run}` : `expected {${tag}}`, number, column);
+                if (LANGUAGES[tag] && /[ \t](?:ignore|no-run)\b/.test(after) && /[ \t]alias\b/.test(after)) {
+                    problem(`{${tag}}: a block marked ignore or no-run never runs, so it cannot have an alias`, number, column);
+                } else {
+                    problem(LANGUAGES[tag] ? `expected {${tag}}, {${tag} alias="name"}, {${tag} ignore} or {${tag} no-run}` : `expected {${tag}}`, number, column);
+                }
             }
         }
         let headerIndex = index;
@@ -253,6 +269,11 @@ export function scanSpl(source: string): SplDocument {
         block.text = lines.slice(headerIndex + 1, close).join('\n');
         document.blocks.push(block);
         items.push({ indent: indentation(line), node: { kind: 'block', block } });
+        if (block.alias !== undefined) {
+            const first = aliases.get(block.alias);
+            if (first) problem(`duplicate alias '${block.alias}'; it is already used on line ${first}`, number, column);
+            else aliases.set(block.alias, number);
+        }
 
         if (tag === 'agent') attempt(() => checkTagInstruction(block.text, headerIndex + 2));
         else if (tag === 'codegen' && block.closed && !block.text.trim()) problem('{codegen}: description must not be empty', number, column);
@@ -301,16 +322,18 @@ function steps(nodes: readonly SplNode[]): Step[] {
             return [{ kind: 'while', line: node.control.line, condition: compileCondition(node.control), steps: steps(node.body) }];
         }
         const { block } = node;
+        const alias = block.alias !== undefined ? { alias: block.alias } : {};
         const language = LANGUAGES[block.tag];
         if (language) {
             const line = block.headerEndLine + 1;
-            return block.ignored ? [] : [{ kind: 'code', line, cell: compileCell(block.text, { language, line }) }];
+            return block.ignored ? [] : [{ kind: 'code', line, cell: compileCell(block.text, { language, line }), ...alias }];
         }
         if (block.tag !== 'agent' && block.tag !== 'codegen') return [];
         return [{
             kind: 'natural', text: splInstruction(block.text), line: block.line,
             ...(block.controls ? { controls: block.controls } : {}),
             ...(block.tag === 'codegen' ? { codegen: true as const } : {}),
+            ...alias,
         }];
     });
 }

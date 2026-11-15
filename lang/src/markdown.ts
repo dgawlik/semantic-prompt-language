@@ -29,9 +29,11 @@ export interface CodeStep {
     kind: 'code';
     cell: CompiledCell;
     line: number;
+    /** Name that `go()` continues at, from `{js alias="..."}` in a `.spl` file. */
+    alias?: string;
 }
 
-export type NaturalStep = NaturalBlock & { kind: 'natural' };
+export type NaturalStep = NaturalBlock & { kind: 'natural'; alias?: string };
 
 /** One branch of an `if` in a `.spl` file; `else` has no condition. */
 export interface BranchStep {

@@ -19,6 +19,10 @@ export interface NaturalBlock {
 const RESTRICTION_KINDS: readonly RestrictKind[] = ['fs', 'exec', 'net', 'mcp'];
 const ESCAPES: Record<string, string> = { n: '\n', t: '\t', r: '\r', 0: '\0', b: '\b', f: '\f', v: '\v' };
 
+/** A block alias, the name `go()` continues at: a letter or `_`, then letters, digits, `_` or `-`. */
+export const ALIAS = /^[A-Za-z_][\w-]*$/;
+export const ALIAS_MESSAGE = 'alias must start with a letter or _ and contain only letters, digits, _ and -';
+
 /** Reads the literal settings of `@CTL(...)` or a block tag and the `@CODEGEN` description; values are never evaluated. */
 class Scanner {
     pos = 0;
@@ -139,16 +143,23 @@ class Scanner {
     }
 
     /** Settings up to their closing delimiter, which is consumed. */
-    settings(close: string): NaturalControls {
+    settings(close: string, extra?: { alias?: string }): NaturalControls {
         const controls: NaturalControls = {};
         while (!this.take(close)) {
             this.skip();
             const start = this.pos;
             const name = this.name();
             if (!name) this.fail(this.pos >= this.text.length ? `unterminated ${this.unit}` : 'expected a setting name');
-            if (Object.hasOwn(controls, name)) this.fail(`duplicate setting '${name}'`, start);
+            if (Object.hasOwn(controls, name) || extra && name === 'alias' && extra.alias !== undefined) this.fail(`duplicate setting '${name}'`, start);
             this.expect('=');
             switch (name) {
+                case 'alias': {
+                    if (!extra) this.fail(`unknown setting '${name}'`, start);
+                    const alias = this.string();
+                    if (!ALIAS.test(alias)) this.fail(ALIAS_MESSAGE, start);
+                    extra.alias = alias;
+                    break;
+                }
                 case 'restrict': controls.restrict = this.restrictions(); break;
                 case 'enforce': controls.enforce = this.strings(); break;
                 case 'forbid': controls.forbid = this.strings(); break;
@@ -227,11 +238,12 @@ export function scanSettings(text: string, at: number): { tokens: ControlToken[]
 }
 
 /** Reads the settings of a block tag such as `{agent model='m'}`, from just after the tag name through the closing brace. */
-export function parseTagControls(text: string, line: number, tag: string, at: number): { controls?: NaturalControls; end: number } {
+export function parseTagControls(text: string, line: number, tag: string, at: number): { controls?: NaturalControls; alias?: string; end: number } {
     const scanner = new Scanner(text, line, `{${tag}}`, `{${tag}} tag`);
     scanner.pos = at;
-    const controls = scanner.settings('}');
-    return { end: scanner.pos, ...(Object.keys(controls).length ? { controls } : {}) };
+    const extra: { alias?: string } = {};
+    const controls = scanner.settings('}', extra);
+    return { end: scanner.pos, ...(Object.keys(controls).length ? { controls } : {}), ...(extra.alias !== undefined ? { alias: extra.alias } : {}) };
 }
 
 const position = (text: string, line: number, at: number): [number, number] => {

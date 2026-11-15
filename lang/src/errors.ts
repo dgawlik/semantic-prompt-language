@@ -22,6 +22,7 @@ export interface FailurePayload {
 // Brands keep `instanceof` working when a helper module loads a second copy of the package.
 const FAILURE = Symbol.for('spl-lang.failure');
 const SUCCESS = Symbol.for('spl-lang.success');
+const GO = Symbol.for('spl-lang.go');
 const branded = (value: unknown, brand: symbol): boolean =>
     typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[brand] === true;
 
@@ -82,6 +83,17 @@ export class SuccessSignal {
 
     constructor(readonly value: unknown) {
         Object.defineProperty(this, SUCCESS, { value: true });
+    }
+}
+
+/** Thrown by `go()`: continues a `.spl` workflow at the block with this alias. Not an Error, so rethrow it if caught. */
+export class GoSignal {
+    static [Symbol.hasInstance](value: unknown): boolean {
+        return branded(value, GO);
+    }
+
+    constructor(readonly alias: string) {
+        Object.defineProperty(this, GO, { value: true });
     }
 }
 

@@ -310,10 +310,10 @@ test('agent blocks complete shared names, library functions and markers', () => 
 });
 
 test('agent and codegen tags complete their settings, restriction kinds and values', () => {
-    const all = ['enforce', 'forbid', 'model', 'reasoning', 'restrict'];
+    const all = ['alias', 'enforce', 'forbid', 'model', 'reasoning', 'restrict'];
     assert.deepEqual(splLabels('{agent |}\nGo\n{/agent}').sort(), all);
     assert.deepEqual(splLabels('{codegen |}\nDefine f()\n{/codegen}').sort(), all);
-    assert.deepEqual(splLabels("{agent model='m', |\n}\nGo\n{/agent}").sort(), ['enforce', 'forbid', 'reasoning', 'restrict']);
+    assert.deepEqual(splLabels("{agent model='m', |\n}\nGo\n{/agent}").sort(), ['alias', 'enforce', 'forbid', 'reasoning', 'restrict']);
     assert.deepEqual(splLabels("{agent restrict={fs: ['./src'], |}}\nGo\n{/agent}").sort(), ['exec', 'mcp', 'net']);
     assert.deepEqual(splLabels("{agent restrict={fs: ['|']}}\nGo\n{/agent}"), []);
     assert.deepEqual(splLabels("{agent reasoning='|'}\nGo\n{/agent}"), ['low', 'medium', 'high']);
@@ -327,6 +327,7 @@ test('agent and codegen tags complete their settings, restriction kinds and valu
     assert.deepEqual(typing.context.analysis.blocks.map(item => item.kind), ['natural', 'code'], 'an unfinished tag does not swallow later blocks');
 
     assert.match(splHover("{agent restrict={fs: ['./src']}, reas|oning='high'}\nGo\n{/agent}"), /reasoning='low' \| 'medium' \| 'high'/);
+    assert.match(splHover("{agent ali|as='draft'}\nGo\n{/agent}"), /alias='name'[\s\S]*go\('name'\)/);
     assert.match(splHover('{ag|ent}\nGo\n{/agent}'), /\{agent restrict=[\s\S]*agent command in plain language/);
     assert.match(splHover('{js}\nconst a = 1;\n{/j|s}'), /\{js\} \.\.\. \{\/js\}/);
     assert.match(splHover('{comment}\nNotes\n{/comm|ent}'), /never executed/);

@@ -110,7 +110,7 @@
       }
     },
     "javascript": {
-      "begin": "^[ \\t]*((\\{)(js)(?:[ \\t]+(ignore|no-run))?[ \\t]*(\\}))[ \\t]*$",
+      "begin": "^[ \\t]*((\\{)(js)(?:[ \\t]+(?:(ignore|no-run)|(alias)[ \\t]*(=)[ \\t]*(\"[^\"]*\"|'[^']*')))?[ \\t]*(\\}))[ \\t]*$",
       "end": "^[ \\t]*((\\{/)(js)(\\}))[ \\t]*$",
       "name": "meta.block.js.spl",
       "beginCaptures": {
@@ -123,11 +123,20 @@
         "3": {
           "name": "entity.name.tag.spl"
         },
-        "5": {
-          "name": "punctuation.definition.tag.end.spl"
-        },
         "4": {
           "name": "storage.modifier.spl"
+        },
+        "5": {
+          "name": "variable.parameter.modifier.spl"
+        },
+        "6": {
+          "name": "keyword.operator.spl"
+        },
+        "7": {
+          "name": "string.quoted.spl"
+        },
+        "8": {
+          "name": "punctuation.definition.tag.end.spl"
         }
       },
       "endCaptures": {
@@ -158,7 +167,7 @@
       ]
     },
     "typescript": {
-      "begin": "^[ \\t]*((\\{)(ts)(?:[ \\t]+(ignore|no-run))?[ \\t]*(\\}))[ \\t]*$",
+      "begin": "^[ \\t]*((\\{)(ts)(?:[ \\t]+(?:(ignore|no-run)|(alias)[ \\t]*(=)[ \\t]*(\"[^\"]*\"|'[^']*')))?[ \\t]*(\\}))[ \\t]*$",
       "end": "^[ \\t]*((\\{/)(ts)(\\}))[ \\t]*$",
       "name": "meta.block.ts.spl",
       "beginCaptures": {
@@ -171,11 +180,20 @@
         "3": {
           "name": "entity.name.tag.spl"
         },
-        "5": {
-          "name": "punctuation.definition.tag.end.spl"
-        },
         "4": {
           "name": "storage.modifier.spl"
+        },
+        "5": {
+          "name": "variable.parameter.modifier.spl"
+        },
+        "6": {
+          "name": "keyword.operator.spl"
+        },
+        "7": {
+          "name": "string.quoted.spl"
+        },
+        "8": {
+          "name": "punctuation.definition.tag.end.spl"
         }
       },
       "endCaptures": {
@@ -391,7 +409,7 @@
           "include": "#strings"
         },
         {
-          "match": "\\b(restrict|enforce|forbid|model|reasoning)(?=\\s*=)",
+          "match": "\\b(restrict|enforce|forbid|model|reasoning|alias)(?=\\s*=)",
           "name": "variable.parameter.modifier.spl"
         },
         {

@@ -1,13 +1,13 @@
 // The library: everything a workflow fence can use without importing it.
 export {
-    ask, think, agent, human, enforce, forbid, restrict, success, fail, assert, log, codegen,
+    ask, think, agent, human, enforce, forbid, restrict, success, go, fail, assert, log, codegen,
     readFile, writeFile, webFetch, webSearch, shell, args, env, markdown, configure,
     t, str, int, float, bool, char, nil, any, object, fn, list, union, nullable, enumOf, struct, typedef, jsonSchema, validate,
     type AskOptions, type ThinkOptions, type AgentOptions, type CodegenOptions, type ConfigureOptions,
     type GenerationResult, type RestrictSpec,
 } from './library.js';
 export { Type, StructType, isType, type Infer, type InferShape, type Shape, type Annotations, type JsonSchema, type TypeKind } from './types.js';
-export { Failure, SuccessSignal, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
+export { Failure, SuccessSignal, GoSignal, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
 
 // Running workflows and embedding the runtime.
 export { parse, parseInstruction, parseMarkdown, extractMarkdown, isWorkflowMarkdown, type Workflow, type Step, type CodeStep, type NaturalStep, type IfStep, type WhileStep, type BranchStep, type MarkdownDocument, type MarkdownBlock } from './markdown.js';

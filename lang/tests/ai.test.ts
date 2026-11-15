@@ -5,7 +5,7 @@ import { AGENT_TOOLS } from '../src/agent.js';
 import type { ModelStreamPart, ModelCallOptions, ToolOutput } from '../src/ai-native.js';
 import { AiBackend, reasoningOptions } from '../src/ai.js';
 import { CopilotBackend } from '../src/copilot.js';
-import { Failure, SuccessSignal } from '../src/errors.js';
+import { Failure, GoSignal, SuccessSignal } from '../src/errors.js';
 import type { LlmRequest, LlmStreamUpdate } from '../src/llm.js';
 import type { ModelStreamEvent } from '../src/log-events.js';
 import { Logger } from '../src/logger.js';
@@ -231,7 +231,7 @@ it('serializes multiple actions requested together and supplies actual results t
 it.each([
     new Failure('runtime_error', 'missing function'), new Failure('validation_failed', 'invalid'),
     new Failure('tool_error', 'write failed'), new Failure('restriction_violation', 'denied'),
-    new Failure('explicit_failure', 'stop'), new Error('unexpected tool failure'), new SuccessSignal(42),
+    new Failure('explicit_failure', 'stop'), new Error('unexpected tool failure'), new SuccessSignal(42), new GoSignal('retry'),
 ])('preserves the original action failure/control signal and never executes a later action: %s', async error => {
     steps = [[call('call_function', { name: 'missing', args: [] }), call('save_variable', { name: 'later', value: 1 }), finish('tool-calls')]];
     const invokeAction = vi.fn(async () => { throw error; });

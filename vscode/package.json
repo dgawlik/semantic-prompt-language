@@ -2,7 +2,7 @@
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
   "description": "Executable workflows in Markdown and .spl files: JavaScript with the SPL library, natural-language steps and notebooks",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "publisher": "spl-lang",
    "icon": "icon.png",
   "license": "ISC",

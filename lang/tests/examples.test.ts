@@ -112,6 +112,13 @@ describe('examples without a model', () => {
 });
 
 describe('examples with scripted models', () => {
+    it('goto.spl asks again with the error until the answer is an integer', async () => {
+        const llm = model([], [save('response', 'forty-two')], [save('response', 42)]);
+        expect(await example('goto.spl', { backend: llm })).toEqual({ status: 'success', value: 42, hasValue: true });
+        expect(llm.quotes).toHaveLength(2);
+        expect(llm.quotes[1].prompt).toContain('Response is not an integer: \\"forty-two\\"');
+    });
+
     it.each([
         ['color', 'What is your favorite color?'],
         ['food', 'What is your favorite food?'],

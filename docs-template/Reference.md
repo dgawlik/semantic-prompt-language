@@ -36,7 +36,8 @@ repeat indented blocks.
 | `{js}` ... `{/js}` | Runs as JavaScript |
 | `{ts}` ... `{/ts}` | Types are erased, then it runs as JavaScript |
 | `{js ignore}`, `{js no-run}`, likewise for `ts` | Not run |
-| `{agent restrict=..., enforce=..., forbid=..., model=..., reasoning=...}` ... `{/agent}` | Agent command; the optional settings are those of `@CTL` |
+| `{js alias="name"}`, `{ts alias="name"}` | Runs; `go('name')` continues here |
+| `{agent restrict=..., enforce=..., forbid=..., model=..., reasoning=..., alias=...}` ... `{/agent}` | Agent command; the optional settings are those of `@CTL`, plus the block alias |
 | `{codegen ...}` ... `{/codegen}` | Generates functions from the description; accepts the settings of `{agent}` |
 | `{comment}` ... `{/comment}` | Commentary |
 | `{lock}` ... `{/lock}` | The journal of a [pinned workflow](CLI.md#pinned-workflows) |
@@ -104,6 +105,7 @@ Each value is a comma-separated string or a list of strings. See [Restrictions](
 | Call | Effect |
 | --- | --- |
 | `success(value?)` | Ends the document with a result (`null` when omitted) |
+| `go(alias)` | Continues a `.spl` workflow at the block with this alias; see [Jumping to a block](Language.md#jumping-to-a-block) |
 | `fail(reason?)` | Raises `explicit_failure`; the default reason is `failed` |
 | `assert(condition, message?)` | Raises `assertion_failed` when `condition` is falsy |
 | `human(question)` | Resolves to a person's answer as a string |

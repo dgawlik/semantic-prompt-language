@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline';
-import { Failure, SuccessSignal } from './errors.js';
+import { Failure, GoSignal, SuccessSignal } from './errors.js';
 import type { LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
 import * as markdownLibrary from './markdown-lib.js';
@@ -151,6 +151,21 @@ export function success(value?: unknown): never {
     throw new SuccessSignal(value === undefined ? null : value);
 }
 
+/**
+ * Continues a `.spl` workflow at the block with this alias, such as `{agent alias="draft"}`.
+ * The current block stops here; blocks run on in document order from the target.
+ *
+ *     if (!int.is(answer)) go('draft');
+ */
+export function go(alias: string): never {
+    const { runtime } = currentContext();
+    if (typeof alias !== 'string' || !alias) throw runtime.failure(runtimeError("go() requires a block alias, such as go('draft')"));
+    if (!runtime.aliases.has(alias)) {
+        throw runtime.failure(runtimeError(`go(): no block has the alias '${alias}'; set one on a .spl block with {js alias="${alias}"} or {agent alias="${alias}"}`));
+    }
+    throw new GoSignal(alias);
+}
+
 /** Ends the document with an `explicit_failure`, unless caught. */
 export function fail(reason: unknown = 'failed'): never {
     throw currentContext().runtime.failure(new Failure('explicit_failure', display(reason)));
@@ -232,7 +247,7 @@ const workspaces = new WeakMap<Runtime, Workspace>();
 /** Everything a fence can use without importing it. */
 export function library(): Record<string, unknown> {
     return {
-        ask, think, agent, human, enforce, forbid, restrict, success, fail, assert, log, codegen,
+        ask, think, agent, human, enforce, forbid, restrict, success, go, fail, assert, log, codegen,
         readFile, writeFile, webFetch, webSearch, shell, args, env, validate, markdown: markdownLibrary, Failure,
         t, str, int, float, bool, char, nil, any, object, fn, list, union, nullable, enumOf, struct, typedef, jsonSchema,
     };

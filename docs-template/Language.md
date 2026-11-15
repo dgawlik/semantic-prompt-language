@@ -113,6 +113,7 @@ success(review.findings.map(
 | `{js}` ... `{/js}` | A `js` fence |
 | `{ts}` ... `{/ts}` | A `ts` fence |
 | `{js ignore}`, `{ts no-run}` | A fence marked `ignore` or `no-run`: shown, not run |
+| `{js alias="check"}`, `{agent alias="draft"}` | A block with a name that [`go()`](#jumping-to-a-block) can continue at; no Markdown equivalent |
 | `{agent}` ... `{/agent}` | A blockquote: an [agent command](LLM-commands.md#blockquotes) |
 | `{agent restrict={fs: ['./src']}, model='m'}` | A blockquote that opens with [`@CTL(...)`](LLM-commands.md#controls): the same literal settings, written in the tag |
 | `{codegen}` ... `{/codegen}` | `@CODEGEN`: the body is the literal description of the [functions to generate](LLM-commands.md#code-generation) |
@@ -128,7 +129,8 @@ success(review.findings.map(
   closing tag inside a line, for example in a string, is ordinary text, and a block ends only
   with its own closing tag. Tag names are lowercase.
 * **Settings live in the tag.** `{agent ...}` and `{codegen ...}` take `restrict`, `enforce`,
-  `forbid`, `model` and `reasoning`, separated by commas and written as in `@CTL(...)`. The tag
+  `forbid`, `model` and `reasoning`, separated by commas and written as in `@CTL(...)`, plus the
+  block's [`alias`](#jumping-to-a-block). The tag
   may continue over several lines. `@CTL` and `@CODEGEN` markers are errors in a `.spl` file.
 * **Everything is in a block or a control line.** Other text between blocks is a syntax error, which catches a
   mistyped tag; write commentary in `{comment}`. Blocks do not nest, so a `{comment}` can show
@@ -189,6 +191,50 @@ success({result, i})
 * **Bodies hold blocks.** A body may contain `{js}`, `{ts}`, `{agent}`, `{codegen}` and
   `{comment}` blocks, as well as nested control lines. `elif` and `else` must have the same
   indentation as their `if`; `else` has no condition.
+
+### Jumping to a block
+
+`alias="name"` in a tag names a block, and `go('name')` continues the workflow there. Use it to
+retry an agent until its answer passes a check:
+
+`goto.spl`
+
+```spl
+{js}
+let error = ""
+{/js}
+
+{agent alias="prime"}
+What is an answer to everything?
+Save to -> @response
+If @error is not empty, repair
+{/agent}
+
+{js alias="check"}
+if (int.is(response)) {
+    success(response)
+}
+error = `Response is not an integer: ${JSON.stringify(response)}`
+go('prime')
+{/js}
+```
+
+* **Where aliases go.** `{js}`, `{ts}`, `{agent}` and `{codegen}` blocks take an alias: alone in
+  a code tag, `{js alias="check"}`, or among the settings of an agent tag,
+  `{agent model='m', alias='draft'}`. An alias starts with a letter or `_` and holds letters,
+  digits, `_` and `-`. Aliases are unique in a file, and blocks marked `ignore` or `no-run`
+  cannot have one.
+* **What `go()` does.** The current block stops at the call, and blocks run on in document order
+  from the target, in the same shared scope. Jumps go backward or forward, and `go()` also works
+  inside functions, conditions and functions that an agent calls.
+* **Into control flow.** A target inside an `if` branch runs the rest of that branch, then
+  continues after the `if`. A target inside a `while` body runs the rest of the body, then tests
+  the condition again.
+* **No limit.** Like `while`, a jump backward can repeat forever; keep a counter when the exit
+  depends on a model answer.
+* **A signal, not an error.** `go()` throws a signal like `success()`: a `try` around it must
+  rethrow what it does not handle. An unknown alias raises `runtime_error`, as does `go()` in a
+  Markdown workflow, which has no aliases.
 
 ## One shared scope
 

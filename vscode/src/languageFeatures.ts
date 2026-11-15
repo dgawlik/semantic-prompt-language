@@ -9,7 +9,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { compileCell } from '../../lang/src/cell.js';
 import { SplSyntaxError } from '../../lang/src/errors.js';
 import { missingImport } from '../../lang/src/imports.js';
-import { blockquoteText, controlCompletions, controlHelp, scanControls } from './blockquoteFeatures';
+import { blockquoteText, controlCompletions, controlHelp, scanControls, tagHelp } from './blockquoteFeatures';
 import { callable, keywords, library, markers, tags } from './catalog';
 import type { TypeScriptProject } from './typescriptService';
 import { analyzeWorkflow, blockquoteAt, codeBlockAt, type Marker, type WorkflowAnalysis } from './workflow';
@@ -363,7 +363,8 @@ export function hover(context: WorkflowContext, position: Position): Hover | nul
         const quote = blockquoteText(analysis.document, block);
         const at = analysis.document.offsetAt(position) - quote.from;
         const token = scanControls(quote.text, block.spl?.tag)?.tokens.find(token => token.kind === 'name' && token.from <= at && at <= token.to);
-        return described(token && Object.hasOwn(controlHelp, token.value) ? controlHelp[token.value as keyof typeof controlHelp] : undefined);
+        const settings: Record<string, { signature: string; description: string }> = block.spl ? tagHelp : controlHelp;
+        return described(token && Object.hasOwn(settings, token.value) ? settings[token.value] : undefined);
     }
     const range = { start: { line: marker.line, character: marker.character - 1 }, end: { line: marker.line, character: marker.character + marker.name.length } };
     const binding = sharedBindings(context, new Set([marker.name]))[0];

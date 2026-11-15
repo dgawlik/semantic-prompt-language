@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { inspect } from 'node:util';
-import { Failure, SuccessSignal } from './errors.js';
+import { Failure, GoSignal, SuccessSignal } from './errors.js';
 import {
     LlmError, buildPromptParts, parseJsonResponse, validateRandomness, validateTokens,
     type AskMods, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel,
@@ -63,6 +63,8 @@ export interface RuntimeOptions {
     source?: string;
     /** Sources already known to an interactive session, so old closures still locate their failures. */
     sources?: Map<string, SourceInfo>;
+    /** Block aliases of a `.spl` workflow that `go()` may continue at. */
+    aliases?: Iterable<string>;
 }
 
 export interface SourceInfo {
@@ -117,7 +119,7 @@ export function runInContext<T>(context: Context, body: () => T): T {
 const GENERATION_OPTIONS = ['len', 'fmt', 'schema', 'repairs', 'reasoning', 'hide', 'model', 'tokens', 'seed', 'temperature', 'topP', 'top_p'];
 const runtimeError = (message: string): Failure => new Failure('runtime_error', message);
 const control = (error: unknown): boolean =>
-    error instanceof TraceError || error instanceof PinError || error instanceof SuccessSignal;
+    error instanceof TraceError || error instanceof PinError || error instanceof SuccessSignal || error instanceof GoSignal;
 
 /** Text form used when a value is interpolated into a prompt. */
 export function display(value: unknown): string {
@@ -205,6 +207,8 @@ export class Runtime {
     readonly sources: Map<string, SourceInfo>;
     readonly root: Context;
     readonly source?: string;
+    /** Block aliases that `go()` may continue at. */
+    readonly aliases: ReadonlySet<string>;
     private readonly environment: Readonly<Record<string, string>>;
     private readonly model?: string;
     private readonly defaultModel?: string;
@@ -224,6 +228,7 @@ export class Runtime {
         this.humanHandler = options.human;
         this.source = options.source;
         this.sources = options.sources ?? new Map();
+        this.aliases = new Set(options.aliases);
         const source = options.pin?.replaying ? options.pin.data.environment ?? {} : options.trace?.environment ?? process.env;
         const environment: Record<string, string> = {};
         for (const [name, value] of Object.entries(source)) {

@@ -13,6 +13,7 @@ export const library: Record<string, Help> = {
     forbid: { signature: 'forbid(text, () => ...)', description: 'Tell every model call made inside the callback what to avoid. Guidance shapes prompts; it does not validate answers.' },
     restrict: { signature: "restrict({ fs, exec, net, mcp }, async () => ...)", description: "Limit what tools and agents may touch inside the callback. A string or list is shorthand for fs. Nested restrictions of one kind intersect; violations raise restriction_violation." },
     success: { signature: 'success(value?)', description: 'End the document successfully with a result, even from inside a function.' },
+    go: { signature: "go(alias)", description: 'Continue a .spl workflow at the block with this alias, such as {agent alias="draft"}: the current block stops and blocks run on from the target. Unknown aliases raise runtime_error.' },
     fail: { signature: 'fail(reason)', description: 'Stop with explicit_failure and a reason, unless caught with try/catch.' },
     assert: { signature: 'assert(condition, message?)', description: 'Raise assertion_failed when the condition is falsy.' },
     log: { signature: 'log(...values)', description: 'Write values to the run log (stderr) at info level. log.error(...) and log.debug(...) select other levels.' },

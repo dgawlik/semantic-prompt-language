@@ -66,10 +66,17 @@ same(code[4].depth, 1);
 ok(has(code[6].tokens, 'ts', TAG) && has(code[6].tokens, 'no-run', 'storage.modifier.spl'));
 ok(all(code[7].tokens, TS) && has(code[7].tokens, 'number', 'keyword.ts'));
 same(code[8].depth, 1);
-for (const opener of ['{js} const a = 1;', '{js skip}', 'const a = {js}', '{javascript}', '{JS}']) {
+for (const opener of ['{js} const a = 1;', '{js skip}', 'const a = {js}', '{javascript}', '{JS}', '{js alias=retry}', '{js ignore alias="a"}']) {
     const result = tokenize(`${opener}\nconst b = 2;`);
     ok(result.every(item => plain(item.tokens)) && result[1].depth === 1, `not a block: ${opener}`);
 }
+
+// Aliases name blocks for go(): in code tags and among agent settings.
+const aliased = tokenize(`{js alias="retry"}\nconst a = 1;\n{/js}\n  {ts alias='typed'}\nconst b: number = 2;\n{/ts}\n{agent model='m', alias='draft'}\nGo\n{/agent}`);
+ok(has(aliased[0].tokens, 'js', TAG) && has(aliased[0].tokens, 'alias', SETTING) && has(aliased[0].tokens, '"retry"', 'string.quoted.spl'));
+ok(has(aliased[0].tokens, '}', 'punctuation.definition.tag.end.spl') && all(aliased[1].tokens, JS));
+ok(has(aliased[3].tokens, 'alias', SETTING) && has(aliased[3].tokens, "'typed'", 'string.quoted.spl') && all(aliased[4].tokens, TS));
+same(scoped(aliased[6].tokens, SETTING), ['model', 'alias']);
 
 // A block ends at its closing tag even inside a construct the embedded grammar has not finished.
 for (const unfinished of ['const text = `template', '/* comment', "{ 'object': 1"]) {

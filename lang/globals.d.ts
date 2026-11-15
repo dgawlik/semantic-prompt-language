@@ -20,6 +20,8 @@ declare global {
     const restrict: typeof spl.restrict;
     /** Ends the document with a result. */
     const success: typeof spl.success;
+    /** Continues a `.spl` workflow at the block with this alias: `{js alias="retry"}`. */
+    const go: typeof spl.go;
     /** Ends the document with an `explicit_failure`, unless caught. */
     const fail: typeof spl.fail;
     /** Raises `assertion_failed` when the condition is falsy. */

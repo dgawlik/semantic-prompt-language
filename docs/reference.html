@@ -7,11 +7,11 @@
 signature and options, the type builder, blockquote tools and controls, and failure codes.">
 <meta name="color-scheme" content="light dark">
 <title>API reference - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=f8de8cfd6af0">
-<link rel="stylesheet" href="assets/style.css?v=f8de8cfd6af0">
+<link rel="icon" type="image/png" href="assets/icon.png?v=d76d24a27249">
+<link rel="stylesheet" href="assets/style.css?v=d76d24a27249">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=f8de8cfd6af0"></script>
-<script defer src="assets/site.js?v=f8de8cfd6af0"></script>
+<script defer src="assets/search-index.js?v=d76d24a27249"></script>
+<script defer src="assets/site.js?v=d76d24a27249"></script>
 </head>
 <body data-page="reference">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -124,8 +124,12 @@ repeat indented blocks.</p>
 <td>Not run</td>
 </tr>
 <tr>
-<td><code>{agent restrict=..., enforce=..., forbid=..., model=..., reasoning=...}</code> ... <code>{/agent}</code></td>
-<td>Agent command; the optional settings are those of <code>@CTL</code></td>
+<td><code>{js alias=&quot;name&quot;}</code>, <code>{ts alias=&quot;name&quot;}</code></td>
+<td>Runs; <code>go(&#39;name&#39;)</code> continues here</td>
+</tr>
+<tr>
+<td><code>{agent restrict=..., enforce=..., forbid=..., model=..., reasoning=..., alias=...}</code> ... <code>{/agent}</code></td>
+<td>Agent command; the optional settings are those of <code>@CTL</code>, plus the block alias</td>
 </tr>
 <tr>
 <td><code>{codegen ...}</code> ... <code>{/codegen}</code></td>
@@ -328,6 +332,10 @@ the type for <code>schema</code>. In TypeScript the return type follows the opti
 <tbody><tr>
 <td><code>success(value?)</code></td>
 <td>Ends the document with a result (<code>null</code> when omitted)</td>
+</tr>
+<tr>
+<td><code>go(alias)</code></td>
+<td>Continues a <code>.spl</code> workflow at the block with this alias; see <a href="language.html#jumping-to-a-block">Jumping to a block</a></td>
 </tr>
 <tr>
 <td><code>fail(reason?)</code></td>
