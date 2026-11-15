@@ -42,7 +42,30 @@ function fences(markdown: string): { language: string; text: string }[] {
 }
 
 describe('documentation site', () => {
-    const pages = fs.readdirSync(docs).filter(name => name.endsWith('.html'));
+    const files = fs.readdirSync(docs).filter(name => name.endsWith('.html'));
+    // index.html is the starter presentation; the generated documentation starts at introduction.html.
+    const pages = files.filter(name => name !== 'index.html');
+
+    it('publishes the starter presentation as the front page, linking to the documentation', () => {
+        const html = fs.readFileSync(path.join(docs, 'index.html'), 'utf8');
+        expect(html).toContain('href="introduction.html">Explore the docs');
+        expect(html).toContain('href="getting-started.html"');
+        expect(html).not.toMatch(/href="\.\.\//);
+        expect(html).not.toContain('href="https://dgawlik.github.io/semantic-prompt-language/');
+        for (const file of pages) expect(fs.readFileSync(path.join(docs, file), 'utf8'), file).toContain('<a href="introduction.html" aria-current="true">Documentation</a>');
+    });
+
+    it('index.html local links resolve', () => {
+        const html = fs.readFileSync(path.join(docs, 'index.html'), 'utf8');
+        for (const match of html.matchAll(/href="([^"]+)"/g)) {
+            const href = match[1];
+            if (/^[a-z][a-z\d+.-]*:/i.test(href)) continue;
+            const [name, fragment] = href.split('#');
+            const target = path.resolve(docs, decodeURIComponent(name || 'index.html'));
+            expect(fs.existsSync(target), href).toBe(true);
+            if (fragment) expect(fs.readFileSync(target, 'utf8'), href).toContain(`id="${fragment}"`);
+        }
+    });
 
     for (const file of pages) {
         const html = fs.readFileSync(path.join(docs, file), 'utf8');
@@ -114,7 +137,7 @@ describe('documentation site', () => {
     });
 
     it('has a Markdown page for every HTML documentation page', () => {
-        const expected = pages.map(file => file === 'index.html' ? 'introduction.md' : file.replace(/\.html$/, '.md')).sort();
+        const expected = pages.map(file => file.replace(/\.html$/, '.md')).sort();
         expect(fs.readdirSync(templates).filter(file => file.endsWith('.md')).map(file => file.toLowerCase()).sort()).toEqual(expected);
     });
 
@@ -136,6 +159,7 @@ describe('documentation site', () => {
     it('states the runtime requirements of the package', () => {
         const { engines } = JSON.parse(fs.readFileSync(path.join(root, 'lang', 'package.json'), 'utf8')) as { engines: { node: string } };
         const minimum = /^>=(\d+\.\d+)/.exec(engines.node)![1];
+        expect(fs.readFileSync(path.join(docs, 'introduction.html'), 'utf8')).toContain(`Node.js ${minimum}+`);
         expect(fs.readFileSync(path.join(docs, 'index.html'), 'utf8')).toContain(`Node.js ${minimum}+`);
         expect(fs.readFileSync(path.join(docs, 'getting-started.html'), 'utf8')).toContain(`Node.js ${engines.node.replace('>', '&gt;')}`);
     });
@@ -143,7 +167,7 @@ describe('documentation site', () => {
 
 describe('documentation sources', () => {
     const sources = [
-        'README.md', 'TYPES.md', path.join('lang', 'README.md'), path.join('vscode', 'README.md'),
+        'README.md', path.join('lang', 'README.md'), path.join('vscode', 'README.md'),
         ...fs.readdirSync(templates).filter(file => file.endsWith('.md')).map(file => path.join('docs-template', file)),
     ];
 

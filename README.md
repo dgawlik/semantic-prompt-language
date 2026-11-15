@@ -144,11 +144,10 @@ Login configures API keys, not subscription OAuth.
 | [lang/](lang/README.md) | The `spl-lang` package: library, runtime, CLI, tests and [examples](lang/examples/) |
 | [vscode/](vscode/README.md) | VS Code extension: JavaScript language features in workflow Markdown and `.spl` files, and runnable notebooks |
 | [docs-template/](docs-template/Introduction.md) | Documentation sources |
-| [docs/](docs/) | Generated documentation site (GitHub Pages) |
+| [docs/](docs/) | Generated documentation site (GitHub Pages); `index.html` is the starter presentation |
 
-[TYPES.md](TYPES.md) records the contract of the type builder.
 [generate-presentation.md](generate-presentation.md) is a workflow that regenerates the
-starter presentation in `presentations/`.
+starter presentation in `presentations/`; `node docs/build.mjs` publishes it as the site's front page.
 
 ## Development
 

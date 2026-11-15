@@ -8,6 +8,8 @@ import hljs from './highlight.mjs';
 const output = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(output);
 const source = path.join(root, 'docs-template');
+const startPage = path.join(root, 'presentations', 'SPL-Start-Here.html');
+const site = 'https://dgawlik.github.io/semantic-prompt-language/';
 const logo = fs.readFileSync(path.join(root, 'vscode', 'icon.png'));
 const repository = 'https://github.com/dgawlik/semantic-prompt-language';
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'lang', 'package.json'), 'utf8'));
@@ -15,7 +17,7 @@ const check = process.argv.includes('--check');
 if (process.argv.slice(2).some((arg) => arg !== '--check')) throw new Error('Usage: node docs/build.mjs [--check]');
 
 const pages = [
-    ['Introduction', 'index', 'Introduction', 'Start here', 'book'],
+    ['Introduction', 'introduction', 'Introduction', 'Start here', 'book'],
     ['Getting-started', 'getting-started', 'Getting started', 'Start here', 'arrow'],
     ['Language', 'language', 'Workflow code', 'Writing workflows', 'code'],
     ['LLM-commands', 'llm-commands', 'Natural language & models', 'Writing workflows', 'spark'],
@@ -66,10 +68,10 @@ const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&
 const plain = (tokens) => tokens.map((token) => token.tokens ? plain(token.tokens) : token.text ?? '').join('');
 const headingId = (value) => value.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, '').replace(/ /g, '-');
 
-function rewriteLink(href, page) {
+function rewriteLink(href, page, base = source) {
     if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith('#')) return href;
     const [filename, fragment] = href.split('#');
-    const target = path.resolve(source, filename);
+    const target = path.resolve(base, filename);
     const destination = pages.find((item) => path.join(source, `${item.file}.md`) === target);
     if (destination) return `${destination.slug}.html${fragment ? `#${fragment}` : ''}`;
     if (target === output) return 'index.html';
@@ -77,6 +79,28 @@ function rewriteLink(href, page) {
     const relative = path.relative(root, target);
     if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`${page.file}: link outside repository: ${href}`);
     return `${repository}/${fs.statSync(target).isDirectory() ? 'tree' : 'blob'}/HEAD/${relative.split(path.sep).map(encodeURIComponent).join('/')}${fragment ? `#${fragment}` : ''}`;
+}
+
+/**
+ * The site's front page: the starter presentation, with links to the published site made relative
+ * (the site root goes to the documentation introduction) and repository paths made absolute.
+ */
+function renderStartPage() {
+    const page = { file: path.relative(root, startPage) };
+    const html = fs.readFileSync(startPage, 'utf8').replace(/\r\n/g, '\n');
+    let docs = 0;
+    const result = html.replace(/\bhref="([^"]*)"/g, (_, raw) => {
+        const href = raw.replace(/&amp;/g, '&');
+        let link;
+        if (href.startsWith(site) || `${href}/` === site) {
+            const [file = '', fragment] = href.slice(site.length).split('#');
+            link = `${!file || file === 'index.html' ? 'introduction.html' : file}${fragment ? `#${fragment}` : ''}`;
+        } else link = rewriteLink(href, page, path.dirname(startPage));
+        if (link.split('#')[0] === 'introduction.html') docs++;
+        return `href="${escape(link)}"`;
+    });
+    if (!docs) throw new Error(`${page.file}: expected a link to the documentation`);
+    return result;
 }
 
 function navigation(current, label) {
@@ -166,7 +190,7 @@ function renderPage(page, index) {
     const toc = `<nav class="toc-links" aria-label="On this page"><ul>${headings.map((heading) => `<li class="toc-level-${heading.depth}"><a href="#${heading.id}">${escape(heading.text)}</a></li>`).join('')}</ul></nav>`;
     const neighbors = [[pages[index - 1], 'Previous'], [pages[index + 1], 'Next']].map(([neighbor, direction]) => neighbor
         ? `<a class="page-link ${direction.toLowerCase()}" href="${neighbor.slug}.html"><span>${direction}</span><strong>${neighbor.label}</strong>${icon('arrow')}</a>` : '<div></div>').join('');
-    const heroTitle = page.slug === 'index' ? escape(title).replace('minutes, not hours', '<em>minutes, not hours</em>') : escape(title);
+    const heroTitle = page.slug === 'introduction' ? escape(title).replace('minutes, not hours', '<em>minutes, not hours</em>') : escape(title);
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -174,7 +198,7 @@ function renderPage(page, index) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="${escape(plain(lead.tokens))}">
 <meta name="color-scheme" content="light dark">
-<title>${escape(page.slug === 'index' ? 'SPL - Semantic Prompt Language' : `${page.label} - SPL docs`)}</title>
+<title>${escape(page.slug === 'introduction' ? 'SPL - Semantic Prompt Language' : `${page.label} - SPL docs`)}</title>
 <link rel="icon" type="image/png" href="assets/icon.png?v=${revision}">
 <link rel="stylesheet" href="assets/style.css?v=${revision}">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
@@ -185,8 +209,8 @@ function renderPage(page, index) {
 <a class="skip-link" href="#page">Skip to content</a>
 <header class="site-header">
   <div class="header-inner">
-    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
-    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <a class="brand" href="index.html" aria-label="SPL home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="introduction.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
     <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden>${icon('search')}<span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden>${icon('sun')}${icon('moon')}</button><a class="github-link icon-button" href="${repository}" aria-label="SPL on GitHub">${icon('external')}</a></div>
   </div>
 </header>
@@ -195,7 +219,7 @@ function renderPage(page, index) {
   <details class="mobile-nav"><summary>Browse documentation <span>${escape(page.label)}</span>${icon('chevron')}</summary>${navigation(page, 'Mobile documentation')}</details>
   <main id="page" tabindex="-1">
     <div class="page-meta"><span>${escape(page.group)}</span>${icon('chevron')}<span>${escape(page.label)}</span><span class="reading-time">${Math.max(1, Math.ceil(markdown.split(/\s+/).length / 220))} min read</span></div>
-    <header class="page-heading${page.slug === 'index' ? ' introduction-heading' : ''}">${page.slug === 'index' ? '<p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Fast iteration. Explicit guards. Readable workflows.</p>' : ''}<h1>${heroTitle}</h1><div class="lead"><p>${leadHtml}</p></div>${page.slug === 'index' ? `<div class="hero-actions"><a class="button-primary" href="getting-started.html">Start building ${icon('arrow')}</a><a class="button-secondary" href="language.html">Write workflow code ${icon('chevron')}</a></div><div class="hero-tags"><span>${icon('terminal')}Node.js 24.15+</span><span>${icon('spark')}OpenAI, Anthropic, Google</span><span>${icon('shield')}Visible boundaries</span></div>` : ''}</header>
+    <header class="page-heading${page.slug === 'introduction' ? ' introduction-heading' : ''}">${page.slug === 'introduction' ? '<p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Fast iteration. Explicit guards. Readable workflows.</p>' : ''}<h1>${heroTitle}</h1><div class="lead"><p>${leadHtml}</p></div>${page.slug === 'introduction' ? `<div class="hero-actions"><a class="button-primary" href="getting-started.html">Start building ${icon('arrow')}</a><a class="button-secondary" href="language.html">Write workflow code ${icon('chevron')}</a></div><div class="hero-tags"><span>${icon('terminal')}Node.js 24.15+</span><span>${icon('spark')}OpenAI, Anthropic, Google</span><span>${icon('shield')}Visible boundaries</span></div>` : ''}</header>
     <details class="mobile-toc"><summary>On this page ${icon('chevron')}</summary>${toc}</details>
     <article class="prose">${body}</article>
     <footer class="page-footer"><a href="${repository}/blob/HEAD/docs-template/${page.file}.md">${icon('edit')}View this page in Markdown ${icon('external')}</a><span>Good tools make intent clear.</span></footer>
@@ -218,7 +242,7 @@ if (JSON.stringify(markdownFiles) !== JSON.stringify(pages.map((page) => `${page
 for (const file of ['style.css', 'site.js']) {
     if (!fs.existsSync(path.join(output, 'assets', file))) throw new Error(`Missing documentation asset: ${file}`);
 }
-const generated = new Map([['.nojekyll', ''], [path.join('assets', 'icon.png'), logo]]);
+const generated = new Map([['.nojekyll', ''], [path.join('assets', 'icon.png'), logo], ['index.html', renderStartPage()]]);
 const search = [];
 for (const [index, page] of pages.entries()) {
     const result = renderPage(page, index);
@@ -236,4 +260,4 @@ for (const [file, content] of generated) {
         fs.writeFileSync(target, content);
     }
 }
-console.log(`${check ? 'Verified' : 'Built'} ${pages.length} documentation pages and ${search.length} searchable sections.`);
+console.log(`${check ? 'Verified' : 'Built'} the start page, ${pages.length} documentation pages and ${search.length} searchable sections.`);

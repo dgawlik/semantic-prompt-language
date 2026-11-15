@@ -8,30 +8,30 @@ prints its result on stdout and logs on stderr, and reports the outcome through 
 Requires Node.js &gt;=24.15.0.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=79b77e369d15">
-<link rel="stylesheet" href="assets/style.css?v=79b77e369d15">
+<link rel="icon" type="image/png" href="assets/icon.png?v=8f8492bb709a">
+<link rel="stylesheet" href="assets/style.css?v=8f8492bb709a">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=79b77e369d15"></script>
-<script defer src="assets/site.js?v=79b77e369d15"></script>
+<script defer src="assets/search-index.js?v=8f8492bb709a"></script>
+<script defer src="assets/site.js?v=8f8492bb709a"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
 <header class="site-header">
   <div class="header-inner">
-    <a class="brand" href="index.html" aria-label="SPL documentation home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
-    <nav class="header-links" aria-label="Primary"><a href="index.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
+    <a class="brand" href="index.html" aria-label="SPL home"><span class="brand-mark" aria-hidden="true">s<span>p</span>l<span class="brand-dot">.</span></span><span class="brand-divider" aria-hidden="true"></span><span class="brand-description">Semantic Prompt Language</span></a>
+    <nav class="header-links" aria-label="Primary"><a href="introduction.html" aria-current="true">Documentation</a><a href="examples.html">Examples</a></nav>
     <div class="header-actions"><button type="button" class="search-trigger" data-open-search aria-label="Search documentation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span>Search docs...</span><kbd>Ctrl K</kbd></button><button type="button" class="theme-toggle icon-button" aria-label="Switch color theme" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z"/></svg></button><a class="github-link icon-button" href="https://github.com/dgawlik/semantic-prompt-language" aria-label="SPL on GitHub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.3.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>CLI &amp; runtime</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.4.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="introduction.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>CLI &amp; runtime</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="introduction.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span><span class="nav-indicator" aria-hidden="true"></span></a></li><li><a href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>CLI &amp; runtime</span><span class="reading-time">16 min read</span></div>
+    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>CLI &amp; runtime</span><span class="reading-time">18 min read</span></div>
     <header class="page-heading"><h1>CLI &amp; runtime</h1><div class="lead"><p><code>spl</code> runs one workflow, a Markdown document or a <a href="language.html#dedicated-spl-files"><code>.spl</code> file</a>,
 prints its result on stdout and logs on stderr, and reports the outcome through its exit code.
 Requires Node.js &gt;=24.15.0.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#pinned-workflows">Pinned workflows</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#runtime-limits">Runtime limits</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li><li class="toc-level-3"><a href="#interactive-sessions">Interactive sessions</a></li></ul></nav></details>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-3"><a href="#terminal-view">Terminal view</a></li><li class="toc-level-3"><a href="#stepping-with---debug">Stepping with --debug</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#pinned-workflows">Pinned workflows</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#runtime-limits">Runtime limits</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li><li class="toc-level-3"><a href="#interactive-sessions">Interactive sessions</a></li></ul></nav></details>
     <article class="prose"><h2 id="usage">Usage<a class="heading-anchor" href="#usage" aria-label="Link to Usage">#</a></h2>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-1">spl &lt;workflow.md&gt; [options] [--arg value ...]
 spl &lt;workflow.spl&gt; [options] [--arg value ...]
@@ -79,6 +79,10 @@ spl <span class="hljs-built_in">logout</span> [openai|anthropic|google]
 <td>No execution logs; human prompts still appear on stderr</td>
 </tr>
 <tr>
+<td><code>--debug</code></td>
+<td>Step through the workflow block by block in the <a href="#stepping-with---debug">terminal view</a></td>
+</tr>
+<tr>
 <td><code>--timeout &lt;s&gt;</code></td>
 <td>Per model call (default 300)</td>
 </tr>
@@ -107,7 +111,8 @@ static relative <code>import</code> declarations point at existing files under <
 it checks the blocks and the settings of their tags in the same way. Dynamic
 <code>import(&#39;./x.js&#39;)</code> calls and package names are not checked. It runs no code and calls no model,
 so it cannot find errors that only appear at run time, such as a misspelled variable.</p>
-<p>Normal runs handle <code>human</code> calls and blockquote <code>ask_human</code> questions directly. The shell
+<p>Normal runs handle <code>human</code> calls and blockquote <code>ask_human</code> questions directly. In the
+<a href="#terminal-view">terminal view</a> you type the answer in its status box; otherwise the shell
 prints each question on stderr and reads one line from stdin, preserving whitespace except the
 line ending. Repeat <code>--human</code> to supply answers in question order without prompting:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">bash</span><span class="code-language">bash</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy bash code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="bash code example"><code class="language-bash" id="code-2">spl lang/examples/color-poem.md
@@ -168,6 +173,11 @@ Use <code>--silent</code> when logs could expose sensitive data.</p>
 <td>Variable state</td>
 <td>Yellow</td>
 </tr>
+<tr>
+<td><code>*</code></td>
+<td>Tool call: <code>* tool read_file path</code>, followed by its content; <code>failed</code> on errors</td>
+<td>Green / red</td>
+</tr>
 </tbody></table>
 </div>
 <p>Generic embedding messages have a <code>- message</code> header. Explicit <code>log(...)</code> calls keep their
@@ -176,39 +186,94 @@ State logs cover the shared top-level bindings: each event names the binding, it
 (<code>&lt;unbound&gt;</code> on initialization) and its new value. Bindings are compared after every top-level
 statement and agent action, so a change made inside a function or loop is reported when that
 statement finishes. Local variables, unchanged values and imported modules are not reported.
-During trace replay, reconstruction is silent; newly completed steps remain visible.</p>
-<p>Terminal stdin and stderr enable an isolated BetterTUI view on stderr, even when stdout is piped.
-Event headers are bold when terminal styling is enabled. An animated trailing loading character
-remains visible while the workflow runs, including while waiting for model output. It disappears
-on exit and is never included in the expanded transcript or stdout.
-Generated model prefaces (runtime/document preambles, guidance and initial blockquote context)
-and every object/array start as folded summaries; the requested prompt stays visible.
-Up/Down selects a payload in the viewport or scrolls text; Enter/Space toggles a visible selection;
-Page Up/Down scrolls; Home/End reaches the ends. Other folds and selection survive arrival/resize.
-The view initially follows new output. Scrolling away from the bottom pauses following, not
-execution; scrolling back to the bottom with arrows, Page Down or End resumes following.
-Expanded JSON uses two-space indentation and preserves original numeric/string tokens and duplicate
-keys. Primitives and malformed JSON remain readable without misleading fold controls.</p>
-<p>Model responses and available reasoning stream live in this view by default; <code>hide: true</code> suppresses reasoning.
-Partial JSON is shown as text until the authoritative response arrives, when normal formatting
-and folding apply. Streaming previews are separate from immutable log events, so the final
-transcript contains each complete response once. Redirected logs remain expanded and append-only.
-<code>--silent</code> also suppresses streaming previews.</p>
-<p><code>@CODEGEN</code> responses appear as JavaScript code with line numbers, preserved indentation and
-syntax colors when terminal color is enabled. The same display handles incomplete streaming
-code and definitions reused from cache. Generated codegen instructions and binding context start
-folded, leaving the requested function description visible. Plain logs and the final transcript
-retain the source without line-number gutters.</p>
-<p>Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
-stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
-append-only output without changing workflow results. Non-terminal stdin/stderr, <code>TERM=dumb</code>,
-embedded sinks, silent, help/version, auth and check-only never acquire the UI.
-Before a human prompt, the interactive renderer exits and restores the terminal so only the shell
-reads the answer; after the answer it starts again with the whole log, and the final transcript
-lists each event once. Supplied <code>--human</code> answers do not stop the UI.
-If terminal-mode queries are unsupported or an alternate screen is already active, SPL diagnoses
-the limitation and uses append-only output without taking over that screen.
+During trace replay, reconstruction is silent; newly completed steps remain visible.
+Tool calls from fences (<code>readFile</code>, <code>writeFile</code>, <code>webFetch</code>, <code>webSearch</code>, <code>shell</code>), blockquotes,
+<code>agent()</code> and MCP servers are logged at <code>info</code> with what they acted on and their content: the file
+read or written, the fetched body, search results, command output, MCP result or error.</p>
+<h3 id="terminal-view">Terminal view<a class="heading-anchor" href="#terminal-view" aria-label="Link to Terminal view">#</a></h3>
+<p>When stdin and stderr are terminals, logs appear in a full-screen <a href="https://github.com/vadimdemedes/ink">Ink</a>
+view on the alternate screen of stderr, even when stdout is piped. A header names the workflow, the
+timeline follows new output, and a status box at the bottom shows a spinner while the workflow runs,
+a human question with its answer field, or the final outcome. The available keys are always listed
+under it.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Terminal view reference table"><table>
+<thead>
+<tr>
+<th scope="col">Item</th>
+<th scope="col">Shown as</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Model prompt</td>
+<td><code>❯ ask prompt</code>; the generated preamble (runtime/document preambles, guidance, initial blockquote context) is a collapsed <code>▸ preamble</code> line, and the workflow&#39;s own prompt follows with a <code>│</code> gutter</td>
+</tr>
+<tr>
+<td>Model response</td>
+<td><code>● ask response</code> with the text; <code>@CODEGEN</code> code is a collapsed <code>▸ JavaScript · N lines</code></td>
+</tr>
+<tr>
+<td>Tool call</td>
+<td><code>● read_file path</code> (green) or <code>✗</code> (red) and a collapsed summary such as <code>▸ 42 lines</code></td>
+</tr>
+<tr>
+<td>Diagnostics</td>
+<td><code>✗</code> error, <code>!</code> warning, <code>•</code> info, <code>·</code> debug, <code>~</code> state, <code>▪</code> script <code>log(...)</code></td>
+</tr>
+</tbody></table>
+</div>
+<p>Tool content, generated code, preambles and every object/array start collapsed. Up/Down selects a
+collapsed item, Space or Enter expands or collapses it, Page Up/Down scrolls and Home/End reach the
+ends. Until you navigate, the newest item is selected, so Space expands the latest tool call. Expanded
+files, fetched pages, search results and generated code appear as they would in a file: line numbers,
+preserved indentation and syntax colors for JavaScript, TypeScript, JSON and Markdown. Expanded JSON
+uses two-space indentation and preserves original numeric/string tokens and duplicate keys.
+Scrolling away from the bottom pauses following, not execution; End resumes following.</p>
+<p>Model responses and available reasoning stream live in this view by default; <code>hide: true</code> suppresses
+reasoning. The live preview is replaced by the complete response when it arrives. <code>--silent</code> also
+suppresses streaming previews.</p>
+<p><code>human()</code> questions and blockquote <code>ask_human</code> questions are answered in the status box: type the
+answer and press Enter. Supplied <code>--human</code> answers are used first, without prompting.</p>
+<p>When the workflow ends, the view stays open with <code>✓ Completed</code> or <code>✗ Failed</code> until you press <code>e</code>.
+Exiting restores the terminal exactly as it was and prints nothing to stderr; stdout then gets only
+the result or failure payload. Ctrl+C cancels a running workflow (exit code 130) and also closes a
+finished one. If the view cannot start or stops unexpectedly, SPL reports it and continues with
+append-only logs without changing the workflow result. Non-terminal stdin/stderr, <code>TERM=dumb</code>,
+embedded sinks, <code>--silent</code>, help/version, auth and <code>--check</code> never start the view.
 Message, label and value controls are sanitized rather than executed as terminal instructions.</p>
+<p>Redirected logs are plain, append-only and fully expanded: JSON is indented, tool content and
+<code>@CODEGEN</code> sources follow their header without line-number gutters, and nothing waits for a key.</p>
+<h3 id="stepping-with---debug">Stepping with <code>--debug</code><a class="heading-anchor" href="#stepping-with---debug" aria-label="Link to Stepping with --debug">#</a></h3>
+<p><code>--debug</code> stops the workflow before its first block and lets you run it one block at a time. A block
+is a <code>js</code>/<code>ts</code> fence or a blockquote (agent or <code>@CODEGEN</code>); <code>.spl</code> blocks, including those inside
+<code>if</code> and <code>while</code>, step the same way.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Stepping with --debug reference table"><table>
+<thead>
+<tr>
+<th scope="col">Key</th>
+<th scope="col">Action</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>n</code></td>
+<td>Next: run the next block, then stop again</td>
+</tr>
+<tr>
+<td><code>v</code></td>
+<td>Variables: print the shared top-level variables as JSON</td>
+</tr>
+<tr>
+<td><code>c</code></td>
+<td>Continue: run to the end without stopping</td>
+</tr>
+<tr>
+<td><code>e</code></td>
+<td>Exit: stop the workflow immediately (exit code 130)</td>
+</tr>
+</tbody></table>
+</div>
+<p>Each stop adds a <code>▶ js block · line N</code> item with the block&#39;s source collapsed, and the status box
+shows the line it will run. <code>--debug</code> needs the terminal view, so it cannot be combined with
+<code>--silent</code> or used with redirected stdin/stderr.</p>
 <p>Colors are enabled automatically when stderr is a terminal, and disabled for redirected output
 or <code>TERM=dumb</code>. Set <code>NO_COLOR=1</code> to disable color, or <code>FORCE_COLOR=1</code> to enable it when redirecting;
 <code>FORCE_COLOR=0</code> disables color, and <code>NO_COLOR</code> takes precedence. stdout results and trace journals
@@ -216,7 +281,7 @@ remain plain, machine-readable data.
 <code>--silent</code> suppresses execution logs; usage, syntax and trace-usage diagnostics still appear
 on stderr so command-line errors are not hidden.
 <code>--log-level</code> retains ordinary severity filtering; model transcripts appear at every non-silent
-level, while state events appear only at <code>debug</code>. Forced color never enables cursor controls or keyboard input.</p>
+level, tool calls from <code>info</code>, and state events only at <code>debug</code>. Forced color never enables cursor controls or keyboard input.</p>
 <p>For example, <code>log(&#39;review:&#39;, review)</code> produces:</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-3" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-3">[info] log: review:
 {
@@ -229,8 +294,8 @@ Custom logger sinks default to plain text; <code>new Logger(&#39;info&#39;, sink
 explicitly enables styling. Non-JSON values such as errors, bigints and circular objects use
 Node&#39;s inspect format instead of losing error details or failing JSON serialization.
 An additive <code>eventSink</code> option delivers detached readonly events instead of strings, never both.
-Neither library imports nor custom sinks load BetterTUI or start a process.</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Output and exit codes reference table"><table>
+Neither library imports nor custom sinks load the terminal view or read input.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Stepping with --debug reference table"><table>
 <thead>
 <tr>
 <th scope="col">Code</th>
@@ -510,7 +575,7 @@ stopped.</p>
     <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="safety.html"><span>Previous</span><strong>Guards & failures</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="reference.html"><span>Next</span><strong>API reference</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#pinned-workflows">Pinned workflows</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#runtime-limits">Runtime limits</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li><li class="toc-level-3"><a href="#interactive-sessions">Interactive sessions</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#usage">Usage</a></li><li class="toc-level-2"><a href="#output-and-exit-codes">Output and exit codes</a></li><li class="toc-level-3"><a href="#terminal-view">Terminal view</a></li><li class="toc-level-3"><a href="#stepping-with---debug">Stepping with --debug</a></li><li class="toc-level-2"><a href="#traces-and-replay">Traces and replay</a></li><li class="toc-level-2"><a href="#pinned-workflows">Pinned workflows</a></li><li class="toc-level-2"><a href="#mcp-servers">MCP servers</a></li><li class="toc-level-2"><a href="#models-and-authentication">Models and authentication</a></li><li class="toc-level-2"><a href="#runtime-limits">Runtime limits</a></li><li class="toc-level-2"><a href="#embedding">Embedding</a></li><li class="toc-level-3"><a href="#interactive-sessions">Interactive sessions</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

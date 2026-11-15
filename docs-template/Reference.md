@@ -178,7 +178,7 @@ Arguments are strings. Failures are `tool_error`; blocked calls are `restriction
 Schema and returns the value. `t` holds every builder under one name: `t.str`, `t.list`,
 `t.struct`, with `t.enum`, `t.null` and `t.schema` as aliases of `enumOf`, `nil` and
 `jsonSchema`. TypeScript code gets the parsed type with `Infer<typeof Type>`, imported from
-`spl-lang`. See [Types](Language.md#types) and [TYPES.md](../TYPES.md).
+`spl-lang`. See [Types](Language.md#types).
 
 ## Markdown builder
 

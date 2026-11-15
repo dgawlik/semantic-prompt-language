@@ -506,8 +506,6 @@ const invoice = await ask('Extract the invoice: Acme, 25.00 EUR', { schema: Invo
 log(describe(invoice));
 ```
 
-[TYPES.md](../TYPES.md) records the full contract of the type builder.
-
 ## Markdown builder
 
 `markdown` builds Markdown text without string concatenation. Every method returns the document,

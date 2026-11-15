@@ -257,9 +257,9 @@
     .table-scroll td:not(:first-child) { min-inline-size: 11rem; }
     .table-scroll td code { font-size: .88em; border: 0; background: transparent; padding: 0; color: var(--accent); }
     .table-scroll tbody tr:hover { background: var(--paper); }
-    body[data-page="index"] .prose ul:has(a[href="getting-started.html"]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; padding: 0; list-style: none; max-inline-size: none; }
-    body[data-page="index"] .prose ul:has(a[href="getting-started.html"]) li { position: relative; padding: 1.1rem; margin: 0; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); color: var(--muted); font-size: .77rem; }
-    body[data-page="index"] .prose ul:has(a[href="getting-started.html"]) a { display: block; margin-block-end: .4rem; color: var(--ink); font-size: .87rem; font-weight: 600; text-decoration: none; }
+    body[data-page="introduction"] .prose ul:has(a[href="getting-started.html"]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; padding: 0; list-style: none; max-inline-size: none; }
+    body[data-page="introduction"] .prose ul:has(a[href="getting-started.html"]) li { position: relative; padding: 1.1rem; margin: 0; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); color: var(--muted); font-size: .77rem; }
+    body[data-page="introduction"] .prose ul:has(a[href="getting-started.html"]) a { display: block; margin-block-end: .4rem; color: var(--ink); font-size: .87rem; font-weight: 600; text-decoration: none; }
 }
 
 @layer responsive {
@@ -324,7 +324,7 @@
         .search-footer span:last-child { display: none; }
     }
     @media (max-width: 34rem) {
-        body[data-page="index"] .prose ul:has(a[href="getting-started.html"]) { grid-template-columns: minmax(0, 1fr); }
+        body[data-page="introduction"] .prose ul:has(a[href="getting-started.html"]) { grid-template-columns: minmax(0, 1fr); }
         .reading-time { display: none; }
         .eyebrow { font-size: .65rem; }
         .hero-actions { gap: .65rem; }
