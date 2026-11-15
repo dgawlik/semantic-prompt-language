@@ -314,6 +314,12 @@ async function main(): Promise<number> {
         process.stderr.write(sanitize(question) + '\n> ');
         const answer = await answers!.next();
         if (answer.done) throw new Failure('runtime_error', 'cannot read human input: stdin ended; supply an answer with --human');
+        if (presentation!.resumable) {
+            // The renderer reads the terminal itself, so release stdin before showing it again.
+            input.close();
+            input = undefined;
+            await presentation!.resume();
+        }
         return answer.value;
     };
     process.on('SIGINT', interrupt);

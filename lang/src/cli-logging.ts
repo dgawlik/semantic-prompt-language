@@ -55,6 +55,8 @@ export class CliLogging {
     private exited = false;
     private finishAcknowledged = false;
     private cursorVisible?: boolean;
+    private released = false;
+    private printed = 0;
 
     constructor(private readonly options: PresentationOptions) {
         this.color = options.color ?? terminalColor();
@@ -66,7 +68,7 @@ export class CliLogging {
     readonly sink = (event: LogEvent): void => {
         if (this.state === 'closed') throw new Error('logging session is closed');
         this.history.push(event);
-        if (this.state === 'plain') this.write(formatEvent(event, this.color));
+        if (this.state === 'plain') this.transcript();
         else if (this.state === 'interactive') this.enqueue({
             version: 1, sessionId: this.sessionId, type: 'event', sequence: event.sequence, event,
         });
@@ -110,7 +112,32 @@ export class CliLogging {
         if (this.state === 'plain') return;
         if (this.state !== 'interactive') throw new Error('cannot release input from an inactive logging session');
         await this.finish('completed');
+        this.released = !this.failurePromise;
         this.state = 'plain';
+    }
+
+    /** Whether `resume` can bring back the interactive view released by `usePlain`. */
+    get resumable(): boolean {
+        return this.released && this.state === 'plain';
+    }
+
+    /** Starts a new interactive view after `usePlain`, showing the whole history again. */
+    resume(): Promise<void> {
+        if (!this.resumable) return Promise.resolve();
+        this.released = false;
+        this.child = undefined;
+        this.queue.length = 0;
+        this.sending = false;
+        this.sent = 0;
+        this.accepted = 0;
+        this.ready = undefined;
+        this.finished = undefined;
+        this.startPromise = undefined;
+        this.restored = false;
+        this.exited = false;
+        this.finishAcknowledged = false;
+        this.cursorVisible = undefined;
+        return this.start();
     }
 
     private async finish(reason: FinishReason): Promise<void> {
@@ -255,7 +282,10 @@ export class CliLogging {
         }
     }
 
-    private transcript(): void { for (const event of this.history) this.write(formatEvent(event, this.color)); }
+    /** Writes the events not yet printed, so a resumed view does not repeat earlier output. */
+    private transcript(): void {
+        while (this.printed < this.history.length) this.write(formatEvent(this.history[this.printed++], this.color));
+    }
     private detach(): void {
         clearTimeout(this.timer);
         this.child?.off('message', this.onMessage);

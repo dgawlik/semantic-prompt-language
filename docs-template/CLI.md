@@ -111,8 +111,9 @@ Normal finish restores input/cursor/screen state and leaves one complete expande
 stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
 append-only output without changing workflow results. Non-terminal stdin/stderr, `TERM=dumb`,
 embedded sinks, silent, help/version, auth and check-only never acquire the UI.
-Before a human prompt, the interactive renderer exits and restores the terminal; subsequent logs
-remain append-only so only the shell reads the answer. Supplied `--human` answers do not stop the UI.
+Before a human prompt, the interactive renderer exits and restores the terminal so only the shell
+reads the answer; after the answer it starts again with the whole log, and the final transcript
+lists each event once. Supplied `--human` answers do not stop the UI.
 If terminal-mode queries are unsupported or an alternate screen is already active, SPL diagnoses
 the limitation and uses append-only output without taking over that screen.
 Message, label and value controls are sanitized rather than executed as terminal instructions.

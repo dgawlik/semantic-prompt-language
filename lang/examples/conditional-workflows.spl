@@ -1,29 +1,25 @@
 
 
 {js}
-let _switch = args[0]
+let cond = args[0]
 let i = 0
+let result = null
 {/js}
 
-if _switch == 'color':
-    {js}
-    let result = await ask('What is your favorite color?', { tokens: 256, model: 'gpt-6-luna' })
-    {/js}
-elif _switch == 'food': 
-    {js}
-    let result = await ask('What is your favorite food?', { tokens: 256, model: 'gpt-6-luna' })
-    {/js}
+if cond == 'color':
+    {agent model='gpt-6-luna', reasoning='low'}
+    What is your favorite color? Save to -> @result
+    {/agent}
 else:
     {js}
-    let result = await ask('What is your favorite hobby?', { tokens: 256, model: 'gpt-6-luna' })
+    go('final')
     {/js}
 
 while i < 2:
-    {js}
-    let result = await agent(`increment number ${i}`, { tokens: 256, model: 'gpt-6-luna' })
-    i++
-    {/js}
+    {agent model='gpt-6-luna', reasoning='low'}
+    Increment the number @i by one. Save to -> @i
+    {/agent}
 
-{js}
+{js alias="final"}
 success({result, i})
 {/js}

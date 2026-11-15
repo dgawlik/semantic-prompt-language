@@ -431,6 +431,35 @@ describe('presentation ownership', () => {
         expect(restore).toHaveBeenCalledTimes(1);
     });
 
+    it('resumes the interactive view after a human prompt without repeating the transcript', async () => {
+        const children = [new FakeChild(), new FakeChild()];
+        const lines: string[] = [];
+        const restore = vi.fn();
+        const spawn = vi.fn((): RendererChild => children[spawn.mock.calls.length - 1]);
+        const logging = new CliLogging({ interactive: true, color: false, write: line => lines.push(line), spawn, restore });
+        await logging.start();
+        const [first, second] = events();
+        logging.sink(first);
+        expect(logging.resumable).toBe(false);
+        await logging.usePlain();
+        expect(logging.resumable).toBe(true);
+        logging.sink(second);
+        await logging.resume();
+        expect(logging.state).toBe('interactive');
+        expect(logging.resumable).toBe(false);
+        expect(spawn).toHaveBeenCalledTimes(2);
+        const third = { ...second, id: 'third', sequence: second.sequence + 1 };
+        logging.sink(third);
+        await logging.close('completed');
+        expect(children[1].sent.filter(message => (message as ParentMessage).type === 'event')).toHaveLength(3);
+        expect(lines).toHaveLength(3);
+        expect(lines[0]).toContain('i info first');
+        expect(lines[1]).toContain('- message second');
+        expect(lines[2]).toContain('- message second');
+        expect(restore).toHaveBeenCalledTimes(2);
+        expect(lines.join('\n')).not.toContain('using append-only');
+    });
+
     it('sends an ordered queue through successful backpressure without dropping events', async () => {
         const { logging, child, lines } = session();
         await logging.start();

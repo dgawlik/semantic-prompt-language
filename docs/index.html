@@ -325,30 +325,26 @@ a one-line definition and a description of several sentences.
         <div class="code-panel">
           <div class="code-head"><span>lang/examples/conditional-workflows.spl</span><a href="../lang/examples/conditional-workflows.spl">Open example &nearr;</a></div>
           <pre><code><span class="spl-block">{js}</span>
-<span class="kw">let</span> _switch = args[0]
+<span class="kw">let</span> cond = args[0]
 <span class="kw">let</span> i = 0
+<span class="kw">let</span> result = <span class="kw">null</span>
 <span class="spl-block">{/js}</span>
 
-<span class="kw">if</span> _switch == <span class="str">'color'</span>:
-    <span class="spl-block">{js}</span>
-    <span class="kw">let</span> result = <span class="kw">await</span> <span class="fn">ask</span>(<span class="str">'What is your favorite color?'</span>, { tokens: 256, model: <span class="str">'gpt-6-luna'</span> })
-    <span class="spl-block">{/js}</span>
-<span class="kw">elif</span> _switch == <span class="str">'food'</span>:
-    <span class="spl-block">{js}</span>
-    <span class="kw">let</span> result = <span class="kw">await</span> <span class="fn">ask</span>(<span class="str">'What is your favorite food?'</span>, { tokens: 256, model: <span class="str">'gpt-6-luna'</span> })
-    <span class="spl-block">{/js}</span>
+<span class="kw">if</span> cond == <span class="str">'color'</span>:
+    <span class="spl-block">{agent</span> <span class="spl-attribute">model</span>=<span class="str">'gpt-6-luna'</span>, <span class="spl-attribute">reasoning</span>=<span class="str">'low'</span><span class="spl-block">}</span>
+    What is your favorite color? Save to -&gt; <span class="spl-reference">@result</span>
+    <span class="spl-block">{/agent}</span>
 <span class="kw">else</span>:
     <span class="spl-block">{js}</span>
-    <span class="kw">let</span> result = <span class="kw">await</span> <span class="fn">ask</span>(<span class="str">'What is your favorite hobby?'</span>, { tokens: 256, model: <span class="str">'gpt-6-luna'</span> })
+    <span class="fn">go</span>(<span class="str">'final'</span>)
     <span class="spl-block">{/js}</span>
 
 <span class="kw">while</span> i &lt; 2:
-    <span class="spl-block">{js}</span>
-    <span class="kw">let</span> result = <span class="kw">await</span> <span class="fn">agent</span>(<span class="str">`increment number ${i}`</span>, { tokens: 256, model: <span class="str">'gpt-6-luna'</span> })
-    i++
-    <span class="spl-block">{/js}</span>
+    <span class="spl-block">{agent</span> <span class="spl-attribute">model</span>=<span class="str">'gpt-6-luna'</span>, <span class="spl-attribute">reasoning</span>=<span class="str">'low'</span><span class="spl-block">}</span>
+    Increment the number <span class="spl-reference">@i</span> by one. Save to -&gt; <span class="spl-reference">@i</span>
+    <span class="spl-block">{/agent}</span>
 
-<span class="spl-block">{js}</span>
+<span class="spl-block">{js</span> <span class="spl-attribute">alias</span>=<span class="str">"final"</span><span class="spl-block">}</span>
 <span class="fn">success</span>({result, i})
 <span class="spl-block">{/js}</span></code></pre>
         </div>
