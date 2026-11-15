@@ -7,7 +7,7 @@ library already imported; its blockquotes run as agent commands in plain languag
 variables, functions, tools and guards.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
-[Examples](lang/examples) | [Migrating from 1.x](docs-template/Migration.md)
+[Examples](lang/examples)
 
 ````markdown
 ---
