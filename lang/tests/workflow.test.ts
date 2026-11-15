@@ -13,6 +13,50 @@ afterEach(() => {
     setAmbient(undefined);
 });
 
+describe('block hook', () => {
+    it('awaits beforeBlock before each fence and blockquote, with a snapshot of shared variables', async () => {
+        const seen: { kind: string; line: number; language: string; source: string; variables: Record<string, unknown> }[] = [];
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const running = execMarkdown(`${fence('const n = 1;')}\n\n${quote('Save @n doubled as m.')}\n\n${fence('success(n + m);')}`, {
+            backend: acting(action('save_variable', { name: 'm', value: 2 })),
+            beforeBlock: async block => {
+                seen.push({ kind: block.kind, line: block.line, language: block.language, source: block.source, variables: block.variables() });
+                if (seen.length === 2) await gate;
+            },
+        });
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(seen).toHaveLength(2);
+        release();
+        await expect(running).resolves.toMatchObject({ status: 'success', value: 3 });
+        expect(seen).toEqual([
+            { kind: 'code', line: 7, language: 'js', source: 'const n = 1;', variables: {} },
+            { kind: 'natural', line: 10, language: 'agent', source: 'Save @n doubled as m.', variables: { n: 1 } },
+            { kind: 'code', line: 13, language: 'js', source: 'success(n + m);', variables: { n: 1, m: 2 } },
+        ]);
+    });
+});
+
+describe('tool logs', () => {
+    it('logs fence and blockquote tool calls with their content', async () => {
+        const cwd = tempDir();
+        const { logger, events } = collecting();
+        const result = await execMarkdown(`${fence("await writeFile('a.ts', 'const a = 1;');")}\n\n${quote('Read a.ts.')}`, {
+            cwd, logger, backend: acting(action('read_file', { path: 'a.ts' }), action('read_file', { path: 'missing.md' })),
+        });
+        expect(result.status).toBe('failure');
+        const tools = events.filter(event => event.kind === 'tool');
+        expect(tools.map(event => event.kind === 'tool' && event.tool)).toEqual([
+            { name: 'write_file', target: 'a.ts', status: 'success' },
+            { name: 'read_file', target: 'a.ts', status: 'success' },
+            { name: 'read_file', target: 'missing.md', status: 'error' },
+        ]);
+        expect(tools[1].segments.at(-1)).toMatchObject({ type: 'listing', language: 'typescript', source: 'const a = 1;', summary: '1 line' });
+        expect(text(tools[0])).toBe('a.ts\nconst a = 1;');
+        expect(tools[2].segments.at(-1)).toMatchObject({ type: 'listing', language: 'text', summary: expect.stringContaining("read_file 'missing.md'") });
+    });
+});
+
 describe('library calls in fences', () => {
     it('assembles prompts from guidance, restrictions and hints', async () => {
         const model = scripted('first', 'second', 'third');

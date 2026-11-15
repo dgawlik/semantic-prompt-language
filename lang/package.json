@@ -48,16 +48,20 @@
   "dependencies": {
     "@ai-sdk/mcp": "^2.0.88",
     "@anthropic-ai/sdk": "^1.4.0",
-    "@bettertui/core": "0.1.1",
     "@google/genai": "^2.32.0",
     "acorn": "^8.19.0",
     "ajv": "^8.17.1",
+    "ink": "^8.0.0",
     "marked": "^18.1.1",
     "openai": "^7.48.0",
+    "react": "^19.3.1",
+    "string-width": "^8.3.0",
+    "wrap-ansi": "^10.0.2",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }

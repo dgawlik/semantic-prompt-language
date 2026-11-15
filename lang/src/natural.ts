@@ -20,7 +20,7 @@ const runtimeError = (message: string): Failure => new Failure('runtime_error', 
 /** Library functions an agent can usefully invoke with JSON arguments. */
 const CALLABLE = ['ask', 'think', 'agent', 'human', 'log', 'codegen', 'readFile', 'writeFile', 'webFetch', 'webSearch', 'shell', 'validate'];
 
-function overview(workspace: Workspace): { bindings: Record<string, unknown>; library: string } {
+export function overview(workspace: Workspace): { bindings: Record<string, unknown>; library: string } {
     const bindings: Record<string, unknown> = Object.create(null);
     for (const [name, value] of Object.entries(workspace.scope)) {
         if (value === undefined) continue;

@@ -156,30 +156,35 @@ With `--trace`, `@CODEGEN` and `codegen()` save generated functions beside the w
 `<workflow>.<function>.js`; later traced runs reuse a file whose first-line hash matches the
 description.
 
-Normal runs ask human questions directly on stderr and read one line from stdin. Supply repeatable
+Normal runs ask human questions directly: in the terminal view's status box, or on stderr with one
+line read from stdin when logs are redirected. Supply repeatable
 `--human <answer>` flags to skip prompting in question order, for example
 `spl examples/color-poem.md --human blue --human apple`. Remaining questions still prompt,
 including with `--silent`. With `--trace`, supplied answers are consumed only for unrecorded questions.
 
 ## Logs
 
-Each event has one compact header: `->` input (magenta), `<-` output/action (cyan),
+Each event has one compact header: `->` input (magenta), `<-` output/action (cyan), `*` tool (green),
 `~` state (yellow), `x` error (red), `!` warning (yellow), `i` info (blue), `.` debug (gray).
 `log(...)` calls keep the prefix `[info|error|debug] log:`. With `--log-level debug`, state logs
-report changes to shared top-level variables with their before and after values.
+report changes to shared top-level variables with their before and after values. Tool calls
+(files, web, shell, MCP) are logged from `info` with their content.
 
-When stdin and stderr are terminals, BetterTUI initially folds JSON objects/arrays. Up/Down
-selects payloads (or scrolls text), Enter/Space toggles a visible selection, Page Up/Down scrolls,
-and Home/End reaches the ends. Output follows the tail initially; scrolling away pauses following
-without pausing execution. Finishing restores the terminal and retains one complete expanded
-transcript without a keypress. Before a human prompt, the renderer restores the terminal and
-switches to append-only logs. Redirected logs and embedded sinks never read input and always
-expand JSON with two-space indentation. stdout results and trace journals remain machine-readable.
+When stdin and stderr are terminals, logs appear in a full-screen Ink view on stderr's alternate
+screen. Preambles, JSON, generated code and tool content (files read or written, fetched pages,
+search results) start collapsed: Up/Down selects, Space/Enter expands with line numbers and syntax
+colors, Page Up/Down scrolls and Home/End reaches the ends. Output follows the tail; scrolling away
+pauses following without pausing execution. Human questions are answered inside the view. When the
+run ends the view waits for `e`; exiting restores the terminal, prints nothing to stderr and leaves
+only the result on stdout. `--debug` stops before the first block: `n` runs the next block, `v`
+prints shared variables, `c` continues and `e` exits. Redirected logs and embedded sinks never read
+input and always expand JSON with two-space indentation. stdout results and trace journals remain
+machine-readable.
 
 `--log-level` filters severity; model events remain visible at every non-silent level.
 `--silent` suppresses execution logs. `NO_COLOR` wins over `FORCE_COLOR`; `FORCE_COLOR=0`
 disables color and forced color never enables interactivity. Auth,
-help/version and `--check` do not start a renderer.
+help/version and `--check` do not start the view.
 
 ## Embedding
 

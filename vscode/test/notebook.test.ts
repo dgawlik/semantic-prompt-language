@@ -368,7 +368,7 @@ test('cancelling a running worker stops unbounded code and rejects queued work',
 });
 
 test('worker hides debug state logs and uses current cells without native UI', async t => {
-    assert.doesNotMatch(readFileSync(workerPath, 'utf8'), /@bettertui|cli-renderer\.js|setRawMode/);
+    assert.doesNotMatch(readFileSync(workerPath, 'utf8'), /cli-tui|cli-view|ink\/build|setRawMode/);
     const session = kernel(t);
     const first: { text: string; output: boolean }[] = [];
     const second: { text: string; output: boolean }[] = [];

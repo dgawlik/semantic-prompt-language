@@ -81,11 +81,39 @@ function highlightCode(text: string, color: boolean): string {
 
 /** Generated JavaScript with line numbers, for the terminal transcript. */
 export function prettyCode(source: string, color = false): string {
-    const text = sanitize(source).replace(/\n$/, '');
-    const lines = highlightCode(text, color).split('\n');
+    return paint('JS', 90, color, true) + '\n' + numbered(highlightCode(sanitize(source).replace(/\n$/, ''), color), color);
+}
+
+function numbered(highlighted: string, color: boolean): string {
+    const lines = highlighted.split('\n');
     const digits = String(lines.length).length;
-    return paint('JS', 90, color, true) + '\n' + lines.map((line, index) =>
+    return lines.map((line, index) =>
         `${paint(String(index + 1).padStart(digits), 90, color)} ${paint('|', 90, color)} ${line}`).join('\n');
+}
+
+const LANGUAGES: Record<string, string> = {
+    js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
+    ts: 'typescript', mts: 'typescript', cts: 'typescript', tsx: 'typescript',
+    json: 'json', jsonl: 'json', md: 'markdown', spl: 'spl', html: 'html', htm: 'html', xml: 'html',
+};
+
+/** Display language of a file, from its extension. */
+export function languageOf(file: string): string {
+    return LANGUAGES[/\.([^./\\]+)$/.exec(file)?.[1]?.toLowerCase() ?? ''] ?? 'text';
+}
+
+/** Tool content highlighted for its language, without line numbers. */
+export function highlightListing(source: string, language: string, color = false): string {
+    const text = sanitize(source);
+    if (language === 'javascript' || language === 'typescript') return highlightCode(text, color);
+    if (language === 'json') return prettyJson(text, color) ?? text;
+    if (language === 'markdown' && color) return text.replace(/^(#{1,6} .*|> .*)$/gm, line => paint(line, line.startsWith('>') ? 36 : 35, color, true));
+    return text;
+}
+
+/** Tool content as it appears in a file: highlighted, with line numbers. */
+export function prettyListing(source: string, language: string, color = false): string {
+    return numbered(highlightListing(source.replace(/\r?\n$/, ''), language, color), color);
 }
 export function textSegments(text: string, eventId: string, identity: string): BodySegment[] {
     const plain = sanitize(text);
@@ -160,6 +188,7 @@ export function formatSegments(segments: readonly BodySegment[], color = false):
     return segments.map(segment => segment.type === 'json' ? prettyJson(segment.source, color)!
         : segment.type === 'preface' ? formatSegments(textSegments(segment.source, segment.payloadId, 'expanded'), color)
         : segment.type === 'code' ? highlightCode(segment.source, color)
+        : segment.type === 'listing' ? highlightListing(segment.source, segment.language, color)
         : segment.text).join('');
 }
 
@@ -175,6 +204,8 @@ export function eventHeader(event: LogEvent, color = false): string {
         case 'info': return marker('i info', 34);
         case 'debug': return marker('. debug', 90);
         case 'generic': return marker(`- ${sanitize(event.label)}`, 35);
+        case 'tool': return event.tool.status === 'success'
+            ? marker(`* tool ${sanitize(event.tool.name)}`, 32) : marker(`* tool ${sanitize(event.tool.name)} failed`, 31);
     }
 }
 

@@ -7,7 +7,7 @@ import { AiBackend, reasoningOptions } from '../src/ai.js';
 import { CopilotBackend } from '../src/copilot.js';
 import { Failure, GoSignal, SuccessSignal } from '../src/errors.js';
 import type { LlmRequest, LlmStreamUpdate } from '../src/llm.js';
-import type { ModelStreamEvent } from '../src/log-events.js';
+import type { LogEvent, ModelStreamEvent } from '../src/log-events.js';
 import { Logger } from '../src/logger.js';
 import { makeRestriction, Restrictions } from '../src/restrict.js';
 import { TOOL_SPECS, ToolHost } from '../src/tools.js';
@@ -343,6 +343,29 @@ it('stops on an unsuccessful MCP result before any subsequent runtime action', a
     await expect(command({ invokeAction })).rejects.toMatchObject({ statusCode: 'tool_error', reason: expect.stringContaining('server failed') });
     expect(invokeAction).not.toHaveBeenCalled();
     expect(mcp.close).toHaveBeenCalledOnce();
+});
+
+it('logs agent built-in and MCP tool calls once each', async () => {
+    const events: LogEvent[] = [];
+    const mcp = client();
+    mcp.callTool.mockResolvedValueOnce({ isError: true, content: [{ type: 'text', text: 'server failed' }] });
+    sdk.mcp.mockResolvedValue(mcp);
+    backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('info', undefined, { eventSink: event => events.push(event) }),
+        mcpServers: { docs: { command: 'node' } } });
+    const tools = request().tools;
+    vi.spyOn(tools, 'invoke').mockResolvedValueOnce('file text').mockRejectedValueOnce(new Failure('tool_error', 'missing file'));
+    steps = [
+        [call('read_file', { path: 'a.md' }), finish('tool-calls')],
+        [call('read_file', { path: 'b.md' }), finish('tool-calls')],
+        [call('mcp_0_0', { query: 'SPL' }), finish('tool-calls')],
+        [...text('Done'), finish()],
+    ];
+    expect(await backend.call(request({ kind: 'agent', tools }))).toMatchObject({ text: 'Done' });
+    expect(events.filter(event => event.kind === 'tool').map(event => event.kind === 'tool' && event.tool)).toEqual([
+        { name: 'read_file', target: 'a.md', status: 'success' },
+        { name: 'read_file', target: 'b.md', status: 'error' },
+        { name: 'docs/search', target: '{"query":"SPL"}', status: 'error' },
+    ]);
 });
 
 it('allows explicit agents to recover a non-restriction MCP failure', async () => {

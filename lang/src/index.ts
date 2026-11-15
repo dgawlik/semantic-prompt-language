@@ -12,11 +12,11 @@ export { Failure, SuccessSignal, GoSignal, SplSyntaxError, type FailurePayload, 
 // Running workflows and embedding the runtime.
 export { parse, parseInstruction, parseMarkdown, extractMarkdown, isWorkflowMarkdown, type Workflow, type Step, type CodeStep, type NaturalStep, type IfStep, type WhileStep, type BranchStep, type MarkdownDocument, type MarkdownBlock } from './markdown.js';
 export { parseSpl, scanSpl, SPL_KEYWORDS, type SplBlock, type SplControl, type SplDocument, type SplKeyword, type SplNode, type SplProblem, type SplTag } from './spl.js';
-export { run, ExecutionSession, checkWorkflow, type RunOptions, type RunResult, type WorkflowProblem } from './workflow.js';
+export { run, ExecutionSession, checkWorkflow, type RunOptions, type RunResult, type WorkflowProblem, type BlockStart } from './workflow.js';
 export { Runtime, type RuntimeOptions, type GenerateOptions, type HumanHandler } from './runtime.js';
 export { compileCell, type CompiledCell, type CellDeclaration, type CellLanguage } from './cell.js';
 export { Logger, type LogLevel, type LoggerOptions } from './logger.js';
-export type { LogEvent, LogEventSink, BodySegment, ModelInteraction, ModelStreamEvent, ModelStreamSink, StateChange, BindingDelta, BindingReference, ScopeReference, ObservedValue } from './log-events.js';
+export type { LogEvent, LogEventSink, BodySegment, ModelInteraction, ModelStreamEvent, ModelStreamSink, StateChange, BindingDelta, BindingReference, ScopeReference, ObservedValue, ToolUse } from './log-events.js';
 export { CopilotBackend } from './copilot.js';
 export { AiBackend, type AiBackendOptions } from './ai.js';
 export { Trace, TraceError, type TraceContext } from './trace.js';

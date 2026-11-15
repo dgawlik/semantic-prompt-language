@@ -85,4 +85,4 @@ export function collecting(level: 'error' | 'info' | 'debug' = 'info'): { logger
 }
 
 export const text = (event: LogEvent): string => event.segments.map(segment =>
-    segment.type === 'json' || segment.type === 'code' || segment.type === 'preface' ? segment.source : segment.text).join('');
+    segment.type === 'json' || segment.type === 'code' || segment.type === 'preface' || segment.type === 'listing' ? segment.source : segment.text).join('');

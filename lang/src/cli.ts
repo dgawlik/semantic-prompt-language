@@ -27,22 +27,30 @@ Usage: spl <workflow.md | workflow.spl> [options]
 
 Options:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
-                          All levels include model input/output; debug adds variable-state changes.
+                          All levels include model input/output; info adds tool calls;
+                          debug adds variable-state changes.
                           State logs identify defining scopes and before/after values.
                           No source traces, reads, no-op assignments or baseline dumps.
-                          Icons: -> input (magenta), <- output (cyan), ~ state (yellow),
+                          Icons: -> input (magenta), <- output (cyan), * tool (green), ~ state (yellow),
                           x error (red), ! warning (yellow), i info (blue), . debug (gray).
-                          Interactive JSON starts folded: Up/Down select, Enter/Space toggle,
-                          PgUp/PgDn scroll, Home/End reach ends. Exit never waits for a key.
-                          Model responses stream live in the interactive view.
-                          Plain/final transcripts expand JSON with two-space indentation.
+                          In a terminal, logs show in a full-screen view on stderr. Preambles, JSON,
+                          generated code and tool content start collapsed: Up/Down select,
+                          Space/Enter expand, PgUp/PgDn scroll, Home/End reach ends.
+                          Model responses stream live; human questions are answered in the view.
+                          When the run ends, press e to exit: the screen is restored and only
+                          the result is printed on stdout.
+                          Redirected logs are plain, append-only and fully expanded.
                           NO_COLOR wins over FORCE_COLOR; FORCE_COLOR=0 disables color.
   --silent                suppress all logs; only the result is printed
+  --debug                 step through the workflow in the terminal view: stops before the first block;
+                          n runs the next js/ts block or blockquote, v prints shared variables,
+                          c continues to the end, e exits immediately. Needs a terminal.
   --model <id>            model override (takes precedence over frontmatter)
   --provider <name>       openai | anthropic | google; model IDs may use provider/model
   --arg <value>           script argument exposed in args (repeatable; also --arg=value)
   --human <answer>        answer a human question without prompting (repeatable, in question order)
-                          Remaining questions read one line from stdin; prompts go to stderr.
+                          Remaining questions are asked in the terminal view, or read one line
+                          from stdin when logs are redirected; prompts go to stderr.
   --mcp <file.json>       MCP servers in VS Code mcp.json format
   --timeout <seconds>     per LLM call timeout (default: 300)
   --trace <file.jsonl>    append external inputs, model decisions, effects and results to a JSONL log
@@ -142,6 +150,7 @@ async function main(): Promise<number> {
             pin: { type: 'boolean' },
             cwd: { type: 'string' },
             check: { type: 'boolean' },
+            debug: { type: 'boolean' },
             version: { type: 'boolean', short: 'v' },
             help: { type: 'boolean', short: 'h' },
         } as const;
@@ -238,6 +247,9 @@ async function main(): Promise<number> {
         for (const problem of problems) new Logger('error').error(`${file}:${problem.line}:${problem.column}: ${problem.message}`);
         return problems.length ? 2 : 0;
     }
+    if (values.debug && (values.silent || !canInteract())) {
+        usageError('--debug needs an interactive terminal (stdin and stderr) and cannot be combined with --silent');
+    }
 
     let backend: LlmBackend;
     let trace: Trace | undefined;
@@ -297,12 +309,20 @@ async function main(): Promise<number> {
     presentation = new CliLogging({
         interactive: !values.silent && canInteract(),
         cancel: interrupt,
+        title: file,
+        debug: values.debug,
     });
     const human = async (question: string): Promise<string> => {
         if (values.human !== undefined && suppliedAnswers < values.human.length) {
             return values.human[suppliedAnswers++];
         }
-        await presentation!.usePlain();
+        if (presentation!.interactive) {
+            try {
+                return await presentation!.ask(question);
+            } catch (error) {
+                throw new Failure('runtime_error', `cannot read human input: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
         if (!input) {
             input = createInterface({
                 input: process.stdin, output: process.stderr,
@@ -314,22 +334,18 @@ async function main(): Promise<number> {
         process.stderr.write(sanitize(question) + '\n> ');
         const answer = await answers!.next();
         if (answer.done) throw new Failure('runtime_error', 'cannot read human input: stdin ended; supply an answer with --human');
-        if (presentation!.resumable) {
-            // The renderer reads the terminal itself, so release stdin before showing it again.
-            input.close();
-            input = undefined;
-            await presentation!.resume();
-        }
         return answer.value;
     };
     process.on('SIGINT', interrupt);
     await presentation.start();
+    let usage: string | undefined;
     try {
         try {
             result = await run(program, {
                 backend, logger, trace, file: path.resolve(file),
                 cwd: locked && values.cwd === undefined ? undefined : cwd,
                 model: values.model, args: values.arg, human, pin,
+                beforeBlock: values.debug ? async block => { await presentation!.pause(block); } : undefined,
             });
         } finally {
             try {
@@ -344,16 +360,20 @@ async function main(): Promise<number> {
     } catch (error) {
         if (interrupted) return 130;
         if (!(error instanceof TraceError) || error.kind !== 'usage') throw error;
-        new Logger('error').error(`spl: ${error.message}`);
-        return 2;
+        usage = `spl: ${error.message}`;
     } finally {
         trace?.close();
         input?.close();
         if (input) process.stdin.pause();
-        await presentation.close(interrupted ? 'cancelled' : result?.status === 'success' ? 'completed' : 'failed');
+        // An interactive run that finished keeps its screen until the user presses `e`; nothing is replayed after it closes.
+        await presentation.close(interrupted || usage !== undefined || !result ? 'cancelled' : result.status === 'success' ? 'completed' : 'failed');
         process.off('SIGINT', interrupt);
     }
-    if (interrupted) return 130;
+    if (usage !== undefined) {
+        new Logger('error').error(usage);
+        return 2;
+    }
+    if (interrupted || !result) return 130;
     if (result.status === 'failure') {
         process.stdout.write(JSON.stringify(result.failure, null, 4) + '\n');
         return 1;

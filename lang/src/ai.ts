@@ -7,7 +7,7 @@ import { Failure } from './errors.js';
 import { LlmError, validateRandomness, validateTokens, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel, type RuntimeTool } from './llm.js';
 import type { Logger } from './logger.js';
 import { configuredMcpTool, filterMcpServers, type McpServers } from './mcp.js';
-import { TOOL_SPECS } from './tools.js';
+import { TOOL_SPECS, describeMcpCall, describeToolCall } from './tools.js';
 
 const SYSTEM_MESSAGE = [
     'You are the execution engine of an automated script. Your reply is stored in a variable and used by the program.',
@@ -159,9 +159,12 @@ export class AiBackend implements LlmBackend {
                         type: 'object', properties: spec.properties, required: spec.required, additionalProperties: false,
                     }, async input => {
                         try {
-                            return await req.tools.invoke(spec.name, input);
+                            const output = await req.tools.invoke(spec.name, input);
+                            this.opts.logger.tool(describeToolCall(spec.name, input, { output }));
+                            return output;
                         } catch (error) {
                             if (!(error instanceof Failure)) throw error;
+                            this.opts.logger.tool(describeToolCall(spec.name, input, { error: error.reason }));
                             if (error.statusCode === 'restriction_violation') return stop(error);
                             return error.reason;
                         }
@@ -199,6 +202,7 @@ export class AiBackend implements LlmBackend {
                             if (!configuredMcpTool(servers, server, spec.name)) continue;
                             add(`mcp_${serverIndex}_${toolIndex++}`, `MCP ${server}/${spec.name}: ${spec.description ?? spec.name}`, spec.inputSchema, async input => {
                                 check();
+                                let logged = false;
                                 try {
                                     (req.currentRestrictions?.() ?? req.restrictions).checkMcp(server, spec.name);
                                     const result = await client.callTool({
@@ -206,6 +210,8 @@ export class AiBackend implements LlmBackend {
                                         options: { signal, timeout: config.timeout ?? this.opts.timeoutMs },
                                     });
                                     check();
+                                    logged = true;
+                                    this.opts.logger.tool(describeMcpCall(server, spec.name, input, { result, isError: Boolean(result.isError) }));
                                     toolResults.push(JSON.stringify({ server, tool: spec.name, arguments: input, success: !result.isError, result }));
                                     if (result.isError && req.naturalLanguage) {
                                         throw new Failure('tool_error', `MCP ${server}/${spec.name}: ${JSON.stringify(result.content)}`);
@@ -216,6 +222,7 @@ export class AiBackend implements LlmBackend {
                                     if (error instanceof Failure && error.statusCode === 'restriction_violation') return stop(error);
                                     const failure = error instanceof Failure ? error
                                         : new Failure('tool_error', `MCP ${server}/${spec.name}: ${error instanceof Error ? error.message : String(error)}`);
+                                    if (!logged) this.opts.logger.tool(describeMcpCall(server, spec.name, input, { error: failure.reason }));
                                     if (req.naturalLanguage) return stop(failure);
                                     toolResults.push(JSON.stringify({ server, tool: spec.name, arguments: input, success: false, error: failure.reason }));
                                     return JSON.stringify({ isError: true, content: [{ type: 'text', text: failure.reason }] });

@@ -24,6 +24,7 @@ spl logout [openai|anthropic|google]
 | `--check` | Validate frontmatter, fences, blockquote controls, relative imports and `--mcp` config without running |
 | `--log-level <level>` | `error`, `info` (default) or `debug` |
 | `--silent` | No execution logs; human prompts still appear on stderr |
+| `--debug` | Step through the workflow block by block in the [terminal view](#stepping-with---debug) |
 | `--timeout <s>` | Per model call (default 300) |
 | `--mcp <file.json>` | MCP servers, see [MCP servers](#mcp-servers) |
 | `--trace <file.jsonl>` | Append execution history, automatically resume or replay the same file; see [Traces and replay](#traces-and-replay) |
@@ -39,7 +40,8 @@ it checks the blocks and the settings of their tags in the same way. Dynamic
 `import('./x.js')` calls and package names are not checked. It runs no code and calls no model,
 so it cannot find errors that only appear at run time, such as a misspelled variable.
 
-Normal runs handle `human` calls and blockquote `ask_human` questions directly. The shell
+Normal runs handle `human` calls and blockquote `ask_human` questions directly. In the
+[terminal view](#terminal-view) you type the answer in its status box; otherwise the shell
 prints each question on stderr and reads one line from stdin, preserving whitespace except the
 line ending. Repeat `--human` to supply answers in question order without prompting:
 
@@ -73,6 +75,7 @@ Each event has one header, without repeated continuation badges, panels or times
 | `i` | Information | Blue |
 | `.` | Debug | Gray |
 | `~` | Variable state | Yellow |
+| `*` | Tool call: `* tool read_file path`, followed by its content; `failed` on errors | Green / red |
 
 Generic embedding messages have a `- message` header. Explicit `log(...)` calls keep their
 `[info|error|debug] log:` prefix for embedding/notebook compatibility.
@@ -81,42 +84,67 @@ State logs cover the shared top-level bindings: each event names the binding, it
 statement and agent action, so a change made inside a function or loop is reported when that
 statement finishes. Local variables, unchanged values and imported modules are not reported.
 During trace replay, reconstruction is silent; newly completed steps remain visible.
+Tool calls from fences (`readFile`, `writeFile`, `webFetch`, `webSearch`, `shell`), blockquotes,
+`agent()` and MCP servers are logged at `info` with what they acted on and their content: the file
+read or written, the fetched body, search results, command output, MCP result or error.
 
-Terminal stdin and stderr enable an isolated BetterTUI view on stderr, even when stdout is piped.
-Event headers are bold when terminal styling is enabled. An animated trailing loading character
-remains visible while the workflow runs, including while waiting for model output. It disappears
-on exit and is never included in the expanded transcript or stdout.
-Generated model prefaces (runtime/document preambles, guidance and initial blockquote context)
-and every object/array start as folded summaries; the requested prompt stays visible.
-Up/Down selects a payload in the viewport or scrolls text; Enter/Space toggles a visible selection;
-Page Up/Down scrolls; Home/End reaches the ends. Other folds and selection survive arrival/resize.
-The view initially follows new output. Scrolling away from the bottom pauses following, not
-execution; scrolling back to the bottom with arrows, Page Down or End resumes following.
-Expanded JSON uses two-space indentation and preserves original numeric/string tokens and duplicate
-keys. Primitives and malformed JSON remain readable without misleading fold controls.
+### Terminal view
 
-Model responses and available reasoning stream live in this view by default; `hide: true` suppresses reasoning.
-Partial JSON is shown as text until the authoritative response arrives, when normal formatting
-and folding apply. Streaming previews are separate from immutable log events, so the final
-transcript contains each complete response once. Redirected logs remain expanded and append-only.
-`--silent` also suppresses streaming previews.
+When stdin and stderr are terminals, logs appear in a full-screen [Ink](https://github.com/vadimdemedes/ink)
+view on the alternate screen of stderr, even when stdout is piped. A header names the workflow, the
+timeline follows new output, and a status box at the bottom shows a spinner while the workflow runs,
+a human question with its answer field, or the final outcome. The available keys are always listed
+under it.
 
-`@CODEGEN` responses appear as JavaScript code with line numbers, preserved indentation and
-syntax colors when terminal color is enabled. The same display handles incomplete streaming
-code and definitions reused from cache. Generated codegen instructions and binding context start
-folded, leaving the requested function description visible. Plain logs and the final transcript
-retain the source without line-number gutters.
+| Item | Shown as |
+| --- | --- |
+| Model prompt | `❯ ask prompt`; the generated preamble (runtime/document preambles, guidance, initial blockquote context) is a collapsed `▸ preamble` line, and the workflow's own prompt follows with a `│` gutter |
+| Model response | `● ask response` with the text; `@CODEGEN` code is a collapsed `▸ JavaScript · N lines` |
+| Tool call | `● read_file path` (green) or `✗` (red) and a collapsed summary such as `▸ 42 lines` |
+| Diagnostics | `✗` error, `!` warning, `•` info, `·` debug, `~` state, `▪` script `log(...)` |
 
-Normal finish restores input/cursor/screen state and leaves one complete expanded transcript on
-stderr; no inspection keypress delays exit. Renderer/native failures are diagnosed and select plain
-append-only output without changing workflow results. Non-terminal stdin/stderr, `TERM=dumb`,
-embedded sinks, silent, help/version, auth and check-only never acquire the UI.
-Before a human prompt, the interactive renderer exits and restores the terminal so only the shell
-reads the answer; after the answer it starts again with the whole log, and the final transcript
-lists each event once. Supplied `--human` answers do not stop the UI.
-If terminal-mode queries are unsupported or an alternate screen is already active, SPL diagnoses
-the limitation and uses append-only output without taking over that screen.
+Tool content, generated code, preambles and every object/array start collapsed. Up/Down selects a
+collapsed item, Space or Enter expands or collapses it, Page Up/Down scrolls and Home/End reach the
+ends. Until you navigate, the newest item is selected, so Space expands the latest tool call. Expanded
+files, fetched pages, search results and generated code appear as they would in a file: line numbers,
+preserved indentation and syntax colors for JavaScript, TypeScript, JSON and Markdown. Expanded JSON
+uses two-space indentation and preserves original numeric/string tokens and duplicate keys.
+Scrolling away from the bottom pauses following, not execution; End resumes following.
+
+Model responses and available reasoning stream live in this view by default; `hide: true` suppresses
+reasoning. The live preview is replaced by the complete response when it arrives. `--silent` also
+suppresses streaming previews.
+
+`human()` questions and blockquote `ask_human` questions are answered in the status box: type the
+answer and press Enter. Supplied `--human` answers are used first, without prompting.
+
+When the workflow ends, the view stays open with `✓ Completed` or `✗ Failed` until you press `e`.
+Exiting restores the terminal exactly as it was and prints nothing to stderr; stdout then gets only
+the result or failure payload. Ctrl+C cancels a running workflow (exit code 130) and also closes a
+finished one. If the view cannot start or stops unexpectedly, SPL reports it and continues with
+append-only logs without changing the workflow result. Non-terminal stdin/stderr, `TERM=dumb`,
+embedded sinks, `--silent`, help/version, auth and `--check` never start the view.
 Message, label and value controls are sanitized rather than executed as terminal instructions.
+
+Redirected logs are plain, append-only and fully expanded: JSON is indented, tool content and
+`@CODEGEN` sources follow their header without line-number gutters, and nothing waits for a key.
+
+### Stepping with `--debug`
+
+`--debug` stops the workflow before its first block and lets you run it one block at a time. A block
+is a `js`/`ts` fence or a blockquote (agent or `@CODEGEN`); `.spl` blocks, including those inside
+`if` and `while`, step the same way.
+
+| Key | Action |
+| --- | --- |
+| `n` | Next: run the next block, then stop again |
+| `v` | Variables: print the shared top-level variables as JSON |
+| `c` | Continue: run to the end without stopping |
+| `e` | Exit: stop the workflow immediately (exit code 130) |
+
+Each stop adds a `▶ js block · line N` item with the block's source collapsed, and the status box
+shows the line it will run. `--debug` needs the terminal view, so it cannot be combined with
+`--silent` or used with redirected stdin/stderr.
 
 Colors are enabled automatically when stderr is a terminal, and disabled for redirected output
 or `TERM=dumb`. Set `NO_COLOR=1` to disable color, or `FORCE_COLOR=1` to enable it when redirecting;
@@ -125,7 +153,7 @@ remain plain, machine-readable data.
 `--silent` suppresses execution logs; usage, syntax and trace-usage diagnostics still appear
 on stderr so command-line errors are not hidden.
 `--log-level` retains ordinary severity filtering; model transcripts appear at every non-silent
-level, while state events appear only at `debug`. Forced color never enables cursor controls or keyboard input.
+level, tool calls from `info`, and state events only at `debug`. Forced color never enables cursor controls or keyboard input.
 
 For example, `log('review:', review)` produces:
 
@@ -142,7 +170,7 @@ Custom logger sinks default to plain text; `new Logger('info', sink, { color: tr
 explicitly enables styling. Non-JSON values such as errors, bigints and circular objects use
 Node's inspect format instead of losing error details or failing JSON serialization.
 An additive `eventSink` option delivers detached readonly events instead of strings, never both.
-Neither library imports nor custom sinks load BetterTUI or start a process.
+Neither library imports nor custom sinks load the terminal view or read input.
 
 | Code | Meaning |
 | --- | --- |

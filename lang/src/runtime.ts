@@ -13,7 +13,7 @@ import { RUNTIME_PREAMBLE } from './preamble.js';
 import { isResponse, isToolValue, traceRequest } from './recording.js';
 import { Restrictions, makeRestriction, type Restriction, type RestrictKind } from './restrict.js';
 import { compileSchema } from './schema.js';
-import { TOOL_SPECS, ToolHost, type ToolName } from './tools.js';
+import { TOOL_SPECS, ToolHost, describeToolCall, type ToolName } from './tools.js';
 import { TraceError, type Trace } from './trace.js';
 import { isType, type JsonSchema, type Type } from './types.js';
 
@@ -352,9 +352,16 @@ export class Runtime {
             params[name] = value;
         });
         const perform = (): Promise<string> => new ToolHost(context.restrictions, this.cwd, false, true).invoke(tool, params);
-        return this.journal
-            ? this.effect({ kind: 'tool', tool, params, restrictions: context.restrictions.list }, perform, (value): value is string => typeof value === 'string')
-            : perform();
+        try {
+            const output = await (this.journal
+                ? this.effect({ kind: 'tool', tool, params, restrictions: context.restrictions.list }, perform, (value): value is string => typeof value === 'string')
+                : perform());
+            if (!this.replaying) this.logger.tool(describeToolCall(tool, params, { output }));
+            return output;
+        } catch (error) {
+            if (!this.replaying && error instanceof Failure) this.logger.tool(describeToolCall(tool, params, { error: error.reason }));
+            throw error;
+        }
     }
 
     async restriction(kind: RestrictKind, value: unknown): Promise<Restriction> {

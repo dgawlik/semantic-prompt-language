@@ -4,8 +4,8 @@ Install the CLI, configure OpenAI, Anthropic or Google credentials, then write a
 
 ## Install
 
-Use Node.js >=24.15.0. Native BetterTUI packages support Windows, macOS and Linux on x64/arm64.
-If native rendering cannot start, the CLI diagnoses the problem and keeps complete plain logs.
+Use Node.js >=24.15.0. The terminal view is pure JavaScript ([Ink](https://github.com/vadimdemedes/ink)),
+so it runs wherever Node.js does. If it cannot start, the CLI diagnoses the problem and keeps complete plain logs.
 
 ```bash
 npm install -g spl-lang

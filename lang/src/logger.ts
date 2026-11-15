@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { freezeEvent, type BodySegment, type LogEvent, type LogEventSink, type ModelInteraction, type ModelStreamEvent, type ModelStreamSink, type StateChange } from './log-events.js';
 import { formatEvent, formatSegments, sanitize, stateSegments, terminalColor, valueSegments } from './log-format.js';
+import type { ToolCallLog } from './tools.js';
 
 export type LogLevel = 'error' | 'info' | 'debug';
 
@@ -104,6 +105,24 @@ export class Logger {
 
     modelOutput(interaction: ModelInteraction, msg: unknown, ...values: unknown[]): void {
         this.emit('error', { kind: 'model-output', origin: 'model', interaction: { ...interaction } }, msg, values);
+    }
+
+    /** A tool call by a fence, blockquote or agent. The terminal view folds its content. */
+    tool(call: ToolCallLog): void {
+        if (this.level === 'silent' || RANK[this.level] < RANK.info) return;
+        const id = `${this.sessionId}:${++this.nextId}`;
+        const target = sanitize(call.target).replace(/\s*\n\s*/g, ' ');
+        const segments: BodySegment[] = [{ type: 'text', text: target }];
+        if (call.source) {
+            segments.push({ type: 'text', text: '\n' }, {
+                type: 'listing', payloadId: `${id}:listing`, language: call.language,
+                source: sanitize(call.source), summary: sanitize(call.summary).replace(/\n/g, ' ') || 'output',
+            });
+        }
+        this.deliver(freezeEvent({
+            id, sequence: ++this.sequence, kind: 'tool', origin: 'tool',
+            tool: { name: sanitize(call.name), target, status: call.status }, segments,
+        }));
     }
 
     state(snapshot: () => StateChange): void {

@@ -1,7 +1,5 @@
-import { fork, type ChildProcess } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { parseChildMessage, type FinishReason, type LogEvent, type ModelStreamEvent, type ParentMessage, type TerminalState } from './log-events.js';
+import type { PausedBlock, StepChoice, TerminalView } from './cli-view.js';
+import type { FinishReason, LogEvent, ModelStreamEvent } from './log-events.js';
 import { formatEvent, sanitize, terminalColor } from './log-format.js';
 
 export interface TerminalCapabilities {
@@ -18,279 +16,131 @@ export function canInteract(capabilities: TerminalCapabilities = {
     return capabilities.stdinTTY && capabilities.stderrTTY && capabilities.rawMode && capabilities.term !== 'dumb';
 }
 
-export type RendererChild = Pick<ChildProcess, 'on' | 'off' | 'once' | 'kill' | 'disconnect' | 'connected'> & {
-    send(message: ParentMessage, callback: (error: Error | null) => void): boolean;
-};
+export interface MountedUi {
+    unmount(): Promise<void>;
+    readonly exited: Promise<unknown>;
+}
 
 interface PresentationOptions {
     interactive: boolean;
     color?: boolean;
+    /** Workflow shown in the header. */
+    title?: string;
+    /** Stop before the first block and step with n/v/c/e. */
+    debug?: boolean;
     write?: (line: string) => void;
-    spawn?: () => RendererChild;
-    restore?: () => void;
     cancel?: () => void;
+    /** Draws the view; defaults to the Ink UI on stderr. */
+    mount?: (view: TerminalView) => MountedUi | Promise<MountedUi>;
 }
 
-const DEADLINE = 1_000;
-
+/**
+ * Presents execution logs: an Ink terminal UI when stdin and stderr are terminals,
+ * otherwise append-only text on stderr. The UI leaves nothing behind on exit.
+ */
 export class CliLogging {
-    state: 'plain' | 'starting' | 'interactive' | 'falling-back' | 'finishing' | 'closed' = 'plain';
+    state: 'plain' | 'starting' | 'interactive' | 'closed' = 'plain';
     private readonly history: LogEvent[] = [];
-    private readonly sessionId = randomUUID();
     private readonly color: boolean;
     private readonly write: (line: string) => void;
-    private readonly terminal: TerminalState;
-    private child?: RendererChild;
-    private readonly queue: ParentMessage[] = [];
-    private sending = false;
-    private sent = 0;
-    private accepted = 0;
-    private timer?: ReturnType<typeof setTimeout>;
-    private ready?: () => void;
-    private finished?: () => void;
+    private view?: TerminalView;
+    private ui?: MountedUi;
     private startPromise?: Promise<void>;
     private closePromise?: Promise<void>;
-    private failurePromise?: Promise<void>;
-    private restored = false;
-    private exited = false;
-    private finishAcknowledged = false;
-    private cursorVisible?: boolean;
-    private released = false;
     private printed = 0;
 
     constructor(private readonly options: PresentationOptions) {
         this.color = options.color ?? terminalColor();
         this.write = options.write ?? (line => { process.stderr.write(line + '\n'); });
-        this.terminal = { raw: Boolean(process.stdin.isRaw),
-            width: process.stderr.columns || undefined, height: process.stderr.rows || undefined };
+        // Events logged before the UI starts are held for it, not printed under it.
+        if (options.interactive) this.state = 'starting';
+    }
+
+    /** Whether the terminal UI owns the screen and input. */
+    get interactive(): boolean {
+        return this.state === 'interactive';
     }
 
     readonly sink = (event: LogEvent): void => {
         if (this.state === 'closed') throw new Error('logging session is closed');
         this.history.push(event);
-        if (this.state === 'plain') this.transcript();
-        else if (this.state === 'interactive') this.enqueue({
-            version: 1, sessionId: this.sessionId, type: 'event', sequence: event.sequence, event,
-        });
+        if (this.view) this.view.append(event);
+        else if (this.state === 'plain') this.transcript();
     };
 
     readonly streamSink = (event: ModelStreamEvent): void => {
         if (this.state === 'closed') throw new Error('logging session is closed');
-        if (this.state === 'interactive') this.enqueue({ version: 1, sessionId: this.sessionId, type: 'stream', event });
+        this.view?.stream(event);
     };
 
     start(): Promise<void> {
-        if (this.startPromise) return this.startPromise;
-        if (!this.options.interactive) return this.startPromise = Promise.resolve();
-        this.state = 'starting';
-        this.startPromise = new Promise(resolve => { this.ready = resolve; });
-        try {
-            // Own the OS input-mode snapshot before a child can change it or crash.
-            if (!this.options.restore) process.stdin.setRawMode?.(true);
-            this.child = this.options.spawn?.() ?? fork(fileURLToPath(new URL('./cli-renderer.js', import.meta.url)), [], {
-                execPath: process.execPath, execArgv: [], stdio: ['inherit', 2, 2, 'ipc'],
-            });
-            this.child.on('message', this.onMessage);
-            this.child.on('error', this.onError);
-            this.child.on('exit', this.onExit);
-            this.child.on('disconnect', this.onDisconnect);
-            this.timer = setTimeout(() => { void this.fail('renderer ready timed out after 1,000 ms'); }, DEADLINE);
-            this.enqueue({ version: 1, sessionId: this.sessionId, type: 'initialize', color: this.color, terminal: this.terminal });
-        } catch (error) {
-            void this.fail(`renderer startup: ${error instanceof Error ? error.message : String(error)}`);
-        }
-        return this.startPromise;
+        return this.startPromise ??= this.open();
     }
 
+    private async open(): Promise<void> {
+        if (!this.options.interactive) return;
+        try {
+            const { TerminalView } = await import('./cli-view.js');
+            const view = new TerminalView({
+                color: this.color, title: this.options.title ?? '', debug: this.options.debug,
+                onCancel: () => this.options.cancel?.(),
+            });
+            for (const event of this.history) view.append(event);
+            this.view = view;
+            const mount = this.options.mount ?? (async (target: TerminalView) => (await import('./cli-tui.js')).mountTui(target));
+            const ui = await mount(view);
+            this.ui = ui;
+            this.state = 'interactive';
+            ui.exited.then(
+                () => { if (this.ui === ui && this.state === 'interactive') this.fallback('terminal UI stopped unexpectedly'); },
+                error => { if (this.ui === ui && this.state === 'interactive') this.fallback(`terminal UI: ${error instanceof Error ? error.message : String(error)}`); },
+            );
+        } catch (error) {
+            this.fallback(`terminal UI startup: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /** Reads a human answer inside the UI. Only valid while the UI is active. */
+    async ask(question: string): Promise<string> {
+        await this.startPromise;
+        if (!this.view || this.state !== 'interactive') throw new Error('the terminal UI is not active');
+        return this.view.ask(question);
+    }
+
+    /** Waits for the `--debug` stepper before a block runs. */
+    async pause(block: PausedBlock): Promise<StepChoice> {
+        await this.startPromise;
+        return this.view && this.state === 'interactive' ? this.view.pause(block) : 'continue';
+    }
+
+    /** Ends the session. A completed or failed interactive run waits for `e` before leaving the screen. */
     close(reason: FinishReason): Promise<void> {
         return this.closePromise ??= this.finish(reason);
     }
 
-    async usePlain(): Promise<void> {
-        await this.startPromise;
-        if (this.failurePromise) await this.failurePromise;
-        if (this.state === 'plain') return;
-        if (this.state !== 'interactive') throw new Error('cannot release input from an inactive logging session');
-        await this.finish('completed');
-        this.released = !this.failurePromise;
-        this.state = 'plain';
-    }
-
-    /** Whether `resume` can bring back the interactive view released by `usePlain`. */
-    get resumable(): boolean {
-        return this.released && this.state === 'plain';
-    }
-
-    /** Starts a new interactive view after `usePlain`, showing the whole history again. */
-    resume(): Promise<void> {
-        if (!this.resumable) return Promise.resolve();
-        this.released = false;
-        this.child = undefined;
-        this.queue.length = 0;
-        this.sending = false;
-        this.sent = 0;
-        this.accepted = 0;
-        this.ready = undefined;
-        this.finished = undefined;
-        this.startPromise = undefined;
-        this.restored = false;
-        this.exited = false;
-        this.finishAcknowledged = false;
-        this.cursorVisible = undefined;
-        return this.start();
-    }
-
     private async finish(reason: FinishReason): Promise<void> {
         await this.startPromise;
-        if (this.failurePromise) await this.failurePromise;
-        if (this.state === 'interactive') {
-            this.state = 'finishing';
-            await new Promise<void>(resolve => {
-                this.finished = resolve;
-                this.timer = setTimeout(() => { void this.fail('renderer finish timed out after 1,000 ms'); }, DEADLINE);
-                this.enqueue({ version: 1, sessionId: this.sessionId, type: 'finish',
-                    lastSequence: this.history.at(-1)?.sequence ?? null, reason });
-            });
-            if (this.failurePromise) await this.failurePromise;
-            else {
-                await this.reap(false);
-                this.restore();
-                this.transcript();
-            }
-        }
-        this.detach();
+        const { view, ui } = this;
+        if (this.state === 'interactive' && view && ui) {
+            await view.finish(reason);
+            this.state = 'closed';
+            await ui.unmount();
+        } else if (this.state === 'starting') this.transcript();
         this.state = 'closed';
     }
 
-    private enqueue(message: ParentMessage): void {
-        this.queue.push(message);
-        this.pump();
+    private fallback(diagnostic: string): void {
+        const { view, ui } = this;
+        this.view = undefined;
+        this.ui = undefined;
+        this.state = 'plain';
+        void ui?.unmount().catch(() => undefined);
+        this.write(`x error ${sanitize(diagnostic)}; using append-only logs.`);
+        this.transcript();
+        view?.abandon(new Error(diagnostic));
     }
 
-    private pump(): void {
-        if (this.sending || !this.queue.length || !this.child || this.state === 'falling-back' || this.state === 'plain') return;
-        const message = this.queue.shift()!;
-        this.sending = true;
-        if (message.type === 'event') this.sent = message.sequence;
-        try {
-            this.child.send(message, error => {
-                this.sending = false;
-                if (error) void this.fail(`renderer send failed: ${error.message}`);
-                else this.pump();
-            });
-        } catch (error) {
-            this.sending = false;
-            void this.fail(`renderer send failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
-
-    private readonly onMessage = (raw: unknown): void => {
-        if (this.state === 'falling-back' || this.state === 'closed' || this.state === 'plain') return;
-        try {
-            const message = parseChildMessage(raw);
-            if (message.sessionId !== this.sessionId) throw new Error('renderer protocol: wrong session');
-            switch (message.type) {
-                case 'prepared':
-                    if (this.state !== 'starting' || this.cursorVisible !== undefined) throw new Error('renderer protocol: unexpected prepared');
-                    this.cursorVisible = message.cursorVisible;
-                    this.enqueue({ version: 1, sessionId: this.sessionId, type: 'activate' });
-                    break;
-                case 'ready':
-                    if (this.state !== 'starting' || this.cursorVisible === undefined) throw new Error('renderer protocol: unexpected ready');
-                    clearTimeout(this.timer);
-                    this.state = 'interactive';
-                    for (const event of this.history) this.enqueue({ version: 1, sessionId: this.sessionId, type: 'event', sequence: event.sequence, event });
-                    this.ready?.();
-                    break;
-                case 'accepted':
-                    if (message.sequence !== this.accepted + 1 || message.sequence > this.sent) throw new Error('renderer protocol: invalid accepted sequence');
-                    this.accepted = message.sequence;
-                    break;
-                case 'finished':
-                    if (this.state !== 'finishing' || message.lastSequence !== (this.history.at(-1)?.sequence ?? null) ||
-                        (message.lastSequence ?? 0) !== this.accepted) throw new Error('renderer protocol: invalid final sequence');
-                    clearTimeout(this.timer);
-                    this.finishAcknowledged = true;
-                    this.finished?.();
-                    break;
-                case 'cancel': this.options.cancel?.(); break;
-                case 'fatal': void this.fail(`renderer ${message.stage}: ${message.diagnostic}`); break;
-            }
-        } catch (error) {
-            void this.fail(error instanceof Error ? error.message : String(error));
-        }
-    };
-
-    private readonly onError = (error: Error): void => { void this.fail(`renderer process: ${error.message}`); };
-    private readonly onDisconnect = (): void => {
-        if (this.state === 'starting' || this.state === 'interactive' || (this.state === 'finishing' && !this.finishAcknowledged)) {
-            void this.fail('renderer IPC disconnected before cleanup acknowledgment');
-        }
-    };
-    private readonly onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
-        this.exited = true;
-        if (this.state === 'starting' || this.state === 'interactive' || (this.state === 'finishing' && !this.finishAcknowledged)) {
-            void this.fail(`renderer exited unexpectedly (${signal ?? code})`);
-        }
-    };
-
-    private fail(diagnostic: string): Promise<void> {
-        if (this.failurePromise) return this.failurePromise;
-        if (this.state === 'closed' || this.state === 'plain') return Promise.resolve();
-        this.state = 'falling-back';
-        clearTimeout(this.timer);
-        this.queue.length = 0;
-        this.failurePromise = (async () => {
-            await this.reap(true);
-            this.restore();
-            this.write(`x error ${sanitize(diagnostic)}; using append-only logs.`);
-            this.transcript();
-            this.state = 'plain';
-            this.detach();
-            this.ready?.();
-            this.finished?.();
-        })();
-        return this.failurePromise;
-    }
-
-    private async reap(terminate: boolean): Promise<void> {
-        const child = this.child;
-        if (!child || this.exited) return;
-        await new Promise<void>(resolve => {
-            const done = () => { clearTimeout(timer); child.off('exit', done); resolve(); };
-            const timer = setTimeout(() => {
-                if (!child.kill('SIGKILL')) this.write('x error renderer could not be terminated; terminal restoration is required.');
-                done();
-            }, DEADLINE);
-            child.once('exit', done);
-            if (terminate) child.kill();
-        });
-    }
-
-    private restore(): void {
-        if (this.restored) return;
-        this.restored = true;
-        try {
-            if (this.options.restore) this.options.restore();
-            else process.stdin.setRawMode?.(this.terminal.raw);
-        } catch (error) {
-            this.write(`x error terminal restoration failed: ${sanitize(error instanceof Error ? error.message : String(error))}`);
-        } finally {
-            if (!this.options.restore && this.cursorVisible !== undefined) {
-                process.stderr.write(`\u001b[0m\u001b[?1049l\u001b[?25${this.cursorVisible ? 'h' : 'l'}`);
-            }
-        }
-    }
-
-    /** Writes the events not yet printed, so a resumed view does not repeat earlier output. */
     private transcript(): void {
         while (this.printed < this.history.length) this.write(formatEvent(this.history[this.printed++], this.color));
-    }
-    private detach(): void {
-        clearTimeout(this.timer);
-        this.child?.off('message', this.onMessage);
-        this.child?.off('error', this.onError);
-        this.child?.off('exit', this.onExit);
-        this.child?.off('disconnect', this.onDisconnect);
     }
 }

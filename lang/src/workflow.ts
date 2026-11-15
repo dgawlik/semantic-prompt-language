@@ -7,7 +7,7 @@ import { attachWorkspace, library } from './library.js';
 import type { LlmBackend } from './llm.js';
 import type { Logger } from './logger.js';
 import type { Step, Workflow } from './markdown.js';
-import { runNatural } from './natural.js';
+import { overview as bindingOverview, runNatural } from './natural.js';
 import { Pin, PinError } from './pin.js';
 import { isToolValue } from './recording.js';
 import { Runtime, type HumanHandler } from './runtime.js';
@@ -36,6 +36,19 @@ export interface RunOptions {
     sourceVersion?: number;
     /** Path of the workflow document: names generated-code caches. Not added to failure payloads. */
     file?: string;
+    /** Awaited before each js/ts block and blockquote runs; the CLI `--debug` stepper pauses here. */
+    beforeBlock?: (block: BlockStart) => void | Promise<void>;
+}
+
+export interface BlockStart {
+    kind: 'code' | 'natural';
+    line: number;
+    /** `js`, `ts`, `agent` or `codegen`. */
+    language: string;
+    /** The block as written. */
+    source: string;
+    /** JSON-shaped snapshot of the shared top-level bindings. */
+    variables(): Record<string, unknown>;
 }
 
 export type RunResult =
@@ -86,6 +99,7 @@ async function execute(workflow: Workflow, opts: RunOptions, workspace: Workspac
         workspace.bind(runtime);
         executing = true;
         let last: unknown;
+        const snapshot = (): Record<string, unknown> => ({ ...bindingOverview(workspace).bindings });
         const test = async (condition: CompiledCell, line: number): Promise<boolean> => {
             current = { line, command: (workflow.lines[line - 1] ?? '').trim() };
             last = undefined;
@@ -118,6 +132,11 @@ async function execute(workflow: Workflow, opts: RunOptions, workspace: Workspac
                 }
                 current = { line: step.line, command: (workflow.lines[step.line - 1] ?? '').trim() };
                 last = undefined;
+                if (opts.beforeBlock) {
+                    await opts.beforeBlock(step.kind === 'code'
+                        ? { kind: 'code', line: step.line, language: step.cell.language, source: step.cell.source, variables: snapshot }
+                        : { kind: 'natural', line: step.line, language: step.codegen ? 'codegen' : 'agent', source: step.text, variables: snapshot });
+                }
                 if (step.kind === 'code') last = await workspace.execute(step.cell, file, runtime);
                 else await runNatural(step, workspace, runtime.root);
             }

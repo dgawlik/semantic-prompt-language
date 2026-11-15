@@ -604,7 +604,7 @@ success(count);`;
         expect(result.err).not.toContain('Enter/Space');
     });
 
-    it('never loads native UI, spawns renderers or acquires input for excluded invocations and library sinks', () => {
+    it('never loads the terminal UI or acquires input for excluded invocations and library sinks', () => {
         const marker = path.join(dir, 'acquisition.txt');
         const env = {
             TERM: 'xterm', NO_COLOR: '1',
@@ -619,7 +619,7 @@ const on = process.stdin.on;
 process.stdin.on = function(name, ...args) { if (name === 'data' || name === 'readable') record('input'); return on.call(this, name, ...args); };
 cp.fork = () => { record('spawn'); throw new Error('test renderer forbidden'); };
 syncBuiltinESMExports();
-registerHooks({ resolve(specifier, context, next) { if (specifier.startsWith('@bettertui/')) { record('native'); throw new Error('test native forbidden'); } return next(specifier, context); } });`),
+registerHooks({ resolve(specifier, context, next) { if (specifier === 'ink' || specifier === 'react' || /cli-(?:tui|view)\\.js$/.test(specifier)) { record('ui'); throw new Error('test UI forbidden'); } return next(specifier, context); } });`),
         };
         const file = path.join(dir, 'excluded.md');
         fs.writeFileSync(file, workflow("success(await human('question'));"));
@@ -896,8 +896,11 @@ ${quote("@CTL(restrict={fs: ['./src'], exec: 'git'}, enforce='Be concise', model
         expect(help).toContain('variable-state changes');
         expect(help).toContain('defining scopes');
         expect(help).toContain('no-op assignments');
-        expect(help).toContain('Enter/Space toggle');
-        expect(help).toContain('Plain/final transcripts');
+        expect(help).toContain('Space/Enter expand');
+        expect(help).toContain('press e to exit');
+        expect(help).toContain('Redirected logs are plain, append-only and fully expanded');
+        expect(help).toContain('--debug                 step through the workflow');
+        expect(help).toContain('n runs the next js/ts block or blockquote, v prints shared variables');
         expect(help).not.toContain('[deterministic]');
         expect(help).toContain('js fences run as native JavaScript (ts fences have their types erased) with the spl-lang library');
         expect(help).toContain('--arg <value>           script argument exposed in args');
@@ -906,6 +909,20 @@ ${quote("@CTL(restrict={fs: ['./src'], exec: 'git'}, enforce='Be concise', model
         expect(help).toContain('the value passed to success()');
         expect(help).not.toMatch(/\$args|\$env|spl fence/);
         expect(help).toContain('A .spl file holds the same workflow in blocks');
+    });
+
+    it('requires an interactive terminal for --debug', () => {
+        expect(spl('success(1);', '--debug')).toMatchObject({ code: 2, out: '', err: expect.stringContaining('--debug needs an interactive terminal') });
+        expect(spl('success(1);', '--debug', '--check')).toMatchObject({ code: 0, out: '' });
+    });
+
+    it('logs tool calls with their content in plain logs', () => {
+        const result = spl("await writeFile('note.txt', 'one\\ntwo');\nconst text = await readFile('note.txt');\nsuccess(text.length);");
+        expect(result).toMatchObject({ code: 0, out: '7\n' });
+        expect(result.err).toContain('* tool write_file note.txt\none\ntwo\n');
+        expect(result.err).toContain('* tool read_file note.txt\none\ntwo\n');
+        expect(spl("await readFile('missing.txt');").err).toContain("* tool read_file failed missing.txt\nread_file 'missing.txt'");
+        expect(spl("await writeFile('quiet.txt', 'x');", '--log-level', 'error').err).not.toContain('* tool');
     });
 
     it('requires a valid login provider and stores keys without echoing them', () => {

@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { Failure } from './errors.js';
+import { languageOf, prettyJson } from './log-format.js';
 import type { Restrictions } from './restrict.js';
 
 export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'web_search' | 'shell';
@@ -54,6 +55,58 @@ export const TOOL_SPECS: Record<ToolName, ToolSpec> = {
         required: ['command'],
     },
 };
+
+export interface ToolCallLog {
+    name: string;
+    target: string;
+    status: 'success' | 'error';
+    /** Content shown folded: the file read or written, fetched body, search results, output or error. */
+    source: string;
+    language: string;
+    summary: string;
+}
+
+const count = (text: string, noun: string): string => {
+    const lines = text.replace(/\r?\n$/, '').split('\n').length;
+    return `${lines} ${noun}${lines === 1 ? '' : 's'}`;
+};
+
+/** What a built-in tool call did, for the log. */
+export function describeToolCall(name: ToolName, params: Record<string, unknown>, outcome: { output: string } | { error: string }): ToolCallLog {
+    const field = (key: string): string => typeof params[key] === 'string' ? params[key] : '';
+    const target = name === 'read_file' || name === 'write_file' ? field('path')
+        : name === 'web_fetch' ? field('url') : name === 'web_search' ? JSON.stringify(field('query')) : field('command');
+    if ('error' in outcome) {
+        return { name, target, status: 'error', source: outcome.error, language: 'text', summary: outcome.error.split('\n')[0] };
+    }
+    const { output } = outcome;
+    switch (name) {
+        case 'read_file': return { name, target, status: 'success', source: output, language: languageOf(target), summary: count(output, 'line') };
+        case 'write_file': {
+            const content = field('content');
+            return { name, target, status: 'success', source: content, language: languageOf(target), summary: `${count(content, 'line')} written` };
+        }
+        case 'web_fetch': {
+            const body = output.trimStart();
+            const language = prettyJson(body) !== undefined ? 'json' : body.startsWith('<') ? 'html' : 'text';
+            return { name, target, status: 'success', source: output, language, summary: count(output, 'line') };
+        }
+        case 'web_search': {
+            const results = output.match(/^\d+\. /gm)?.length ?? 0;
+            return { name, target, status: 'success', source: output, language: 'text', summary: `${results} result${results === 1 ? '' : 's'}` };
+        }
+        case 'shell': return { name, target, status: 'success', source: output, language: 'text', summary: output ? count(output, 'line') : 'no output' };
+    }
+}
+
+/** What an MCP tool call did, for the log. */
+export function describeMcpCall(server: string, tool: string, input: unknown, outcome: { result: unknown; isError: boolean } | { error: string }): ToolCallLog {
+    const name = `${server}/${tool}`;
+    const target = JSON.stringify(input) ?? '';
+    if ('error' in outcome) return { name, target, status: 'error', source: outcome.error, language: 'text', summary: outcome.error.split('\n')[0] };
+    const source = JSON.stringify(outcome.result) ?? 'null';
+    return { name, target, status: outcome.isError ? 'error' : 'success', source, language: 'json', summary: outcome.isError ? 'error result' : 'result' };
+}
 
 function needString(tool: string, params: Record<string, unknown>, name: string): string {
     const v = params[name];
