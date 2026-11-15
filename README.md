@@ -165,8 +165,8 @@ Preview with `python -m http.server 8765 --directory docs`.
 
 ## Contributing
 
-Especially in this early phase of development the feedback is very important.
+PRs and Issues are welcome. The most needed help is in running and testing the toolkit.
+There are lots of edge cases to consider, if you found the one please let me know.
 
-Something does not work -> file an issue.
-
-PRs are welcome, I'm looking for Co-Founders.
+I'm also looking for maintainers to discuss ideas where the idea should head next and
+more importantly implement these.
