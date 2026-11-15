@@ -1,20 +1,77 @@
 # SPL: Semantic Prompt Language
 
-Executable Markdown for AI workflows, and a Node.js library for checked model calls.
+Run your agentic workflows from single Markdown document or SPL file.
 
-A workflow is a Markdown file. Its `js` fences run as native JavaScript with the `spl-lang`
-library already imported; its blockquotes run as agent commands in plain language. Both share
+Its `js` fences/blocks run as native JavaScript with the `spl-lang`
+toolkit already imported; its blockquotes run as agent commands in plain language. Both share
 variables, functions, tools and guards.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
 [Examples](lang/examples)
+
+```
+{comment}
+Prose like this is commentary. Only {js} and {agent} scopes run,
+top to bottom, in one shared scope.
+The agent selects a topic and saves a validated Card; the final {js}
+block only renders it as Markdown.
+{/comment}
+
+{js}
+const topics = ['recursion', 'closures']
+const Topic = enumOf(...topics)
+const Card = struct('Card', {
+    term: Topic,
+    definition: str.describe('Definition one line'),
+    description: str.describe('Several sentences about'),
+});
+{/js}
+
+
+{agent model='gpt-6.1-sol', reasoning='high'}
+Pick the item of @topics that a beginner would find hardest.
+Create a flashcard for that topic with term set to the selected topic,
+a one-line definition and a description of several sentences.
+@validate[Card] save the flashcard to variable @hardest
+{/agent}
+
+{js}
+const doc = markdown.document()
+    .heading(hardest.term, 3)
+    .paragraph(markdown.bold(hardest.definition))
+    .paragraph(hardest.description);
+
+await writeFile('./out/hardest-card.md', doc.toString());
+{/js}
+```
+
+## Why SPL?
+
+* **Short loops.** One file, run directly. `--check` needs no model; `--trace run.jsonl` resumes
+  recorded work and replays completed runs without repeating model calls or tool effects.
+* **Plain JavaScript where it matters.** Fences are native JavaScript on Node.js with top-level
+  `await`. The standard library, your own `.js` modules and npm packages are one `import` away.
+* **Checked model output.** `ask`/`think` generate values without tools; `fmt`, `schema`,
+  `repairs` and `assert` check what comes back. Types are built in JavaScript
+  (`struct`, `enumOf`, `list`, `typedef`) and carry annotations for the model to read.
+* **Guards you can see.** `agent` calls and blockquotes can act; `restrict` limits their files,
+  network, commands and MCP tools. Prompt guidance (`enforce`, `forbid`) is kept separate from validation.
+* **A library, not a language.** The same functions work in any Node.js program:
+  `import { ask, struct } from 'spl-lang'`.
+
+Try [typed-data.md](lang/examples/typed-data.md) without a model or login. See
+[Workflow code](docs-template/Language.md) for the JavaScript rules,
+[Types](docs-template/Language.md#types) for the schema builder and
+[Schemas and repairs](docs-template/LLM-commands.md#schemas-and-repairs) for typed generation.
+
+## One to one match with markdown
+
 
 ````markdown
 ---
 extension: 'semantic-prompt-language'
 version: 1
 model: 'gpt-6-luna'
-preamble: 'Be concise.'
 ---
 
 # Hello, SPL
@@ -46,50 +103,8 @@ const doc = markdown.document()
 
 await writeFile('./out/hardest-card.md', doc.toString());
 ```
+
 ````
-
-## Why SPL?
-
-* **Short loops.** One file, run directly. `--check` needs no model; `--trace run.jsonl` resumes
-  recorded work and replays completed runs without repeating model calls or tool effects.
-* **Plain JavaScript where it matters.** Fences are native JavaScript on Node.js with top-level
-  `await`. The standard library, your own `.js` modules and npm packages are one `import` away.
-* **Checked model output.** `ask`/`think` generate values without tools; `fmt`, `schema`,
-  `repairs` and `assert` check what comes back. Types are built in JavaScript
-  (`struct`, `enumOf`, `list`, `typedef`) and carry annotations for the model to read.
-* **Guards you can see.** `agent` calls and blockquotes can act; `restrict` limits their files,
-  network, commands and MCP tools. Prompt guidance (`enforce`, `forbid`) is kept separate from validation.
-* **A library, not a language.** The same functions work in any Node.js program:
-  `import { ask, struct } from 'spl-lang'`.
-
-Try [typed-data.md](lang/examples/typed-data.md) without a model or login. See
-[Workflow code](docs-template/Language.md) for the JavaScript rules,
-[Types](docs-template/Language.md#types) for the schema builder and
-[Schemas and repairs](docs-template/LLM-commands.md#schemas-and-repairs) for typed generation.
-
-## Workflows without Markdown
-
-A `.spl` file holds the same steps as blocks instead of fences and blockquotes: `{js}` and `{ts}`
-for code, `{agent ...}` for agent commands with their settings in the tag, `{codegen}` for
-generated functions and `{comment}` for commentary. It runs on the same runtime, with the same
-guards, traces and pins.
-
-```spl
----
-model: 'gpt-6-luna'
----
-
-{js}
-const notes = await readFile('./notes.txt');
-{/js}
-
-{agent restrict={fs: ['./out']}, forbid='adding facts that are not in @notes'}
-Summarize @notes in three bullets and write them to './out/summary.md'
-{/agent}
-```
-
-Run it with `spl summary.spl`. See [Dedicated .spl files](docs-template/Language.md#dedicated-spl-files)
-and [code-review.spl](lang/examples/code-review.spl).
 
 ## Install
 
@@ -106,7 +121,6 @@ Environment keys override saved keys. With multiple providers and no saved defau
 using `--provider`, `SPL_PROVIDER` or a model such as `--model anthropic/claude-sonnet-4-5`.
 Login configures API keys, not subscription OAuth.
 
-From a checkout: `cd lang`, `npm install`, then `node dist/cli.js examples/hi.md`.
 
 ## What to know about the JavaScript
 
@@ -148,25 +162,10 @@ Tests never contact a model. The [VS Code extension](vscode/README.md) reuses th
 language service for `js` and `ts` fences and `{js}` and `{ts}` blocks, with the library declared
 as globals, and adds `@name` and `@CTL` support in blockquotes and `{agent}` blocks. Editor analysis is offline and never executes workflows.
 
-To change the documentation, edit [docs-template/](docs-template/Introduction.md), then regenerate
-and verify the site. Commit the generated `docs/` files with the sources.
-The build-time highlighting rules live in [docs/highlight.mjs](docs/highlight.mjs); the tests in
-`lang/tests/docs.test.ts` compile every JavaScript example and keep embedded examples in sync.
-The shared logo is [vscode/icon.png](vscode/icon.png); the docs build copies it into
-`docs/assets/` for the site header and favicon.
-
-```sh
-npm install
-npm run docs:build
-npm run docs:check
-```
-
-Preview with `python -m http.server 8765 --directory docs`.
-
 ## Contributing
 
 PRs and Issues are welcome. The most needed help is in running and testing the toolkit.
 There are lots of edge cases to consider, if you found the one please let me know.
 
-I'm also looking for maintainers to discuss ideas where the idea should head next and
-more importantly implement these.
+I'm also looking for maintainers to discuss ideas, where the project should head next and
+more importantly implement use cases.
