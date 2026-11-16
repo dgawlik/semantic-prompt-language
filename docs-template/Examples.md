@@ -14,6 +14,7 @@ Blocks, references, typed outputs and human input, a few lines at a time.
 
 ```spl-doc
 hi.spl
+random-article.spl
 basics.spl
 is-friday.spl
 env.spl

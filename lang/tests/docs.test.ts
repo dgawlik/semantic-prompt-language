@@ -57,7 +57,7 @@ describe('documentation site', () => {
 
     it('presents 3.0 syntax on the front page', () => {
         const text = decode(fs.readFileSync(path.join(docs, 'index.html'), 'utf8'));
-        for (const expected of ['spl run lang/examples/typed-data.spl', 'spl check lang/examples/hi.spl', 'mode: agent', '->[Card] @hardest']) expect(text).toContain(expected);
+        for (const expected of ['spl run lang/examples/typed-data.spl', 'spl check lang/examples/random-article.spl', 'mode: agent', '->[Str] @article']) expect(text).toContain(expected);
         for (const removed of ['{js}', '{agent', '@validate', '--check', 'enumOf(', 'go(']) expect(text).not.toContain(removed);
     });
 

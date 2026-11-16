@@ -220,32 +220,34 @@
             <li>Typed outputs</li>
           </ul>
         </div>
-        <div class="hero-visual" aria-label="Excerpt from the hi.spl flashcard workflow">
+        <div class="hero-visual" aria-label="Excerpt from the random-article.spl workflow">
           <div class="visual-orbit" aria-hidden="true"></div>
-          <div class="visual-top"><span>lang/examples/hi.spl</span><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/hi.spl">Open example &nearr;</a></div>
+          <div class="visual-top"><span>lang/examples/random-article.spl</span><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/random-article.spl">Open example &nearr;</a></div>
           <div class="code-card">
-            <pre><code><span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>, <span class="str">'regular expressions'</span>];
-<span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">Enum</span>(...topics);
-
-<span class="kw">const</span> <span class="type">Card</span> = <span class="fn">Struct</span>(<span class="str">'Card'</span>, {
-  term: <span class="type">Topic</span>,
-  definition: <span class="type">Str</span>.<span class="fn">describe</span>(<span class="str">'One line about the term'</span>),
-  description: <span class="type">Str</span>.<span class="fn">describe</span>(<span class="str">'A paragraph about the term'</span>),
-});
-
-<span class="kw">const</span> cards = <span class="kw">await</span> Promise.<span class="fn">all</span>(topics.<span class="fn">map</span>(topic =&gt;
-  <span class="fn">ask</span>(<span class="str">`A one-sentence flashcard about ${topic}`</span>, { schema: <span class="type">Card</span>, repairs: 1 })));
+            <pre><code><span class="spl-block">---</span>
+<span class="spl-attribute">model</span>: gpt-6-luna
+<span class="spl-block">---</span>
 
 <span class="spl-block">---</span>
 <span class="spl-attribute">mode</span>: agent
-<span class="spl-attribute">reasoning</span>: high
 
-Pick the item of <span class="spl-reference">@cards</span> whose card a beginner would find hardest <span class="spl-directive">-&gt;[Card]</span> <span class="spl-reference">@hardest</span>
-<span class="spl-block">---</span></code></pre>
+Get a random article from https://longform.org/random.
+It will give you page with a random article link,
+navigate to it and return its contents as markdown.
+Save to <span class="spl-directive">-&gt;[Str]</span> <span class="spl-reference">@article</span>
+<span class="spl-block">---</span>
+
+<span class="kw">const</span> words = article.<span class="fn">toLowerCase</span>().<span class="fn">match</span>(<span class="str">/\w+/g</span>) ?? []
+<span class="kw">const</span> freq: <span class="type">Record</span>&lt;<span class="type">string</span>, <span class="type">number</span>&gt; = {}
+<span class="kw">for</span> (<span class="kw">const</span> word <span class="kw">of</span> words) {
+    freq[word] = (freq[word] ?? 0) + 1
+}
+
+<span class="fn">success</span>({article, length: article.length, freq})</code></pre>
           </div>
           <div class="visual-result">
             <span class="check-mark" aria-hidden="true">&check;</span>
-            <p><strong>Checked data.</strong><br>A typed constant for the code below.</p>
+            <p><strong>Exact counts.</strong><br>The agent's typed output is a plain string for the code below.</p>
           </div>
         </div>
       </div>
@@ -463,15 +465,15 @@ npm install -g spl-lang
 spl run lang/examples/typed-data.spl
 
 <span class="comment"># Type-check before running</span>
-spl check lang/examples/hi.spl
+spl check lang/examples/random-article.spl
 
 <span class="comment"># Configure a provider, then run</span>
 spl login openai
-spl run lang/examples/hi.spl</code></pre>
+spl run lang/examples/random-article.spl</code></pre>
             </div>
             <div class="start-links">
               <a href="getting-started.html">Read the setup guide &nearr;</a>
-              <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/hi.spl">Try the flashcard workflow &nearr;</a>
+              <a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/random-article.spl">Try the random article workflow &nearr;</a>
               <a href="introduction.html">Browse the documentation &nearr;</a>
             </div>
           </div>

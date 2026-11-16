@@ -1,4 +1,12 @@
 
+//*
+# Random article word frequencies
+
+An agent fetches a random longform article as Markdown. Plain code then counts how
+often each word appears, so the counts are exact.
+
+    spl run examples/random-article.spl
+*//
 
 ---
 model: gpt-6-luna
@@ -13,4 +21,10 @@ navigate to it and return its contents as markdown.
 Save to ->[Str] @article
 ---
 
-success({article, length: article.length})
+const words = article.toLowerCase().match(/\w+/g) ?? []
+const freq: Record<string, number> = {}
+for (const word of words) {
+    freq[word] = (freq[word] ?? 0) + 1
+}
+
+success({article, length: article.length, freq})
