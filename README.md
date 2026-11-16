@@ -1,13 +1,20 @@
 # SPL: Semantic Prompt Language
 
-Interleave natural-language instructions for models and agents with TypeScript, in one `.spl` file.
+The agentic frameworks are hard. Callback hell, operating on graphs and using language native primitives puts burden on you.
 
-Code runs as TypeScript on Node.js with the `spl-lang` library already in scope. A `---` block is an
-instruction for a model: `@name` reads a variable, and the block's outputs are ordinary typed
-variables for the code that follows.
+There is another way:
+* interleave JavaScript with natural language prose directly in one file
+* use shorthands for schema enforcement, restricting llm outputs and drive agentic tasks from one file 
+* decide with minimal costs about next route
+
+Meet **Semantic Prompt Language**. It's a toolkit and runtime for agentic tasks that runs from a single `.spl` file.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
 [Examples](lang/examples)
+
+## Example worth thousand of words
+
+The runtime scans file for `---` tags. When detected they become calls to llms. `//*` are markdown comments. With docs command you can document your workflow as Markdown file. LLM calls can read and write shared variables and whole file is read top to bottom. The whole file gets transpiled to TypeScript and is ready to be consumed by runtime or embedded with JavaScript import. Short example:
 
 ```spl
 //*
@@ -111,8 +118,7 @@ Login configures API keys, not subscription OAuth.
 ## What to know about the file format
 
 * A `.spl` file is TypeScript with three additions: `//* ... *//` Markdown comments, `---` blocks
-  and `@name` references inside blocks. Only type syntax that can be erased is allowed, so no
-  `enum`, `namespace`, decorators or constructor parameter properties.
+  and `@name` references inside blocks.
 * A block has an optional header of `key: value` lines (`mode`, `model`, `reasoning`, `outputVar`,
   `outputType`, `enforce`, `forbid`, `restrict`, ...) and then the instruction. `ask` is the default
   mode; `agent` acts with tools; `codegen` generates functions.
@@ -138,9 +144,7 @@ Coming from SPL 2.x? Markdown workflows and the `{js}`/`{agent}` block syntax ar
 | [vscode/](vscode/README.md) | VS Code extension: syntax coloring, TypeScript language features and Run and Debug commands for `.spl` files |
 | [docs-template/](docs-template/Introduction.md) | Documentation sources |
 | [docs/](docs/) | Generated documentation site (GitHub Pages); `index.html` is the starter presentation |
-
-[generate-presentation.spl](generate-presentation.spl) is a workflow that regenerates the
-starter presentation in `presentations/`; `node docs/build.mjs` publishes it as the site's front page.
+| [examples/](langs/examples) | Many examples how SPL can help you|
 
 ## Development
 

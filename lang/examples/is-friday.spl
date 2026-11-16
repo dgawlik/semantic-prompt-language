@@ -27,4 +27,4 @@ outputVar: complaint
 Complain in an original way that it is not Friday yet.
 ---
 
-success(complaint);
+fail(complaint);
