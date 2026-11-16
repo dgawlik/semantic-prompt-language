@@ -1,0 +1,13 @@
+---
+model: gpt-6-luna
+---
+
+if(await decision({evidence: "The movie was fantastic!", 
+    question: "is the movie good?"}))
+{
+    success("The movie is good!");
+}
+else
+{
+    fail("The movie is not good!");
+}
