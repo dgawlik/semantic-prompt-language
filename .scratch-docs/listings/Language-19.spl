@@ -1,1 +1,0 @@
-const diff = await restrict({ exec: 'git' }, () => shell('git diff --cached'));

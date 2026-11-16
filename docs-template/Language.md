@@ -296,7 +296,7 @@ Workflow code is TypeScript that Node.js can run by erasing the types.
 
 ## Await model calls and tools
 
-`ask`, `agent`, `human`, `codegen`, `restrict` and the tools return promises. Use `await`
+`ask`, `agent`, `decision`, `human`, `codegen`, `restrict` and the tools return promises. Use `await`
 whenever you need the result or the effect to have happened.
 
 ```ts
@@ -426,7 +426,7 @@ A `.spl` file can use these names without importing them. Other modules import t
 
 | Group | Names |
 | --- | --- |
-| Model calls | `ask` `agent` |
+| Model calls | `ask` `agent` `decision` |
 | People | `human` |
 | Guidance and restrictions | `enforce` `forbid` `restrict` |
 | Control | `success` `fail` `assert` `Failure` |

@@ -101,8 +101,35 @@ export interface LlmResponse {
     toolResults?: string[];
 }
 
+/** Fixed models of the provider decision endpoints; Anthropic has none, so its decisions are simulated. */
+export const DECISION_MODELS = { openai: 'gpt-6-luna', google: 'gemini-decision-1' } as const;
+
+export interface DecisionRequest {
+    /** What the question is judged against, in order. */
+    evidence: readonly string[];
+    /** The question, with any enforce/forbid guidance already appended. */
+    question: string;
+    /** Choice labels in order; without them the question is a yes/no predicate. */
+    labels?: readonly string[];
+    /** Selects the provider only: decision endpoints always use their fixed model. */
+    model?: string;
+}
+
+export interface DecisionResponse {
+    /** Yes/no questions: the probability that the answer is yes. */
+    probability?: number;
+    /** Choice questions: the probability of each label. */
+    probabilities?: Record<string, number>;
+    /** Choice questions: the chosen label. */
+    label?: string;
+    /** Effective provider and model, recorded in the logs. */
+    effective: Record<string, unknown>;
+}
+
 export interface LlmBackend {
     call(req: LlmRequest): Promise<LlmResponse>;
+    /** A provider decision endpoint, or `null` when the provider has none and the runtime simulates one with `call`. */
+    decide?(req: DecisionRequest): Promise<DecisionResponse | null>;
     close(): Promise<void>;
 }
 

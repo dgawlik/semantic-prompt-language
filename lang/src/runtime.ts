@@ -6,7 +6,8 @@ import { inspect } from 'node:util';
 import { Failure, SplSyntaxError, SuccessSignal } from './errors.js';
 import {
     LlmError, REASONING_LEVELS, buildPromptParts, parseJsonResponse, validateRandomness, validateTokens,
-    type AskMods, type Constraint, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel,
+    type AskMods, type Constraint, type DecisionRequest, type DecisionResponse, type LlmBackend, type LlmRequest, type LlmResponse,
+    type ReasoningLevel,
 } from './llm.js';
 import { sources } from './loader.js';
 import type { ModelInteraction } from './log-events.js';
@@ -45,6 +46,34 @@ export interface GenerateOptions {
     /** `ask` only. */
     topP?: number;
 }
+
+/** `decision()`: a yes/no question judged by a probability cutoff, or a choice of labels that stand for true or false. */
+export interface DecisionOptions {
+    /** The question to judge. */
+    question: string;
+    /** What the question is judged against: a text or a list of items; non-strings are shown as JSON. */
+    evidence?: string | readonly unknown[];
+    /** Yes/no questions: true when the probability of yes exceeds this, 0.5 by default. */
+    cutoff?: number;
+    /** Choice questions: each label and the boolean it stands for. */
+    labels?: Readonly<Record<string, boolean>>;
+    /** Selects the provider; OpenAI and Google decide with their fixed decision models. */
+    model?: string;
+}
+
+const DECISION_OPTIONS = ['question', 'evidence', 'cutoff', 'labels', 'model'];
+
+const isDecisionResponse = (value: unknown): value is DecisionResponse | null => {
+    if (value === null) return true;
+    if (typeof value !== 'object' || Array.isArray(value)) return false;
+    const { probability, probabilities, label, effective } = value as Record<string, unknown>;
+    const unit = (item: unknown): boolean => typeof item === 'number' && item >= 0 && item <= 1;
+    return typeof effective === 'object' && effective !== null && !Array.isArray(effective)
+        && (probability === undefined || unit(probability))
+        && (label === undefined || typeof label === 'string')
+        && (probabilities === undefined || typeof probabilities === 'object' && probabilities !== null && !Array.isArray(probabilities)
+            && Object.values(probabilities).every(unit));
+};
 
 /** A place the `--debug` stepper can stop: a `---` block or a top-level statement. */
 export interface Step {
@@ -590,6 +619,113 @@ export class Runtime {
                 text = `${base}\n\nPrevious response:\n${response}\n\nValidation failed: ${error.reason}\nReturn a corrected JSON value.`;
             }
         }
+    }
+
+    /**
+     * `decision`: a provider decision endpoint with its fixed model, or, for providers without one, a simulated
+     * decision made with `ask` and a JSON Schema. Yes/no questions are true above the cutoff; choice questions
+     * are the boolean of the chosen label.
+     */
+    async decision(options: unknown, context: Context): Promise<boolean> {
+        if (typeof options !== 'object' || options === null || Array.isArray(options) || isType(options)) {
+            throw runtimeError("decision() requires an object such as { question: 'Is it red?', evidence: [...], cutoff: 0.8 }");
+        }
+        const given: Record<string, unknown> = { ...options };
+        for (const name of Object.keys(given)) {
+            if (!DECISION_OPTIONS.includes(name)) throw runtimeError(`unknown decision() option '${name}'`);
+            if (given[name] === undefined) delete given[name];
+        }
+        const { question, evidence = [], model, labels } = given;
+        if (typeof question !== 'string' || !question.trim()) throw runtimeError('decision() requires a question: a non-empty string');
+        if (typeof evidence !== 'string' && !Array.isArray(evidence)) throw runtimeError('decision() evidence must be a string or a list');
+        const items = (typeof evidence === 'string' ? [evidence] : evidence).map(display);
+        if (model !== undefined && (typeof model !== 'string' || !model.trim())) throw runtimeError('model must be a non-empty string');
+        if ('cutoff' in given && labels !== undefined) throw runtimeError('decision() takes either cutoff or labels, not both');
+        const cutoff = given.cutoff ?? 0.5;
+        if (typeof cutoff !== 'number' || !(cutoff >= 0 && cutoff <= 1)) throw runtimeError('decision() cutoff must be a number from 0 to 1');
+        let meanings: Record<string, boolean> | undefined;
+        if (labels !== undefined) {
+            if (typeof labels !== 'object' || labels === null || Array.isArray(labels) || isType(labels)) {
+                throw runtimeError("decision() labels must be an object such as { red: true, orange: false }");
+            }
+            meanings = { ...labels as Record<string, unknown> } as Record<string, boolean>;
+            const names = Object.keys(meanings);
+            if (names.length < 2 || names.length > 255) throw runtimeError('decision() labels must name between 2 and 255 labels');
+            for (const name of names) {
+                if (!name.trim() || name !== name.trim() || /[\u0000-\u001f\u007f]/.test(name)) {
+                    throw runtimeError(`decision() label '${name}' must be non-empty, without surrounding spaces or control characters`);
+                }
+                if (typeof meanings[name] !== 'boolean') throw runtimeError(`decision() label '${name}' must map to true or false`);
+            }
+            if (!Object.values(meanings).includes(true) || !Object.values(meanings).includes(false)) {
+                throw runtimeError('decision() labels need at least one label for true and one for false');
+            }
+        }
+        const names = meanings ? Object.keys(meanings) : undefined;
+        const guidance = context.constraints.map(c => `- ${c.kind === 'enforce' ? 'Follow' : 'Avoid'}: ${c.text}`).join('\n');
+        const resolved = this.resolveModel(model as string | undefined, context);
+        const request: DecisionRequest = {
+            evidence: items,
+            question: guidance ? `${question}\n\nGuidance:\n${guidance}` : question,
+            ...(names ? { labels: names } : {}),
+            ...(resolved !== undefined ? { model: resolved } : {}),
+        };
+        let response: DecisionResponse | null = null;
+        if (this.backend.decide) {
+            const decide = this.backend.decide.bind(this.backend);
+            const started = Date.now();
+            const perform = async (): Promise<DecisionResponse | null> => {
+                try {
+                    return await decide(request);
+                } catch (error) {
+                    if (error instanceof Failure || control(error)) throw error;
+                    throw new Failure('llm_error', error instanceof Error ? error.message : String(error));
+                }
+            };
+            response = this.trace
+                ? await this.effect({ kind: 'decision', request }, perform, isDecisionResponse)
+                : await perform();
+            if (!isDecisionResponse(response)) throw new Failure('llm_error', 'backend returned an invalid decision');
+            if (response && !this.replaying) this.logger.info(`llm decision call: ${JSON.stringify(response.effective)} (${Date.now() - started} ms)`);
+        }
+        response ??= await this.simulateDecision(question, items, names, model as string | undefined, context);
+        let result: boolean;
+        if (meanings) {
+            const label = response.label;
+            if (label === undefined || !Object.hasOwn(meanings, label)) throw new Failure('llm_error', `decision chose an unknown label: ${JSON.stringify(label)}`);
+            result = meanings[label];
+            if (!this.replaying) this.logger.info(`decision: '${label}' -> ${result}`);
+        } else {
+            if (response.probability === undefined) throw new Failure('llm_error', 'decision returned no probability');
+            result = response.probability > cutoff;
+            if (!this.replaying) this.logger.info(`decision: P(yes)=${response.probability} ${result ? '>' : '<='} cutoff ${cutoff} -> ${result}`);
+        }
+        return result;
+    }
+
+    /** A decision for providers without a decision endpoint: `ask` for probabilities that satisfy a JSON Schema. */
+    private async simulateDecision(
+        question: string, evidence: readonly string[], labels: readonly string[] | undefined, model: string | undefined, context: Context,
+    ): Promise<DecisionResponse> {
+        const shown = evidence.length ? evidence.map((item, index) => `${index + 1}. ${item}`).join('\n') : 'No evidence was given.';
+        const unit = { type: 'number', minimum: 0, maximum: 1 };
+        const prompt = labels
+            ? `Judge the question by the evidence alone. Give each label the probability that it is the right answer; the probabilities add up to 1.\n\nQuestion: ${question}\n\nLabels: ${labels.map(label => JSON.stringify(label)).join(', ')}\n\nEvidence:\n${shown}`
+            : `Judge the question by the evidence alone. Give the probability, from 0 to 1, that the answer is yes.\n\nQuestion: ${question}\n\nEvidence:\n${shown}`;
+        const schema = labels
+            ? { type: 'object', properties: { probabilities: { type: 'object', properties: Object.fromEntries(labels.map(label => [label, unit])), required: [...labels], additionalProperties: false } }, required: ['probabilities'], additionalProperties: false }
+            : { type: 'object', properties: { probability: unit }, required: ['probability'], additionalProperties: false };
+        const answer = await this.generate('ask', prompt, { schema, repairs: 1, ...(model !== undefined ? { model } : {}) }, context) as
+            { probability?: number; probabilities?: Record<string, number> };
+        const effective = { simulated: true };
+        if (!labels) return { probability: answer.probability!, effective };
+        const raw = answer.probabilities!;
+        const total = labels.reduce((sum, label) => sum + raw[label], 0);
+        if (!(total > 0)) throw new Failure('invalid_format', 'decision label probabilities must not all be 0');
+        const probabilities = Object.fromEntries(labels.map(label => [label, raw[label] / total]));
+        // The first label wins a tie, as listed.
+        const label = labels.reduce((best, item) => probabilities[item] > probabilities[best] ? item : best);
+        return { label, probabilities, effective };
     }
 }
 

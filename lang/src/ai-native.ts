@@ -5,7 +5,7 @@ import type { ContentBlockParam, MessageParam, MessageCreateParamsStreaming, Raw
 import type { Stream } from '@anthropic-ai/sdk/core/streaming';
 import type { Content, Part } from '@google/genai';
 import type { Provider } from './auth.js';
-import { LlmError, type RuntimeTool } from './llm.js';
+import { DECISION_MODELS, LlmError, type DecisionRequest, type DecisionResponse, type RuntimeTool } from './llm.js';
 import type { Logger } from './logger.js';
 
 export interface ProviderOptions {
@@ -448,4 +448,77 @@ async function googleModel(apiKey: string, model: string): Promise<NativeModel> 
 export function createNativeModel(provider: Provider, apiKey: string, model: string, logger: Logger): Promise<NativeModel> {
     return provider === 'anthropic' ? anthropicModel(apiKey, model, logger)
         : provider === 'google' ? googleModel(apiKey, model) : openaiModel(apiKey, model, logger);
+}
+
+const NO_EVIDENCE = 'No evidence was given.';
+
+const probability = (value: unknown): number => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
+        throw new LlmError(`the decision endpoint returned an invalid probability: ${JSON.stringify(value)}`);
+    }
+    return value;
+};
+
+function chosen(labels: readonly string[], label: unknown, entries: Iterable<[unknown, unknown]>): Pick<DecisionResponse, 'label' | 'probabilities'> {
+    if (typeof label !== 'string' || !labels.includes(label)) {
+        throw new LlmError(`the decision endpoint chose an unknown label: ${JSON.stringify(label)}`);
+    }
+    const probabilities: Record<string, number> = Object.fromEntries(labels.map(name => [name, 0]));
+    for (const [name, value] of entries) {
+        if (typeof name === 'string' && labels.includes(name)) probabilities[name] = probability(value);
+    }
+    return { label, probabilities };
+}
+
+async function openaiDecision(apiKey: string, req: DecisionRequest, signal: AbortSignal, logger: Logger): Promise<DecisionResponse> {
+    const { default: OpenAI } = await import('openai');
+    const client = new OpenAI({
+        apiKey, baseURL: 'https://api.openai.com/v1', organization: null, project: null,
+        maxRetries: 0, logger, logLevel: 'warn',
+    });
+    const result = await client.decisions.create({
+        model: DECISION_MODELS.openai,
+        input: req.evidence.length ? [{ role: 'user', content: req.evidence.map(text => ({ type: 'input_text', text })) }] : NO_EVIDENCE,
+        questions: [req.labels
+            ? { type: 'choice', name: 'decision', instructions: req.question, choices: req.labels.map(value => ({ value })) }
+            : { type: 'predicate', name: 'decision', instructions: req.question }],
+    }, { signal });
+    const answer = result.answers[0];
+    const effective = { backend: 'native-sdk', provider: 'openai', model: result.model ?? DECISION_MODELS.openai, endpoint: 'decisions' };
+    if (!answer) throw new LlmError('the decision endpoint returned no answer');
+    if (answer.type === 'refusal') throw new LlmError('the model refused to decide');
+    if (answer.type === 'predicate' && !req.labels) return { probability: probability(answer.probability), effective };
+    if (answer.type === 'choice' && req.labels) {
+        return { ...chosen(req.labels, answer.choice, answer.probabilities.map(item => [item.value, item.probability])), effective };
+    }
+    throw new LlmError(`the decision endpoint returned an unexpected '${answer.type}' answer`);
+}
+
+async function googleDecision(apiKey: string, req: DecisionRequest, signal: AbortSignal): Promise<DecisionResponse> {
+    const { GoogleGenAI } = await import('@google/genai');
+    const client = new GoogleGenAI({
+        apiKey, apiVersion: 'v1beta', enterprise: false, httpOptions: { baseUrl: 'https://generativelanguage.googleapis.com' },
+    });
+    const result = await client.decisions.create({
+        model: DECISION_MODELS.google,
+        input: req.evidence.length ? req.evidence.map(text => ({ type: 'text' as const, text })) : NO_EVIDENCE,
+        questions: { decision: req.labels
+            ? { type: 'choice', instructions: req.question, criteria: Object.fromEntries(req.labels.map(label => [label, label])) }
+            : { type: 'noul', instructions: req.question } },
+    }, { signal, retries: { strategy: 'none' } });
+    if (result.prompt_feedback?.block_reason) throw new LlmError(`decision input was blocked (${result.prompt_feedback.block_reason})`);
+    const answer = result.answers?.decision;
+    const effective = { backend: 'native-sdk', provider: 'google', model: DECISION_MODELS.google, endpoint: 'decisions' };
+    if (!answer) throw new LlmError('the decision endpoint returned no answer');
+    if (answer.type === 'noul' && !req.labels) return { probability: probability(answer.noul), effective };
+    if (answer.type === 'choice' && req.labels) return { ...chosen(req.labels, answer.choice, Object.entries(answer.probabilities)), effective };
+    throw new LlmError(`the decision endpoint returned an unexpected '${answer.type}' answer`);
+}
+
+/** Calls a provider decision endpoint with its fixed model; `null` for providers without one. */
+export function nativeDecision(
+    provider: Provider, apiKey: string, req: DecisionRequest, signal: AbortSignal, logger: Logger,
+): Promise<DecisionResponse | null> {
+    return provider === 'openai' ? openaiDecision(apiKey, req, signal, logger)
+        : provider === 'google' ? googleDecision(apiKey, req, signal) : Promise.resolve(null);
 }

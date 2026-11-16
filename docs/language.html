@@ -8,11 +8,11 @@ Markdown comments and --- blocks. This page covers the file format, the TypeScri
 imports, the library, types, the Markdown builder, inputs, logging, tools and errors.">
 <meta name="color-scheme" content="light dark">
 <title>Workflow code - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=cff9ec1f36c0">
-<link rel="stylesheet" href="assets/style.css?v=cff9ec1f36c0">
+<link rel="icon" type="image/png" href="assets/icon.png?v=dbd29fb1fa11">
+<link rel="stylesheet" href="assets/style.css?v=dbd29fb1fa11">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=cff9ec1f36c0"></script>
-<script defer src="assets/site.js?v=cff9ec1f36c0"></script>
+<script defer src="assets/search-index.js?v=dbd29fb1fa11"></script>
+<script defer src="assets/site.js?v=dbd29fb1fa11"></script>
 </head>
 <body data-page="language">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -329,7 +329,7 @@ that scope. Avoid library names such as <code>args</code>, <code>env</code>, <co
 your own variables.</li>
 </ul>
 <h2 id="await-model-calls-and-tools">Await model calls and tools<a class="heading-anchor" href="#await-model-calls-and-tools" aria-label="Link to Await model calls and tools">#</a></h2>
-<p><code>ask</code>, <code>agent</code>, <code>human</code>, <code>codegen</code>, <code>restrict</code> and the tools return promises. Use <code>await</code>
+<p><code>ask</code>, <code>agent</code>, <code>decision</code>, <code>human</code>, <code>codegen</code>, <code>restrict</code> and the tools return promises. Use <code>await</code>
 whenever you need the result or the effect to have happened.</p>
 <figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">ts</span><span class="code-language">ts</span><button type="button" class="copy-button" data-copy="code-8" aria-label="Copy ts code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="ts code example"><code class="language-ts" id="code-8"><span class="hljs-keyword">const</span> report = <span class="hljs-keyword">await</span> <span class="hljs-title function_">readFile</span>(<span class="hljs-string">&#x27;./report.txt&#x27;</span>);
 <span class="hljs-keyword">const</span> [title, summary] = <span class="hljs-keyword">await</span> <span class="hljs-title class_">Promise</span>.<span class="hljs-title function_">all</span>([
@@ -468,7 +468,7 @@ is an error, for example:
 </thead>
 <tbody><tr>
 <td>Model calls</td>
-<td><code>ask</code> <code>agent</code></td>
+<td><code>ask</code> <code>agent</code> <code>decision</code></td>
 </tr>
 <tr>
 <td>People</td>

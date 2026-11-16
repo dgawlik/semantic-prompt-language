@@ -40,7 +40,7 @@ blocks between two `---` lines, which hold an optional YAML header and an instru
 * **TypeScript IntelliSense.** Diagnostics, completions, hover, signature help, **Go to
   Definition**, **Find All References**, reference highlighting, **Rename Symbol**, document
   symbols and folding come from the TypeScript language service. The library (`ask`, `agent`,
-  `restrict`, `Struct`, ...) is declared as globals with its documentation, so nothing needs to
+  `decision`, `restrict`, `Struct`, ...) is declared as globals with its documentation, so nothing needs to
   be imported. Files are checked the way `spl check` checks them.
 * **Blocks are part of the program.** An unknown `@name`, a wrong type in `->[Type]` or
   `outputType`, and an output that redeclares a variable are reported where they are written.
@@ -59,8 +59,8 @@ blocks between two `---` lines, which hold an optional YAML header and an instru
   resolve from the importing file. An imported `.spl` file gives its exported declarations and its
   workflow as the default export, also when it is not open in an editor.
 * **Run and Debug** start the `spl` command line in a terminal.
-* **Snippets**: `ask`, `agent` and `codegen` blocks, `defaults` for the file defaults and `doc`
-  for a Markdown comment.
+* **Snippets**: `ask`, `agent` and `codegen` blocks, `defaults` for the file defaults, `doc`
+  for a Markdown comment, and `decision` / `decision-labels` for branching on a `decision()`.
 
 The language server only reads source: it never runs workflows, calls tools or contacts models.
 Its errors appear in **Output > SPL Language Server**.

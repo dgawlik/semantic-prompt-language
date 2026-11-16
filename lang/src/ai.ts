@@ -1,10 +1,13 @@
 import { createMCPClient, type MCPClient } from '@ai-sdk/mcp';
 import { StdioMCPTransport } from '@ai-sdk/mcp/mcp-stdio';
 import { Ajv } from 'ajv';
-import { createNativeModel, type ProviderOptions, type ToolOutput } from './ai-native.js';
+import { createNativeModel, nativeDecision, type ProviderOptions, type ToolOutput } from './ai-native.js';
 import { AuthError, resolveProvider, type Provider } from './auth.js';
 import { Failure } from './errors.js';
-import { LlmError, validateRandomness, validateTokens, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel, type RuntimeTool } from './llm.js';
+import {
+    LlmError, validateRandomness, validateTokens,
+    type DecisionRequest, type DecisionResponse, type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel, type RuntimeTool,
+} from './llm.js';
 import type { Logger } from './logger.js';
 import { configuredMcpTool, filterMcpServers, type McpServers } from './mcp.js';
 import { TOOL_SPECS, describeMcpCall, describeToolCall } from './tools.js';
@@ -376,6 +379,28 @@ export class AiBackend implements LlmBackend {
             this.active.delete(controller);
             if (!signal.aborted) controller.abort(new LlmError('the model call has completed'));
             await Promise.all([...clients].map(client => this.closeMcp(client)));
+        }
+    }
+
+    async decide(req: DecisionRequest): Promise<DecisionResponse | null> {
+        if (this.closed) throw new LlmError('the model backend is closed');
+        const selected = (() => {
+            try { return resolveProvider(req.model, this.opts.provider); }
+            catch (error) { throw error instanceof AuthError ? new LlmError(error.message) : error; }
+        })();
+        if (selected.provider === 'anthropic') return null;
+        const controller = new AbortController();
+        this.active.add(controller);
+        const timer = setTimeout(() => controller.abort(new LlmError(`decision call timed out after ${this.opts.timeoutMs}ms`)), this.opts.timeoutMs);
+        try {
+            return await nativeDecision(selected.provider, selected.apiKey, req, controller.signal, this.opts.logger);
+        } catch (error) {
+            if (controller.signal.aborted) throw controller.signal.reason;
+            if (error instanceof Failure || error instanceof LlmError) throw error;
+            throw new LlmError(error instanceof Error ? error.message : String(error));
+        } finally {
+            clearTimeout(timer);
+            this.active.delete(controller);
         }
     }
 

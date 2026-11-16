@@ -8,11 +8,11 @@ and its logs on stderr, and reports the outcome through its exit code.
 Requires Node.js &gt;=24.15.0.">
 <meta name="color-scheme" content="light dark">
 <title>CLI &amp; runtime - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=cff9ec1f36c0">
-<link rel="stylesheet" href="assets/style.css?v=cff9ec1f36c0">
+<link rel="icon" type="image/png" href="assets/icon.png?v=dbd29fb1fa11">
+<link rel="stylesheet" href="assets/style.css?v=dbd29fb1fa11">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=cff9ec1f36c0"></script>
-<script defer src="assets/site.js?v=cff9ec1f36c0"></script>
+<script defer src="assets/search-index.js?v=dbd29fb1fa11"></script>
+<script defer src="assets/site.js?v=dbd29fb1fa11"></script>
 </head>
 <body data-page="cli">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -524,8 +524,8 @@ continues live at the first unrecorded effect. Records are appended and flushed 
 existing bytes are never rewritten. A completed success or failure replays, prints the same
 result and leaves the trace unchanged. To restart, choose a different JSONL file.</p>
 <p>The JSONL journal records the effects of the library: model requests, raw responses and
-failures (including repairs, reasoning, sampling and token budgets), every decision of an agent
-block, <code>readFile</code>/<code>writeFile</code>/<code>webFetch</code>/<code>webSearch</code>/<code>shell</code> outcomes, restrictions, human
+failures (including repairs, reasoning, sampling and token budgets), <code>decision()</code> answers, every
+decision of an agent block, <code>readFile</code>/<code>writeFile</code>/<code>webFetch</code>/<code>webSearch</code>/<code>shell</code> outcomes, restrictions, human
 answers, generated code, accessed environment values and the final result. Blocks go through
 the same journal as <code>ask()</code> and <code>agent()</code>. Completed effects are not executed again: replay
 never contacts model providers or MCP, re-reads files through the tools, repeats writes,
@@ -543,7 +543,7 @@ change the replayed result, and a deleted one makes the replay fail.</p>
 configuration must match the recording. Arguments are retained; omitting <code>--arg</code> reuses them,
 while explicitly different arguments fail. Requests must match exactly and in order; malformed,
 mismatched and unused history fail without falling back to live work.</p>
-<p>After an interruption, a recorded human question, a model call without tools, a read or the
+<p>After an interruption, a recorded human question, a model call without tools, a <code>decision()</code>, a read or the
 next decision of an agent block can continue. If a write, a shell command or an <code>agent()</code> call
 was interrupted between its durable intent and outcome, its side effects may already have
 occurred: SPL reports an unresolved effect instead of repeating it. Truncated final records
@@ -593,6 +593,8 @@ restrictions use the configured names instead: <code>docs/search</code>.</p>
 starts. Only load configurations you trust.</p>
 <h2 id="models-and-authentication">Models and authentication<a class="heading-anchor" href="#models-and-authentication" aria-label="Link to Models and authentication">#</a></h2>
 <p>Every model call uses the official OpenAI, Anthropic or Google client in a fresh conversation.
+<code>decision()</code> calls the OpenAI and Google decision endpoints with their fixed models
+(<code>gpt-6-luna</code>, <code>gemini-decision-1</code>) and simulates one on Anthropic.
 See <a href="getting-started.html#install">Getting started</a> for API-key login and environment variables.
 A call without credentials, or a provider/model access error, fails with <code>llm_error</code>.
 Workflows without model calls, <code>check</code>, <code>compile</code>, <code>doc</code> and replay do not initialize providers or MCP.</p>

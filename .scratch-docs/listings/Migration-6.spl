@@ -1,7 +1,0 @@
----
-outputVar: invoice
-outputType: Invoice
-forbid: filling in values that are not printed on the invoice
-
-Extract the invoice in @text.
----

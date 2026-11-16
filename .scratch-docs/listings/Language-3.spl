@@ -1,7 +1,0 @@
----
-mode: agent
-model: gpt-6.1-sol
-restrict: { fs: ./reports }
-
-Convert @groups to a Markdown report and write it to './reports/review.md'
----

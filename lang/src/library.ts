@@ -3,7 +3,7 @@ import { Failure, SuccessSignal } from './errors.js';
 import type { LogLevel } from './logger.js';
 import * as markdownLibrary from './markdown-lib.js';
 import type { RestrictKind } from './restrict.js';
-import { currentContext, display, runInContext, type Context, type GenerateOptions, type GenerationKind } from './runtime.js';
+import { currentContext, display, runInContext, type Context, type DecisionOptions, type GenerateOptions, type GenerationKind } from './runtime.js';
 import type { ToolName } from './tools.js';
 import {
     Any, Bool, Char, Dict, Enum, Float, Fn, Int, JsonSchema, List, Nil, Nullable, Str, Struct, Typedef, Union, t, validate,
@@ -87,6 +87,23 @@ export function agent(prompt: unknown, ...rest: unknown[]): Promise<unknown> {
 export function human(question: string): Promise<string> {
     const context = currentContext();
     return located(context, context.runtime.human(question, context.runtime.callerLine(context)));
+}
+
+export type { DecisionOptions };
+type DecisionQuestion = Pick<DecisionOptions, 'question' | 'evidence' | 'model'>;
+
+/**
+ * Answers a question about the evidence with a boolean. OpenAI and Google use their decision endpoints
+ * (`gpt-6-luna`, `gemini-decision-1`); Anthropic models simulate one.
+ *
+ *     if (await decision({ evidence: ['The color red is #ff0000'], question: `Is ${color} a shade of red?`, cutoff: 0.85 })) ...
+ *     const urgent = await decision({ evidence: [ticket], question: 'How urgent is it?', labels: { now: true, today: true, later: false } });
+ */
+export function decision(options: DecisionQuestion & { cutoff?: number }): Promise<boolean>;
+export function decision(options: DecisionQuestion & { labels: Readonly<Record<string, boolean>> }): Promise<boolean>;
+export function decision(options: DecisionOptions): Promise<boolean> {
+    const context = currentContext();
+    return located(context, context.runtime.decision(options, context));
 }
 
 function guidance<T>(kind: 'enforce' | 'forbid', text: string | readonly string[], body: () => T): T {
@@ -210,7 +227,7 @@ export const env: Readonly<Record<string, string | undefined>> = new Proxy({} as
 /** Everything a `.spl` file can use without importing it. */
 export function library(): Record<string, unknown> {
     return {
-        ask, agent, human, enforce, forbid, restrict, success, fail, assert, log, codegen,
+        ask, agent, human, decision, enforce, forbid, restrict, success, fail, assert, log, codegen,
         readFile, writeFile, webFetch, webSearch, shell, args, env, validate, markdown: markdownLibrary, Failure,
         t, Str, Int, Float, Bool, Char, Nil, Any, Dict, Fn, List, Union, Nullable, Enum, Struct, Typedef, JsonSchema,
     };

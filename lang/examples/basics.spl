@@ -24,7 +24,7 @@ function factorial(n: number): number {
 
 ---
 mode: agent
-reasoning: high
+reasoning: medium
 
 Invoke @factorial with 15 as argument ->[Int] @fact15
 Invoke @fib with 10 as argument ->[Int] @fib10

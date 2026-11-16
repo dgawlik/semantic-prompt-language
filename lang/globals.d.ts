@@ -10,6 +10,8 @@ declare global {
     const agent: typeof spl.agent;
     /** Asks a person and resolves to their answer. */
     const human: typeof spl.human;
+    /** Answers a question about evidence with a boolean: a probability `cutoff`, or `labels` mapped to true/false. */
+    const decision: typeof spl.decision;
     /** Adds an instruction to every model call made inside the callback. */
     const enforce: typeof spl.enforce;
     /** Tells every model call inside the callback what to avoid. */

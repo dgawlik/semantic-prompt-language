@@ -143,12 +143,14 @@ test('the manifest contributes the .spl language, its grammar, snippets and the 
 
 test('the snippets are valid .spl: each block scans without problems', () => {
     const snippets: Record<string, { prefix: string; body: string[] }> = json('snippets/spl.code-snippets');
-    assert.deepEqual(Object.values(snippets).map(snippet => snippet.prefix).sort(), ['agent', 'ask', 'codegen', 'defaults', 'doc']);
+    const code = ['decision', 'decision-labels'];
+    assert.deepEqual(Object.values(snippets).map(snippet => snippet.prefix).sort(), ['agent', 'ask', 'codegen', ...code, 'defaults', 'doc']);
     for (const [name, snippet] of Object.entries(snippets)) {
         const text = snippet.body.join('\n').replace(/\$\{\d+:([^}]*)\}/g, '$1').replace(/\$\d+/g, '');
         const scanned = scan(text);
         assert.deepEqual(scanned.problems, [], name);
-        assert.equal(scanned.blocks.length + scanned.comments.length + (scanned.defaults ? 1 : 0), 1, name);
+        const parts = scanned.blocks.length + scanned.comments.length + (scanned.defaults ? 1 : 0);
+        assert.equal(parts, code.includes(snippet.prefix) ? 0 : 1, name);
     }
 });
 

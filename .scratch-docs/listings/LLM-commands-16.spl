@@ -1,2 +1,0 @@
-const answer = await enforce('Answer in English', () =>
-    forbid('jokes', () => ask('Explain recursion', { len: 'sentence' })));

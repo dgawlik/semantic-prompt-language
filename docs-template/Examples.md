@@ -25,11 +25,12 @@ answer.spl
 
 ## Control flow and guidance
 
-Blocks inside `if` and loops, outputs that assign existing variables, guidance and sampling.
+Blocks inside `if` and loops, outputs that assign existing variables, decisions, guidance and sampling.
 
 ```spl-doc
 conditional-workflows.spl
 goto.spl
+decision.spl
 enforce.spl
 randomness.spl
 ```

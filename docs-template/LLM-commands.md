@@ -1,8 +1,9 @@
 # Natural language & models
 
 A `---` block is an instruction for a model, written in plain language between lines of code;
-`ask` and `agent` call the model from code. This page covers the three block modes, references
-and outputs, models and reasoning, and how to check what comes back.
+`ask` and `agent` call the model from code, and `decision` turns a question into a boolean. This
+page covers the three block modes, references and outputs, models and reasoning, decisions, and
+how to check what comes back.
 
 ## Blocks
 
@@ -738,3 +739,74 @@ of strings. Guidance from all four places combines.
 const answer = await enforce('Answer in English', () =>
     forbid('jokes', () => ask('Explain recursion', { len: 'sentence' })));
 ```
+
+## Decisions
+
+`await decision({ question, evidence, ... })` answers a question about the evidence with a
+boolean, so code can branch on it without parsing an answer. It has two forms:
+
+* **A probability cutoff.** `{ question, evidence, cutoff }` asks a yes/no question and is
+  `true` when the probability of yes is above `cutoff`. `cutoff` is a number from 0 to 1,
+  `0.5` when omitted.
+* **Labels.** `{ question, evidence, labels }` picks one label, and the result is the boolean
+  that label stands for: `labels: { warm: true, neutral: false, cool: false }`. Give 2 to 255
+  labels, at least one for `true` and one for `false`. `cutoff` and `labels` cannot be combined.
+
+`decision.spl`
+
+```spl
+//*
+# Decisions
+
+`decision()` answers a question about the evidence with a boolean, so code can branch on it. With
+`cutoff`, it is true when the probability of yes is above the cutoff; with `labels`, the model picks
+a label and the result is the boolean that label stands for. OpenAI and Google answer with their
+decision endpoints, whatever the model below; Anthropic models simulate one.
+
+    spl run examples/decision.spl --arg crimson
+*//
+
+---
+model: gpt-6-luna
+---
+
+const color = args[0] ?? 'crimson';
+
+if (await decision({
+    evidence: ['The color red is #ff0000'],
+    question: `Is ${color} a shade of red?`,
+    cutoff: 0.85,
+})) {
+    log(`${color} is red`);
+} else {
+    fail(`${color} is not red`);
+}
+
+const warm = await decision({
+    evidence: [`The color is ${color}`],
+    question: 'Which temperature group does the color belong to?',
+    labels: { warm: true, neutral: false, cool: false },
+});
+
+success(warm ? `${color} is a warm red` : `${color} is red, but not warm`);
+```
+
+| Option | Values | Effect |
+| --- | --- | --- |
+| `question` | Nonempty string | What to decide; build it with a template literal |
+| `evidence` | A string or a list | What the question is judged against; objects in the list are shown as JSON |
+| `cutoff` | Number `0..1`, default `0.5` | Yes/no form: the probability that must be exceeded |
+| `labels` | `{ label: boolean, ... }` | Label form: the labels to choose from and what each stands for |
+| `model` | Model id | Selects the provider, like `model` of `ask` |
+
+**Providers.** OpenAI and Google answer with their decision endpoints, which use a fixed model
+whatever model the workflow names: `gpt-6-luna` on OpenAI's `/v1/decisions` and
+`gemini-decision-1` on Google's `/v1beta/decisions`. The model of the call, the file default or
+`--model` only selects the provider. Anthropic has no decision endpoint, so on Anthropic models
+the runtime simulates one with an `ask` call of the selected model that returns probabilities
+as JSON, checked against a JSON Schema with one repair.
+
+The probability, or the chosen label, is written to the run log. [Guidance](#guidance-enforce-and-forbid)
+from `enforce` and `forbid` applies to decisions too. Decisions are recorded in
+[traces](CLI.md#traces-and-replay) and replay without contacting the provider. An invalid option
+is a `runtime_error` before any call; a refusal or an unexpected answer is an `llm_error`.

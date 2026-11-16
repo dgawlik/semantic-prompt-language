@@ -44,17 +44,24 @@ export function createRuntime(options: ConfigureOptions): Runtime {
     const logger = options.logger ?? new Logger(level);
     const cwd = options.cwd ?? process.cwd();
     let inner: LlmBackend | undefined = options.backend;
+    const load = async (): Promise<LlmBackend> => {
+        if (!inner) {
+            const { AiBackend } = await import('./ai.js');
+            inner = new AiBackend({
+                logger, cwd, timeoutMs: options.timeoutMs ?? 300_000,
+                provider: options.provider, mcpServers: options.mcpServers,
+            });
+        }
+        return inner;
+    };
     // Provider SDKs load on the first model call, not on import.
     const backend: LlmBackend = {
         async call(request) {
-            if (!inner) {
-                const { AiBackend } = await import('./ai.js');
-                inner = new AiBackend({
-                    logger, cwd, timeoutMs: options.timeoutMs ?? 300_000,
-                    provider: options.provider, mcpServers: options.mcpServers,
-                });
-            }
-            return inner.call(request);
+            return (await load()).call(request);
+        },
+        async decide(request) {
+            const loaded = await load();
+            return loaded.decide ? loaded.decide(request) : null;
         },
         async close() { await inner?.close(); },
     };

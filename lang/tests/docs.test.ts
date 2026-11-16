@@ -1,23 +1,16 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { compileCell, FENCE_LANGUAGES } from '../src/cell.js';
-import { parseMarkdown } from '../src/markdown.js';
-import { parseSpl } from '../src/spl.js';
-import { header } from './helpers.js';
+import { compile } from '../src/compile.js';
+import { documentMarkdown } from '../src/doc.js';
+import hljs from '../src/highlight.js';
 
 const root = path.resolve(__dirname, '..', '..');
 const docs = path.join(root, 'docs');
 const templates = path.join(root, 'docs-template');
 const examples = path.join(root, 'lang', 'examples');
-
-interface Highlighter {
-    highlight(text: string, options: { language: string }): { value: string };
-    getLanguage(name: string): unknown;
-}
-// The documentation generator's own highlighter: plain JavaScript outside this package.
-const { default: hljs } = await import(pathToFileURL(path.join(docs, 'highlight.mjs')).href) as { default: Highlighter };
+const exampleFiles = fs.readdirSync(examples, { recursive: true, encoding: 'utf8' })
+    .map(name => name.replaceAll('\\', '/')).filter(name => name.endsWith('.spl')).sort();
 
 const normalize = (source: string): string => source.replace(/\r\n/g, '\n').trim();
 /** Turns highlighted HTML back into the text a reader copies. */
@@ -29,16 +22,23 @@ const headingId = (heading: string): string => heading.toLowerCase().replace(/[^
 const withoutFences = (markdown: string): string =>
     normalize(markdown).replace(/^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]*\1[ \t]*$/gm, '');
 
-/** A listing is either a whole workflow or a fragment of one: a few fences and blockquotes. */
-const workflow = (text: string): string => text.startsWith('---\n') ? text : `${header}---\n\n${text}`;
+interface Fence {
+    language: string;
+    /** `spl fragment` marks a part of a file, such as a lone header: highlighted, not compiled. */
+    fragment: boolean;
+    text: string;
+    /** The example file named by the caption above the listing. */
+    caption?: string;
+}
 
 /** Fenced blocks of a Markdown source, outermost fences only. */
-function fences(markdown: string): { language: string; text: string }[] {
-    const found: { language: string; text: string }[] = [];
-    for (const match of normalize(markdown).matchAll(/^(`{3,}|~{3,})([^\s`]*)[^\n]*\n([\s\S]*?)^\1[ \t]*$/gm)) {
-        found.push({ language: match[2].toLowerCase(), text: match[3] });
-    }
-    return found;
+function fences(markdown: string): Fence[] {
+    const source = normalize(markdown);
+    return [...source.matchAll(/^(`{3,}|~{3,})([^\n]*)\n([\s\S]*?)^\1[ \t]*$/gm)].map(match => {
+        const [language = '', flag] = match[2].trim().toLowerCase().split(/\s+/);
+        const caption = /(?:^|\n)`([^`\n]+\.\w+)`\n\n$/.exec(source.slice(0, match.index))?.[1];
+        return { language, fragment: flag === 'fragment', text: match[3], ...(caption ? { caption } : {}) };
+    });
 }
 
 describe('documentation site', () => {
@@ -53,6 +53,12 @@ describe('documentation site', () => {
         expect(html).not.toMatch(/href="\.\.\//);
         expect(html).not.toContain('href="https://dgawlik.github.io/semantic-prompt-language/');
         for (const file of pages) expect(fs.readFileSync(path.join(docs, file), 'utf8'), file).toContain('<a href="introduction.html" aria-current="true">Documentation</a>');
+    });
+
+    it('presents 3.0 syntax on the front page', () => {
+        const text = decode(fs.readFileSync(path.join(docs, 'index.html'), 'utf8'));
+        for (const expected of ['spl run lang/examples/typed-data.spl', 'spl check lang/examples/hi.spl', 'mode: agent', '->[Card] @hardest']) expect(text).toContain(expected);
+        for (const removed of ['{js}', '{agent', '@validate', '--check', 'enumOf(', 'go(']) expect(text).not.toContain(removed);
     });
 
     it('index.html local links resolve', () => {
@@ -97,43 +103,33 @@ describe('documentation site', () => {
             }
         });
 
-        it(`${file} does not present the grammar of the removed language`, () => {
-            expect(html).not.toContain('class="language-ebnf"');
-        });
-
-        const blocks = [...html.matchAll(/<code class="language-([\w-]+)"([^>]*)>([\s\S]*?)<\/code>/g)]
-            .map(match => ({ language: match[1], text: decode(match[3]), example: /data-file="([^"]+)"/.exec(match[2])?.[1] }));
-        blocks.forEach((block, index) => {
-            const language = Object.hasOwn(FENCE_LANGUAGES, block.language) ? FENCE_LANGUAGES[block.language] : undefined;
-            if (language) {
-                it(`${file} ${block.language} block ${index + 1} compiles as a workflow fence`, () => {
-                    expect(() => compileCell(block.text, { language })).not.toThrow();
-                });
-            }
-            if (block.language === 'markdown') {
-                it(`${file} workflow listing ${index + 1} parses`, () => {
-                    const parsed = parseMarkdown(workflow(block.text));
-                    expect(parsed.steps.length).toBeGreaterThan(0);
-                });
-            }
-            // `spl` names the block format of .spl files; a listing in the removed 1.x language does not parse.
-            if (block.language === 'spl') {
-                it(`${file} .spl listing ${index + 1} parses`, () => {
-                    expect(parseSpl(block.text).steps.length).toBeGreaterThan(0);
-                });
-            }
-            if (block.example) {
-                it(`${file} embeds the current ${block.example}`, () => {
-                    expect(decodeURIComponent(block.example!)).not.toContain('..');
-                    expect(normalize(block.text)).toBe(normalize(fs.readFileSync(path.join(examples, block.example!), 'utf8')));
-                });
+        it(`${file} shows its listings as the template wrote them`, () => {
+            const template = fs.readdirSync(templates).find(name => name.toLowerCase() === file.replace(/\.html$/, '.md'))!;
+            const written = fences(fs.readFileSync(path.join(templates, template), 'utf8')).filter(fence => fence.language !== 'spl-doc');
+            const shown = [...html.matchAll(/<code class="language-([\w-]+)"([^>]*)>([\s\S]*?)<\/code>/g)]
+                .map(match => ({ text: decode(match[3]), example: /data-file="([^"]+)"/.exec(match[2])?.[1] }));
+            for (const fence of written) expect(shown.map(block => normalize(block.text)), `${file}: ${fence.text.slice(0, 40)}`).toContain(normalize(fence.text));
+            for (const block of shown.filter(item => item.example)) {
+                expect(normalize(block.text), `${file}: ${block.example}`).toBe(normalize(fs.readFileSync(path.join(examples, block.example!), 'utf8')));
             }
         });
     }
 
     it('shows shipped examples from their files', () => {
         const embedded = pages.flatMap(file => [...fs.readFileSync(path.join(docs, file), 'utf8').matchAll(/data-file="([^"]+)"/g)].map(match => match[1]));
-        for (const name of ['hi.md', 'codegen.md', 'types.md', 'extract-invoice.md', 'triage-issues.md', 'code-review.spl']) expect(embedded).toContain(name);
+        for (const name of ['hi.spl', 'basics.spl', 'codegen.spl', 'code-review.spl']) expect(embedded).toContain(name);
+    });
+
+    it('documents every example on the Examples page, as spl doc prints it', () => {
+        const html = fs.readFileSync(path.join(docs, 'examples.html'), 'utf8');
+        const template = fs.readFileSync(path.join(templates, 'Examples.md'), 'utf8');
+        const listed = fences(template).filter(fence => fence.language === 'spl-doc').flatMap(fence => fence.text.split('\n').map(line => line.trim()).filter(Boolean));
+        expect([...listed].sort()).toEqual(exampleFiles);
+        for (const name of exampleFiles) {
+            const title = /^# (.+)$/m.exec(documentMarkdown(fs.readFileSync(path.join(examples, name), 'utf8')))![1];
+            expect(decode(html.replace(/<[^>]+>/g, '')), name).toContain(title.replace(/`/g, ''));
+            expect(html, name).toContain(`/lang/examples/${name.split('/').map(encodeURIComponent).join('/')}"`);
+        }
     });
 
     it('has a Markdown page for every HTML documentation page', () => {
@@ -152,16 +148,13 @@ describe('documentation site', () => {
         }
     });
 
-    it('preserves the published output formats permalink', () => {
-        expect(fs.readFileSync(path.join(docs, 'llm-commands.html'), 'utf8')).toContain('id="fmt-object"');
-    });
-
-    it('states the runtime requirements of the package', () => {
-        const { engines } = JSON.parse(fs.readFileSync(path.join(root, 'lang', 'package.json'), 'utf8')) as { engines: { node: string } };
+    it('states the runtime requirements and the version of the package', () => {
+        const { engines, version } = JSON.parse(fs.readFileSync(path.join(root, 'lang', 'package.json'), 'utf8')) as { engines: { node: string }; version: string };
         const minimum = /^>=(\d+\.\d+)/.exec(engines.node)![1];
+        expect(version).toBe('3.0.0');
         expect(fs.readFileSync(path.join(docs, 'introduction.html'), 'utf8')).toContain(`Node.js ${minimum}+`);
+        expect(fs.readFileSync(path.join(docs, 'introduction.html'), 'utf8')).toContain(`v${version}`);
         expect(fs.readFileSync(path.join(docs, 'index.html'), 'utf8')).toContain(`Node.js ${minimum}+`);
-        expect(fs.readFileSync(path.join(docs, 'getting-started.html'), 'utf8')).toContain(`Node.js ${engines.node.replace('>', '&gt;')}`);
     });
 });
 
@@ -190,247 +183,96 @@ describe('documentation sources', () => {
             }
         });
 
+        it(`${file} describes SPL 3.0 only`, () => {
+            // The migration guide is the one place that shows what 2.x looked like.
+            if (file.endsWith('Migration.md')) return;
+            const prose = withoutFences(markdown);
+            for (const removed of ['@CTL', '@CODEGEN', '@validate', '--pin', 'think(', 'enumOf', 'go(']) {
+                expect(prose.toLowerCase(), `${file}: ${removed}`).not.toContain(removed.toLowerCase());
+            }
+        });
+
         fences(markdown).forEach((fence, index) => {
-            const language = Object.hasOwn(FENCE_LANGUAGES, fence.language) ? FENCE_LANGUAGES[fence.language] : undefined;
-            if (language) {
-                it(`${file} ${fence.language} example ${index + 1} compiles as a workflow fence`, () => {
-                    expect(() => compileCell(fence.text, { language })).not.toThrow();
+            // An `spl` listing is a whole file unless it is marked as a fragment: it must compile.
+            if (fence.language === 'spl' && !fence.fragment) {
+                it(`${file} .spl listing ${index + 1} compiles`, () => {
+                    expect(() => compile(fence.text)).not.toThrow();
                 });
             }
-            if (fence.language === 'markdown') {
-                it(`${file} workflow listing ${index + 1} parses`, () => {
-                    expect(parseMarkdown(workflow(fence.text)).steps.length).toBeGreaterThan(0);
-                });
-            }
-            // An `spl` fence shows a .spl file; the removed 1.x language does not parse as one.
-            if (fence.language === 'spl') {
-                it(`${file} .spl listing ${index + 1} parses`, () => {
-                    expect(parseSpl(fence.text).steps.length).toBeGreaterThan(0);
+            if (fence.caption && fs.existsSync(path.join(examples, fence.caption))) {
+                it(`${file} listing ${index + 1} is ${fence.caption} as shipped`, () => {
+                    expect(normalize(fence.text)).toBe(normalize(fs.readFileSync(path.join(examples, fence.caption!), 'utf8')));
                 });
             }
         });
     }
 
     it('keeps the README example current', () => {
-        const readme = normalize(fs.readFileSync(path.join(root, 'README.md'), 'utf8'));
-        const embedded = /^````markdown\n([\s\S]*?)^````[ \t]*$/m.exec(readme);
-        expect(embedded).not.toBeNull();
-        expect(normalize(embedded![1])).toBe(normalize(fs.readFileSync(path.join(examples, 'hi.md'), 'utf8')));
+        const [first] = fences(fs.readFileSync(path.join(root, 'README.md'), 'utf8'));
+        expect(first.language).toBe('spl');
+        expect(normalize(first.text)).toBe(normalize(fs.readFileSync(path.join(examples, 'basics.spl'), 'utf8')));
     });
 
-    it.each(['generate-presentation.md', path.join('.testmd', '1.md')])('%s is a valid workflow', file => {
-        const source = fs.readFileSync(path.join(root, file), 'utf8');
-        expect(source).not.toMatch(/^(`{3,}|~{3,})spl\b/m);
-        expect(parseMarkdown(source).steps.some(step => step.kind === 'code')).toBe(true);
+    it('generate-presentation.spl is a valid workflow', () => {
+        expect(() => compile(fs.readFileSync(path.join(root, 'generate-presentation.spl'), 'utf8'))).not.toThrow();
     });
 });
 
 describe('documentation syntax highlighting', () => {
-    const highlight = (text: string, language = 'markdown'): string => hljs.highlight(text, { language }).value;
+    const highlight = (text: string, language = 'spl'): string => hljs.highlight(text, { language }).value;
+    const source = [
+        '//*', '# Title', '', 'Some *prose* with `---` in it.', '*//',
+        '---', 'model: gpt-6-luna', '---',
+        "const topic: string = 'types';", 'const rule = `---`;',
+        '---', 'mode: agent', 'restrict: { fs: ./out }', '',
+        'Explain @topic and @env.HOME to user@example.com ->[List(Str)] @points', 'model: this line is text, and so is @=count', '---',
+        'success(points);',
+    ].join('\n');
 
-    it('registers the languages used by the documentation and not the removed grammar notation', () => {
-        for (const name of ['js', 'javascript', 'ts', 'typescript', 'bash', 'powershell', 'json', 'markdown', 'spl']) {
+    it('registers the languages used by the documentation', () => {
+        for (const name of ['js', 'javascript', 'ts', 'typescript', 'bash', 'sh', 'powershell', 'json', 'yaml', 'markdown', 'md', 'spl']) {
             expect(hljs.getLanguage(name), name).toBeTruthy();
         }
-        expect(hljs.getLanguage('ebnf')).toBeFalsy();
+        expect(hljs.getLanguage('ebnf')).toBeUndefined();
     });
 
-    it('highlights the blocks of a .spl file: tags, settings, instructions and embedded code', () => {
-        const text = `---
-model: 'm'
----
-
-{comment}
-Shown as text: {js} and @name
-{/comment}
-
-{js}
-const notes = await ask('Notes?');
-{/js}
-
-{agent restrict={fs: ['./src'], exec: 'git'},
-       forbid='mentioning @literal or model=', reasoning='high'}
-Inspect @notes and @env.HOME; @validate[Schema] save to @result, then @success
-{/agent}
-
-{ts no-run}
-const total: number = 1;
-{/ts}
-
-{codegen model='m'}
-Define double(value) using @literal
-{/codegen}
-
-Stray @outside and model='x'
-`;
-        const html = highlight(text, 'spl');
-        expect(html).toContain('<span class="hljs-comment">{comment}\nShown as text: {js} and @name\n{/comment}</span>');
-        for (const tag of ['{js}', '{/js}', '{agent', '{/agent}', '{ts no-run}', '{/ts}', '{codegen', '{/codegen}']) {
-            expect(html, tag).toContain(`<span class="hljs-meta">${tag}</span>`);
-        }
-        expect(html).toContain('<span class="language-javascript">');
-        expect(html).toContain('<span class="hljs-title function_">ask</span>');
-        expect(html).toContain('<span class="language-typescript">');
-        expect(html).toContain('<span class="hljs-built_in">number</span>');
-        for (const name of ['restrict', 'forbid', 'reasoning', 'fs', 'exec']) expect(html, name).toContain(`<span class="hljs-attr">${name}</span>`);
-        expect(html.match(/<span class="hljs-attr">model<\/span>/g)).toHaveLength(2);
-        for (const name of ['@notes', '@env.HOME', '@result']) expect(html, name).toContain(`<span class="hljs-variable">${name}</span>`);
-        for (const name of ['@validate', '@success']) expect(html, name).toContain(`<span class="hljs-keyword">${name}</span>`);
-        for (const name of ['@literal', '@outside', '@name']) expect(html, name).not.toContain(`>${name}</span>`);
-        expect(decode(html)).toBe(text);
+    it('colors a .spl file: Markdown comments, fences, header keys, references, arrows and TypeScript between them', () => {
+        const html = highlight(source);
+        expect(html).toContain('<span class="hljs-comment">//*</span>');
+        expect(html).toContain('<span class="hljs-section"># Title</span>');
+        expect(html).toContain('<span class="hljs-comment">*//</span>');
+        expect(html).toContain('<span class="hljs-meta">---</span>');
+        expect(html).toContain('<span class="hljs-attr">model</span>: gpt-6-luna');
+        expect(html).toContain('<span class="hljs-attr">mode</span>: agent');
+        expect(html).toContain('<span class="hljs-attr">restrict</span>');
+        expect(html).toContain('<span class="hljs-variable">@topic</span>');
+        expect(html).toContain('<span class="hljs-variable">@env.HOME</span>');
+        expect(html).toContain('<span class="hljs-variable">@=count</span>');
+        expect(html).toContain('<span class="hljs-keyword">-&gt;</span>[List(Str)] <span class="hljs-variable">@points</span>');
+        expect(html).toContain('<span class="hljs-keyword">const</span> <span class="hljs-attr">topic</span>: <span class="hljs-built_in">string</span> = <span class="hljs-string">&#x27;types&#x27;</span>;');
+        expect(html).toContain('<span class="hljs-title function_">success</span>(points);');
     });
 
-    it('ends a .spl block only at its own closing tag on a line of its own', () => {
-        const text = "{js}\nconst text = `\n{/agent}\n  {/js} trailing`;\nconst inline = '{/js}';\n{/js}\n\n{agent}\nSave to @result\n{/agent}";
-        const html = highlight(text, 'spl');
-        expect(html.match(/<span class="hljs-meta">\{\/js\}<\/span>/g)).toHaveLength(1);
-        expect(html).toContain('<span class="hljs-variable">@result</span>');
-        expect(decode(html)).toBe(text);
+    it('leaves addresses, fences inside strings and prose alone', () => {
+        const html = highlight(source);
+        expect(html).toContain('user@example.com');
+        expect(html).not.toContain('<span class="hljs-variable">@example');
+        expect(html).toContain('<span class="hljs-string">`---`</span>');
+        // Six fence lines open and close the three blocks; the `---` in the comment and in the string are not fences.
+        expect(html.match(/<span class="hljs-meta">---<\/span>/g)).toHaveLength(4);
     });
 
-    it('highlights .spl control keywords and JavaScript conditions', () => {
-        const text = "if _switch == 'color':\n    {js}\n    let result = 1\n    {/js}\nelif count > 1:\n    {agent}\n    Use @count\n    {/agent}\nelse:\n    {js}\n    let result = 2\n    {/js}\nwhile i < 3:\n    {js}\n    i++\n    {/js}\niffy:";
-        const html = highlight(text, 'spl');
-        for (const keyword of ['if', 'elif', 'else', 'while']) expect(html, keyword).toContain(`<span class="hljs-keyword">${keyword}</span>`);
-        expect(html).not.toContain('<span class="hljs-keyword">iffy</span>');
-        expect(html).toContain('<span class="hljs-string">&#x27;color&#x27;</span>');
-        expect(html).toContain('<span class="hljs-number">3</span>');
-        expect(html).toContain('<span class="hljs-variable">@count</span>');
-        expect(decode(html)).toBe(text);
-    });
-
-    it('highlights JavaScript workflow code with the library as ordinary calls', () => {
-        const text = "const answer = await ask(`Rate ${args[0]}`, { fmt: 'integer', repairs: 1 });\nsuccess(answer);";
-        const html = highlight(text, 'js');
-        for (const keyword of ['const', 'await']) expect(html).toContain(`<span class="hljs-keyword">${keyword}</span>`);
-        expect(html).toContain('<span class="hljs-title function_">ask</span>');
-        expect(html).toContain('<span class="hljs-subst">${args[<span class="hljs-number">0</span>]}</span>');
-        for (const name of ['fmt', 'repairs']) expect(html).toContain(`<span class="hljs-attr">${name}</span>`);
-        expect(decode(html)).toBe(text);
-    });
-
-    it('highlights TypeScript annotations in ts blocks', () => {
-        const text = "import type { Infer } from 'spl-lang';\ntype Invoice = Infer<typeof Invoice>;\nconst total: number = 1;";
-        const html = highlight(text, 'ts');
-        expect(html).toContain('<span class="hljs-keyword">type</span>');
-        expect(html).toContain('<span class="hljs-built_in">number</span>');
-        expect(decode(html)).toBe(text);
-    });
-
-    it('highlights references and agent markers only in blockquotes', () => {
-        const text = "Email user@example.com and mention @outside.\n\n> @CTL(forbid='guessing') Inspect @facts and @env.HOME; @validate[Schema] save to @result, then @success or @fail";
-        const html = highlight(text);
-        expect(html).toContain('<span class="hljs-keyword">@CTL</span>');
-        expect(html).toContain('<span class="hljs-attr">forbid</span>');
-        for (const name of ['@validate', '@success', '@fail']) expect(html).toContain(`<span class="hljs-keyword">${name}</span>`);
-        for (const name of ['@facts', '@env.HOME', '@result']) expect(html).toContain(`<span class="hljs-variable">${name}</span>`);
-        for (const name of ['@example', '@outside']) expect(html).not.toContain(`>${name}</span>`);
-        expect(decode(html)).toBe(text);
-    });
-
-    it('highlights every control setting of a multiline @CTL block', () => {
-        const text = "> @CTL(\n>     restrict={fs: ['./src']},\n>     enforce='Be concise',\n>     model='m', reasoning='high'\n> )\n>\n> Save findings to @notes";
-        const html = highlight(text);
-        for (const name of ['restrict', 'enforce', 'model', 'reasoning']) expect(html).toContain(`<span class="hljs-attr">${name}</span>`);
-        expect(html).toContain('<span class="hljs-variable">@notes</span>');
-        expect(decode(html)).toBe(text);
-    });
-
-    it('does not highlight removed blockquote markers as keywords', () => {
-        const html = highlight('> @RESTRICT @ENFORCE @FORBID @HUMAN');
-        for (const name of ['RESTRICT', 'ENFORCE', 'FORBID', 'HUMAN']) {
-            expect(html).not.toContain(`<span class="hljs-keyword">@${name}</span>`);
-        }
-    });
-
-    it('highlights the explicit codegen marker in blockquotes', () => {
-        expect(highlight("> @CODEGEN 'Define double(value)'")).toContain('<span class="hljs-keyword">@CODEGEN</span>');
-        const lower = highlight("> @ctl(model='m')\n> @codegen 'Define double(value)'");
-        for (const name of ['@ctl', '@codegen']) expect(lower).toContain(`<span class="hljs-keyword">${name}</span>`);
-        expect(highlight('> Return @total with @SUCCESS')).toContain('<span class="hljs-keyword">@SUCCESS</span>');
-    });
-
-    it('highlights embedded JavaScript and TypeScript in all supported Markdown fence styles', () => {
-        const cases: [string, string][] = [
-            ['js', 'javascript'], ['javascript', 'javascript'], ['mjs', 'javascript'],
-            ['ts', 'typescript'], ['typescript', 'typescript'], ['mts', 'typescript'],
-        ];
-        for (const [name, language] of cases) {
-            for (const fence of ['```', '````', '~~~', '~~~~']) {
-                for (const indent of ['', '   ']) {
-                    for (const newline of ['\n', '\r\n']) {
-                        const text = `${indent}${fence}${name}${newline}const count = args.length;${newline}success(\`\${count}\`);${newline}${indent}${fence}${fence[0]}  ${newline}`;
-                        const html = highlight(text);
-                        expect(html, text).toContain(`<span class="language-${language}">`);
-                        expect(html, text).toContain('<span class="hljs-keyword">const</span>');
-                        expect(html, text).toContain('<span class="hljs-title function_">success</span>');
-                        expect(decode(html)).toBe(text);
-                    }
-                }
-            }
-        }
-    });
-
-    it('highlights fences that are shown but not run', () => {
-        const text = '```js ignore\nconst shown = true;\n```\n\n```ts no-run\nconst typed: boolean = true;\n```';
-        const html = highlight(text);
-        expect(html).toContain('<span class="language-javascript">');
-        expect(html).toContain('<span class="language-typescript">');
-        expect(decode(html)).toBe(text);
-    });
-
-    it('does not close a fence on a shorter or different delimiter', () => {
-        const text = '````js\n/*\n```\n~~~\n*/\nsuccess(true);\n````\n\n> Save to @result';
-        const html = highlight(text);
-        expect(html).toContain('<span class="hljs-title function_">success</span>');
-        expect(html).toContain('<span class="hljs-variable">@result</span>');
-        expect(decode(html)).toBe(text);
-    });
-
-    it('does not highlight apparent workflow fences inside another code block', () => {
-        const html = highlight('````text\n```js\nconst hidden = true;\n```\n````');
-        expect(html).not.toContain('hljs-keyword');
-        expect(html).not.toContain('language-javascript');
-    });
-
-    it('treats fences in other languages, including the removed one, as plain code', () => {
-        for (const name of ['spl', 'python', 'json']) {
-            const text = `\`\`\`${name}\nconst value = 1\n\`\`\``;
-            const html = highlight(text);
-            expect(html, name).not.toContain('class="language-');
-            expect(html, name).not.toContain('hljs-keyword');
-            expect(decode(html)).toBe(text);
-        }
-    });
-
-    it('preserves every example document and its source text', () => {
-        const files = fs.readdirSync(examples, { recursive: true, encoding: 'utf8' }).filter(name => name.endsWith('.md'));
-        expect(files.length).toBeGreaterThan(20);
-        for (const file of files) {
-            const text = fs.readFileSync(path.join(examples, file), 'utf8');
-            const html = highlight(text);
-            expect(decode(html), file).toBe(text);
-            if (/^```js\r?$/m.test(text)) expect(html, file).toContain('<span class="language-javascript">');
-        }
-        const blocks = fs.readdirSync(examples, { recursive: true, encoding: 'utf8' }).filter(name => name.endsWith('.spl'));
-        expect(blocks).toContain('code-review.spl');
-        for (const file of blocks) {
-            const text = fs.readFileSync(path.join(examples, file), 'utf8');
-            const html = highlight(text, 'spl');
-            expect(decode(html), file).toBe(text);
-            if (/^\{js\}\r?$/m.test(text)) expect(html, file).toContain('<span class="language-javascript">');
+    it('preserves the source text of every example', () => {
+        for (const name of exampleFiles) {
+            const text = fs.readFileSync(path.join(examples, name), 'utf8').replace(/\r\n/g, '\n');
+            expect(decode(highlight(text)), name).toBe(text);
         }
     });
 
     it('escapes HTML without changing copied code', () => {
-        const text = `const html = '<script>alert("x")</script> & text';`;
-        for (const language of ['js', 'ts']) {
-            const html = highlight(text, language);
-            expect(html).not.toContain('<script>');
-            expect(decode(html)).toBe(text);
-        }
-        const quoted = highlight('> Save <b>bold</b> & more to @result');
-        expect(quoted).not.toContain('<b>');
-        expect(decode(quoted)).toBe('> Save <b>bold</b> & more to @result');
+        const text = 'const html = "<b>&amp;</b>";\n---\noutputVar: a\n\nIs 1 < 2 && 3 > 2?\n---';
+        const html = highlight(text);
+        expect(html).not.toContain('<b>');
+        expect(decode(html)).toBe(text);
     });
 });

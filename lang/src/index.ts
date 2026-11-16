@@ -1,9 +1,9 @@
 // The library: everything a `.spl` file can use without importing it.
 export {
-    ask, agent, human, enforce, forbid, restrict, success, fail, assert, log, codegen,
+    ask, agent, human, decision, enforce, forbid, restrict, success, fail, assert, log, codegen,
     readFile, writeFile, webFetch, webSearch, shell, args, env, markdown, configure, validate,
     t, Str, Int, Float, Bool, Char, Nil, Any, Dict, Fn, List, Union, Nullable, Enum, Struct, Typedef, JsonSchema,
-    type AskOptions, type AgentOptions, type CodegenOptions, type ConfigureOptions,
+    type AskOptions, type AgentOptions, type CodegenOptions, type ConfigureOptions, type DecisionOptions,
     type GenerationResult, type RestrictSpec,
 } from './library.js';
 export { Type, StructType, isType, type Infer, type InferShape, type Shape, type Annotations, type TypeKind } from './types.js';
@@ -25,4 +25,4 @@ export { AiBackend, type AiBackendOptions } from './ai.js';
 export { Trace, TraceError, type TraceContext } from './trace.js';
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError, type Provider } from './auth.js';
-export type { LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, ReasoningLevel, RuntimeAction, RuntimeTool } from './llm.js';
+export type { DecisionRequest, DecisionResponse, LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, ReasoningLevel, RuntimeAction, RuntimeTool } from './llm.js';

@@ -1,0 +1,50 @@
+//*
+# Generate the starter presentation
+
+Generates a six-slide introduction to SPL, including the type builders.
+Run it from the repository root. Generation uses an agent and writes presentation files;
+`spl check generate-presentation.spl` checks the workflow without making model calls.
+
+    spl run generate-presentation.spl
+*//
+
+---
+model: gpt-6.1-terra
+---
+
+const slides = [
+    `Semantic Prompt Language: natural-language instructions for models and agents, interleaved with
+     TypeScript in one .spl file; show the three additions (Markdown comments, --- blocks, @name references);
+     distinguish deterministic checks from probabilistic model output`,
+    `Getting started ->
+     1. installation from npm (Node.js 24.15 or newer)
+     2. API-key login and setting up VS Code
+     3. spl run lang/examples/basics.spl; spl run lang/examples/typed-data.spl without a model; spl check`,
+    `Code and blocks -> code is TypeScript with the library already in scope and types erased by Node.js;
+     explain the block header (mode, model, reasoning, outputVar, outputType), ask, agent and codegen modes,
+     @name inputs and ->[Type] @name outputs that become ordinary variables;
+     show a block inside an if or a loop and a compact exact-code example`,
+    `Types -> the type builders: Enum, Struct, List, Union, Nullable, Typedef and class types with methods;
+     show Typedef('Money', Int) with integer-cent arithmetic and an ask block with outputType: Invoice;
+     coerce converts what a model sends, parse validates strictly;
+     annotations are model advice, assertions check business rules`,
+    `Append-only traces and human input -> record a run with --trace run.jsonl;
+     human input in the terminal or via repeated --human flags;
+     reuse the same --trace path to resume or replay deterministically, choose another file to restart`,
+    `Restrictions and MCP -> enforce and forbid are prompt guidance, restrict is runtime enforcement,
+     in code and as block header keys; show filesystem, command and MCP tool restrictions;
+     restrictions cover library tools and agents, not Node.js APIs called directly, and are not an OS sandbox`,
+];
+
+const outline = slides.map((slide, index) => `Slide ${index + 1} - ${slide}`).join('\n\n');
+
+---
+mode: agent
+enforce: Use modern-web-standards skill
+forbid: Hallucinating
+
+Read the current README, the docs-template guides and the runnable examples before writing.
+Create a beautiful presentation of this repo for new starters: exactly 6 slides in HTML
+and a matching 6-page PDF. Use valid SPL examples and explain implemented features only.
+Follow the outline in @outline and save the files to the folder presentations.
+---

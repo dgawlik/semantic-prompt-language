@@ -1,7 +1,0 @@
-import { run, Logger } from 'spl-lang';
-
-const backend = {
-    async call() { return { text: '4', effective: {} }; },
-    async close() {},
-};
-const result = await run("success(await ask('2 + 2?', { fmt: 'integer' }));", { backend, logger: new Logger('silent') });

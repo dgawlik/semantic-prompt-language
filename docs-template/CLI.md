@@ -351,8 +351,8 @@ existing bytes are never rewritten. A completed success or failure replays, prin
 result and leaves the trace unchanged. To restart, choose a different JSONL file.
 
 The JSONL journal records the effects of the library: model requests, raw responses and
-failures (including repairs, reasoning, sampling and token budgets), every decision of an agent
-block, `readFile`/`writeFile`/`webFetch`/`webSearch`/`shell` outcomes, restrictions, human
+failures (including repairs, reasoning, sampling and token budgets), `decision()` answers, every
+decision of an agent block, `readFile`/`writeFile`/`webFetch`/`webSearch`/`shell` outcomes, restrictions, human
 answers, generated code, accessed environment values and the final result. Blocks go through
 the same journal as `ask()` and `agent()`. Completed effects are not executed again: replay
 never contacts model providers or MCP, re-reads files through the tools, repeats writes,
@@ -374,7 +374,7 @@ configuration must match the recording. Arguments are retained; omitting `--arg`
 while explicitly different arguments fail. Requests must match exactly and in order; malformed,
 mismatched and unused history fail without falling back to live work.
 
-After an interruption, a recorded human question, a model call without tools, a read or the
+After an interruption, a recorded human question, a model call without tools, a `decision()`, a read or the
 next decision of an agent block can continue. If a write, a shell command or an `agent()` call
 was interrupted between its durable intent and outcome, its side effects may already have
 occurred: SPL reports an unresolved effect instead of repeating it. Truncated final records
@@ -433,6 +433,8 @@ starts. Only load configurations you trust.
 ## Models and authentication
 
 Every model call uses the official OpenAI, Anthropic or Google client in a fresh conversation.
+`decision()` calls the OpenAI and Google decision endpoints with their fixed models
+(`gpt-6-luna`, `gemini-decision-1`) and simulates one on Anthropic.
 See [Getting started](Getting-started.md#install) for API-key login and environment variables.
 A call without credentials, or a provider/model access error, fails with `llm_error`.
 Workflows without model calls, `check`, `compile`, `doc` and replay do not initialize providers or MCP.

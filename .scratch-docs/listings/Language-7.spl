@@ -1,2 +1,0 @@
-const joke = await __spl.ask({ line: 37, enforce: ['Answer in Chinese'], forbid: ['Mentioning the word cat'],
-    output: 'joke', text: 'A joke about programmers with a setup and a punchline.', outputType: Joke });

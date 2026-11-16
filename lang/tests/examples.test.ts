@@ -186,6 +186,16 @@ describe('examples with scripted models', () => {
         expect(await example('is-friday.spl', { backend: model(['false', 'Alas.']) })).toMatchObject({ value: 'Alas.' });
     });
 
+    it('decision.spl branches on a probability cutoff and on labels', async () => {
+        const red = model(['{"probability":0.9}', '{"probabilities":{"warm":0.8,"neutral":0.1,"cool":0.1}}']);
+        expect(await example('decision.spl', { backend: red })).toMatchObject({ value: 'crimson is a warm red' });
+        expect(red.asks[0].prompt).toContain('Question: Is crimson a shade of red?');
+        expect(await example('decision.spl', { backend: model(['{"probability":0.95}', '{"probabilities":{"warm":0.2,"neutral":0.1,"cool":0.7}}']), args: ['teal'] }))
+            .toMatchObject({ value: 'teal is red, but not warm' });
+        expect(await example('decision.spl', { backend: model(['{"probability":0.85}']), args: ['teal'] }))
+            .toMatchObject({ failure: { status_code: 'explicit_failure', reason: 'teal is not red', line: 25 } });
+    });
+
     it('env.spl reads environment variables in a block and arguments in code', async () => {
         vi.stubEnv('lhs', '2');
         vi.stubEnv('rhs', '40');

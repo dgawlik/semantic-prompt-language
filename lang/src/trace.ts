@@ -140,6 +140,7 @@ function validateHistory(events: Event[]): void {
 function retryable(request: unknown): boolean {
     if (!record(request)) return false;
     return request.kind === 'human' || request.kind === 'agent-block' || request.kind === 'codegen' || request.kind === 'restriction' || request.kind === 'environment-value'
+        || request.kind === 'decision'
         || request.kind === 'llm' && record(request.request) && request.request.kind !== 'agent'
         || request.kind === 'tool' && ['readFile', 'webFetch', 'webSearch'].includes(String(request.tool));
 }

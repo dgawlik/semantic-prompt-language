@@ -1,7 +1,0 @@
-const doc = markdown.document()
-    .heading('Build report', 1)
-    .paragraph(`${markdown.bold('Results')} from ${markdown.link('CI', 'https://example.com/build')}`)
-    .bulletList(['parser', 'runtime'].map(name => `${markdown.escape(name)}: passed`))
-    .codeBlock('spl check workflow.spl', 'bash')
-    .table(['Suite', 'Status'], [['parser', 'passed'], ['runtime', 'passed']]);
-success(doc.toString());

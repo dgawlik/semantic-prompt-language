@@ -147,6 +147,25 @@ The result is a string for text output, the parsed JSON value for `fmt`, and the
 value of the type for `schema`. In TypeScript the return type follows the options. Invalid
 options are a `runtime_error` raised before any model call. See [Options](LLM-commands.md#options).
 
+### Decisions
+
+| Call | Resolves to |
+| --- | --- |
+| `decision({ question, evidence?, cutoff?, model? })` | `true` when the probability of yes is above `cutoff` |
+| `decision({ question, evidence?, labels, model? })` | The boolean of the chosen label |
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `question` | Nonempty string | required |
+| `evidence` | String, or a list of values shown as text or JSON | none |
+| `cutoff` | Number `0` to `1`; not with `labels` | `0.5` |
+| `labels` | Object of 2 to 255 labels mapped to `true` or `false`, with at least one of each | none |
+| `model` | Nonempty string; selects the provider | File default, else the provider's |
+
+OpenAI and Google use their decision endpoints with fixed models, `gpt-6-luna` and
+`gemini-decision-1`; Anthropic models simulate a decision with `ask`. See
+[Decisions](LLM-commands.md#decisions).
+
 ## Guidance and restrictions
 
 | Call | Effect |

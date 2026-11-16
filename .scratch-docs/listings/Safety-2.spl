@@ -1,6 +1,0 @@
----
-mode: agent
-restrict: { fs: ./src, exec: git, net: docs.example.com, mcp: docs/search }
-
-Review the changes in git diff and check them against the docs -> @review
----

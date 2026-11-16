@@ -20,7 +20,7 @@ A line such as "-> @slugify(text: string): string" names a function to generate 
 Without such lines, the first function is the requested one. Additional helper functions are allowed.
 Write modern, strict-mode JavaScript for Node.js. Use "function name(args) { ... }" or "async function name(args) { ... }" declarations, not arrow functions or classes.
 There is no require(). Node.js built-ins are reachable with "await import('node:fs')" inside an async function.
-The workflow library is in scope: ask, agent, human, restrict, enforce, forbid, assert, fail, log, readFile, writeFile, webFetch, webSearch and shell.
+The workflow library is in scope: ask, agent, human, decision, restrict, enforce, forbid, assert, fail, log, readFile, writeFile, webFetch, webSearch and shell.
 Model calls and tools return promises; await them inside async functions. Prefer pure synchronous functions when the description needs no I/O.
 Use only standard JavaScript, the listed library functions and the listed inputs; do not assume other packages exist.
 Example:
