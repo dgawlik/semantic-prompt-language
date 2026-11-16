@@ -1,4 +1,3 @@
-import { stripVTControlCharacters, types } from 'node:util';
 import type { LlmStreamUpdate } from './llm.js';
 
 export type BodySegment =
@@ -64,7 +63,7 @@ export interface StateChange {
 
 export interface ModelInteraction {
     readonly requestId: string;
-    readonly kind: 'ask' | 'think' | 'agent' | 'blockquote' | 'codegen';
+    readonly kind: 'ask' | 'agent' | 'codegen';
     readonly role?: 'response' | 'action';
 }
 
@@ -84,7 +83,6 @@ interface EventBase {
 
 export type LogEvent = EventBase & (
     | { readonly kind: 'error' | 'warning' | 'info' | 'debug'; readonly origin: 'diagnostic' | 'script' }
-    | { readonly kind: 'generic'; readonly origin: 'embedding'; readonly label: string }
     | { readonly kind: 'model-input' | 'model-output'; readonly origin: 'model'; readonly interaction: ModelInteraction }
     | { readonly kind: 'state'; readonly origin: 'state'; readonly change: StateChange }
     | { readonly kind: 'tool'; readonly origin: 'tool'; readonly tool: ToolUse }
@@ -119,33 +117,3 @@ export function freezeEvent(event: LogEvent): LogEvent {
 }
 
 export type FinishReason = 'completed' | 'failed' | 'cancelled';
-
-function record(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !types.isProxy(value) && !Array.isArray(value) &&
-        (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null) &&
-        Object.values(Object.getOwnPropertyDescriptors(value)).every(descriptor => 'value' in descriptor);
-}
-const fields = (value: Record<string, unknown>, allowed: readonly string[]): boolean =>
-    Object.keys(value).every(key => allowed.includes(key));
-const nonempty = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
-const safeText = (value: unknown): value is string => typeof value === 'string' &&
-    stripVTControlCharacters(value) === value && !/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(value);
-
-/** Validates a stream event received from another process, such as the notebook worker. */
-export function isModelStreamEvent(value: unknown): value is ModelStreamEvent {
-    if (!record(value) || !record(value.interaction)) return false;
-    const interaction = value.interaction;
-    if (!fields(interaction, ['requestId', 'kind', 'role']) || !nonempty(interaction.requestId) ||
-        !['ask', 'think', 'agent', 'blockquote', 'codegen'].includes(String(interaction.kind)) ||
-        (interaction.role !== undefined && interaction.role !== 'response' && interaction.role !== 'action')) return false;
-    if (value.type === 'update') {
-        return fields(value, ['type', 'interaction', 'update']) && record(value.update) &&
-            fields(value.update, ['channel', 'messageId', 'mode', 'text']) &&
-            ['response', 'reasoning'].includes(String(value.update.channel)) && nonempty(value.update.messageId) &&
-            ['append', 'replace'].includes(String(value.update.mode)) && safeText(value.update.text);
-    }
-    if (value.type !== 'end') return false;
-    if (value.outcome === 'failed') return fields(value, ['type', 'interaction', 'outcome']);
-    return value.outcome === 'completed' && fields(value, ['type', 'interaction', 'outcome', 'response', 'reasoning']) &&
-        safeText(value.response) && (value.reasoning === undefined || safeText(value.reasoning));
-}

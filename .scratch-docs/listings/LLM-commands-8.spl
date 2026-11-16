@@ -1,0 +1,8 @@
+---
+mode: codegen
+
+Sieve of Eratosthenes that returns the primes up to a given number -> @sieve(limit: number): number[]
+Slug of a title: lower case, words joined by single dashes -> @slugify(title: string): string
+---
+
+log(sieve(30), slugify('Hello, World'));

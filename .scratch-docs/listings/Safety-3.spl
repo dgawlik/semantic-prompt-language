@@ -1,0 +1,5 @@
+const subtotal = 10;
+const total = 12;
+assert(total >= subtotal, 'total is smaller than subtotal');
+if (total > 1000) fail('needs manual approval');
+success(total);

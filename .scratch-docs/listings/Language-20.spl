@@ -1,0 +1,7 @@
+let notes = '';
+try {
+    notes = await readFile('./optional-notes.txt');
+} catch (error) {
+    if (!(error instanceof Failure)) throw error;
+    log(`${error.statusCode}: ${error.reason}`);
+}

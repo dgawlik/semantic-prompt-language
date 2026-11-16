@@ -1,17 +1,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AGENT_TOOLS } from '../src/agent.js';
 import type { ModelStreamPart, ModelCallOptions, ToolOutput } from '../src/ai-native.js';
 import { AiBackend, reasoningOptions } from '../src/ai.js';
-import { CopilotBackend } from '../src/copilot.js';
-import { Failure, GoSignal, SuccessSignal } from '../src/errors.js';
-import type { LlmRequest, LlmStreamUpdate } from '../src/llm.js';
+import type { Provider } from '../src/auth.js';
+import { AGENT_TOOLS } from '../src/blocks.js';
+import { Failure, SuccessSignal } from '../src/errors.js';
+import { LlmError, type LlmRequest, type LlmStreamUpdate, type ReasoningLevel } from '../src/llm.js';
 import type { LogEvent, ModelStreamEvent } from '../src/log-events.js';
 import { Logger } from '../src/logger.js';
 import { makeRestriction, Restrictions } from '../src/restrict.js';
 import { TOOL_SPECS, ToolHost } from '../src/tools.js';
-import { cleanTemp, collecting, exec, execMarkdown, fence, tempDir, text as body } from './helpers.js';
+import { agentBlock, block, cleanTemp, collecting, exec, silent, tempDir, text as body } from './helpers.js';
 
 const sdk = vi.hoisted(() => ({
     model: vi.fn(),
@@ -44,16 +44,20 @@ const request = (overrides: Partial<LlmRequest> = {}): LlmRequest => {
     return { kind: 'ask', prompt: 'Prompt', restrictions, showReasoning: false, tools: new ToolHost(restrictions, cwd), ...overrides };
 };
 const command = (overrides: Partial<LlmRequest> = {}) => backend.call(request({
-    kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, invokeAction: async () => null, ...overrides,
+    kind: 'agent', runtimeTools: AGENT_TOOLS, invokeAction: async () => null, ...overrides,
 }));
-const client = () => ({
-    listTools: vi.fn(async () => ({ tools: [
-        { name: 'search', description: 'Search', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
-        { name: 'write', inputSchema: { type: 'object', properties: {} } },
-    ] })),
+const tool = (name: string) => ({ name, inputSchema: { type: 'object', properties: {} } });
+const client = (tools: { name: string; description?: string; inputSchema: Record<string, unknown> }[] = [
+    { name: 'search', description: 'Search', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+    tool('write'),
+]) => ({
+    listTools: vi.fn(async () => ({ tools })),
     callTool: vi.fn(async (): Promise<Record<string, unknown>> => ({ content: [{ type: 'text', text: 'Verified documentation' }] })),
     close: vi.fn(async () => {}),
 });
+const conflict = (feature: string): ModelStreamPart =>
+    ({ type: 'stream-start', warnings: [{ type: 'unsupported', feature, details: `${feature} is not supported while reasoning`, conflict: 'reasoning' }] });
+
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -104,10 +108,6 @@ afterEach(async () => {
     cleanTemp();
 });
 
-it('retains the old backend import as an alias, not a second implementation', () => {
-    expect(CopilotBackend).toBe(AiBackend);
-});
-
 it.each([
     ['openai/gpt-4.1', 'openai'], ['anthropic/claude-sonnet-4-5', 'anthropic'], ['google/gemini-2.5-flash', 'google'],
 ] as const)('uses the %s provider through the native adapter', async (model, provider) => {
@@ -117,7 +117,7 @@ it.each([
     expect(requests[0].prompt.at(-1)).toMatchObject({ role: 'user', content: [{ type: 'text', text: 'Prompt' }] });
 });
 
-it.each(['ask', 'think', 'agent'] as const)('streams %s text and keeps calls isolated', async kind => {
+it.each(['ask', 'agent'] as const)('streams %s text and keeps calls isolated', async kind => {
     const updates: LlmStreamUpdate[] = [];
     steps.push([...text('Second answer'), finish()]);
     expect(await backend.call(request({ kind, onStream: value => updates.push(value) }))).toMatchObject({ text: 'Final answer' });
@@ -129,7 +129,7 @@ it.each(['ask', 'think', 'agent'] as const)('streams %s text and keeps calls iso
     expect(requests[1].prompt.filter(message => message.role !== 'system')).toHaveLength(1);
 });
 
-it.each(['ask', 'think', 'agent'] as const)('forwards %s sampling to the client without modifying the prompt or reasoning', async kind => {
+it.each(['ask', 'agent'] as const)('forwards %s sampling to the client without modifying the prompt or reasoning', async kind => {
     const result = await backend.call(request({
         kind, model: 'google/gemini-2.5-flash', reasoningEffort: 'high',
         randomness: { seed: 42, temperature: 0, top_p: 0.01 },
@@ -194,15 +194,15 @@ it.each([false, true])('returns reasoning, but exposes live reasoning only when 
     expect(updates.filter(update => update.channel === 'reasoning')).toHaveLength(showReasoning ? 2 : 0);
 });
 
-it.each(['ask', 'think'] as const)('does not expose tools or initialize MCP during %s', async kind => {
+it('does not expose tools or initialize MCP during ask', async () => {
     backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('silent'), mcpServers: { docs: { command: 'never-start' } } });
-    await backend.call(request({ kind }));
+    await backend.call(request());
     expect(requests[0].tools ?? []).toHaveLength(0);
     expect(sdk.mcp).not.toHaveBeenCalled();
 });
 
 it('denies a tool attempt during generation even when the provider ignores the empty tool list', async () => {
-    steps = [[call('read_file', { path: 'secret' }), ...text('Ignored denial'), finish()]];
+    steps = [[call('readFile', { path: 'secret' }), ...text('Ignored denial'), finish()]];
     await expect(backend.call(request())).rejects.toMatchObject({ statusCode: 'restriction_violation' });
 });
 
@@ -212,8 +212,8 @@ it('exposes exactly the runtime tool set for explicit agents', async () => {
 });
 
 it('serializes multiple actions requested together and supplies actual results to the next step', async () => {
-    steps = [[call('save_variable', { name: 'answer', value: 42 }, 'first'),
-        call('load_variable', { name: 'answer' }, 'second'), finish('tool-calls')], [...text('Done'), finish()]];
+    steps = [[call('saveVariable', { name: 'answer', value: 42 }, 'first'),
+        call('loadVariable', { name: 'answer' }, 'second'), finish('tool-calls')], [...text('Done'), finish()]];
     const invoked: string[] = [];
     let running = false;
     await command({ invokeAction: async action => {
@@ -224,16 +224,16 @@ it('serializes multiple actions requested together and supplies actual results t
         running = false;
         return 42;
     } });
-    expect(invoked).toEqual(['save_variable', 'load_variable']);
+    expect(invoked).toEqual(['saveVariable', 'loadVariable']);
     expect(JSON.stringify(requests[1].prompt)).toContain('{"value":42}'.replaceAll('"', '\\"'));
 });
 
 it.each([
     new Failure('runtime_error', 'missing function'), new Failure('validation_failed', 'invalid'),
     new Failure('tool_error', 'write failed'), new Failure('restriction_violation', 'denied'),
-    new Failure('explicit_failure', 'stop'), new Error('unexpected tool failure'), new SuccessSignal(42), new GoSignal('retry'),
+    new Failure('explicit_failure', 'stop'), new Error('unexpected tool failure'), new SuccessSignal(42),
 ])('preserves the original action failure/control signal and never executes a later action: %s', async error => {
-    steps = [[call('call_function', { name: 'missing', args: [] }), call('save_variable', { name: 'later', value: 1 }), finish('tool-calls')]];
+    steps = [[call('callFunction', { name: 'missing', args: [] }), call('saveVariable', { name: 'later', value: 1 }), finish('tool-calls')]];
     const invokeAction = vi.fn(async () => { throw error; });
     await expect(command({ invokeAction })).rejects.toBe(error);
     expect(invokeAction).toHaveBeenCalledOnce();
@@ -242,15 +242,15 @@ it.each([
 });
 
 it('rejects invalid runtime arguments without calling the host', async () => {
-    steps = [[call('save_variable', { name: 'answer' }), finish('tool-calls')]];
+    steps = [[call('saveVariable', { name: 'answer' }), finish('tool-calls')]];
     const invokeAction = vi.fn(async () => null);
     await expect(command({ invokeAction })).rejects.toMatchObject({ statusCode: 'runtime_error' });
     expect(invokeAction).not.toHaveBeenCalled();
 });
 
 it.each(['', ' \n'])('accepts action-only completion with %j prose, but not empty generation', async prose => {
-    steps = [[call('save_variable', { name: 'answer', value: 42 }), finish('tool-calls')], [...text(prose), finish()]];
-    expect(await command()).toMatchObject({ text: 'Runtime actions completed.' });
+    steps = [[call('saveVariable', { name: 'answer', value: 42 }), finish('tool-calls')], [...text(prose), finish()]];
+    expect(await command()).toMatchObject({ text: 'Actions completed.' });
     steps = [[...text(prose), finish()]];
     await expect(backend.call(request())).rejects.toThrow('empty response');
 });
@@ -258,10 +258,10 @@ it.each(['', ' \n'])('accepts action-only completion with %j prose, but not empt
 it('lets explicit agents recover ordinary tool errors, but not restriction violations', async () => {
     const tools = request().tools;
     const invoke = vi.spyOn(tools, 'invoke').mockRejectedValueOnce(new Failure('tool_error', 'missing file'));
-    steps = [[call('read_file', { path: 'missing.txt' }), finish('tool-calls')], [...text('Not found'), finish()]];
+    steps = [[call('readFile', { path: 'missing.txt' }), finish('tool-calls')], [...text('Not found'), finish()]];
     expect(await backend.call(request({ kind: 'agent', tools }))).toMatchObject({ text: 'Not found' });
     invoke.mockRejectedValueOnce(new Failure('restriction_violation', 'blocked'));
-    steps = [[call('read_file', { path: 'secret.txt' }), finish('tool-calls')]];
+    steps = [[call('readFile', { path: 'secret.txt' }), finish('tool-calls')]];
     await expect(backend.call(request({ kind: 'agent', tools }))).rejects.toMatchObject({ statusCode: 'restriction_violation' });
 });
 
@@ -277,7 +277,7 @@ it('aborts on streaming consumer failure even if the remote stream never finishe
 
 it('times out without accepting preview text, and never starts another action after a stalled action', async () => {
     backend = new AiBackend({ cwd, timeoutMs: 30, logger: new Logger('silent') });
-    steps = [[...text('Preview'), call('save_variable', { name: 'x', value: 1 }), call('save_variable', { name: 'later', value: 2 }), finish()]];
+    steps = [[...text('Preview'), call('saveVariable', { name: 'x', value: 1 }), call('saveVariable', { name: 'later', value: 2 }), finish()]];
     let release!: () => void;
     const invokeAction = vi.fn(() => new Promise<null>(resolve => { release = () => resolve(null); }));
     await expect(command({ invokeAction })).rejects.toThrow('timed out');
@@ -309,25 +309,48 @@ it.each(['stdio', 'http', 'sse'] as const)('connects configured %s MCP tools, fi
         ? { command: 'node', tools: ['search'], workingDirectory: cwd, timeout: 500 }
         : { type, url: 'https://example.test/mcp', headers: { Authorization: 'test' }, tools: ['search'], timeout: 500 };
     backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('silent'), mcpServers: { docs: config } });
-    steps = [[call('mcp_0_0', { query: 'SPL' }), finish('tool-calls')], [...text('Found'), finish()]];
+    steps = [[call('mcp0Search', { query: 'SPL' }), finish('tool-calls')], [...text('Found'), finish()]];
     const result = await command();
-    expect(requests[0].tools?.map(tool => tool.name)).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp_0_0']);
+    expect(requests[0].tools?.map(tool => tool.name)).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp0Search']);
     expect(mcp.callTool).toHaveBeenCalledWith(expect.objectContaining({ name: 'search', arguments: { query: 'SPL' }, options: expect.objectContaining({ timeout: 500 }) }));
     expect(JSON.parse(result.toolResults![0])).toMatchObject({ server: 'docs', tool: 'search', success: true, result: { content: [{ text: 'Verified documentation' }] } });
     expect(mcp.close).toHaveBeenCalledOnce();
     if (type !== 'stdio') expect(sdk.mcp).toHaveBeenCalledWith(expect.objectContaining({ transport: { type, url: config.url, headers: config.headers } }));
 });
 
-it('does not start excluded MCP servers and checks narrowed MCP restrictions immediately', async () => {
-    let restrictions = new Restrictions(cwd).with(makeRestriction('mcp', 'docs', cwd));
+it('names MCP tools mcp<Index><Tool>, numbering the servers that start and keeping names unique', async () => {
+    const docs = client([tool('search'), tool('search_docs'), tool('search-docs'), tool('get.page.v2'), tool('listIssues')]);
+    const issues = client([tool('search')]);
+    sdk.mcp.mockResolvedValueOnce(docs).mockResolvedValueOnce(issues);
+    const mcpServers = { docs: { command: 'node' }, issues: { command: 'node' } };
+    backend = new AiBackend({ cwd, timeoutMs: 2000, logger: silent, mcpServers });
+    steps = [[call('mcp0SearchDocs2', {}), call('mcp1Search', {}, 'second'), finish('tool-calls')], [...text('Found'), finish()]];
+    const result = await backend.call(request({ kind: 'agent' }));
+    expect(requests[0].tools.filter(tool => tool.name.startsWith('mcp')).map(tool => [tool.name, tool.description])).toEqual([
+        ['mcp0Search', 'MCP docs/search: search'], ['mcp0SearchDocs', 'MCP docs/search_docs: search_docs'],
+        ['mcp0SearchDocs2', 'MCP docs/search-docs: search-docs'], ['mcp0GetPageV2', 'MCP docs/get.page.v2: get.page.v2'],
+        ['mcp0ListIssues', 'MCP docs/listIssues: listIssues'], ['mcp1Search', 'MCP issues/search: search'],
+    ]);
+    expect(docs.callTool).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: 'search-docs' }));
+    expect(issues.callTool).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: 'search' }));
+    expect(result.toolResults!.map(item => JSON.parse(item))).toMatchObject([{ server: 'docs', tool: 'search-docs' }, { server: 'issues', tool: 'search' }]);
+    // A server the restrictions exclude takes no index.
+    sdk.mcp.mockResolvedValueOnce(client([tool('search')]));
+    steps = [[...text('Done'), finish()]];
+    await backend.call(request({ kind: 'agent', restrictions: new Restrictions(cwd).with(makeRestriction('mcp', 'issues', cwd)) }));
+    expect(requests.at(-1)!.tools.map(tool => tool.name)).toEqual([...Object.keys(TOOL_SPECS), 'mcp0Search']);
+});
+
+it('does not start excluded MCP servers and offers only the tools the restrictions allow', async () => {
+    const restrictions = new Restrictions(cwd).with(makeRestriction('mcp', 'docs/write', cwd));
     const mcp = client();
     sdk.mcp.mockResolvedValue(mcp);
     backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('silent'), mcpServers: { docs: { command: 'node' }, excluded: { command: 'never-start' } } });
-    steps = [[call('restrict', { kind: 'mcp', value: 'docs/write' }), call('mcp_0_0', { query: 'SPL' }), finish('tool-calls')]];
-    await expect(command({
-        restrictions, currentRestrictions: () => restrictions,
-        invokeAction: async () => { restrictions = restrictions.with(makeRestriction('mcp', 'docs/write', cwd)); return null; },
-    })).rejects.toMatchObject({ statusCode: 'restriction_violation' });
+    steps = [[call('mcp0Search', { query: 'SPL' }), finish('tool-calls')]];
+    await expect(command({ restrictions })).rejects.toMatchObject({
+        statusCode: 'restriction_violation', reason: "tool 'mcp0Search' is not enabled by the runtime",
+    });
+    expect(requests[0].tools.map(tool => tool.name)).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp0Write']);
     expect(sdk.mcp).toHaveBeenCalledOnce();
     expect(mcp.callTool).not.toHaveBeenCalled();
     expect(mcp.close).toHaveBeenCalledOnce();
@@ -338,7 +361,7 @@ it('stops on an unsuccessful MCP result before any subsequent runtime action', a
     mcp.callTool.mockResolvedValue({ isError: true, content: [{ type: 'text', text: 'server failed' }] });
     sdk.mcp.mockResolvedValue(mcp);
     backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('silent'), mcpServers: { docs: { command: 'node' } } });
-    steps = [[call('mcp_0_0', { query: 'SPL' }), call('save_variable', { name: 'later', value: 42 }), finish('tool-calls')]];
+    steps = [[call('mcp0Search', { query: 'SPL' }), call('saveVariable', { name: 'later', value: 42 }), finish('tool-calls')]];
     const invokeAction = vi.fn(async () => null);
     await expect(command({ invokeAction })).rejects.toMatchObject({ statusCode: 'tool_error', reason: expect.stringContaining('server failed') });
     expect(invokeAction).not.toHaveBeenCalled();
@@ -355,15 +378,15 @@ it('logs agent built-in and MCP tool calls once each', async () => {
     const tools = request().tools;
     vi.spyOn(tools, 'invoke').mockResolvedValueOnce('file text').mockRejectedValueOnce(new Failure('tool_error', 'missing file'));
     steps = [
-        [call('read_file', { path: 'a.md' }), finish('tool-calls')],
-        [call('read_file', { path: 'b.md' }), finish('tool-calls')],
-        [call('mcp_0_0', { query: 'SPL' }), finish('tool-calls')],
+        [call('readFile', { path: 'a.md' }), finish('tool-calls')],
+        [call('readFile', { path: 'b.md' }), finish('tool-calls')],
+        [call('mcp0Search', { query: 'SPL' }), finish('tool-calls')],
         [...text('Done'), finish()],
     ];
     expect(await backend.call(request({ kind: 'agent', tools }))).toMatchObject({ text: 'Done' });
     expect(events.filter(event => event.kind === 'tool').map(event => event.kind === 'tool' && event.tool)).toEqual([
-        { name: 'read_file', target: 'a.md', status: 'success' },
-        { name: 'read_file', target: 'b.md', status: 'error' },
+        { name: 'readFile', target: 'a.md', status: 'success' },
+        { name: 'readFile', target: 'b.md', status: 'error' },
         { name: 'docs/search', target: '{"query":"SPL"}', status: 'error' },
     ]);
 });
@@ -373,12 +396,18 @@ it('allows explicit agents to recover a non-restriction MCP failure', async () =
     mcp.callTool.mockRejectedValueOnce(new Error('temporary tool failure'));
     sdk.mcp.mockResolvedValue(mcp);
     backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('silent'), mcpServers: { docs: { command: 'node' } } });
-    steps = [[call('mcp_0_0', { query: 'SPL' }), finish('tool-calls')], [...text('Tool unavailable'), finish()]];
+    steps = [[call('mcp0Search', { query: 'SPL' }), finish('tool-calls')], [...text('Tool unavailable'), finish()]];
     const result = await backend.call(request({ kind: 'agent' }));
     expect(result.text).toBe('Tool unavailable');
     expect(JSON.parse(result.toolResults![0])).toMatchObject({ success: false, error: expect.stringContaining('temporary tool failure') });
     expect(JSON.stringify(requests[1].prompt)).toContain('temporary tool failure');
 });
+
+/** Reasoning settings for a model, with the warnings that choosing them produced. */
+const reasoning = (provider: Provider, model: string, level?: ReasoningLevel, sampling = false) => {
+    const { logger, events } = collecting();
+    return { ...reasoningOptions(provider, model, level, true, logger, sampling), warnings: events.map(body) };
+};
 
 it.each([
     ['openai', 'gpt-5', { openai: { reasoningEffort: 'high' } }],
@@ -387,7 +416,79 @@ it.each([
     ['google', 'gemini-2.5-flash', { google: { thinkingConfig: { thinkingBudget: 16384, includeThoughts: true } } }],
     ['google', 'gemini-3-flash-preview', { google: { thinkingConfig: { thinkingLevel: 'high' } } }],
 ] as const)('maps reasoning for %s/%s', (provider, model, expected) => {
-    expect(reasoningOptions(provider, model, 'high', true, new Logger('silent'))).toMatchObject({ effort: 'high', options: expected });
+    expect(reasoning(provider, model, 'high')).toMatchObject({ effort: 'high', options: expected, warnings: [] });
+});
+
+it.each([
+    ['openai', 'gpt-5', { openai: { reasoningEffort: 'medium' } }],
+    ['anthropic', 'claude-sonnet-4-5', { anthropic: { thinking: { type: 'enabled', budgetTokens: 4096 } } }],
+    ['anthropic', 'claude-sonnet-4-6', { anthropic: { thinking: { type: 'adaptive' }, effort: 'medium' } }],
+    ['google', 'gemini-2.5-flash', { google: { thinkingConfig: { thinkingBudget: 4096, includeThoughts: true } } }],
+    ['google', 'gemini-3-flash-preview', { google: { thinkingConfig: { thinkingLevel: 'medium' } } }],
+] as const)('defaults to medium reasoning for %s/%s, or to none with sampling', (provider, model, expected) => {
+    expect(reasoning(provider, model)).toMatchObject({ effort: 'medium', options: expected, warnings: [] });
+    expect(reasoning(provider, model, 'medium')).toEqual(reasoning(provider, model));
+    expect(reasoning(provider, model, undefined, true)).toMatchObject({ effort: 'none', warnings: [] });
+    expect(reasoning(provider, model, undefined, true)).toEqual(reasoning(provider, model, 'none'));
+    expect(reasoning(provider, model, 'medium', true)).toEqual(reasoning(provider, model));
+});
+
+it.each([
+    ['openai', 'gpt-5'], ['openai', 'gpt-5-pro'], ['anthropic', 'claude-sonnet-4-5'], ['anthropic', 'claude-sonnet-4-6'],
+    ['google', 'gemini-2.5-flash'], ['google', 'gemini-2.5-pro'], ['google', 'gemini-3-pro-preview'],
+] as const)('leaves the provider minimum of reasoning none for %s/%s to the request', (provider, model) => {
+    expect(reasoning(provider, model, 'none')).toEqual({
+        effort: 'none', warnings: [],
+        options: provider === 'openai' ? { openai: { parallelToolCalls: false, store: false, reasoningSummary: 'auto' } }
+            : provider === 'anthropic' ? { anthropic: { disableParallelToolUse: true } } : { google: { thinkingConfig: { includeThoughts: true } } },
+    });
+});
+
+it.each([
+    ['openai', 'gpt-5', 'high', { openai: { reasoningEffort: 'high' } }],
+    ['openai', 'gpt-5.1', 'high', { openai: { reasoningEffort: 'high' } }],
+    ['openai', 'gpt-5.2', 'max', { openai: { reasoningEffort: 'xhigh' } }],
+    ['openai', 'gpt-6-luna', 'max', { openai: { reasoningEffort: 'xhigh' } }],
+    ['openai', 'gpt-5-pro', 'high', { openai: { reasoningEffort: 'high' } }],
+    ['openai', 'o3', 'high', { openai: { reasoningEffort: 'high' } }],
+    ['anthropic', 'claude-3-7-sonnet-20250219', 'max', { anthropic: { thinking: { type: 'enabled', budgetTokens: 32768 } } }],
+    ['anthropic', 'claude-sonnet-4-5', 'max', { anthropic: { thinking: { type: 'enabled', budgetTokens: 32768 } } }],
+    ['anthropic', 'claude-opus-4-8', 'max', { anthropic: { thinking: { type: 'adaptive' }, effort: 'max' } }],
+    ['google', 'gemini-2.5-flash', 'max', { google: { thinkingConfig: { thinkingBudget: 24576 } } }],
+    ['google', 'gemini-2.5-pro', 'max', { google: { thinkingConfig: { thinkingBudget: 32768 } } }],
+    ['google', 'gemini-3-flash-preview', 'high', { google: { thinkingConfig: { thinkingLevel: 'high' } } }],
+    ['google', 'gemini-3-pro-preview', 'high', { google: { thinkingConfig: { thinkingLevel: 'high' } } }],
+] as const)('maps reasoning max to the strongest effort of %s/%s: %s', (provider, model, effort, expected) => {
+    expect(reasoning(provider, model, 'max')).toMatchObject({ effort, options: expected });
+});
+
+it.each([
+    ['openai', 'gpt-5-pro', 'low', 'high', { openai: { reasoningEffort: 'high' } }],
+    ['openai', 'gpt-5-pro', 'medium', 'high', { openai: { reasoningEffort: 'high' } }],
+    ['google', 'gemini-3-pro-preview', 'medium', 'high', { google: { thinkingConfig: { thinkingLevel: 'high' } } }],
+    ['google', 'gemini-3.0-pro', 'medium', 'high', { google: { thinkingConfig: { thinkingLevel: 'high' } } }],
+] as const)('falls back from a level %s/%s lacks (%s) to the nearest one, with a warning naming it', (provider, model, level, effort, expected) => {
+    expect(reasoning(provider, model, level)).toMatchObject({
+        effort, options: expected, warnings: [`model '${model}' does not support reasoning '${level}'; using '${effort}'`],
+    });
+    // The default level is not something the workflow asked for: the same fallback stays silent.
+    if (level === 'medium') expect(reasoning(provider, model)).toMatchObject({ effort, options: expected, warnings: [] });
+});
+
+it.each([
+    ['openai', 'gpt-4.1'], ['openai', 'o1-mini'], ['anthropic', 'claude-3-5-haiku-20241022'], ['google', 'gemini-2.0-flash'],
+] as const)('sends no thinking controls to %s/%s, which cannot reason, and warns only about a requested level', (provider, model) => {
+    for (const level of ['low', 'medium', 'high', 'max'] as const) {
+        const { options, warnings, ...rest } = reasoning(provider, model, level);
+        expect(rest).toEqual({});
+        expect(options).toEqual(reasoning(provider, model).options);
+        expect(warnings).toEqual([`model '${model}' does not support reasoning '${level}'; using the model default`]);
+    }
+    for (const result of [reasoning(provider, model), reasoning(provider, model, 'none'), reasoning(provider, model, undefined, true)]) {
+        expect(result).not.toHaveProperty('effort');
+        expect(result.warnings).toEqual([]);
+        expect(JSON.stringify(result.options)).not.toMatch(/reasoningEffort|thinking|effort/);
+    }
 });
 
 it('warns and records no effective effort for an unsupported reasoning model', async () => {
@@ -397,11 +498,26 @@ it('warns and records no effective effort for an unsupported reasoning model', a
     warn.mockRestore();
 });
 
-it('requests available Google reasoning even without an explicit effort, and avoids unsupported OpenAI summaries', () => {
-    expect(reasoningOptions('google', 'gemini-2.5-flash', undefined, true, new Logger('silent'))).toMatchObject({
-        options: { google: { thinkingConfig: { includeThoughts: true } } },
-    });
-    expect(reasoningOptions('openai', 'gpt-4.1', undefined, true, new Logger('silent')).options.openai).not.toHaveProperty('reasoningSummary');
+it('requests reasoning summaries only where they exist and are shown', () => {
+    expect(reasoningOptions('google', 'gemini-2.5-flash', undefined, true, silent).options).toMatchObject({ google: { thinkingConfig: { includeThoughts: true } } });
+    expect(reasoningOptions('google', 'gemini-2.5-flash', undefined, false, silent).options).toMatchObject({ google: { thinkingConfig: { includeThoughts: false } } });
+    expect(reasoningOptions('openai', 'gpt-5', undefined, true, silent).options.openai).toMatchObject({ reasoningSummary: 'auto' });
+    expect(reasoningOptions('openai', 'gpt-5', undefined, false, silent).options.openai).toMatchObject({ reasoningSummary: null });
+    expect(reasoningOptions('openai', 'gpt-4.1', undefined, true, silent).options.openai).not.toHaveProperty('reasoningSummary');
+});
+
+it.each([
+    [undefined, 'medium', 'medium'], ['none', 'none', undefined], ['low', 'low', 'low'], ['high', 'high', 'high'], ['max', 'max', 'xhigh'],
+] as const)('sends reasoning %s as %s and reports it as the effective level', async (reasoningEffort, effective, sent) => {
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    try {
+        expect(await backend.call(request({ model: 'openai/gpt-6-luna', reasoningEffort }))).toMatchObject({ effective: { reasoningEffort: effective } });
+        expect(requests[0].providerOptions.openai?.reasoningEffort).toBe(sent);
+        expect(requests[0].reasoning).toBe(effective === 'none' ? 'none' : undefined);
+        expect(warn).not.toHaveBeenCalled();
+    } finally {
+        warn.mockRestore();
+    }
 });
 
 it.each([
@@ -422,11 +538,28 @@ it.each([
 });
 
 it.each([
-    ['openai', 'gpt-4.1'],
-    ['anthropic', 'claude-3-5-haiku-20241022'],
-    ['google', 'gemini-2.0-flash'],
-] as const)('does not send thinking controls to non-reasoning %s models', (provider, model) => {
-    expect(reasoningOptions(provider, model, undefined, true, new Logger('silent'), true)).not.toHaveProperty('effort');
+    ['low', 'temperature'], ['medium', 'topP'], ['high', 'temperature'], ['max', 'topP'],
+] as const)('fails when requested reasoning %s meets a %s setting the provider rejects, naming both', async (reasoningEffort, feature) => {
+    steps = [[conflict(feature), call('saveVariable', { name: 'answer', value: 42 }), finish('tool-calls')]];
+    const invokeAction = vi.fn(async () => null);
+    const error = await command({ model: 'openai/gpt-6-luna', reasoningEffort, randomness: { temperature: 0, top_p: 0.5 }, invokeAction }).catch(error => error);
+    expect(error).toBeInstanceOf(LlmError);
+    expect(error.message).toBe(`reasoning '${reasoningEffort}' cannot be combined with ${feature} on openai/gpt-6-luna; drop one of the two settings`);
+    expect(invokeAction).not.toHaveBeenCalled();
+    expect(requests).toHaveLength(1);
+    expect(requests[0].abortSignal.aborted).toBe(true);
+});
+
+it.each([undefined, 'none'] as const)('only warns about rejected sampling when reasoning is %s: nothing was insisted on', async reasoningEffort => {
+    steps[0].unshift(conflict('temperature'));
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    try {
+        const result = await backend.call(request({ model: 'openai/gpt-5', reasoningEffort, randomness: { seed: 3, temperature: 0 } }));
+        expect(result).toMatchObject({ text: 'Final answer', effective: { reasoningEffort: 'none', randomness: { seed: 3, temperature: null, top_p: null } } });
+        expect(warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('"conflict":"reasoning"'));
+    } finally {
+        warn.mockRestore();
+    }
 });
 
 it('routes provider warnings through the SPL logger instead of leaking global SDK warnings', async () => {
@@ -444,83 +577,93 @@ it('routes provider warnings through the SPL logger instead of leaking global SD
 });
 
 describe('workflows on the provider backend', () => {
-    const logger = new Logger('silent');
-    const factorial = fence('function factorial(n) {\n    return n === 0 ? 1 : n * factorial(n - 1);\n}');
+    const factorial = 'function factorial(n: number): number {\n    return n === 0 ? 1 : n * factorial(n - 1);\n}';
+    /** A value as it appears in a tool result, which is JSON text inside the JSON of the conversation. */
+    const escaped = (value: unknown): string => JSON.stringify(JSON.stringify(value)).slice(1, -1);
 
     it('executes a factorial instruction and saves the real function result in the same conversation', async () => {
-        steps = [[call('call_function', { name: 'factorial', args: [15] }), finish('tool-calls')],
-            [call('save_variable', { name: 'fact15', value: 1307674368000 }), finish('tool-calls')],
+        steps = [[call('callFunction', { name: 'factorial', args: [15] }), finish('tool-calls')],
+            [call('saveVariable', { name: 'fact15', value: 1307674368000 }), finish('tool-calls')],
             [...text(''), finish()]];
-        const result = await execMarkdown(`${factorial}\n\n> Invoke @factorial with 15 as argument -> @fact15\n\n${fence('success(fact15);')}`, { cwd, backend, logger });
+        const instruction = 'Invoke @factorial with 15 as argument ->[Int] @fact15';
+        const result = await exec(`${factorial}\n${agentBlock(instruction)}\nsuccess(fact15);`, { cwd, backend });
         expect(result).toEqual({ status: 'success', value: 1307674368000, hasValue: true });
         expect(requests).toHaveLength(3);
         expect(JSON.stringify(requests[1].prompt)).toContain('1307674368000');
         expect(requests[0].tools?.map(tool => tool.name)).toEqual(AGENT_TOOLS.map(tool => tool.name));
-        expect(requests[0].prompt[0]).toMatchObject({ role: 'user', content: [{ text: expect.stringContaining('Blockquote:\nInvoke @factorial with 15 as argument -> @fact15') }] });
+        expect(requests[0].prompt[0]).toMatchObject({ role: 'user', content: [{ text: expect.stringContaining(`Instruction:\n${instruction}`) }] });
     });
 
-    it('gives a blockquote agent types, async functions and schema-checked saves through runtime tools', async () => {
-        steps = [[call('load_variable', { name: 'Review' }), finish('tool-calls')],
-            [call('call_function', { name: 'grade', args: ['four'] }), finish('tool-calls')],
-            [call('save_variable', { name: 'review', value: { score: 4 }, schema: 'Review' }), finish('tool-calls')],
+    it('gives an agent block types, async functions and coerced saves through runtime tools', async () => {
+        steps = [[call('loadVariable', { name: 'Review' }), finish('tool-calls')],
+            [call('callFunction', { name: 'grade', args: ['four'] }), finish('tool-calls')],
+            [call('saveVariable', { name: 'review', value: { score: '4' } }), finish('tool-calls')],
             [...text('Saved the review.'), finish()]];
-        const result = await execMarkdown(`${fence("const Review = struct('Review', { score: int.describe('Characters') }).methods({ stars() { return '*'.repeat(this.score); } });\nasync function grade(text) { await 0; return text.length; }")}
-
-> Grade the word and save a @Review to @review
-
-${fence('success(review.stars());')}`, { cwd, backend, logger });
+        const result = await exec(`const Review = Struct('Review', { score: Int.describe('Characters') }).methods({ stars() { return '*'.repeat(this.score); } });
+async function grade(text: string): Promise<number> { await 0; return text.length; }
+${agentBlock('Grade the word with @grade and save a @Review ->[Review] @review')}
+success(review.stars());`, { cwd, backend });
         expect(result).toMatchObject({ status: 'success', value: '****' });
-        expect(JSON.stringify(requests[1].prompt)).toContain('"description":"Characters"'.replaceAll('"', '\\"'));
-        expect(JSON.stringify(requests[2].prompt)).toContain('{"value":4}'.replaceAll('"', '\\"'));
-        expect(JSON.stringify(requests[3].prompt)).toContain('{"value":{"score":4}}'.replaceAll('"', '\\"'));
+        expect(JSON.stringify(requests[1].prompt)).toContain(escaped({ description: 'Characters' }).slice(1, -1));
+        expect(JSON.stringify(requests[2].prompt)).toContain(escaped({ value: 4 }));
+        expect(JSON.stringify(requests[3].prompt)).toContain(escaped({ value: { score: 4 } }));
     });
 
     it('keeps the failure of a workflow function, aborts the model turn and never runs a later action', async () => {
-        steps = [[call('call_function', { name: 'explode', args: [] }), call('save_variable', { name: 'later', value: 1 }), finish('tool-calls')],
+        steps = [[call('callFunction', { name: 'explode', args: [] }), call('saveVariable', { name: 'later', value: 1 }), finish('tool-calls')],
             [...text('unreachable'), finish()]];
-        const result = await execMarkdown(`${fence('function explode() {\n    null.x;\n}')}\n\n> Call @explode\n\n${fence('success(typeof later);')}`, { cwd, backend, logger });
+        const result = await exec(`function explode(): never {\n    throw new TypeError('boom');\n}\n${agentBlock('Call @explode -> @later')}\nsuccess(later);`, { cwd, backend });
         expect(result).toMatchObject({ status: 'failure', failure: {
-            status_code: 'runtime_error', reason: expect.stringContaining('TypeError'), line: 8, command: 'null.x;',
+            status_code: 'runtime_error', reason: 'TypeError: boom', line: 2, command: "throw new TypeError('boom');",
         } });
         expect(requests).toHaveLength(1);
         expect(requests[0].abortSignal.aborted).toBe(true);
     });
 
-    it('rejects a schema-invalid save as validation_failed without retrying the model', async () => {
-        steps = [[call('save_variable', { name: 'rating', value: 0, schema: { type: 'integer', minimum: 1 } }), finish('tool-calls')],
-            [...text('unreachable'), finish()]];
-        expect(await execMarkdown('> Save a rating to @rating', { cwd, backend, logger })).toMatchObject({
-            status: 'failure', failure: { status_code: 'validation_failed', reason: expect.stringMatching(/must be >= 1/), line: 6 },
-        });
-        expect(requests).toHaveLength(1);
+    it('returns an invalid save to the model, and fails with validation_failed after two corrections', async () => {
+        const source = `${agentBlock('Rate it ->[Int] @rating')}\nsuccess(rating);`;
+        const rate = (value: unknown) => [call('saveVariable', { name: 'rating', value }), finish('tool-calls')];
+        steps = [rate('high'), rate(4.5), rate('4'), [...text('Saved.'), finish()]];
+        expect(await exec(source, { cwd, backend })).toEqual({ status: 'success', value: 4, hasValue: true });
+        expect(requests).toHaveLength(4);
+        expect(JSON.stringify(requests[1].prompt)).toContain(escaped({ value: { rejected: 'rating: expected Int, got "high"', hint: 'Correct the value and save @rating again.' } }));
+        expect(JSON.stringify(requests[2].prompt)).toContain(escaped({ rejected: 'rating: expected Int, got 4.5' }).slice(1, -1));
+        requests = [];
+        steps = [rate('high'), rate('higher'), rate('highest'), [...text('unreachable'), finish()]];
+        expect(await exec(source, { cwd, backend })).toMatchObject({ status: 'failure', failure: {
+            status_code: 'validation_failed', reason: '@rating is still invalid after 2 corrections: rating: expected Int, got "highest"',
+            line: 1, command: 'Rate it ->[Int] @rating',
+        } });
+        expect(requests).toHaveLength(3);
+        expect(requests[2].abortSignal.aborted).toBe(true);
     });
 
-    it('ends the document as soon as a blockquote agent calls success', async () => {
-        steps = [[call('success', { value: { ok: true } }), call('save_variable', { name: 'later', value: 1 }), finish('tool-calls')]];
-        expect(await execMarkdown(`> Finish with @success\n\n${fence("fail('unreachable');")}`, { cwd, backend, logger }))
-            .toEqual({ status: 'success', value: { ok: true }, hasValue: true });
+    it('ends the workflow as soon as a function called by the agent calls success', async () => {
+        steps = [[call('callFunction', { name: 'finish', args: [] }), call('saveVariable', { name: 'later', value: 1 }), finish('tool-calls')]];
+        const source = `function finish(): never {\n    success({ ok: true });\n}\n${agentBlock('Finish with @finish -> @later')}\nfail('unreachable');`;
+        expect(await exec(source, { cwd, backend })).toEqual({ status: 'success', value: { ok: true }, hasValue: true });
         expect(requests).toHaveLength(1);
         expect(requests[0].abortSignal.aborted).toBe(true);
     });
 
-    it('answers ask_human and get_env actions from the run, and returns their results to the model', async () => {
+    it('answers askHuman and getEnv actions from the run, and returns their results to the model', async () => {
         vi.stubEnv('SPL_AI_TEST_VALUE', 'from-env');
-        steps = [[call('ask_human', { question: 'Proceed?' }), call('get_env', { name: 'SPL_AI_TEST_VALUE' }), finish('tool-calls')],
+        steps = [[call('askHuman', { question: 'Proceed?' }), call('getEnv', { name: 'SPL_AI_TEST_VALUE' }), finish('tool-calls')],
             [...text('Asked.'), finish()]];
         const questions: string[] = [];
-        expect(await execMarkdown('> Ask whether to proceed', { cwd, backend, logger, human: question => { questions.push(question); return 'yes'; } }))
+        expect(await exec(agentBlock('Ask whether to proceed'), { cwd, backend, human: question => { questions.push(question); return 'yes'; } }))
             .toMatchObject({ status: 'success' });
         expect(questions).toEqual(['Proceed?']);
         const results = JSON.stringify(requests[1].prompt);
-        expect(results).toContain('{"value":"yes"}'.replaceAll('"', '\\"'));
-        expect(results).toContain('{"value":"from-env"}'.replaceAll('"', '\\"'));
+        expect(results).toContain(escaped({ value: 'yes' }));
+        expect(results).toContain(escaped({ value: 'from-env' }));
     });
 
     it('runs agent() file tools inside the working directory and stops on a restriction violation', async () => {
         fs.writeFileSync(path.join(cwd, 'secret.txt'), 'top secret');
-        steps = [[call('write_file', { path: './out/note.txt', content: 'written' }), finish('tool-calls')], [...text('Wrote it'), finish()],
-            [call('read_file', { path: './out/missing.txt' }), finish('tool-calls')], [...text('Not found'), finish()],
-            [call('read_file', { path: './secret.txt' }), finish('tool-calls')], [...text('unreachable'), finish()]];
+        steps = [[call('writeFile', { path: './out/note.txt', content: 'written' }), finish('tool-calls')], [...text('Wrote it'), finish()],
+            [call('readFile', { path: './out/missing.txt' }), finish('tool-calls')], [...text('Not found'), finish()],
+            [call('readFile', { path: './secret.txt' }), finish('tool-calls')], [...text('unreachable'), finish()]];
         const result = await exec(`
 const reports = await restrict('./out', async () => [await agent('Write the note'), await agent('Read a missing file')]);
 let blocked;
@@ -529,7 +672,7 @@ try {
 } catch (error) {
     blocked = [error.statusCode, error.reason.includes('secret.txt')];
 }
-success([reports, blocked, await readFile('./out/note.txt')]);`, { cwd, backend, logger });
+success([reports, blocked, await readFile('./out/note.txt')]);`, { cwd, backend });
         expect(result).toMatchObject({ status: 'success', value: [['Wrote it', 'Not found'], ['restriction_violation', true], 'written'] });
         expect(requests).toHaveLength(5);
         expect(requests[0].tools.map(tool => tool.name)).toEqual(Object.keys(TOOL_SPECS));
@@ -538,30 +681,55 @@ success([reports, blocked, await readFile('./out/note.txt')]);`, { cwd, backend,
         expect(steps).toHaveLength(1);
     });
 
-    it('forwards per-call model, reasoning, token and sampling options, and reports the effective settings', async () => {
-        steps = [[...text('one'), finish()], [...text('two'), finish()], [...text('three'), finish()], [...text('four'), finish()]];
+    it('forwards block and per-call model, reasoning, token and sampling settings, and reports the effective ones', async () => {
+        steps = ['one', 'two', 'three', 'four', 'five'].map(answer => [...text(answer), finish()]);
         const { logger: recorder, events } = collecting('info');
-        const code = `success([
-    await ask('One', { model: 'google/gemini-2.5-flash', reasoning: 'high', tokens: 128, hide: true }),
+        const source = `${block('One', 'outputVar: one', 'model: google/gemini-2.5-flash', 'reasoning: max', 'tokens: 128', 'hide: true')}
+success([
+    one,
     await ask('Two', { seed: 7, temperature: 0, topP: 0.5 }),
-    await think('Three', { model: 'anthropic/claude-sonnet-4-6' }),
+    await ask('Three', { model: 'anthropic/claude-sonnet-4-6' }),
+    await ask('Four', { model: 'gpt-6-luna', reasoning: 'none' }),
 ]);`;
-        expect(await exec(code, { cwd, backend, logger: recorder })).toMatchObject({ status: 'success', value: ['one', 'two', 'three'] });
-        expect(requests[0]).toMatchObject({ tokens: 128, providerOptions: { google: { thinkingConfig: { thinkingBudget: 16384, includeThoughts: false } } } });
+        expect(await exec(source, { cwd, backend, logger: recorder })).toMatchObject({ status: 'success', value: ['one', 'two', 'three', 'four'] });
+        expect(requests[0]).toMatchObject({ tokens: 128, providerOptions: { google: { thinkingConfig: { thinkingBudget: 24576, includeThoughts: false } } } });
         expect(requests[1]).toMatchObject({ seed: 7, temperature: 0, topP: 0.5 });
         expect(requests[1].tokens).toBeUndefined();
         expect(requests[2]).toMatchObject({ providerOptions: { anthropic: { thinking: { type: 'adaptive' }, effort: 'medium' } } });
+        expect(requests[3]).toMatchObject({ reasoning: 'none' });
+        expect(requests[3].providerOptions.openai).not.toHaveProperty('reasoningEffort');
         expect(sdk.google).toHaveBeenCalledWith({ apiKey: 'test-google-key' });
         expect(sdk.openai).toHaveBeenCalledWith({ apiKey: 'test-openai-key' });
         expect(sdk.anthropic).toHaveBeenCalledWith({ apiKey: 'test-anthropic-key' });
         const effective = events.filter(event => event.kind === 'info').map(event => JSON.parse(body(event).split('\n')[1].replace(/ \(\d+ ms\)$/, '')));
         expect(effective).toEqual([
-            { backend: 'native-sdk', provider: 'google', model: 'gemini-2.5-flash', reasoningEffort: 'high', tokens: 128 },
+            { backend: 'native-sdk', provider: 'google', model: 'gemini-2.5-flash', reasoningEffort: 'max', tokens: 128 },
             { backend: 'native-sdk', provider: 'openai', model: 'gpt-4.1', reasoningEffort: null, randomness: { seed: 7, temperature: 0, top_p: 0.5 } },
             { backend: 'native-sdk', provider: 'anthropic', model: 'claude-sonnet-4-6', reasoningEffort: 'medium' },
+            { backend: 'native-sdk', provider: 'openai', model: 'gpt-6-luna', reasoningEffort: 'none' },
         ]);
-        await exec("await ask('Four', { model: 'google/gemini-2.5-flash' });", { cwd, backend, logger, model: 'anthropic/claude-sonnet-4-5' });
+        await exec("await ask('Five', { model: 'google/gemini-2.5-flash' });", { cwd, backend, model: 'anthropic/claude-sonnet-4-5' });
         expect(sdk.anthropic).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['none', 'low', 'medium', 'high', 'max'] as const)('accepts reasoning %s in block headers, ask() and agent()', async level => {
+        steps = ['one', 'two', 'three', 'four'].map(answer => [...text(answer), finish()]);
+        const source = `---\nmodel: gpt-6-luna\n---
+${block('One', 'outputVar: one', `reasoning: ${level}`)}
+${agentBlock('Two', `reasoning: ${level}`)}
+success([one, await ask('Three', { reasoning: '${level}' }), await agent('Four', { reasoning: '${level}' })]);`;
+        expect(await exec(source, { cwd, backend })).toMatchObject({ status: 'success', value: ['one', 'three', 'four'] });
+        const sent = { none: undefined, low: 'low', medium: 'medium', high: 'high', max: 'xhigh' }[level];
+        expect(requests.map(request => [request.providerOptions.openai?.reasoningEffort, request.reasoning]))
+            .toEqual(new Array(4).fill([sent, level === 'none' ? 'none' : undefined]));
+    });
+
+    it('rejects an unknown reasoning level before calling a provider', async () => {
+        expect(await exec("await ask('Prompt', { reasoning: 'think' });", { cwd, backend })).toMatchObject({
+            status: 'failure', failure: { status_code: 'runtime_error', reason: 'reasoning must be none, low, medium, high, or max', line: 1 },
+        });
+        await expect(exec(block('Prompt', 'outputVar: answer', 'reasoning: think'), { cwd, backend })).rejects.toThrow('`reasoning` must be none, low, medium, high or max');
+        expect(requests).toHaveLength(0);
     });
 
     it('streams provider previews and reasoning into the run logger', async () => {
@@ -570,31 +738,45 @@ success([reports, blocked, await readFile('./out/note.txt')]);`, { cwd, backend,
             ...text('Final answer'), finish(),
         ]];
         const streams: ModelStreamEvent[] = [];
-        const result = await exec("success(await think('Prompt'));", { cwd, backend, logger: new Logger('error', () => {}, { streamSink: event => streams.push(event) }) });
+        const result = await exec("success(await ask('Prompt', { model: 'gpt-5', reasoning: 'high' }));", { cwd, backend, logger: new Logger('error', () => {}, { streamSink: event => streams.push(event) }) });
         expect(result).toMatchObject({ status: 'success', value: 'Final answer' });
+        expect(requests[0].providerOptions).toMatchObject({ openai: { reasoningEffort: 'high', reasoningSummary: 'auto' } });
         expect(streams.map(event => event.type === 'update' ? [event.update.channel, event.update.messageId, event.update.mode, event.update.text] : [event.type, event.outcome])).toEqual([
             ['reasoning', '0:why', 'append', 'Because.'], ['reasoning', '0:why', 'replace', 'Because.'],
             ['response', '0:answer', 'append', 'Final answer'], ['response', '0:answer', 'replace', 'Final answer'],
             ['end', 'completed'],
         ]);
-        expect(streams.at(-1)).toMatchObject({ response: 'Final answer', reasoning: 'Because.', interaction: { kind: 'think' } });
+        expect(streams.at(-1)).toMatchObject({ response: 'Final answer', reasoning: 'Because.', interaction: { kind: 'ask' } });
     });
 
     it.each([
         ['an empty response', () => { steps = [[...text(' '), finish()]]; }, 'llm_error', 'the model returned an empty response'],
         ['a truncated turn', () => { steps = [[...text('Partial'), finish('length')]]; }, 'llm_error', 'model turn did not complete (length)'],
-        ['a tool attempt during generation', () => { steps = [[call('read_file', { path: 'secret' }), finish('tool-calls')]]; },
+        ['a tool attempt during generation', () => { steps = [[call('readFile', { path: 'secret' }), finish('tool-calls')]]; },
             'restriction_violation', 'generation cannot use tools; use an explicit agent operation'],
         ['a missing API key', () => { vi.stubEnv('OPENAI_API_KEY', undefined); }, 'llm_error', 'no API key for openai; set OPENAI_API_KEY or run spl login openai'],
         ['a stalled provider', () => {
-            backend = new AiBackend({ cwd, timeoutMs: 30, logger });
+            backend = new AiBackend({ cwd, timeoutMs: 30, logger: silent });
             streamOverride = () => new ReadableStream({ start() {} });
         }, 'llm_error', 'model call timed out after 30ms'],
     ])('reports %s as a located workflow failure', async (_name, arrange, code, reason) => {
         arrange();
-        expect(await exec("\nconst answer = await ask('Prompt');\nsuccess(answer);", { cwd, backend, logger })).toEqual({
+        expect(await exec("\nconst answer = await ask('Prompt');\nsuccess(answer);", { cwd, backend })).toEqual({
             status: 'failure', failure: { status: 'failure', status_code: code, reason, line: 2, command: "const answer = await ask('Prompt');" },
         });
+    });
+
+    it('fails an ask block that requests reasoning together with sampling the provider rejects', async () => {
+        steps = [[conflict('temperature'), ...text('unreachable'), finish()], [...text('Sampled'), finish()]];
+        const source = (...header: string[]) => `${block('Prompt', 'outputVar: answer', 'model: gpt-6-luna', 'temperature: 0', ...header)}\nsuccess(answer);`;
+        expect(await exec(source('reasoning: high'), { cwd, backend })).toEqual({ status: 'failure', failure: {
+            status: 'failure', status_code: 'llm_error', line: 1, command: 'Prompt',
+            reason: "reasoning 'high' cannot be combined with temperature on openai/gpt-6-luna; drop one of the two settings",
+        } });
+        expect(steps).toHaveLength(1);
+        // Without a requested level the sampled call runs with reasoning off.
+        expect(await exec(source(), { cwd, backend })).toEqual({ status: 'success', value: 'Sampled', hasValue: true });
+        expect(requests[1]).toMatchObject({ temperature: 0, reasoning: 'none' });
     });
 
     it('lets workflow code catch a provider failure and continue with another call', async () => {
@@ -602,7 +784,7 @@ success([reports, blocked, await readFile('./out/note.txt')]);`, { cwd, backend,
         const result = await exec(`
 let first;
 try { await ask('Risky'); } catch (error) { first = [error instanceof Failure, error.statusCode]; }
-success([first, await ask('Safe')]);`, { cwd, backend, logger });
+success([first, await ask('Safe')]);`, { cwd, backend });
         expect(result).toMatchObject({ status: 'success', value: [[true, 'llm_error'], 'Recovered'] });
     });
 });

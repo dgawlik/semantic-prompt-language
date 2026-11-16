@@ -1,0 +1,37 @@
+//*
+# Randomness controls
+
+`seed`, `temperature` and `topP` limit randomness in an ask block. With sampling set, reasoning
+defaults to `none`. Sampling is best-effort and does not guarantee identical responses.
+
+    spl run examples/randomness.spl
+*//
+
+---
+model: gpt-6-luna
+---
+
+const recipes: string[] = [];
+
+for (let attempt = 0; attempt < 2; attempt++) {
+    ---
+    outputVar: recipe
+    seed: 13
+    temperature: 0
+    topP: 0.0001
+    tokens: 1024
+
+    <most-frequent>give a recipe for an apple pie</most-frequent>
+    ---
+    recipes.push(recipe);
+}
+
+---
+outputVar: similar
+outputType: Bool
+
+Are the two recipes in @recipes semantically at least 95% similar?
+---
+
+if (!similar) fail('Not similar');
+success('It works');

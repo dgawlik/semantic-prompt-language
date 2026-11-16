@@ -7,7 +7,8 @@ export interface AskMods {
     fmt?: 'integer' | 'float' | 'array' | 'object' | 'text' | 'boolean' | 'json';
 }
 
-export type ReasoningLevel = 'low' | 'medium' | 'high';
+export const REASONING_LEVELS = ['none', 'low', 'medium', 'high', 'max'] as const;
+export type ReasoningLevel = typeof REASONING_LEVELS[number];
 
 export function isTokenBudget(value: unknown): value is number {
     return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
@@ -70,10 +71,11 @@ export interface LlmStreamUpdate {
 }
 
 export interface LlmRequest {
-    kind: 'ask' | 'think' | 'agent';
+    kind: 'ask' | 'agent';
     /** The fully assembled query: constraints, restriction guidance and hints are already prepended. */
     prompt: string;
     model?: string;
+    /** The level asked for; without one the backend uses `medium`, or `none` when sampling is set. */
     reasoningEffort?: ReasoningLevel;
     randomness?: Randomness;
     /** Maximum generated tokens per model turn, including reasoning. */
@@ -83,12 +85,9 @@ export interface LlmRequest {
     onStream?: (update: LlmStreamUpdate) => void;
     restrictions: Restrictions;
     tools: ToolHost;
-    /** Execute a blockquote as an agent command with immediate runtime tool calls. */
-    naturalLanguage?: boolean;
+    /** Agent blocks: tools that act on the block's variables. Each call runs at once through `invokeAction`. */
     runtimeTools?: readonly RuntimeTool[];
     invokeAction?: (action: RuntimeAction) => Promise<unknown>;
-    /** Restrictions can narrow during a blockquote without recreating its SDK session. */
-    currentRestrictions?: () => Restrictions;
 }
 
 export interface LlmResponse {
@@ -129,17 +128,12 @@ const FORMAT_CONTRACTS: Record<Exclude<JsonFormat, 'json'>, { description: strin
     boolean: { description: 'a JSON boolean (true or false)', accepts: (value) => typeof value === 'boolean' },
 };
 
-export function buildPrompt(opts: {
+export function buildPromptParts(opts: {
     prompt: string;
     mods?: AskMods;
-    thinking?: boolean;
     constraints: readonly Constraint[];
     restrictions: Restrictions;
-}): string {
-    return buildPromptParts(opts).prompt;
-}
-
-export function buildPromptParts(opts: Parameters<typeof buildPrompt>[0]): { preface: string; prompt: string } {
+}): { preface: string; prompt: string } {
     const sections: string[] = [];
     if (opts.constraints.length) {
         sections.push(
@@ -149,7 +143,6 @@ export function buildPromptParts(opts: Parameters<typeof buildPrompt>[0]): { pre
     }
     const guidance = opts.restrictions.guidance();
     if (guidance.length) sections.push(`Active restrictions (enforced by the runtime):\n${guidance.map((g) => `- ${g}`).join('\n')}`);
-    if (opts.thinking) sections.push('Think carefully about the problem before giving the final answer.');
     if (opts.mods?.len) sections.push(LEN_HINTS[opts.mods.len]);
     if (opts.mods?.fmt && opts.mods.fmt !== 'text' && opts.mods.fmt !== 'json') {
         sections.push(`${JSON_HINT} Return ${FORMAT_CONTRACTS[opts.mods.fmt].description}.`);

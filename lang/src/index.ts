@@ -1,27 +1,28 @@
-// The library: everything a workflow fence can use without importing it.
+// The library: everything a `.spl` file can use without importing it.
 export {
-    ask, think, agent, human, enforce, forbid, restrict, success, go, fail, assert, log, codegen,
-    readFile, writeFile, webFetch, webSearch, shell, args, env, markdown, configure,
-    t, str, int, float, bool, char, nil, any, object, fn, list, union, nullable, enumOf, struct, typedef, jsonSchema, validate,
-    type AskOptions, type ThinkOptions, type AgentOptions, type CodegenOptions, type ConfigureOptions,
+    ask, agent, human, enforce, forbid, restrict, success, fail, assert, log, codegen,
+    readFile, writeFile, webFetch, webSearch, shell, args, env, markdown, configure, validate,
+    t, Str, Int, Float, Bool, Char, Nil, Any, Dict, Fn, List, Union, Nullable, Enum, Struct, Typedef, JsonSchema,
+    type AskOptions, type AgentOptions, type CodegenOptions, type ConfigureOptions,
     type GenerationResult, type RestrictSpec,
 } from './library.js';
-export { Type, StructType, isType, type Infer, type InferShape, type Shape, type Annotations, type JsonSchema, type TypeKind } from './types.js';
-export { Failure, SuccessSignal, GoSignal, SplSyntaxError, type FailurePayload, type StatusCode } from './errors.js';
+export { Type, StructType, isType, type Infer, type InferShape, type Shape, type Annotations, type TypeKind } from './types.js';
+export { Failure, SuccessSignal, SplSyntaxError, type FailurePayload, type StatusCode, type SyntaxProblem } from './errors.js';
 
-// Running workflows and embedding the runtime.
-export { parse, parseInstruction, parseMarkdown, extractMarkdown, isWorkflowMarkdown, type Workflow, type Step, type CodeStep, type NaturalStep, type IfStep, type WhileStep, type BranchStep, type MarkdownDocument, type MarkdownBlock } from './markdown.js';
-export { parseSpl, scanSpl, SPL_KEYWORDS, type SplBlock, type SplControl, type SplDocument, type SplKeyword, type SplNode, type SplProblem, type SplTag } from './spl.js';
-export { run, ExecutionSession, checkWorkflow, type RunOptions, type RunResult, type WorkflowProblem, type BlockStart } from './workflow.js';
-export { Runtime, type RuntimeOptions, type GenerateOptions, type HumanHandler } from './runtime.js';
-export { compileCell, type CompiledCell, type CellDeclaration, type CellLanguage } from './cell.js';
+// What compiled workflows call: the `---` blocks and the workflow function itself.
+export * as __spl from './blocks.js';
+
+// Compiling and running workflows, and embedding the runtime.
+export { scan, sourceColumn, CHECK_OPTIONS, DEFAULT_EXPORT, HEADER_KEYS, MODES, type Scan, type Region, type HeaderEntry, type SplBlock, type SplComment, type SplProblem, type BlockMode, type BlockInput, type BlockOutput, type HeaderKey, type Span } from './scanner.js';
+export { compile, type Compiled } from './compile.js';
+export { check, type CheckProblem } from './check.js';
+export { documentMarkdown, documentHtml, type DocOptions } from './doc.js';
+export { run, type RunOptions, type RunResult } from './workflow.js';
+export { Runtime, type RuntimeOptions, type GenerateOptions, type HumanHandler, type Step } from './runtime.js';
 export { Logger, type LogLevel, type LoggerOptions } from './logger.js';
 export type { LogEvent, LogEventSink, BodySegment, ModelInteraction, ModelStreamEvent, ModelStreamSink, StateChange, BindingDelta, BindingReference, ScopeReference, ObservedValue, ToolUse } from './log-events.js';
-export { CopilotBackend } from './copilot.js';
 export { AiBackend, type AiBackendOptions } from './ai.js';
 export { Trace, TraceError, type TraceContext } from './trace.js';
-export { Pin, PinError, type PinData } from './pin.js';
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError, type Provider } from './auth.js';
-export { MemoryStore, type VariableStore } from './store.js';
-export type { LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, RuntimeAction, RuntimeTool } from './llm.js';
+export type { LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, ReasoningLevel, RuntimeAction, RuntimeTool } from './llm.js';

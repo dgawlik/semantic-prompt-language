@@ -1,0 +1,26 @@
+//*
+# A poem from two questions
+
+An agent may ask a person with its `askHuman` tool.
+
+    spl run examples/color-poem.spl
+*//
+
+---
+model: gpt-6-luna
+---
+
+---
+mode: agent
+
+Ask the human "What is your favorite color?" ->[Str] @color
+Ask the human "What is your favorite fruit?" ->[Str] @fruit
+---
+
+---
+outputVar: poem
+
+A paragraph long poem about @color and @fruit
+---
+
+success({ poem });

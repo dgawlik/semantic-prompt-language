@@ -1,4 +1,4 @@
-// The workflow library as ambient globals, exactly as every `js`/`ts` fence sees it.
+// The workflow library as ambient globals, exactly as every `.spl` file sees it.
 // Editors and type checkers can opt in from a jsconfig.json or tsconfig.json:
 //     { "compilerOptions": { "types": ["spl-lang/globals"] } }
 import type * as spl from './dist/library.js';
@@ -6,9 +6,7 @@ import type * as spl from './dist/library.js';
 declare global {
     /** Asks the model for a value; no tools. `fmt` and `schema` parse and check the answer. */
     const ask: typeof spl.ask;
-    /** Like `ask`, with medium reasoning by default. */
-    const think: typeof spl.think;
-    /** Lets the model act with runtime and MCP tools, within active restrictions. */
+    /** Lets the model act with built-in and MCP tools, within active restrictions. */
     const agent: typeof spl.agent;
     /** Asks a person and resolves to their answer. */
     const human: typeof spl.human;
@@ -18,17 +16,15 @@ declare global {
     const forbid: typeof spl.forbid;
     /** Limits files, hosts, executables and MCP tools inside the callback. */
     const restrict: typeof spl.restrict;
-    /** Ends the document with a result. */
+    /** Ends the workflow with a result. */
     const success: typeof spl.success;
-    /** Continues a `.spl` workflow at the block with this alias: `{js alias="retry"}`. */
-    const go: typeof spl.go;
-    /** Ends the document with an `explicit_failure`, unless caught. */
+    /** Ends the workflow with an `explicit_failure`, unless caught. */
     const fail: typeof spl.fail;
     /** Raises `assertion_failed` when the condition is falsy. */
     const assert: typeof spl.assert;
     /** Writes to the run log; `log.error` and `log.debug` select other levels. */
     const log: typeof spl.log;
-    /** Generates a JavaScript function from a description and defines it in the shared scope. */
+    /** Generates a JavaScript function from a description. */
     const codegen: typeof spl.codegen;
     /** Reads a UTF-8 text file, subject to `restrict`. */
     const readFile: typeof spl.readFile;
@@ -51,27 +47,38 @@ declare global {
     /** A workflow failure: `error instanceof Failure`, `error.statusCode`, `error.reason`. */
     const Failure: typeof spl.Failure;
     type Failure = spl.Failure;
-    /** The JavaScript value a type parses to: `type Invoice = Infer<typeof Invoice>`. */
+    /** The TypeScript type a type builder stands for: `type Invoice = Infer<typeof Invoice>`. */
     type Infer<T> = import('./dist/types.js').Infer<T>;
 
-    /** The type builders under one name: `t.str`, `t.list(t.int)`. */
+    /** The type builders under one name: `t.Str`, `t.List(t.Int)`. */
     const t: typeof spl.t;
-    const str: typeof spl.str;
-    const int: typeof spl.int;
-    const float: typeof spl.float;
-    const bool: typeof spl.bool;
-    const char: typeof spl.char;
-    const nil: typeof spl.nil;
-    const any: typeof spl.any;
-    const object: typeof spl.object;
-    const fn: typeof spl.fn;
-    const list: typeof spl.list;
-    const union: typeof spl.union;
-    const nullable: typeof spl.nullable;
-    const enumOf: typeof spl.enumOf;
-    const struct: typeof spl.struct;
-    const typedef: typeof spl.typedef;
-    const jsonSchema: typeof spl.jsonSchema;
+    const Str: typeof spl.Str;
+    const Int: typeof spl.Int;
+    const Float: typeof spl.Float;
+    const Bool: typeof spl.Bool;
+    /** Exactly one Unicode character. */
+    const Char: typeof spl.Char;
+    const Nil: typeof spl.Nil;
+    /** Any JSON value. */
+    const Any: typeof spl.Any;
+    /** Any JSON object, without a declared shape. */
+    const Dict: typeof spl.Dict;
+    /** A callable; cannot be decoded from JSON. */
+    const Fn: typeof spl.Fn;
+    const List: typeof spl.List;
+    const Union: typeof spl.Union;
+    const Nullable: typeof spl.Nullable;
+    /** One of the given strings. */
+    const Enum: typeof spl.Enum;
+    /** An exact record: every field is required and extra fields are rejected. */
+    const Struct: typeof spl.Struct;
+    /** Names a type and attaches annotations. */
+    const Typedef: typeof spl.Typedef;
+    /** Wraps raw JSON Schema as a type. */
+    const JsonSchema: typeof spl.JsonSchema;
+
+    /** What `---` blocks compile to. Generated code only. */
+    const __spl: typeof import('./dist/blocks.js');
 }
 
 export {};

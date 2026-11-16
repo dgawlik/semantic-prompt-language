@@ -1,0 +1,44 @@
+//*
+# Hello, SPL
+
+A `.spl` file is TypeScript. Markdown comments like this one are commentary, and each `---` block is an
+instruction for a model. Everything runs top to bottom, and the library (`ask`, `Struct`, `writeFile`,
+`markdown`, ...) needs no import.
+
+    spl run examples/hi.spl
+*//
+
+---
+model: gpt-6-luna
+enforce: Be concise.
+---
+
+const topics = ['recursion', 'closures', 'regular expressions'];
+const Topic = Enum(...topics);
+
+const Card = Struct('Card', {
+    term: Topic,
+    definition: Str.describe('One line about the term'),
+    description: Str.describe('A paragraph about the term'),
+});
+
+const cards = await Promise.all(topics.map(topic =>
+    ask(`A one-sentence flashcard about ${topic}`, { schema: Card, repairs: 1 })));
+
+//*
+The agent reads `cards` through a tool and must save a value that fits `Card`.
+*//
+
+---
+mode: agent
+reasoning: high
+
+Pick the item of @cards whose card a beginner would find hardest ->[Card] @hardest
+---
+
+const doc = markdown.document()
+    .heading(hardest.term, 3)
+    .paragraph(markdown.bold(hardest.definition))
+    .paragraph(hardest.description);
+
+await writeFile('./out/hardest-card.md', doc.toString());

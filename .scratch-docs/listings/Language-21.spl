@@ -1,0 +1,9 @@
+import { ask, configure, Enum, restrict, Str, Struct, writeFile } from 'spl-lang';
+
+const runtime = configure({ model: 'gpt-6-luna', logLevel: 'error' });
+
+const Triage = Struct('Triage', { label: Enum('bug', 'feature', 'question'), reason: Str });
+const triage = await ask('Classify: the export button does nothing', { schema: Triage, repairs: 1 });
+await restrict('./out', () => writeFile('./out/triage.json', JSON.stringify(triage)));
+
+await runtime.backend.close();

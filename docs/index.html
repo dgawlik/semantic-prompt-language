@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="Build AI workflows with Semantic Prompt Language: native JavaScript, natural-language agents and checked output in one readable file.">
+  <meta name="description" content="Build AI workflows with Semantic Prompt Language: TypeScript, natural-language instructions for models and agents, and checked output in one readable file.">
   <title>SPL / Start here</title>
   <style>
     :root {
@@ -209,41 +209,43 @@
         <div>
           <p class="eyebrow">Semantic Prompt Language</p>
           <h1 id="hero-title">Write the code.<br>Describe the <span>judgment.</span></h1>
-          <p class="hero-copy">Build AI workflows in one readable file. Use native JavaScript where you need precision, and natural language where you need a model.</p>
+          <p class="hero-copy">Build AI workflows in one readable file. Use TypeScript where you need precision, and natural language where you need a model.</p>
           <div class="actions">
             <a class="button" href="#get-started">Start building <span aria-hidden="true">&rarr;</span></a>
             <a class="button button-secondary" href="introduction.html">Explore the docs</a>
           </div>
-          <ul class="chips" aria-label="SPL formats and integrations">
-            <li>Executable Markdown</li>
-            <li>.spl blocks</li>
-            <li>Node.js library</li>
+          <ul class="chips" aria-label="What a workflow is made of">
+            <li>One .spl file</li>
+            <li>TypeScript + instructions</li>
+            <li>Typed outputs</li>
           </ul>
         </div>
         <div class="hero-visual" aria-label="Excerpt from the hi.spl flashcard workflow">
           <div class="visual-orbit" aria-hidden="true"></div>
           <div class="visual-top"><span>lang/examples/hi.spl</span><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/hi.spl">Open example &nearr;</a></div>
           <div class="code-card">
-            <pre><code><span class="spl-block">{js}</span>
-<span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>]
-<span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">enumOf</span>(...topics)
-<span class="kw">const</span> <span class="type">Card</span> = <span class="fn">struct</span>(<span class="str">'Card'</span>, {
-  term: <span class="type">Topic</span>,
-  definition: str.<span class="fn">describe</span>(<span class="str">'Definition one line'</span>),
-  description: str.<span class="fn">describe</span>(<span class="str">'Several sentences about'</span>),
-});
-<span class="spl-block">{/js}</span>
+            <pre><code><span class="kw">const</span> topics = [<span class="str">'recursion'</span>, <span class="str">'closures'</span>, <span class="str">'regular expressions'</span>];
+<span class="kw">const</span> <span class="type">Topic</span> = <span class="fn">Enum</span>(...topics);
 
-<span class="spl-block">{agent</span> <span class="spl-attribute">model</span>=<span class="str">'gpt-6.1-sol'</span>, <span class="spl-attribute">reasoning</span>=<span class="str">'high'</span><span class="spl-block">}</span>
-Pick the item of <span class="spl-reference">@topics</span> that a beginner would find hardest.
-Create a flashcard for that topic with term set to the selected topic,
-a one-line definition and a description of several sentences.
-<span class="spl-directive">@validate</span>[<span class="type">Card</span>] save the flashcard to variable <span class="spl-reference">@hardest</span>
-<span class="spl-block">{/agent}</span></code></pre>
+<span class="kw">const</span> <span class="type">Card</span> = <span class="fn">Struct</span>(<span class="str">'Card'</span>, {
+  term: <span class="type">Topic</span>,
+  definition: <span class="type">Str</span>.<span class="fn">describe</span>(<span class="str">'One line about the term'</span>),
+  description: <span class="type">Str</span>.<span class="fn">describe</span>(<span class="str">'A paragraph about the term'</span>),
+});
+
+<span class="kw">const</span> cards = <span class="kw">await</span> Promise.<span class="fn">all</span>(topics.<span class="fn">map</span>(topic =&gt;
+  <span class="fn">ask</span>(<span class="str">`A one-sentence flashcard about ${topic}`</span>, { schema: <span class="type">Card</span>, repairs: 1 })));
+
+<span class="spl-block">---</span>
+<span class="spl-attribute">mode</span>: agent
+<span class="spl-attribute">reasoning</span>: high
+
+Pick the item of <span class="spl-reference">@cards</span> whose card a beginner would find hardest <span class="spl-directive">-&gt;[Card]</span> <span class="spl-reference">@hardest</span>
+<span class="spl-block">---</span></code></pre>
           </div>
           <div class="visual-result">
             <span class="check-mark" aria-hidden="true">&check;</span>
-            <p><strong>Checked data.</strong><br>Ready for ordinary JavaScript.</p>
+            <p><strong>Checked data.</strong><br>A typed constant for the code below.</p>
           </div>
         </div>
       </div>
@@ -254,30 +256,31 @@ a one-line definition and a description of several sentences.
         <div class="section-heading">
           <div>
             <p class="eyebrow">The mental model</p>
-            <h2 id="approach-title">One document.<br><span class="editorial">One shared scope.</span></h2>
+            <h2 id="approach-title">One file.<br><span class="editorial">Ordinary scope.</span></h2>
           </div>
-          <p class="section-intro">SPL brings model-driven steps and deterministic code together. Everything runs top to bottom, so a value created in one step is ready for the next.</p>
+          <p class="section-intro">SPL interleaves instructions for models and agents with TypeScript. Everything runs top to bottom, and the output of a block is an ordinary variable for the code that follows.</p>
         </div>
         <ol class="idea-grid">
           <li class="idea-card">
             <span class="step-number">01</span>
             <h3>Set things up in code.</h3>
-            <p>Read inputs, declare types, import modules and calculate values with familiar JavaScript. Top-level <code>await</code> works.</p>
+            <p>Read inputs, declare types, import modules and calculate values in TypeScript. Top-level <code>await</code> works, and Node.js erases the types.</p>
           </li>
           <li class="idea-card">
             <span class="step-number">02</span>
-            <h3>Give the agent a task.</h3>
-            <p>Describe what needs judgment in natural language. Agent tools can load and save values in the workflow's shared scope.</p>
+            <h3>Give the model a task.</h3>
+            <p>Write what needs judgment between two <code>---</code> lines. <code>@name</code> reads a variable, and an agent declares what it saves with <code>-&gt;[Type] @name</code>.</p>
           </li>
           <li class="idea-card">
             <span class="step-number">03</span>
             <h3>Use the checked result.</h3>
-            <p>Validate the returned shape, assert business rules, format Markdown or write a file with ordinary code.</p>
+            <p>Outputs are coerced to their type and declared in the enclosing scope. Assert business rules, format Markdown or write a file with ordinary code.</p>
           </li>
         </ol>
-        <div class="format-row" aria-label="Workflow file formats">
-          <div class="format-chip"><strong>.md</strong><code>```js ... ```</code><span>JavaScript, TypeScript and agent blockquotes</span></div>
-          <div class="format-chip"><strong>.spl</strong><code>{js} {agent}</code><span>Explicit workflow blocks, no frontmatter</span></div>
+        <div class="format-row" aria-label="The three additions to TypeScript">
+          <div class="format-chip"><strong>//* &hellip; *//</strong><span>A Markdown comment: prose that <code>spl doc</code> renders</span></div>
+          <div class="format-chip"><strong>--- &hellip; ---</strong><span>A block: settings such as <code>mode</code> and <code>model</code>, then the instruction</span></div>
+          <div class="format-chip"><strong>@name</strong><span>A reference: an input, or a typed output after <code>-&gt;</code></span></div>
         </div>
       </div>
     </section>
@@ -287,11 +290,11 @@ a one-line definition and a description of several sentences.
         <div class="walkthrough-copy">
           <p class="eyebrow">Prompt controls &amp; permissions</p>
           <h2 id="walkthrough-title">Guide the answer.<br><span class="editorial">Limit the effects.</span></h2>
-          <p>Use <code>ask</code> to get a model response. Wrap it in <code>enforce</code> and <code>forbid</code> to shape the prompt, then use <code>restrict</code> to scope library tool actions.</p>
+          <p>Use <code>ask</code> to get a model response. Wrap it in <code>enforce</code> and <code>forbid</code> to shape the prompt, then use <code>restrict</code> to scope library tool actions. In a block, the same three are header keys.</p>
         </div>
         <div>
           <div class="code-panel">
-            <div class="code-head"><span>{js} / guide a response, scope a write</span><span>ask &middot; restrict</span></div>
+            <div class="code-head"><span>TypeScript / guide a response, scope a write</span><span>ask &middot; restrict</span></div>
             <pre><code><span class="kw">const</span> answer = <span class="kw">await</span> <span class="fn">enforce</span>(
   <span class="str">'Answer in one sentence'</span>,
   () =&gt; <span class="fn">forbid</span>(<span class="str">'jokes'</span>,
@@ -304,8 +307,8 @@ a one-line definition and a description of several sentences.
             <p class="label">What each wrapper does</p>
             <ul class="control-list">
               <li><code>ask</code><span>Returns a model answer; it has no tools.</span></li>
-              <li><code>enforce / forbid</code><span>Add prompt guidance. They do not validate the answer.</span></li>
-              <li><code>restrict</code><span>Limits SPL library tools and agents while its callback runs.</span></li>
+              <li><code>enforce / forbid</code><span>Add prompt guidance, in code or in a block header. They do not validate the answer.</span></li>
+              <li><code>restrict</code><span>Limits SPL library tools and agents: inside its callback, or for one agent block.</span></li>
             </ul>
             <p>Restrictions are not an OS sandbox; direct Node.js APIs are outside their scope.</p>
           </div>
@@ -317,57 +320,60 @@ a one-line definition and a description of several sentences.
       <div class="wrap">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">New / Conditional blocks in .spl</p>
+            <p class="eyebrow">Blocks are statements</p>
             <h2 id="flow-title">Branch on data.<br><span class="editorial">Repeat until done.</span></h2>
           </div>
-          <p class="section-intro">Between blocks, <code>if</code>, <code>elif</code>, <code>else</code> and <code>while</code> lines choose and repeat whole blocks. A control line ends with <code>:</code>, and its body is every following block indented further than the line.</p>
+          <p class="section-intro">A block may stand wherever a statement may: at the top level, in a function, inside <code>if</code>, a loop or <code>try</code>. Plain TypeScript decides what runs and how often.</p>
         </div>
         <div class="code-panel">
           <div class="code-head"><span>lang/examples/conditional-workflows.spl</span><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/lang/examples/conditional-workflows.spl">Open example &nearr;</a></div>
-          <pre><code><span class="spl-block">{js}</span>
-<span class="kw">let</span> cond = args[0]
-<span class="kw">let</span> i = 0
-<span class="kw">let</span> result = <span class="kw">null</span>
-<span class="spl-block">{/js}</span>
+          <pre><code><span class="spl-block">---</span>
+<span class="spl-attribute">model</span>: gpt-6-luna
+<span class="spl-attribute">reasoning</span>: low
+<span class="spl-block">---</span>
 
-<span class="kw">if</span> cond == <span class="str">'color'</span>:
-    <span class="spl-block">{agent</span> <span class="spl-attribute">model</span>=<span class="str">'gpt-6-luna'</span>, <span class="spl-attribute">reasoning</span>=<span class="str">'low'</span><span class="spl-block">}</span>
-    What is your favorite color? Save to -&gt; <span class="spl-reference">@result</span>
-    <span class="spl-block">{/agent}</span>
-<span class="kw">else</span>:
-    <span class="spl-block">{js}</span>
-    <span class="fn">go</span>(<span class="str">'final'</span>)
-    <span class="spl-block">{/js}</span>
+<span class="kw">const</span> [topic] = args;
+<span class="kw">let</span> i = 0;
+<span class="kw">let</span> result: <span class="type">string</span> | <span class="kw">null</span> = <span class="kw">null</span>;
 
-<span class="kw">while</span> i &lt; 2:
-    <span class="spl-block">{agent</span> <span class="spl-attribute">model</span>=<span class="str">'gpt-6-luna'</span>, <span class="spl-attribute">reasoning</span>=<span class="str">'low'</span><span class="spl-block">}</span>
-    Increment the number <span class="spl-reference">@i</span> by one. Save to -&gt; <span class="spl-reference">@i</span>
-    <span class="spl-block">{/agent}</span>
+<span class="kw">if</span> (topic === <span class="str">'color'</span>) {
+    <span class="spl-block">---</span>
+    <span class="spl-attribute">outputVar</span>: =result
 
-<span class="spl-block">{js</span> <span class="spl-attribute">alias</span>=<span class="str">"final"</span><span class="spl-block">}</span>
-<span class="fn">success</span>({result, i})
-<span class="spl-block">{/js}</span></code></pre>
+    What is your favorite color? Answer with one word.
+    <span class="spl-block">---</span>
+}
+
+<span class="kw">while</span> (i &lt; 2) {
+    <span class="spl-block">---</span>
+    <span class="spl-attribute">mode</span>: agent
+
+    Increment the number <span class="spl-reference">@i</span> by one <span class="spl-directive">-&gt;[Int]</span> <span class="spl-reference">@=i</span>
+    <span class="spl-block">---</span>
+}
+
+<span class="fn">success</span>({ result, i });</code></pre>
         </div>
         <div class="stack-grid">
           <article class="stack-card">
             <span class="label">01 / Choose</span>
-            <h3><code>if</code> &middot; <code>elif</code> &middot; <code>else</code></h3>
-            <p>Runs the first body whose condition is truthy. <code>elif</code> and <code>else</code> line up with their <code>if</code>; <code>else</code> has no condition.</p>
+            <h3><code>if</code> &middot; <code>else</code></h3>
+            <p>An ordinary condition decides whether a block runs. It can read anything earlier code or blocks produced.</p>
           </article>
           <article class="stack-card">
             <span class="label">02 / Repeat</span>
-            <h3><code>while</code></h3>
-            <p>Runs its body again for as long as the condition stays truthy.</p>
+            <h3><code>while</code> &middot; <code>for</code></h3>
+            <p>A block in a loop runs once per pass. Each pass is a new model call.</p>
           </article>
           <article class="stack-card">
-            <span class="label">03 / Decide</span>
-            <h3>Conditions are JavaScript.</h3>
-            <p>Expressions run in the shared scope, read values saved by code or agents, and may use <code>await</code>.</p>
+            <span class="label">03 / Update</span>
+            <h3><code>=name</code></h3>
+            <p>An output declares a new constant. Written as <code>=name</code>, it assigns an existing <code>let</code> instead.</p>
           </article>
           <article class="stack-card">
-            <span class="label">04 / Share</span>
-            <h3>Still one scope.</h3>
-            <p>Bodies hold <code>{js}</code>, <code>{ts}</code>, <code>{agent}</code>, <code>{codegen}</code>, <code>{comment}</code> blocks and nested control lines. <code>result</code> stays visible after the branch.</p>
+            <span class="label">04 / Scope</span>
+            <h3>Normal block scoping.</h3>
+            <p>Outputs live in the scope that encloses the block. <code>result</code> is declared before the <code>if</code>, so it stays visible after it.</p>
           </article>
         </div>
       </div>
@@ -386,7 +392,7 @@ a one-line definition and a description of several sentences.
           <article class="feature-card">
             <span class="label">01 / Validate</span>
             <h3>Check the shape.</h3>
-            <p>Types and schemas verify fields and values. Use assertions in JavaScript for exact business rules.</p>
+            <p>Output types coerce and verify fields and values, and <code>spl check</code> type-checks the file. Use assertions for exact business rules.</p>
           </article>
           <article class="feature-card">
             <span class="label">02 / Control</span>
@@ -396,7 +402,7 @@ a one-line definition and a description of several sentences.
           <article class="feature-card">
             <span class="label">03 / Learn</span>
             <h3>Trace and review.</h3>
-            <p>Check workflows before running them, record execution history and add human approval where it matters.</p>
+            <p>Check workflows before running them, record a run with <code>--trace</code> to resume or replay it, and add human approval where it matters.</p>
           </article>
         </div>
         <p class="caveat"><strong>Useful boundaries:</strong> valid shape does not guarantee correct facts. Prompt instructions are not deterministic checks, replay is not a promise of repeatability, and restrictions on library tools are not an operating-system sandbox.</p>
@@ -408,7 +414,7 @@ a one-line definition and a description of several sentences.
         <div class="section-heading">
           <div>
             <p class="eyebrow">When you need more</p>
-            <h2 id="stack-title">Start in a document.<br><span class="editorial">Grow into your stack.</span></h2>
+            <h2 id="stack-title">Start in one file.<br><span class="editorial">Grow into your stack.</span></h2>
           </div>
           <p class="section-intro">Begin with a small workflow, then add editor support, reusable code, trusted tools or the Node.js library as your project grows.</p>
         </div>
@@ -416,12 +422,12 @@ a one-line definition and a description of several sentences.
           <article class="stack-card">
             <span class="label">01 / Editor</span>
             <h3>VS Code</h3>
-            <p>Cross-block completions, type-aware outputs and notebook execution.</p>
+            <p>Syntax coloring, TypeScript diagnostics, completion and hover, <code>@name</code> completion, and Run and Debug commands.</p>
           </article>
           <article class="stack-card">
             <span class="label">02 / Reuse</span>
             <h3>Code generation</h3>
-            <p>Generate shared JavaScript functions with <code>@CODEGEN</code> or <code>codegen()</code>.</p>
+            <p>Generate typed functions with a codegen block or <code>codegen()</code>. The code is cached beside the workflow.</p>
           </article>
           <article class="stack-card">
             <span class="label">03 / Connect</span>
@@ -431,7 +437,7 @@ a one-line definition and a description of several sentences.
           <article class="stack-card">
             <span class="label">04 / Embed</span>
             <h3>Node.js library</h3>
-            <p>Import from <code>spl-lang</code> or embed documents in an existing application.</p>
+            <p>Import from <code>spl-lang</code>, or run <code>spl compile</code> to turn a workflow into a TypeScript module.</p>
           </article>
         </div>
       </div>
@@ -444,7 +450,7 @@ a one-line definition and a description of several sentences.
             <p class="eyebrow">Your first 30 minutes</p>
             <h2 id="start-title">Start small.<br><span class="editorial">Then add a model.</span></h2>
           </div>
-          <p class="section-intro">Explore types and regular JavaScript before spending a token. When you're ready, configure a provider and run a workflow.</p>
+          <p class="section-intro">Explore types and regular TypeScript before spending a token. When you're ready, configure a provider and run a workflow.</p>
         </div>
         <div class="start-grid">
           <div>
@@ -454,14 +460,14 @@ a one-line definition and a description of several sentences.
 npm install -g spl-lang
 
 <span class="comment"># Run a no-model example</span>
-spl lang/examples/typed-data.md
+spl run lang/examples/typed-data.spl
 
-<span class="comment"># Check before running</span>
-spl lang/examples/hi.spl --check
+<span class="comment"># Type-check before running</span>
+spl check lang/examples/hi.spl
 
 <span class="comment"># Configure a provider, then run</span>
 spl login openai
-spl lang/examples/hi.spl --model gpt-4.1</code></pre>
+spl run lang/examples/hi.spl</code></pre>
             </div>
             <div class="start-links">
               <a href="getting-started.html">Read the setup guide &nearr;</a>
@@ -471,9 +477,9 @@ spl lang/examples/hi.spl --model gpt-4.1</code></pre>
           </div>
           <ol class="start-steps">
             <li><span class="number">1</span><div><h3>Install on Node.js 24.15+.</h3><p>The CLI runs on Windows, macOS and Linux.</p></div></li>
-            <li><span class="number">2</span><div><h3>Run a no-model example.</h3><p>Learn types and ordinary JavaScript without provider credentials.</p></div></li>
+            <li><span class="number">2</span><div><h3>Run a no-model example.</h3><p>Learn types and ordinary TypeScript without provider credentials.</p></div></li>
             <li><span class="number">3</span><div><h3>Configure an API key.</h3><p>Choose OpenAI, Anthropic or Google. Login sets up an API key; it is not subscription OAuth.</p></div></li>
-            <li><span class="number">4</span><div><h3>Check, then run.</h3><p><code>--check</code> validates without executing the workflow or calling a model.</p></div></li>
+            <li><span class="number">4</span><div><h3>Check, then run.</h3><p><code>spl check</code> scans and type-checks without executing the workflow or calling a model.</p></div></li>
           </ol>
         </div>
       </div>

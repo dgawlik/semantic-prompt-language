@@ -4,11 +4,11 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AiBackend } from '../src/ai.js';
 import { DEFAULT_MODELS, PROVIDERS, PROVIDER_ENV, type Provider } from '../src/auth.js';
-import { AGENT_TOOLS } from '../src/agent.js';
+import { AGENT_TOOLS } from '../src/blocks.js';
 import { Logger } from '../src/logger.js';
 import { Restrictions } from '../src/restrict.js';
 import { ToolHost } from '../src/tools.js';
-import type { LlmRequest, LlmStreamUpdate, Randomness } from '../src/llm.js';
+import { LlmError, type LlmRequest, type LlmStreamUpdate, type Randomness } from '../src/llm.js';
 
 let home: string;
 let backend: AiBackend;
@@ -23,13 +23,13 @@ function providerEvents(provider: Provider, action: boolean): unknown[] {
     const args = { name: 'answer', value: 42 };
     if (provider === 'google') return [{
         candidates: [{ content: { role: 'model', parts: action
-            ? [{ functionCall: { name: 'save_variable', args } }] : [{ text: '42' }] }, finishReason: 'STOP' }],
+            ? [{ functionCall: { name: 'saveVariable', args } }] : [{ text: '42' }] }, finishReason: 'STOP' }],
         usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 },
     }];
     if (provider === 'anthropic') return [
         { type: 'message_start', message: { id: 'msg_1', model: DEFAULT_MODELS.anthropic, usage: { input_tokens: 1 } } },
         { type: 'content_block_start', index: 0, content_block: action
-            ? { type: 'tool_use', id: 'tool_1', name: 'save_variable', input: {} } : { type: 'text', text: '' } },
+            ? { type: 'tool_use', id: 'tool_1', name: 'saveVariable', input: {} } : { type: 'text', text: '' } },
         { type: 'content_block_delta', index: 0, delta: action
             ? { type: 'input_json_delta', partial_json: JSON.stringify(args) } : { type: 'text_delta', text: '42' } },
         { type: 'content_block_stop', index: 0 },
@@ -37,7 +37,7 @@ function providerEvents(provider: Provider, action: boolean): unknown[] {
         { type: 'message_stop' },
     ];
     const item = action
-        ? { type: 'function_call', id: 'fc_1', call_id: 'tool_1', name: 'save_variable', arguments: JSON.stringify(args), status: 'completed' }
+        ? { type: 'function_call', id: 'fc_1', call_id: 'tool_1', name: 'saveVariable', arguments: JSON.stringify(args), status: 'completed' }
         : { type: 'message', id: 'msg_1', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: '42', annotations: [] }] };
     return [
         { type: 'response.created', response: { id: 'resp_1', created_at: 1, model: DEFAULT_MODELS.openai } },
@@ -60,8 +60,8 @@ function chatEvents(action: boolean): unknown[] {
         choices: [{ index: 0, delta, finish_reason }],
     });
     return action ? [
-        chunk({ tool_calls: [{ index: 0, id: 'tool_1', type: 'function', function: { name: 'save_', arguments: '{"name":' } }] }),
-        chunk({ tool_calls: [{ index: 0, function: { name: 'variable', arguments: '"answer","value":42}' } }] }),
+        chunk({ tool_calls: [{ index: 0, id: 'tool_1', type: 'function', function: { name: 'save', arguments: '{"name":' } }] }),
+        chunk({ tool_calls: [{ index: 0, function: { name: 'Variable', arguments: '"answer","value":42}' } }] }),
         chunk({}, 'tool_calls'),
     ] : [chunk({ content: '4' }), chunk({ content: '2' }), chunk({}, 'stop')];
 }
@@ -96,28 +96,28 @@ it.each(PROVIDERS)('serializes real %s API requests, credentials, streaming and 
     const restrictions = new Restrictions(home);
     const invokeAction = vi.fn(async () => 42);
     const result = await backend.call({
-        kind: 'agent', naturalLanguage: true, model: `${provider}/${DEFAULT_MODELS[provider]}`,
+        kind: 'agent', model: `${provider}/${DEFAULT_MODELS[provider]}`,
         prompt: 'Save the answer', showReasoning: false, restrictions,
         tools: new ToolHost(restrictions, home), runtimeTools: AGENT_TOOLS, invokeAction,
-        tokens: 2048,
+        tokens: 8192,
     });
     expect(result).toMatchObject({ text: '42', effective: { provider, model: DEFAULT_MODELS[provider] } });
-    expect(invokeAction).toHaveBeenCalledExactlyOnceWith({ name: 'save_variable', arguments: { name: 'answer', value: 42 } });
+    expect(invokeAction).toHaveBeenCalledExactlyOnceWith({ name: 'saveVariable', arguments: { name: 'answer', value: 42 } });
     expect(requests).toHaveLength(2);
-    expect(result.effective.tokens).toBe(2048);
+    expect(result.effective.tokens).toBe(8192);
     for (const { body } of requests) {
-        if (provider === 'google') expect(body.generationConfig).toMatchObject({ maxOutputTokens: 2048 });
-        else expect(body[provider === 'openai' ? 'max_output_tokens' : 'max_tokens']).toBe(2048);
+        if (provider === 'google') expect(body.generationConfig).toMatchObject({ maxOutputTokens: 8192 });
+        else expect(body[provider === 'openai' ? 'max_output_tokens' : 'max_tokens']).toBe(8192);
     }
     const header = provider === 'google' ? 'x-goog-api-key' : 'authorization';
     expect(requests[0].headers.get(header)).toBe(`${provider === 'google' ? '' : 'Bearer '}test-${provider}`);
     expect(requests[0].url).toContain(provider === 'google' ? 'generativelanguage.googleapis.com' : `api.${provider}.com`);
     const second = JSON.stringify(requests[1].body);
-    expect(second).toContain('save_variable');
+    expect(second).toContain('saveVariable');
     expect(second).toContain('42');
     if (provider === 'openai') {
         expect(requests[0].body).toMatchObject({ store: false, parallel_tool_calls: false });
-        expect(requests[0].body.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'save_variable', strict: false })]));
+        expect(requests[0].body.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'saveVariable', strict: false })]));
     }
     if (provider === 'anthropic') expect(requests[0].headers.get('anthropic-version')).toBe('2023-06-01');
 });
@@ -135,7 +135,7 @@ it.each(PROVIDERS)('surfaces %s authentication/model errors without fallback or 
     expect(fetch).toHaveBeenCalledOnce();
 });
 
-it.each(['ask', 'think'] as const)('omits OpenAI tool options for %s with and without a seed', async kind => {
+it('omits OpenAI tool options for ask with and without a seed', async () => {
     const requests: { url: string; body: Record<string, unknown> }[] = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
         const body: Record<string, unknown> = JSON.parse(String(init.body));
@@ -147,7 +147,7 @@ it.each(['ask', 'think'] as const)('omits OpenAI tool options for %s with and wi
     }));
     for (const seed of [undefined, 13]) {
         const result = await callModel('openai', {
-            kind, model: 'openai/gpt-6-luna', tokens: 1024,
+            model: 'openai/gpt-6-luna', tokens: 1024,
             randomness: { ...(seed !== undefined ? { seed } : {}), temperature: 0, top_p: 1 },
         });
         expect(result.text).toBe('42');
@@ -175,7 +175,7 @@ it.each([
     try {
         const restrictions = new Restrictions(home);
         const result = await backend.call({
-            kind: 'agent', naturalLanguage: true, model: `${provider}/${model}`,
+            kind: 'agent', model: `${provider}/${model}`,
             prompt: 'Save the answer', showReasoning: false, restrictions,
             randomness: { seed: 42, temperature: 0, top_p: 0.01 },
             tokens: 2048,
@@ -202,7 +202,7 @@ it.each([
         if (provider === 'openai') {
             expect(bodies[1].messages).toEqual(expect.arrayContaining([
                 expect.objectContaining({ role: 'assistant', tool_calls: [expect.objectContaining({ id: 'tool_1', function: {
-                    name: 'save_variable', arguments: '{"name":"answer","value":42}',
+                    name: 'saveVariable', arguments: '{"name":"answer","value":42}',
                 } })] }),
                 expect.objectContaining({ role: 'tool', tool_call_id: 'tool_1', content: '{"value":42}' }),
             ]));
@@ -231,7 +231,7 @@ it.each([
     }));
     const restrictions = new Restrictions(home);
     const result = await backend.call({
-        kind: 'agent', naturalLanguage: true, model: `${provider}/${model}`,
+        kind: 'agent', model: `${provider}/${model}`,
         prompt: 'Save the answer', showReasoning: true, restrictions,
         randomness: { temperature: 0 },
         tools: new ToolHost(restrictions, home), runtimeTools: AGENT_TOOLS, invokeAction: async () => 42,
@@ -257,47 +257,84 @@ it.each([
     });
 });
 
-it.each([
-    ['openai', 'gpt-6-luna'],
-    ['anthropic', 'claude-sonnet-4-5'],
-    ['google', 'gemini-2.5-flash'],
-] as const)('preserves explicit reasoning overrides with sampling for %s/%s', async (provider, model) => {
+it('preserves requested reasoning with sampling on Google, which accepts both', async () => {
     const bodies: Record<string, unknown>[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
         bodies.push(JSON.parse(String(init.body)));
+        return sse(providerEvents('google', false));
+    }));
+    for (const [effort, thinkingBudget] of [['low', 1024], ['medium', 4096], ['high', 16384], ['max', 24576]] as const) {
+        const result = await callModel('google', { reasoningEffort: effort, showReasoning: true, randomness: { temperature: 0, top_p: 0.5 } });
+        expect(result.effective).toMatchObject({ reasoningEffort: effort, randomness: { seed: null, temperature: 0, top_p: 0.5 } });
+        expect(bodies.at(-1)!.generationConfig).toMatchObject({ temperature: 0, topP: 0.5, thinkingConfig: { thinkingBudget } });
+    }
+});
+
+it.each([
+    ['openai', 'gpt-6-luna', 'temperature'],
+    ['openai', 'gpt-5', 'topP'],
+    ['anthropic', 'claude-sonnet-4-5', 'temperature'],
+    ['anthropic', 'claude-sonnet-4-6', 'topP'],
+    ['anthropic', 'claude-opus-4-8', 'temperature'],
+] as const)('fails before any request when requested reasoning meets %s/%s sampling it rejects: %s', async (provider, model, feature) => {
+    const fetch = vi.fn(async () => sse(providerEvents(provider, false)));
+    vi.stubGlobal('fetch', fetch);
+    const randomness = feature === 'topP' ? { top_p: 0.5 } : { temperature: 0 };
+    for (const effort of ['low', 'medium', 'high', 'max'] as const) {
+        for (const seed of [undefined, 7]) {
+            const error = await callModel(provider, {
+                model: `${provider}/${model}`, reasoningEffort: effort, randomness: { ...randomness, ...(seed !== undefined ? { seed } : {}) },
+            }).catch(error => error);
+            expect(error).toBeInstanceOf(LlmError);
+            expect(error.message).toBe(`reasoning '${effort}' cannot be combined with ${feature} on ${provider}/${model}; drop one of the two settings`);
+        }
+    }
+    expect(fetch).not.toHaveBeenCalled();
+});
+
+it.each([
+    ['openai', 'gpt-6-luna', undefined, 'medium', { reasoning: { effort: 'medium' } }],
+    ['openai', 'gpt-6-luna', 'none', 'none', { reasoning: { effort: 'none' } }],
+    ['openai', 'gpt-6-luna', 'max', 'max', { reasoning: { effort: 'xhigh' } }],
+    ['openai', 'gpt-5', 'max', 'high', { reasoning: { effort: 'high' } }],
+    ['anthropic', 'claude-sonnet-4-5', undefined, 'medium', { thinking: { type: 'enabled', budget_tokens: 4096 }, max_tokens: 64000 }],
+    ['anthropic', 'claude-sonnet-4-5', 'none', 'none', { thinking: { type: 'disabled' } }],
+    ['anthropic', 'claude-sonnet-4-5', 'max', 'max', { thinking: { type: 'enabled', budget_tokens: 32768 }, max_tokens: 64000 }],
+    ['anthropic', 'claude-sonnet-4-6', undefined, 'medium', { thinking: { type: 'adaptive' }, output_config: { effort: 'medium' } }],
+    ['anthropic', 'claude-sonnet-4-6', 'max', 'max', { thinking: { type: 'adaptive' }, output_config: { effort: 'max' } }],
+    ['google', 'gemini-2.5-flash', undefined, 'medium', { generationConfig: { thinkingConfig: { thinkingBudget: 4096 } } }],
+    ['google', 'gemini-2.5-flash', 'none', 'none', { generationConfig: { thinkingConfig: { thinkingBudget: 0 } } }],
+    ['google', 'gemini-2.5-flash', 'max', 'max', { generationConfig: { thinkingConfig: { thinkingBudget: 24576 } } }],
+    ['google', 'gemini-2.5-pro', 'max', 'max', { generationConfig: { thinkingConfig: { thinkingBudget: 32768 } } }],
+    ['google', 'gemini-3-flash-preview', 'max', 'high', { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } }],
+    ['google', 'gemini-3-pro-preview', undefined, 'high', { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } }],
+] as const)('sends %s/%s reasoning %s as its %s level, without warnings', async (provider, model, reasoningEffort, effective, expected) => {
+    let body: Record<string, unknown> = {};
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        body = JSON.parse(String(init.body));
         return sse(providerEvents(provider, false));
     }));
-    const restrictions = new Restrictions(home);
-    for (const effort of ['low', 'medium', 'high'] as const) {
-        const result = await backend.call({
-            kind: 'think', model: `${provider}/${model}`, reasoningEffort: effort,
-            prompt: 'Prompt', showReasoning: true, restrictions,
-            tools: new ToolHost(restrictions, home), randomness: { temperature: 0 },
-        });
-        expect(result.effective.reasoningEffort).toBe(effort);
-        const body = bodies.at(-1)!;
-        if (provider === 'openai') {
-            expect(body.reasoning).toMatchObject({ effort });
-            expect(body).not.toHaveProperty('temperature');
-        } else if (provider === 'anthropic') {
-            expect(body.thinking).toMatchObject({ type: 'enabled' });
-            expect(body).not.toHaveProperty('temperature');
-        } else {
-            expect(body.generationConfig).toMatchObject({ temperature: 0, thinkingConfig: {
-                thinkingBudget: { low: 1024, medium: 4096, high: 16384 }[effort],
-            } });
-        }
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    try {
+        const result = await callModel(provider, { model: `${provider}/${model}`, reasoningEffort });
+        expect(result.effective.reasoningEffort).toBe(effective);
+        expect(body).toMatchObject(expected);
+        expect(warn).not.toHaveBeenCalled();
+    } finally {
+        warn.mockRestore();
     }
 });
 
 it.each([
     ['openai', 'gpt-5', { reasoning: { effort: 'minimal' } }],
+    ['openai', 'gpt-5-pro', { reasoning: { effort: 'high' } }],
     ['openai', 'gpt-6-astra', { reasoning: { effort: 'low' } }],
     ['google', 'gemini-2.5-pro', { generationConfig: { thinkingConfig: { thinkingBudget: 128 } } }],
     ['google', 'gemini-3-flash-preview', { generationConfig: { thinkingConfig: { thinkingLevel: 'MINIMAL' } } }],
+    ['google', 'gemini-3-pro-preview', { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } }],
     ['anthropic', 'claude-opus-5-5', { output_config: { effort: 'low' } }],
     ['anthropic', 'claude-sonnet-5-5', { thinking: { type: 'between_tools' } }],
-] as const)('warns when %s/%s cannot disable thinking, including an empty randomness prefix', async (provider, model, expected) => {
+] as const)('warns when %s/%s cannot disable thinking and uses its minimum, for reasoning none and for sampling', async (provider, model, expected) => {
     const bodies: Record<string, unknown>[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
         bodies.push(JSON.parse(String(init.body)));
@@ -306,16 +343,20 @@ it.each([
     const warn = vi.spyOn(Logger.prototype, 'warn');
     try {
         const restrictions = new Restrictions(home);
-        const result = await backend.call({
-            kind: 'ask', model: `${provider}/${model}`, prompt: 'Prompt', showReasoning: true,
-            restrictions, tools: new ToolHost(restrictions, home), randomness: {},
-        });
-        expect(bodies).toHaveLength(1);
-        expect(bodies[0]).toMatchObject(expected);
-        if (model === 'claude-opus-5-5') expect(bodies[0]).not.toHaveProperty('thinking');
-        expect(result.effective.reasoningEffort).toBeNull();
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"feature":"reasoning"'));
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining('"type":"compatibility"'));
+        for (const settings of [{ randomness: {} }, { reasoningEffort: 'none' as const }]) {
+            warn.mockClear();
+            const result = await backend.call({
+                kind: 'ask', model: `${provider}/${model}`, prompt: 'Prompt', showReasoning: true,
+                restrictions, tools: new ToolHost(restrictions, home), ...settings,
+            });
+            expect(bodies.at(-1)).toMatchObject(expected);
+            if (model === 'claude-opus-5-5') expect(bodies.at(-1)).not.toHaveProperty('thinking');
+            expect(result.effective.reasoningEffort).toBeNull();
+            expect(warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(`reasoning 'none' is not supported by ${model}; using`));
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('"feature":"reasoning"'));
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('"type":"compatibility"'));
+        }
+        expect(bodies).toHaveLength(2);
     } finally {
         warn.mockRestore();
     }
@@ -350,11 +391,12 @@ it.each([
 });
 
 it.each([
-    ['openai', 'gpt-5', 'high'],
-    ['openai', 'gpt-6-astra', 'high'],
-    ['anthropic', 'claude-sonnet-4-5', 'high'],
-    ['anthropic', 'claude-opus-4-8', undefined],
-] as const)('warns and omits sampling rejected by %s/%s without disabling reasoning', async (provider, model, reasoningEffort) => {
+    ['openai', 'gpt-5', undefined, 'minimal'],
+    ['openai', 'gpt-5', 'none', 'minimal'],
+    ['openai', 'gpt-6-astra', undefined, 'low'],
+    ['anthropic', 'claude-opus-4-8', undefined, undefined],
+    ['anthropic', 'claude-opus-4-8', 'none', undefined],
+] as const)('warns and omits sampling rejected by %s/%s when no reasoning was insisted on: %s', async (provider, model, reasoningEffort, minimum) => {
     const bodies: Record<string, unknown>[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
         bodies.push(JSON.parse(String(init.body)));
@@ -362,19 +404,16 @@ it.each([
     }));
     const warn = vi.spyOn(Logger.prototype, 'warn');
     try {
-        const restrictions = new Restrictions(home);
-        const result = await backend.call({
-            kind: 'think', model: `${provider}/${model}`, reasoningEffort, prompt: 'Prompt', showReasoning: false, restrictions,
-            tools: new ToolHost(restrictions, home), randomness: { seed: 42, temperature: 0, top_p: 0.01 },
+        const result = await callModel(provider, {
+            model: `${provider}/${model}`, reasoningEffort, randomness: { seed: 42, temperature: 0, top_p: 0.01 },
         });
         expect(bodies).toHaveLength(1);
         expect(bodies[0]).not.toHaveProperty('temperature');
         expect(bodies[0]).not.toHaveProperty('top_p');
-        if (provider === 'openai') expect(bodies[0].seed).toBe(42);
-        else expect(bodies[0]).not.toHaveProperty('seed');
-        if (reasoningEffort !== undefined) {
-            if (provider === 'openai') expect(bodies[0].reasoning_effort).toBe(reasoningEffort);
-            else expect(bodies[0].thinking).toMatchObject({ type: 'enabled' });
+        if (provider === 'openai') expect(bodies[0]).toMatchObject({ seed: 42, reasoning_effort: minimum });
+        else {
+            expect(bodies[0]).not.toHaveProperty('seed');
+            expect(bodies[0].thinking).toEqual({ type: 'disabled' });
         }
         expect(result.effective.randomness).toEqual({ seed: provider === 'openai' ? 42 : null, temperature: null, top_p: null });
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('"feature":"temperature"'));
@@ -435,7 +474,7 @@ it.each(PROVIDERS)('preserves %s signed reasoning and native tool calls in conti
                 content: {
                     role: 'model', parts: [
                         { text: 'Thinking.', thought: true },
-                        { functionCall: { name: 'save_variable', args: { name: 'answer', value: 42 } }, thoughtSignature: 'google-signature' },
+                        { functionCall: { name: 'saveVariable', args: { name: 'answer', value: 42 } }, thoughtSignature: 'google-signature' },
                     ]
                 }, finishReason: 'STOP'
             }],
@@ -464,13 +503,13 @@ it.each(PROVIDERS)('preserves %s signed reasoning and native tool calls in conti
     });
     vi.stubGlobal('fetch', fetch);
     const result = await callModel(provider, {
-        kind: 'agent', naturalLanguage: true, showReasoning: true,
+        kind: 'agent', showReasoning: true,
         runtimeTools: AGENT_TOOLS, invokeAction: async () => 42, onStream: update => updates.push(update),
     });
     expect(result).toMatchObject({ text: '42', reasoning: 'Thinking.' });
     expect(updates.filter(update => update.channel === 'reasoning').map(update => update.mode)).toEqual(['append', 'replace']);
     expect(JSON.stringify(bodies[1])).toContain(`${provider}-signature`);
-    expect(JSON.stringify(bodies[1])).toContain('save_variable');
+    expect(JSON.stringify(bodies[1])).toContain('saveVariable');
     expect(JSON.stringify(bodies[1])).toContain('Prompt');
 });
 
@@ -544,18 +583,18 @@ it('keeps native Anthropic diagnostics inside the host logger, including depreca
     }
 });
 
-it('keeps legacy Anthropic output limits above the configured thinking budget', async () => {
+it.each([['high', 16384], ['max', 32768]] as const)('keeps legacy Anthropic output limits above the thinking budget of reasoning %s', async (reasoningEffort, budget) => {
     let body: Record<string, unknown> | undefined;
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
         body = JSON.parse(String(init.body));
         return sse(providerEvents('anthropic', false));
     }));
-    await callModel('anthropic', { model: 'anthropic/claude-3-7-sonnet-20250219', reasoningEffort: 'high' });
-    expect(body).toMatchObject({ thinking: { budget_tokens: 16384 } });
-    expect(body?.max_tokens).toBeGreaterThan(16384);
+    await callModel('anthropic', { model: 'anthropic/claude-3-7-sonnet-20250219', reasoningEffort });
+    expect(body).toMatchObject({ thinking: { budget_tokens: budget } });
+    expect(body?.max_tokens).toBeGreaterThan(budget);
 });
 
-it.each(PROVIDERS.flatMap(provider => (['ask', 'think', 'agent'] as const).map(kind => ({ provider, kind }))))
+it.each(PROVIDERS.flatMap(provider => (['ask', 'agent'] as const).map(kind => ({ provider, kind }))))
 ('honors $kind tokens with and without seeds on $provider', async ({ provider, kind }) => {
     const requests: { url: string; body: Record<string, unknown> }[] = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
@@ -619,6 +658,16 @@ it('never expands an explicit Anthropic generation budget to accommodate manual 
     expect(fetch).toHaveBeenCalledOnce();
 });
 
+it('accepts a token budget below the default Anthropic thinking budget', async () => {
+    let body: Record<string, unknown> = {};
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+        body = JSON.parse(String(init.body));
+        return sse(providerEvents('anthropic', false));
+    }));
+    expect(await callModel('anthropic', { tokens: 2048 })).toMatchObject({ text: '42', effective: { tokens: 2048 } });
+    expect(body.max_tokens).toBe(2048);
+});
+
 it('warns about unavailable reasoning summaries on seeded OpenAI calls without removing reasoning effort', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => sse(chatEvents(false))));
     const warn = vi.spyOn(Logger.prototype, 'warn');
@@ -640,7 +689,7 @@ it.each(['length', 'content_filter', 'unknown'])('rejects seeded OpenAI %s finis
     vi.stubGlobal('fetch', vi.fn(async () => sse(events)));
     const invokeAction = vi.fn();
     await expect(callModel('openai', {
-        kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, invokeAction,
+        kind: 'agent', runtimeTools: AGENT_TOOLS, invokeAction,
         randomness: { seed: 42 }, tokens: 1,
     })).rejects.toThrow(`model turn did not complete (${finish})`);
     expect(invokeAction).not.toHaveBeenCalled();
@@ -658,12 +707,12 @@ it('surfaces seeded OpenAI API errors without falling back to Responses or retry
 it('rejects malformed seeded OpenAI tool JSON before executing an action', async () => {
     const events = chatEvents(true);
     events[1] = { model: 'served-chat-model', choices: [{ index: 0, delta: {
-        tool_calls: [{ index: 0, function: { name: 'variable', arguments: 'invalid' } }],
+        tool_calls: [{ index: 0, function: { name: 'Variable', arguments: 'invalid' } }],
     }, finish_reason: null }] };
     vi.stubGlobal('fetch', vi.fn(async () => sse(events)));
     const invokeAction = vi.fn();
     await expect(callModel('openai', {
-        kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, invokeAction, randomness: { seed: 42 },
+        kind: 'agent', runtimeTools: AGENT_TOOLS, invokeAction, randomness: { seed: 42 },
     })).rejects.toThrow(/invalid JSON/);
     expect(invokeAction).not.toHaveBeenCalled();
 });
@@ -708,12 +757,12 @@ it.each(['openai', 'anthropic'] as const)('rejects malformed native %s tool JSON
     };
     else events[events.length - 2] = {
         type: 'response.output_item.done', output_index: 0,
-        item: { type: 'function_call', id: 'fc_1', call_id: 'tool_1', name: 'save_variable', arguments: '{invalid' },
+        item: { type: 'function_call', id: 'fc_1', call_id: 'tool_1', name: 'saveVariable', arguments: '{invalid' },
     };
     vi.stubGlobal('fetch', vi.fn(async () => sse(events)));
     const invokeAction = vi.fn(async () => 42);
     await expect(callModel(provider, {
-        kind: 'agent', naturalLanguage: true, runtimeTools: AGENT_TOOLS, invokeAction,
+        kind: 'agent', runtimeTools: AGENT_TOOLS, invokeAction,
     })).rejects.toMatchObject({ statusCode: 'runtime_error' });
     expect(invokeAction).not.toHaveBeenCalled();
 });

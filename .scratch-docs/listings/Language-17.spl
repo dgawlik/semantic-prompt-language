@@ -1,0 +1,3 @@
+const [target = 'world', mode] = args;
+const home = env.HOME ?? env.USERPROFILE;
+log(`Hello ${target}`, { mode, home });

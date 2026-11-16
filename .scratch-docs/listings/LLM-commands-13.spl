@@ -1,0 +1,12 @@
+const Label = Enum('bug', 'feature', 'question');
+const Triage = Struct('Triage', {
+    label: Label,
+    reason: Str.describe('One-sentence explanation'),
+});
+
+const issues = (await readFile('./issues.txt')).split('\n');
+const triage = await ask(`Classify: ${issues[0]}`, { schema: Triage, repairs: 2 });
+assert(triage.label !== 'bug' || triage.reason.length > 0, 'bugs need a reason');
+
+const batch = await ask(`Classify each issue: ${JSON.stringify(issues)}`, { schema: List(Triage) });
+log(batch.length);

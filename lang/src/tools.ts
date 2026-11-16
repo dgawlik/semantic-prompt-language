@@ -6,7 +6,7 @@ import { Failure } from './errors.js';
 import { languageOf, prettyJson } from './log-format.js';
 import type { Restrictions } from './restrict.js';
 
-export type ToolName = 'read_file' | 'write_file' | 'web_fetch' | 'web_search' | 'shell';
+export type ToolName = 'readFile' | 'writeFile' | 'webFetch' | 'webSearch' | 'shell';
 
 const MAX_TEXT = 200_000;
 const SHELL_TIMEOUT_MS = 120_000;
@@ -21,14 +21,14 @@ export interface ToolSpec {
 }
 
 export const TOOL_SPECS: Record<ToolName, ToolSpec> = {
-    read_file: {
-        name: 'read_file',
+    readFile: {
+        name: 'readFile',
         description: 'Read a UTF-8 text file and return its content.',
         properties: { path: { type: 'string', description: 'Path of the file to read' } },
         required: ['path'],
     },
-    write_file: {
-        name: 'write_file',
+    writeFile: {
+        name: 'writeFile',
         description: 'Create or overwrite a UTF-8 text file (parent folders are created).',
         properties: {
             path: { type: 'string', description: 'Path of the file to write' },
@@ -36,14 +36,14 @@ export const TOOL_SPECS: Record<ToolName, ToolSpec> = {
         },
         required: ['path', 'content'],
     },
-    web_fetch: {
-        name: 'web_fetch',
+    webFetch: {
+        name: 'webFetch',
         description: 'Fetch an http(s) URL with GET and return the response body as text.',
         properties: { url: { type: 'string', description: 'URL to fetch' } },
         required: ['url'],
     },
-    web_search: {
-        name: 'web_search',
+    webSearch: {
+        name: 'webSearch',
         description: 'Search the web and return the top results (title, URL and snippet).',
         properties: { query: { type: 'string', description: 'Search query' } },
         required: ['query'],
@@ -74,24 +74,24 @@ const count = (text: string, noun: string): string => {
 /** What a built-in tool call did, for the log. */
 export function describeToolCall(name: ToolName, params: Record<string, unknown>, outcome: { output: string } | { error: string }): ToolCallLog {
     const field = (key: string): string => typeof params[key] === 'string' ? params[key] : '';
-    const target = name === 'read_file' || name === 'write_file' ? field('path')
-        : name === 'web_fetch' ? field('url') : name === 'web_search' ? JSON.stringify(field('query')) : field('command');
+    const target = name === 'readFile' || name === 'writeFile' ? field('path')
+        : name === 'webFetch' ? field('url') : name === 'webSearch' ? JSON.stringify(field('query')) : field('command');
     if ('error' in outcome) {
         return { name, target, status: 'error', source: outcome.error, language: 'text', summary: outcome.error.split('\n')[0] };
     }
     const { output } = outcome;
     switch (name) {
-        case 'read_file': return { name, target, status: 'success', source: output, language: languageOf(target), summary: count(output, 'line') };
-        case 'write_file': {
+        case 'readFile': return { name, target, status: 'success', source: output, language: languageOf(target), summary: count(output, 'line') };
+        case 'writeFile': {
             const content = field('content');
             return { name, target, status: 'success', source: content, language: languageOf(target), summary: `${count(content, 'line')} written` };
         }
-        case 'web_fetch': {
+        case 'webFetch': {
             const body = output.trimStart();
             const language = prettyJson(body) !== undefined ? 'json' : body.startsWith('<') ? 'html' : 'text';
             return { name, target, status: 'success', source: output, language, summary: count(output, 'line') };
         }
-        case 'web_search': {
+        case 'webSearch': {
             const results = output.match(/^\d+\. /gm)?.length ?? 0;
             return { name, target, status: 'success', source: output, language: 'text', summary: `${results} result${results === 1 ? '' : 's'}` };
         }
@@ -303,21 +303,20 @@ export class ToolHost {
     constructor(
         private readonly restrictions: Restrictions,
         private readonly cwd: string,
-        private readonly replay = false,
+        /** Workflow code gets files and pages whole; a model gets long ones truncated. */
         private readonly raw = false,
     ) {}
 
     async invoke(name: ToolName, params: Record<string, unknown>): Promise<string> {
-        if (this.replay && name !== 'read_file') throw new Failure('restriction_violation', `replay blocks ${name}; only local reads and recorded generation are allowed`);
         switch (name) {
-            case 'read_file': return this.readFile(needString(name, params, 'path'));
-            case 'write_file': {
+            case 'readFile': return this.readFile(needString(name, params, 'path'));
+            case 'writeFile': {
                 const content = params.content;
-                if (typeof content !== 'string') throw new Failure('tool_error', "write_file: parameter 'content' must be a string");
+                if (typeof content !== 'string') throw new Failure('tool_error', "writeFile: parameter 'content' must be a string");
                 return this.writeFile(needString(name, params, 'path'), content);
             }
-            case 'web_fetch': return this.webFetch(needString(name, params, 'url'));
-            case 'web_search': return this.webSearch(needString(name, params, 'query'));
+            case 'webFetch': return this.webFetch(needString(name, params, 'url'));
+            case 'webSearch': return this.webSearch(needString(name, params, 'query'));
             case 'shell': return this.shell(needString(name, params, 'command'));
         }
     }
@@ -328,7 +327,7 @@ export class ToolHost {
             const text = await fs.readFile(canonical, 'utf8');
             return this.raw ? text : truncate(text);
         } catch (e) {
-            throw new Failure('tool_error', `read_file '${p}': ${(e as Error).message}`);
+            throw new Failure('tool_error', `readFile '${p}': ${(e as Error).message}`);
         }
     }
 
@@ -338,7 +337,7 @@ export class ToolHost {
             await fs.mkdir(path.dirname(canonical), { recursive: true });
             await fs.writeFile(canonical, content, 'utf8');
         } catch (e) {
-            throw new Failure('tool_error', `write_file '${p}': ${(e as Error).message}`);
+            throw new Failure('tool_error', `writeFile '${p}': ${(e as Error).message}`);
         }
         return `Wrote ${Buffer.byteLength(content)} bytes to ${canonical}`;
     }
@@ -350,7 +349,7 @@ export class ToolHost {
             try {
                 res = await fetch(current, { redirect: 'manual', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
             } catch (e) {
-                throw new Failure('tool_error', `web_fetch '${current.href}': ${(e as Error).message}`);
+                throw new Failure('tool_error', `webFetch '${current.href}': ${(e as Error).message}`);
             }
             if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
                 current = this.restrictions.checkUrl(new URL(res.headers.get('location')!, current).href);
@@ -361,13 +360,13 @@ export class ToolHost {
                 text = await res.text();
             } catch (e) {
                 if (!(e instanceof Error)) throw e;
-                throw new Failure('tool_error', `web_fetch '${current.href}': ${e.message}`);
+                throw new Failure('tool_error', `webFetch '${current.href}': ${e.message}`);
             }
             const body = this.raw ? text : truncate(text);
-            if (!res.ok) throw new Failure('tool_error', `web_fetch '${current.href}': HTTP ${res.status}\n${body}`);
+            if (!res.ok) throw new Failure('tool_error', `webFetch '${current.href}': HTTP ${res.status}\n${body}`);
             return body;
         }
-        throw new Failure('tool_error', `web_fetch '${url}': too many redirects`);
+        throw new Failure('tool_error', `webFetch '${url}': too many redirects`);
     }
 
     /** Searches DuckDuckGo's HTML endpoint (no API key); it is a network call, so `restrict net` applies to it. */
@@ -382,7 +381,7 @@ export class ToolHost {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             html = await res.text();
         } catch (e) {
-            throw new Failure('tool_error', `web_search '${query}': ${(e as Error).message}`);
+            throw new Failure('tool_error', `webSearch '${query}': ${(e as Error).message}`);
         }
         const results = parseSearchResults(html);
         if (results.length === 0) return `No results for "${query}".`;

@@ -1,34 +1,44 @@
+//*
+# Hello, SPL
 
-{comment}
-Prose like this is commentary. Only {js} and {agent} scopes run,
-top to bottom, in one shared scope.
-The agent selects a topic and saves a validated Card; the final {js}
-block only renders it as Markdown.
-{/comment}
+A `.spl` file is TypeScript. Markdown comments like this one are commentary, and each `---` block is an
+instruction for a model. Everything runs top to bottom, and the library (`ask`, `Struct`, `writeFile`,
+`markdown`, ...) needs no import.
 
-{js}
-const topics = ['recursion', 'closures']
-const Topic = enumOf(...topics)
-const Card = struct('Card', {
+    spl run examples/hi.spl
+*//
+
+---
+model: gpt-6-luna
+enforce: Be concise.
+---
+
+const topics = ['recursion', 'closures', 'regular expressions'];
+const Topic = Enum(...topics);
+
+const Card = Struct('Card', {
     term: Topic,
-    definition: str.describe('Definition one line'),
-    description: str.describe('Several sentences about'),
+    definition: Str.describe('One line about the term'),
+    description: Str.describe('A paragraph about the term'),
 });
-{/js}
 
+const cards = await Promise.all(topics.map(topic =>
+    ask(`A one-sentence flashcard about ${topic}`, { schema: Card, repairs: 1 })));
 
-{agent model='gpt-6.1-sol', reasoning='high'}
-Pick the item of @topics that a beginner would find hardest.
-Create a flashcard for that topic with term set to the selected topic,
-a one-line definition and a description of several sentences.
-@validate[Card] save the flashcard to variable @hardest
-{/agent}
+//*
+The agent reads `cards` through a tool and must save a value that fits `Card`.
+*//
 
-{js}
+---
+mode: agent
+reasoning: high
+
+Pick the item of @cards whose card a beginner would find hardest ->[Card] @hardest
+---
+
 const doc = markdown.document()
     .heading(hardest.term, 3)
     .paragraph(markdown.bold(hardest.definition))
     .paragraph(hardest.description);
 
 await writeFile('./out/hardest-card.md', doc.toString());
-{/js}

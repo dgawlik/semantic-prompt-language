@@ -1,0 +1,33 @@
+//*
+# Answer questions from an MCP docs server
+
+Needs an MCP configuration with a server named `docs` that exposes a `search` tool.
+MCP tools are available only to agents; `restrict: { mcp }` limits which ones a block may call.
+
+    spl run examples/mcp.spl --mcp mcp.json --arg "How do I configure authentication?"
+*//
+
+---
+model: gpt-6-luna
+---
+
+const question = args[0] ?? 'How do I get started?';
+
+---
+mode: agent
+restrict: { mcp: docs/search }
+
+Use docs/search to answer @question
+End with a line "Sources:" followed by the URLs of the pages you used ->[Str] @answer
+---
+
+assert(answer.includes('Sources:'), 'the answer does not cite its sources');
+
+---
+outputVar: summary
+forbid: adding facts that are not in the answer
+
+Rewrite this answer as at most five short bullet points followed by its sources: @answer
+---
+
+success(summary);

@@ -1,0 +1,4 @@
+const issue = await readFile('./issue.txt');
+const rating = await ask(`Rate this issue from 1 to 5: ${issue}`, {
+    schema: { type: 'integer', minimum: 1, maximum: 5 },
+});

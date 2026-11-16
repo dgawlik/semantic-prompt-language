@@ -6,10 +6,12 @@ import { TerminalView, type PausedBlock } from '../src/cli-view.js';
 import type { LogEvent } from '../src/log-events.js';
 import { Logger } from '../src/logger.js';
 import { describeMcpCall, describeToolCall } from '../src/tools.js';
+import { run } from '../src/workflow.js';
+import { acting, agentBlock, block, save, scripted } from './helpers.js';
 
 function setup(debug = false) {
     const onCancel = vi.fn();
-    const view = new TerminalView({ color: false, title: 'flow.md', debug, onCancel });
+    const view = new TerminalView({ color: false, title: 'flow.spl', debug, onCancel });
     const logger = new Logger('debug', undefined, { eventSink: event => view.append(event), streamSink: event => view.stream(event) });
     const screen = (width = 80, height = 40) => {
         const frame = view.frame(width, height);
@@ -18,19 +20,21 @@ function setup(debug = false) {
     return { view, logger, onCancel, screen };
 }
 
-const block = (line: number, source = 'const x = 1;', variables: Record<string, unknown> = {}): PausedBlock =>
-    ({ kind: 'code', line, language: 'js', source, variables: () => variables });
+const statement = (line: number, source = 'const x = 1;', variables: Record<string, unknown> = {}): PausedBlock =>
+    ({ kind: 'code', line, language: 'ts', source, variables: () => variables });
+const paused = (line: number, language: string, source: string, variables: Record<string, unknown> = {}): PausedBlock =>
+    ({ kind: 'block', line, language, source, variables: () => variables });
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 describe('terminal view', () => {
     it('logs tool calls collapsed and expands the selected one with line numbers', () => {
         const { view, logger, screen } = setup();
-        logger.tool(describeToolCall('read_file', { path: 'src/a.ts' }, { output: 'const a = 1;\nconst b = 2;\n' }));
-        logger.tool(describeToolCall('write_file', { path: 'out.md', content: '# Title\n' }, { output: 'Wrote 8 bytes' }));
+        logger.tool(describeToolCall('readFile', { path: 'src/a.ts' }, { output: 'const a = 1;\nconst b = 2;\n' }));
+        logger.tool(describeToolCall('writeFile', { path: 'out.md', content: '# Title\n' }, { output: 'Wrote 8 bytes' }));
         let { text } = screen();
-        expect(text).toContain('\u25cf read_file src/a.ts\n  \u25b8 2 lines');
-        expect(text).toContain('\u25cf write_file out.md\n\u203a \u25b8 1 line written  space to expand');
+        expect(text).toContain('\u25cf readFile src/a.ts\n  \u25b8 2 lines');
+        expect(text).toContain('\u25cf writeFile out.md\n\u203a \u25b8 1 line written  space to expand');
         expect(text).not.toContain('const a = 1;');
         view.key(' ', {});
         expect(screen().text).toContain('\u25be 1 line written  space to collapse\n    1 | # Title');
@@ -56,16 +60,30 @@ describe('terminal view', () => {
 
     it('folds preambles, JSON and generated code apart from the workflow prompt', () => {
         const { view, logger, screen } = setup();
-        logger.modelPrompt({ requestId: 'r', kind: 'ask' }, 'RUNTIME RULES\nmore rules\n\nWrite about {"a":1}', 'RUNTIME RULES\nmore rules');
+        logger.modelPrompt({ requestId: 'r', kind: 'ask' }, 'GENERATED RULES\nmore rules\n\nWrite about {"a":1}', 'GENERATED RULES\nmore rules');
         logger.modelOutput({ requestId: 'c', kind: 'codegen', role: 'response' }, 'function f() {\n    return 1;\n}');
         const { text } = screen();
         expect(text).toContain('\u276f ask prompt\n  \u25b8 preamble \u00b7 2 lines\n  \u2502 Write about\n  \u25b8 {\u2026} 1 key');
-        expect(text).not.toContain('RUNTIME RULES');
+        expect(text).not.toContain('GENERATED RULES');
         expect(text).toContain('\u25cf codegen response\n\u203a \u25b8 JavaScript \u00b7 3 lines');
         expect(text).not.toContain('return 1;');
         view.key('', { home: true });
         view.key(' ', {});
-        expect(screen().text).toContain('\u25be preamble \u00b7 2 lines  space to collapse\n    RUNTIME RULES\n    more rules');
+        expect(screen().text).toContain('\u25be preamble \u00b7 2 lines  space to collapse\n    GENERATED RULES\n    more rules');
+    });
+
+    it('shows the transcript of an agent block: folded context, visible instruction, actions, tools and state', async () => {
+        const { logger, screen } = setup();
+        const source = `const draft = { title: 'T' };\n${agentBlock('Review @draft ->[Int] @score', 'enforce: Be brief')}`;
+        expect(await run(source, { logger, backend: acting(save('score', 4)) })).toMatchObject({ status: 'success' });
+        const { text } = screen(100, 60);
+        expect(text).toContain('~ draft @ global (scope-1): <unbound> ->\n  \u25b8 {\u2026} 1 key');
+        expect(text).toMatch(/\u276f agent prompt\n {2}\u25b8 preamble \u00b7 \d+ lines\n {2}\u2502 Instruction:\n {2}\u2502 Review @draft ->\[Int\] @score\n {2}\u2502 \n {2}\u2502 Completed actions and their results:\n {2}\u25b8 \[\u2026\] 0 items/);
+        expect(text).toContain('\u25cf agent action\n  \u25b8 {\u2026} 2 keys');
+        expect(text).toContain('\u25cf agent response\n  Done.');
+        expect(text).toContain('~ score @ global (scope-1): <unbound> -> 4');
+        expect(text).not.toContain('Be brief');
+        expect(text).not.toContain('saveVariable');
     });
 
     it('streams responses until the final event replaces them', () => {
@@ -101,39 +119,83 @@ describe('terminal view', () => {
         expect(onCancel).toHaveBeenCalledOnce();
     });
 
-    it('steps block by block, prints variables and continues to the end', async () => {
+    it('steps statement by statement and block by block, prints variables and continues to the end', async () => {
         const { view, onCancel, screen } = setup(true);
-        const first = view.pause(block(5, 'const color = "blue";', { color: 'blue', list: [1] }));
+        const first = view.pause(statement(5, 'const color = "blue";', { color: 'blue', list: [1] }));
         let frame = screen();
-        expect(frame.header).toMatch(/^\u25cf SPL flow\.md +debug $/);
-        expect(frame.footer).toEqual(['\u2016 Paused before js block at line 5', 'const color = "blue";']);
+        expect(frame.header).toMatch(/^\u25cf SPL flow\.spl +debug $/);
+        expect(frame.footer).toEqual(['\u2016 Paused before statement at line 5', 'const color = "blue";']);
         expect(frame.hints).toContain('n Next \u00b7 v Variables \u00b7 c Continue \u00b7 e Exit');
-        expect(frame.text).toContain('\u25b6 js block \u00b7 line 5\n');
+        expect(frame.text).toContain('\u25b6 statement \u00b7 line 5\n');
         view.key('v', {});
-        expect(screen().text).toContain('\u25c6 Variables before line 5\n\u203a \u25be 2 bindings  space to collapse\n    {\n      "color": "blue",');
+        expect(screen().text).toContain('\u25c6 Variables before line 5\n\u203a \u25be 2 variables  space to collapse\n    {\n      "color": "blue",');
         view.key('x', {});
         view.key('n', {});
         await expect(first).resolves.toBe('next');
         expect(screen().footer[0]).toContain('Running \u00b7 stepping');
-        const second = view.pause({ ...block(9), kind: 'natural', language: 'agent', source: 'Summarize @color.' });
-        expect(screen().text).toContain('\u25b6 agent block \u00b7 line 9');
+        const second = view.pause(paused(9, 'agent', 'Summarize @color.'));
+        frame = screen();
+        expect(frame.text).toContain('\u25b6 agent block \u00b7 line 9');
+        expect(frame.footer).toEqual(['\u2016 Paused before agent block at line 9', 'Summarize @color.']);
         view.key('c', {});
         await expect(second).resolves.toBe('continue');
-        await expect(view.pause(block(12))).resolves.toBe('continue');
+        await expect(view.pause(statement(12))).resolves.toBe('continue');
         expect(screen().text).not.toContain('line 12');
         expect(onCancel).not.toHaveBeenCalled();
     });
 
+    it.each(['ask', 'agent', 'codegen'])('labels a paused %s block by its mode and lists its instruction as Markdown', async mode => {
+        const { view, screen } = setup(true);
+        const pending = view.pause(paused(3, mode, '\n# Task\nDescribe @topic\n'));
+        expect(screen().footer).toEqual([`\u2016 Paused before ${mode} block at line 3`, '# Task']);
+        expect(screen().text).toBe(`\u25b6 ${mode} block \u00b7 line 3\n\u203a \u25b8 3 lines  space to expand`);
+        view.key(' ', {});
+        expect(screen().text).toContain('\u25be 3 lines  space to collapse\n    1 | \n    2 | # Task\n    3 | Describe @topic');
+        view.key('N', {});
+        await expect(pending).resolves.toBe('next');
+    });
+
+    it('lists the source of a paused statement with its own line numbers', () => {
+        const { view, screen } = setup(true);
+        void view.pause(statement(7, 'const total = items\n    .map(item => item.price)\n    .reduce((a, b) => a + b, 0);'));
+        expect(screen().footer).toEqual(['\u2016 Paused before statement at line 7', 'const total = items']);
+        view.key(' ', {});
+        expect(screen().text).toBe([
+            '\u25b6 statement \u00b7 line 7', '\u203a \u25be 3 lines  space to collapse',
+            '    1 | const total = items', '    2 |     .map(item => item.price)', '    3 |     .reduce((a, b) => a + b, 0);',
+        ].join('\n'));
+    });
+
+    it('shows variables that are not assigned yet, an empty scope and a snapshot that fails', () => {
+        const { view, screen } = setup(true);
+        void view.pause(statement(1, 'let count = 1;', { count: '<uninitialized>', twice: 'function twice(n)' }));
+        view.key('v', {});
+        expect(screen().text).toContain('\u25be 2 variables  space to collapse\n    {\n      "count": "<uninitialized>",\n      "twice": "function twice(n)"\n    }');
+        view.key('n', {});
+        void view.pause(statement(2));
+        view.key('V', {});
+        expect(screen().text).toContain('\u25c6 Variables before line 2\n  no top-level variables yet');
+        view.key('n', {});
+        void view.pause({ ...statement(3, 'count++;', { count: 1 }) });
+        view.key('v', {});
+        expect(screen().text).toContain('\u25c6 Variables before line 3\n\u203a \u25be 1 variable  space to collapse');
+        view.key('n', {});
+        void view.pause({ ...statement(4), variables: () => { throw new Error('snapshot failed'); } });
+        view.key('v', {});
+        expect(screen().text).toContain('\u25c6 Variables before line 4\n\u203a \u25be 1 variable  space to collapse\n    {\n      "error": "snapshot failed"\n    }');
+    });
+
     it('exits immediately with e while paused', () => {
         const { view, onCancel } = setup(true);
-        void view.pause(block(1));
+        void view.pause(statement(1));
         view.key('e', {});
         expect(onCancel).toHaveBeenCalledOnce();
     });
 
     it('does not pause without --debug', async () => {
         const { view } = setup(false);
-        await expect(view.pause(block(1))).resolves.toBe('continue');
+        await expect(view.pause(statement(1))).resolves.toBe('continue');
+        await expect(view.pause(paused(2, 'ask', 'Hi'))).resolves.toBe('continue');
     });
 
     it('reads human answers in the status box', async () => {
@@ -195,7 +257,7 @@ describe('presentation', () => {
         expect(lines).toEqual(['i info hello']);
         expect(mount).not.toHaveBeenCalled();
         expect(logging.interactive).toBe(false);
-        await expect(logging.pause(block(1))).resolves.toBe('continue');
+        await expect(logging.pause(statement(1))).resolves.toBe('continue');
     });
 
     it('shows events in the UI, waits for e and prints nothing on exit', async () => {
@@ -203,7 +265,7 @@ describe('presentation', () => {
         let view: TerminalView | undefined;
         const unmount = vi.fn(async () => {});
         const logging = new CliLogging({
-            interactive: true, color: false, write: line => lines.push(line), title: 'flow.md',
+            interactive: true, color: false, write: line => lines.push(line), title: 'flow.spl',
             mount: target => { view = target; return { unmount, exited: new Promise(() => {}) }; },
         });
         const logger = new Logger('info', undefined, { eventSink: logging.sink });
@@ -240,7 +302,7 @@ describe('presentation', () => {
         const logger = new Logger('info', undefined, { eventSink: logging.sink });
         await logging.start();
         event(logger);
-        const paused = logging.pause(block(1));
+        const paused = logging.pause(statement(1));
         await tick();
         expect(view!.status).toBe('paused');
         fail(new Error('boom'));
@@ -267,6 +329,137 @@ describe('presentation', () => {
     });
 });
 
+describe('--debug stepper', () => {
+    /** A logging session as `spl run --debug` builds it; keys go straight to the view instead of a terminal. */
+    async function debugging(source: string, options: Partial<Parameters<typeof run>[1]> = {}) {
+        let view!: TerminalView;
+        const cancel = vi.fn();
+        const lines: string[] = [];
+        const logging = new CliLogging({
+            interactive: true, color: false, debug: true, title: 'flow.spl', cancel, write: line => lines.push(line),
+            mount: target => { view = target; return { unmount: async () => {}, exited: new Promise(() => {}) }; },
+        });
+        const logger = new Logger('info', undefined, { eventSink: logging.sink, streamSink: logging.streamSink });
+        await logging.start();
+        const result = run(source, { backend: scripted(), logger, ...options, beforeStep: async step => { await logging.pause(step); } });
+        const screen = () => {
+            const frame = view.frame(100, 80);
+            return { ...frame, text: frame.rows.join('\n').trimEnd() };
+        };
+        /** Waits until the run stops before its next step. */
+        const stop = async () => {
+            while (view.status !== 'paused') await tick();
+            return screen().footer;
+        };
+        const variables = (): unknown => {
+            view.key('v', {});
+            const { text } = screen();
+            return JSON.parse(text.slice(text.lastIndexOf('space to collapse') + 'space to collapse'.length));
+        };
+        return { view, result, stop, screen, variables, cancel, logging, lines };
+    }
+
+    const source = [
+        'let count = 1;',
+        'function twice(n: number) {', '    return n * 2;', '}',
+        agentBlock('Double @count ->[Int] @doubled'),
+        'count = twice(',
+        '    doubled,',
+        ');',
+        'success(count);',
+    ].join('\n');
+
+    it('stops before each top-level statement and each block, showing the top-level variables', async () => {
+        const session = await debugging(source, { backend: acting(save('doubled', 2)) });
+        expect(await session.stop()).toEqual(['\u2016 Paused before statement at line 1', 'let count = 1;']);
+        expect(session.variables()).toEqual({ count: '<uninitialized>', twice: 'function twice(n)', doubled: '<uninitialized>' });
+        session.view.key('n', {});
+        expect(await session.stop()).toEqual(['\u2016 Paused before agent block at line 5', 'Double @count ->[Int] @doubled']);
+        expect(session.variables()).toEqual({ count: 1, twice: 'function twice(n)', doubled: '<uninitialized>' });
+        expect(session.screen().text).not.toContain('agent prompt');
+        session.view.key('n', {});
+        expect(await session.stop()).toEqual(['\u2016 Paused before statement at line 10', 'count = twice(']);
+        expect(session.variables()).toEqual({ count: 1, twice: 'function twice(n)', doubled: 2 });
+        expect(session.screen().text).toContain('\u25cf agent response\n  Done.');
+        session.view.key('n', {});
+        expect(await session.stop()).toEqual(['\u2016 Paused before statement at line 13', 'success(count);']);
+        expect(session.variables()).toEqual({ count: 4, twice: 'function twice(n)', doubled: 2 });
+        session.view.key('n', {});
+        expect(await session.result).toEqual({ status: 'success', value: 4, hasValue: true });
+        const steps = session.screen().text.split('\n').filter(row => row.startsWith('\u25b6'));
+        expect(steps).toEqual(['\u25b6 statement \u00b7 line 1', '\u25b6 agent block \u00b7 line 5', '\u25b6 statement \u00b7 line 10', '\u25b6 statement \u00b7 line 13']);
+        expect(session.screen().text).toContain('\u25b6 statement \u00b7 line 10\n  \u25b8 3 lines');
+        const closing = session.logging.close('completed');
+        await tick();
+        expect(session.screen().footer).toEqual(['\u2713 Completed']);
+        session.view.key('e', {});
+        await closing;
+        expect(session.lines).toEqual([]);
+        expect(session.cancel).not.toHaveBeenCalled();
+    });
+
+    it('runs to the end with c, and cancels the run with e', async () => {
+        const continued = await debugging(source, { backend: acting(save('doubled', 2)) });
+        await continued.stop();
+        continued.view.key('n', {});
+        await continued.stop();
+        continued.view.key('c', {});
+        expect(await continued.result).toMatchObject({ status: 'success', value: 4 });
+        expect(continued.screen().text).not.toContain('line 10');
+        const exited = await debugging(source);
+        await exited.stop();
+        exited.view.key('e', {});
+        expect(exited.cancel).toHaveBeenCalledOnce();
+        expect(exited.view.status).toBe('paused');
+    });
+
+    it('stops before blocks inside functions and loops, but not before the statements around them', async () => {
+        const nested = [
+            'const seen: string[] = [];',
+            'async function describe(item: string) {',
+            '    const label = item.toUpperCase();',
+            '    ---', '    outputVar: summary', '', '    Describe @label', '    ---',
+            '    return summary;',
+            '}',
+            'for (const item of ["a", "b"]) {',
+            '    seen.push(await describe(item));',
+            '}',
+            block('Generate -> @count(items: string[]): number', 'mode: codegen'),
+            'success(count(seen));',
+        ].join('\n');
+        const session = await debugging(nested, { backend: scripted('A.', 'B.', 'function count(items) { return items.length; }') });
+        const stops: string[] = [];
+        const seen: unknown[] = [];
+        for (;;) {
+            const done = await Promise.race([session.stop(), session.result.then(() => undefined)]);
+            if (!done) break;
+            stops.push(done[0].replace('\u2016 Paused before ', ''));
+            seen.push((session.variables() as { seen: unknown }).seen);
+            session.view.key('n', {});
+        }
+        expect(stops).toEqual([
+            'statement at line 1', 'statement at line 11', 'ask block at line 4', 'ask block at line 4', 'codegen block at line 14', 'statement at line 19',
+        ]);
+        expect(seen).toEqual(['<uninitialized>', [], [], ['A.'], ['A.', 'B.'], ['A.', 'B.']]);
+        expect(await session.result).toMatchObject({ status: 'success', value: 2 });
+    });
+
+    it('stops before a failing statement and still reports the failure of the run', async () => {
+        const session = await debugging("const limit = 1;\nassert(limit > 1, 'too small');");
+        await session.stop();
+        session.view.key('n', {});
+        expect(await session.stop()).toEqual(['\u2016 Paused before statement at line 2', "assert(limit > 1, 'too small');"]);
+        session.view.key('n', {});
+        expect(await session.result).toMatchObject({ status: 'failure', failure: { status_code: 'assertion_failed', line: 2 } });
+        expect(session.screen().text).toContain('\u2717 assertion_failed: too small (line 2)');
+        const closing = session.logging.close('failed');
+        await tick();
+        expect(session.screen().footer).toEqual(['\u2717 Failed']);
+        session.view.key('e', {});
+        await closing;
+    });
+});
+
 describe('ink terminal UI', () => {
     function terminal() {
         let output = '';
@@ -284,10 +477,10 @@ describe('ink terminal UI', () => {
 
     it('renders on the alternate screen, takes keys and restores the screen on exit', async () => {
         const term = terminal();
-        const view = new TerminalView({ color: false, title: 'flow.md', onCancel: vi.fn() });
+        const view = new TerminalView({ color: false, title: 'flow.spl', onCancel: vi.fn() });
         const logger = new Logger('info', undefined, { eventSink: (event: LogEvent) => view.append(event) });
         const ui = mountTui(view, term);
-        logger.tool(describeToolCall('read_file', { path: 'a.js' }, { output: 'const a = 1;\n' }));
+        logger.tool(describeToolCall('readFile', { path: 'a.js' }, { output: 'const a = 1;\n' }));
         const answer = view.ask('Colour?');
         await term.type('red');
         await term.type('\r');
@@ -295,7 +488,7 @@ describe('ink terminal UI', () => {
         const done = view.finish('completed');
         await term.type(' ');
         const screen = term.screen();
-        expect(screen).toContain('\u25cf read_file a.js');
+        expect(screen).toContain('\u25cf readFile a.js');
         expect(screen).toContain('1 | const a = 1;');
         expect(screen).toContain('? Colour?');
         expect(screen).toMatch(/\u256d\u2500+\u256e/);

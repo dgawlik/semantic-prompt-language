@@ -1,10 +1,10 @@
 {
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
-  "description": "Executable workflows in Markdown and .spl files: JavaScript with the SPL library, natural-language steps and notebooks",
-  "version": "2.3.0",
+  "description": "Language support for .spl workflows: natural-language instructions for models and agents, interleaved with TypeScript",
+  "version": "3.0.0",
   "publisher": "spl-lang",
-   "icon": "icon.png",
+  "icon": "icon.png",
   "license": "ISC",
   "repository": {
     "type": "git",
@@ -19,25 +19,23 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "Workflow editing is available; running cells requires workspace trust."
+      "description": "Workflow editing is available; running workflows requires workspace trust."
     },
     "virtualWorkspaces": { "supported": false }
   },
   "activationEvents": [
-    "onLanguage:markdown",
-    "onLanguage:spl",
-    "onNotebook:spl-workflow"
+    "onLanguage:spl"
   ],
   "categories": [
     "Programming Languages",
-    "Snippets",
-    "Notebooks"
+    "Snippets"
   ],
   "keywords": [
     "spl",
     "llm",
     "prompt",
-    "copilot"
+    "agents",
+    "typescript"
   ],
   "contributes": {
     "languages": [
@@ -48,82 +46,64 @@
         "configuration": "./language-configuration.json"
       }
     ],
-    "notebooks": [
-      {
-        "type": "spl-workflow",
-        "displayName": "SPL Workflow Notebook",
-        "selector": [{ "filenamePattern": "*.md" }],
-        "priority": "option"
-      }
-    ],
-    "commands": [
-      { "command": "spl.openNotebook", "title": "SPL: Open as Notebook" },
-      { "command": "spl.resetNotebook", "title": "SPL: Reset Notebook Session" }
-    ],
-    "menus": {
-      "notebook/toolbar": [
-        { "command": "spl.resetNotebook", "when": "notebookType == spl-workflow", "group": "navigation" }
-      ],
-      "editor/title": [
-        { "command": "spl.openNotebook", "when": "resourceExtname == .md", "group": "navigation" }
-      ]
-    },
-    "configuration": {
-      "title": "SPL",
-      "properties": {
-        "spl.notebook.nodePath": {
-          "type": "string",
-          "default": "node",
-          "scope": "machine",
-          "description": "Node.js executable used for isolated notebook sessions. Workflow cells run as native JavaScript and require Node.js >=24.15.0; the extension host does not load the terminal UI."
-        }
-      }
-    },
     "grammars": [
-      {
-        "scopeName": "spl.markdown.injection",
-        "path": "./syntaxes/markdown.tmLanguage.json",
-        "injectTo": [
-          "text.html.markdown"
-        ]
-      },
       {
         "language": "spl",
         "scopeName": "source.spl",
         "path": "./syntaxes/spl.tmLanguage.json",
         "embeddedLanguages": {
-          "meta.embedded.block.javascript": "javascript",
-          "meta.embedded.expression.javascript": "javascript",
-          "meta.embedded.block.typescript": "typescript",
-          "meta.embedded.block.frontmatter": "yaml",
-          "meta.embedded.block.json": "json"
+          "meta.embedded.block.markdown": "markdown"
         }
       }
     ],
     "snippets": [
       {
-        "language": "markdown",
-        "path": "./snippets/markdown.code-snippets"
-      },
-      {
         "language": "spl",
         "path": "./snippets/spl.code-snippets"
       }
-    ]
+    ],
+    "commands": [
+      { "command": "spl.run", "title": "SPL: Run Workflow", "icon": "$(play)", "enablement": "isWorkspaceTrusted" },
+      { "command": "spl.debug", "title": "SPL: Debug Workflow", "icon": "$(debug-alt)", "enablement": "isWorkspaceTrusted" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "spl.run", "when": "editorLangId == spl" },
+        { "command": "spl.debug", "when": "editorLangId == spl" }
+      ],
+      "editor/title/run": [
+        { "command": "spl.run", "when": "resourceLangId == spl", "group": "navigation@1" },
+        { "command": "spl.debug", "when": "resourceLangId == spl", "group": "navigation@2" }
+      ],
+      "editor/context": [
+        { "command": "spl.run", "when": "resourceLangId == spl", "group": "spl@1" },
+        { "command": "spl.debug", "when": "resourceLangId == spl", "group": "spl@2" }
+      ],
+      "explorer/context": [
+        { "command": "spl.run", "when": "resourceLangId == spl", "group": "spl@1" },
+        { "command": "spl.debug", "when": "resourceLangId == spl", "group": "spl@2" }
+      ]
+    },
+    "configuration": {
+      "title": "SPL",
+      "properties": {
+        "spl.executablePath": {
+          "type": "string",
+          "default": "spl",
+          "scope": "machine",
+          "description": "The spl executable that Run Workflow and Debug Workflow start in the terminal: a name on the PATH, a full path, or a command such as `npx spl`."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "vscode:prepublish": "npm run typecheck && npm run build",
-    "test": "npm run typecheck && node build.mjs --test && node --test out/test/language-server.test.cjs out/test/notebook.test.cjs out/test/notebook-ui.test.cjs && node test/run-assertions.mjs && node test/check-examples.mjs && node test/spl-grammar.mjs",
+    "test": "npm run typecheck && node build.mjs --test && node --test \"out/test/*.test.cjs\"",
     "package": "vsce package --skip-license"
   },
   "dependencies": {
-    "@ai-sdk/mcp": "^2.0.88",
-    "@anthropic-ai/sdk": "^1.4.0",
-    "@google/genai": "^2.32.0",
-    "openai": "^7.48.0",
-
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"

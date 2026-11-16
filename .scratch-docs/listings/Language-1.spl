@@ -1,0 +1,52 @@
+//*
+# Fibonacci check
+
+This a markdown comment. It is rendered as prose by `spl doc`.
+
+Points:
+* one
+* two
+*//
+
+---
+model: gpt-6-luna
+---
+
+const Joke = Struct('Joke', { setup: Str, punchline: Str });
+
+function fib(n: number): number {
+    return n < 2 ? n : fib(n - 1) + fib(n - 2);
+}
+
+function factorial(n: number): number {
+    return n === 0 ? 1 : n * factorial(n - 1);
+}
+
+---
+mode: agent
+reasoning: high
+
+Invoke @factorial with 15 as argument ->[Int] @fact15
+Invoke @fib with 10 as argument ->[Int] @fib10
+Add 2 to @fib10 ->[Int] @fibPlus2
+Work out the 10th Fibonacci number yourself, without using @fib ->[Int] @modelFib10
+---
+
+assert(fib10 === modelFib10, 'Oops, the model got it wrong');
+
+---
+enforce: Answer in Chinese
+forbid: Mentioning the word cat
+outputVar: joke
+outputType: Joke
+
+A joke about programmers with a setup and a punchline.
+---
+
+---
+outputVar: animal
+
+A paragraph of a funny story about a pet animal.
+---
+
+success({ fib: fib10, modelFib: modelFib10, joke, animal });

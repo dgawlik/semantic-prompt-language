@@ -4,7 +4,7 @@ import { compileSchema } from './schema.js';
 export type Annotations = Readonly<Record<string, unknown>>;
 export type JsonSchema = boolean | { [key: string]: unknown };
 export type TypeKind =
-    | 'str' | 'int' | 'float' | 'bool' | 'char' | 'null' | 'any' | 'object'
+    | 'str' | 'int' | 'float' | 'bool' | 'char' | 'null' | 'any' | 'dict'
     | 'list' | 'union' | 'enum' | 'struct' | 'class' | 'fn' | 'schema';
 
 /** The JavaScript value a type parses to: `Infer<typeof Invoice>`. */
@@ -91,20 +91,29 @@ export class Type<T = unknown> {
     }
 
     nullable(): Type<T | null> {
-        return union(this, nil);
+        return Union(this, Nil);
     }
 
     list(): Type<T[]> {
-        return list(this);
+        return List(this);
     }
 
     or<U>(other: Type<U>): Type<T | U> {
-        return union(this, other);
+        return Union(this, other);
     }
 
     /** Validates a value and returns the parsed JavaScript object; never coerces or fills defaults. */
     parse(value: unknown, path = '$'): T {
-        return decode(this, value, path, true) as T;
+        return decode(this, value, path, 'parse') as T;
+    }
+
+    /**
+     * Converts a value to this type: JSON text is parsed, numeric strings become numbers, `Bool` accepts
+     * `1`/`0`, `Str` turns other values into JSON text, and fields and items are converted recursively.
+     * Deterministic; it never calls a model.
+     */
+    coerce(value: unknown, path = '$'): T {
+        return decode(this, value, path, 'coerce') as T;
     }
 
     /** Parses strict JSON text, then validates it. */
@@ -122,7 +131,7 @@ export class Type<T = unknown> {
     /** True when the value already satisfies this type; classes require an instance. */
     is(value: unknown): value is T {
         try {
-            decode(this, value, '$', false);
+            decode(this, value, '$', 'check');
             return true;
         } catch (error) {
             if (error instanceof Failure) return false;
@@ -185,52 +194,52 @@ export class StructType<S extends Record<string, unknown>, T = S> extends Type<T
 }
 
 function requireType(value: unknown, where: string): asserts value is Type<any> {
-    if (!isType(value)) throw new Failure('runtime_error', `${where} must be a type such as str, list(int) or a struct`);
+    if (!isType(value)) throw new Failure('runtime_error', `${where} must be a type such as Str, List(Int) or a Struct`);
 }
 
-const primitive = <T>(kind: TypeKind, name: string = kind): Type<T> =>
+const primitive = <T>(kind: TypeKind, name: string): Type<T> =>
     new Type<T>({ kind, name, annotations: Object.freeze({}) });
 
-export const str = primitive<string>('str');
-export const int = primitive<number>('int');
-export const float = primitive<number>('float');
-export const bool = primitive<boolean>('bool');
+export const Str = primitive<string>('str', 'Str');
+export const Int = primitive<number>('int', 'Int');
+export const Float = primitive<number>('float', 'Float');
+export const Bool = primitive<boolean>('bool', 'Bool');
 /** Exactly one Unicode character. */
-export const char = primitive<string>('char');
-export const nil = primitive<null>('null');
+export const Char = primitive<string>('char', 'Char');
+export const Nil = primitive<null>('null', 'Nil');
 /** Any JSON value. */
-export const any = primitive<unknown>('any');
+export const Any = primitive<unknown>('any', 'Any');
 /** Any JSON object, without a declared shape. */
-export const object = primitive<Record<string, unknown>>('object');
+export const Dict = primitive<Record<string, unknown>>('dict', 'Dict');
 /** A callable; cannot be decoded from JSON. */
-export const fn = primitive<(...args: any[]) => unknown>('fn');
+export const Fn = primitive<(...args: any[]) => unknown>('fn', 'Fn');
 
-export function list<V>(element: Type<V>): Type<V[]> {
-    requireType(element, 'list() element');
-    return new Type<V[]>({ kind: 'list', name: `list(${element.name})`, annotations: Object.freeze({}), element });
+export function List<V>(element: Type<V>): Type<V[]> {
+    requireType(element, 'List() element');
+    return new Type<V[]>({ kind: 'list', name: `List(${element.name})`, annotations: Object.freeze({}), element });
 }
 
-export function union<M extends Type<any>[]>(...members: M): Type<Infer<M[number]>> {
-    if (!members.length) throw new Failure('runtime_error', 'union() requires at least one type');
+export function Union<M extends Type<any>[]>(...members: M): Type<Infer<M[number]>> {
+    if (!members.length) throw new Failure('runtime_error', 'Union() requires at least one type');
     const flat: Type<any>[] = [];
     for (const item of members) {
-        requireType(item, 'union() member');
+        requireType(item, 'Union() member');
         if (!flat.includes(item)) flat.push(item);
     }
     if (flat.length === 1) return flat[0];
     return new Type({ kind: 'union', name: flat.map(item => item.name).join(' | '), annotations: Object.freeze({}), members: Object.freeze(flat) });
 }
 
-export function nullable<V>(type: Type<V>): Type<V | null> {
-    return union(type, nil);
+export function Nullable<V>(type: Type<V>): Type<V | null> {
+    return Union(type, Nil);
 }
 
 /** One of the given strings. */
-export function enumOf<const V extends readonly string[]>(values: V): Type<V[number]>;
-export function enumOf<const V extends readonly string[]>(...values: V): Type<V[number]>;
-export function enumOf(...values: readonly unknown[]): Type<string> {
+export function Enum<const V extends readonly string[]>(values: V): Type<V[number]>;
+export function Enum<const V extends readonly string[]>(...values: V): Type<V[number]>;
+export function Enum(...values: readonly unknown[]): Type<string> {
     const items: readonly unknown[] = values.length === 1 && Array.isArray(values[0]) ? values[0] : values;
-    if (!items.length || items.some(item => typeof item !== 'string')) throw new Failure('runtime_error', 'enumOf() requires one or more strings');
+    if (!items.length || items.some(item => typeof item !== 'string')) throw new Failure('runtime_error', 'Enum() requires one or more strings');
     return new Type({
         kind: 'enum', name: items.map(item => JSON.stringify(item)).join(' | '),
         annotations: Object.freeze({}), values: Object.freeze([...new Set(items as string[])]),
@@ -238,8 +247,8 @@ export function enumOf(...values: readonly unknown[]): Type<string> {
 }
 
 /** An exact record: every field is required and extra fields are rejected. */
-export function struct<F extends Shape = {}>(name: string, fields?: F): StructType<Simplify<InferShape<F>>> {
-    if (typeof name !== 'string' || !name.trim()) throw new Failure('runtime_error', 'struct() requires a name');
+export function Struct<F extends Shape = {}>(name: string, fields?: F): StructType<Simplify<InferShape<F>>> {
+    if (typeof name !== 'string' || !name.trim()) throw new Failure('runtime_error', 'Struct() requires a name');
     const checked: Record<string, Type<any>> = {};
     for (const [key, type] of Object.entries(fields ?? {})) {
         requireType(type, `field '${key}' of ${name}`);
@@ -248,19 +257,64 @@ export function struct<F extends Shape = {}>(name: string, fields?: F): StructTy
     return new StructType({ kind: 'struct', name, annotations: Object.freeze({}), fields: Object.freeze(checked) });
 }
 
-/** Names a type and attaches annotations: `typedef('Money', int, { desc: 'Amount in cents' })`. */
-export function typedef<T extends Type<any>>(name: string, type: T, annotations: Record<string, unknown> = {}): T {
-    requireType(type, `typedef('${name}')`);
+/** Names a type and attaches annotations: `Typedef('Money', Int, { desc: 'Amount in cents' })`. */
+export function Typedef<T extends Type<any>>(name: string, type: T, annotations: Record<string, unknown> = {}): T {
+    requireType(type, `Typedef('${name}')`);
     return type.as(name, annotations);
 }
 
 /** Wraps raw JSON Schema as a type; unlike annotations, its constraints are enforced. */
-export function jsonSchema<T = unknown>(schema: JsonSchema, name = 'schema'): Type<T> {
+export function JsonSchema<T = unknown>(schema: JsonSchema, name = 'JsonSchema'): Type<T> {
     return new Type<T>({ kind: 'schema', name, annotations: Object.freeze({}), json: schema, check: compileSchema(schema) });
 }
 
-function decode(type: Type<any>, value: unknown, path: string, hydrate: boolean): unknown {
+type Mode = 'parse' | 'check' | 'coerce';
+
+/** JSON held in a string, for coercion; nothing when the value is not a string of JSON. */
+function embedded(value: unknown): { json: unknown } | undefined {
+    if (typeof value !== 'string') return undefined;
+    try {
+        return { json: JSON.parse(value) };
+    } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        return undefined;
+    }
+}
+
+/** Conversions of `coerce`; whatever they leave unchanged is for validation to accept or reject. */
+function convert(definition: Definition, value: unknown): unknown {
+    const { kind } = definition;
+    if (kind === 'str') {
+        if (typeof value === 'string' || value === undefined || typeof value === 'function' || typeof value === 'symbol') return value;
+        try {
+            return JSON.stringify(value) ?? value;
+        } catch (error) {
+            // BigInt and cyclic values have no JSON text.
+            if (!(error instanceof TypeError)) throw error;
+            return value;
+        }
+    }
+    if (kind === 'char' || kind === 'fn' || kind === 'schema' || kind === 'union') return value;
+    const parsed = embedded(value);
+    if (kind === 'enum') return parsed && typeof parsed.json === 'string' && !definition.values!.includes(value as string) ? parsed.json : value;
+    // JSON text is read first: `"3"` in quotes is the string 3, which is then a number like any other numeric string.
+    if (parsed && typeof parsed.json === 'string') value = parsed.json;
+    const text = typeof value === 'string' ? value.trim() : undefined;
+    switch (kind) {
+        case 'int':
+        case 'float':
+            return text !== undefined && text !== '' && Number.isFinite(Number(text)) ? Number(text) : value;
+        case 'bool':
+            return value === 1 || text === 'true' || text === '1' ? true : value === 0 || text === 'false' || text === '0' ? false : value;
+        case 'null': return text === 'null' ? null : value;
+        default: return parsed ? parsed.json : value;
+    }
+}
+
+function decode(type: Type<any>, value: unknown, path: string, mode: Mode): unknown {
     const definition = type.definition;
+    const hydrate = mode !== 'check';
+    if (mode === 'coerce') value = convert(definition, value);
     const fail = (detail = `expected ${definition.name}, got ${describe(value)}`): never => { throw invalid(path, detail); };
     switch (definition.kind) {
         case 'str': return typeof value === 'string' ? value : fail();
@@ -270,7 +324,7 @@ function decode(type: Type<any>, value: unknown, path: string, hydrate: boolean)
         case 'char': return typeof value === 'string' && Array.from(value).length === 1 && !/^[\uD800-\uDFFF]$/.test(value) ? value : fail();
         case 'null': return value === null ? value : fail();
         case 'fn': return typeof value === 'function' ? value : fail();
-        case 'object': return plain(value) ? value : fail();
+        case 'dict': return plain(value) ? value : fail();
         case 'any': return value === undefined || typeof value === 'function' || typeof value === 'symbol' ? fail() : value;
         case 'enum': return typeof value === 'string' && definition.values!.includes(value) ? value : fail();
         case 'schema':
@@ -278,6 +332,9 @@ function decode(type: Type<any>, value: unknown, path: string, hydrate: boolean)
                 definition.check!(value);
             } catch (error) {
                 if (!(error instanceof Failure)) throw error;
+                // JSON text is tried as written first: a schema may describe a string.
+                const parsed = mode === 'coerce' ? embedded(value) : undefined;
+                if (parsed) return decode(type, parsed.json, path, 'parse');
                 // Schema errors carry paths relative to this value; anchor them at its place in the whole.
                 throw new Failure('validation_failed', error.reason.split('; ').map(item => {
                     const [, at, detail] = /^([^:]*): (.*)$/s.exec(item) ?? [];
@@ -287,17 +344,22 @@ function decode(type: Type<any>, value: unknown, path: string, hydrate: boolean)
             return value;
         case 'list':
             if (!Array.isArray(value)) return fail();
-            return value.map((item, index) => decode(definition.element!, item, `${path}[${index}]`, hydrate));
+            return value.map((item, index) => decode(definition.element!, item, `${path}[${index}]`, mode));
         case 'union': {
             const matches: { type: Type<any>; value: unknown }[] = [];
             let first: Failure | undefined;
-            for (const candidate of definition.members!) {
-                try {
-                    matches.push({ type: candidate, value: decode(candidate, value, path, hydrate) });
-                } catch (error) {
-                    if (!(error instanceof Failure)) throw error;
-                    first ??= error;
+            // A value that already fits a member is kept as it is; conversion is only the fallback.
+            for (const attempt of mode === 'coerce' ? ['parse', 'coerce'] as const : [mode]) {
+                first = undefined;
+                for (const candidate of definition.members!) {
+                    try {
+                        matches.push({ type: candidate, value: decode(candidate, value, path, attempt) });
+                    } catch (error) {
+                        if (!(error instanceof Failure)) throw error;
+                        first ??= error;
+                    }
                 }
+                if (matches.length) break;
             }
             if (!matches.length) {
                 // For `T | null`, the error for T says more than "expected T | null".
@@ -326,9 +388,10 @@ function decode(type: Type<any>, value: unknown, path: string, hydrate: boolean)
             const data: Record<string, unknown> = {};
             for (const [key, field] of Object.entries(fields)) {
                 if (!Object.hasOwn(source, key)) fail(`missing required field '${key}' of ${definition.name}`);
-                set(data, key, decode(field, source[key], member(path, key), hydrate));
+                set(data, key, decode(field, source[key], member(path, key), mode));
             }
-            if (instance) return value;
+            // An instance is kept, unless conversion changed one of its fields.
+            if (instance && Object.keys(fields).every(key => Object.is(data[key], source[key]))) return value;
             if (definition.kind === 'struct') return data;
             if (definition.hydrate) {
                 const created = definition.hydrate(data);
@@ -367,7 +430,7 @@ function schemaOf(type: Type<any>, seen: Type<any>[] = []): { [key: string]: unk
             case 'char': return { type: 'string', minLength: 1, maxLength: 1, description: 'Exactly one Unicode character.' };
             case 'null': return { type: 'null' };
             case 'any': return {};
-            case 'object': return { type: 'object' };
+            case 'dict': return { type: 'object' };
             case 'enum': return { type: 'string', enum: [...definition.values!] };
             case 'schema': return definition.json === true ? {} : definition.json === false ? { not: {} } : structuredClone(definition.json as { [key: string]: unknown });
             case 'list': return { type: 'array', items: schemaOf(definition.element!, seen) };
@@ -396,8 +459,7 @@ export function validate(value: unknown, target: Type<unknown> | JsonSchema): un
     return value;
 }
 
-/** The builders under one name, for code that prefers `t.str` and `t.list(t.int)`. */
+/** The builders under one name, for code that prefers `t.Str` and `t.List(t.Int)`. */
 export const t = Object.freeze({
-    str, int, float, bool, char, null: nil, nil, any, object, fn,
-    list, union, nullable, enum: enumOf, enumOf, struct, typedef, schema: jsonSchema, jsonSchema, validate,
+    Str, Int, Float, Bool, Char, Nil, Any, Dict, Fn, List, Union, Nullable, Enum, Struct, Typedef, JsonSchema, validate,
 });

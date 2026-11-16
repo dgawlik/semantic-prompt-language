@@ -1,0 +1,4 @@
+const rule = `
+---
+`;
+const pattern = /---/; // --- neither of these opens a block

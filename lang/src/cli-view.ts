@@ -6,12 +6,14 @@ import { formatSegments, paint, prettyJson, prettyListing, sanitize, textSegment
 export type Outcome = 'completed' | 'failed' | 'cancelled';
 export type StepChoice = 'next' | 'continue';
 
-/** A block the `--debug` stepper stops before. */
+/** A step the `--debug` stepper stops before: a `---` block or a top-level statement. */
 export interface PausedBlock {
-    kind: 'code' | 'natural';
+    kind: 'code' | 'block';
     line: number;
+    /** `ts` for code; `ask`, `agent` or `codegen` for a block. */
     language: string;
     source: string;
+    /** JSON-shaped snapshot of the top-level variables. */
     variables(): Record<string, unknown>;
 }
 
@@ -89,11 +91,10 @@ function fit(text: string, width: number): string {
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
 const lineCount = (text: string): number => text.replace(/\r?\n$/, '').split('\n').length;
 
+const stepLabel = (block: PausedBlock): string => block.kind === 'block' ? `${block.language} block` : 'statement';
+
 function displayLanguage(language: string): string {
-    if (language === 'js') return 'javascript';
-    if (language === 'ts') return 'typescript';
-    if (language === 'agent' || language === 'codegen') return 'markdown';
-    return language;
+    return language === 'ts' ? 'typescript' : 'markdown';
 }
 
 export class TerminalView {
@@ -159,7 +160,7 @@ export class TerminalView {
         const { color } = this.options;
         const id = `note:${++this.notes}:source`;
         const language = displayLanguage(block.language);
-        const label = `${block.language} block`;
+        const label = stepLabel(block);
         this.add({
             header: `${paint('\u25b6', 33, color, true)} ${paint(label, 33, color, true)} ${paint(`\u00b7 line ${block.line}`, 90, color)}`,
             inline: false,
@@ -360,8 +361,8 @@ export class TerminalView {
             header: `${paint('\u25c6', 34, color, true)} ${paint('Variables', 34, color, true)} ${paint(`before line ${block.line}`, 90, color)}`,
             inline: false,
             parts: names.length
-                ? [{ id: `note:${++this.notes}:variables`, summary: plural(names.length, 'binding'), body: () => prettyJson(source, color) ?? source, open: true }]
-                : [paint('no shared variables yet', 90, color)],
+                ? [{ id: `note:${++this.notes}:variables`, summary: plural(names.length, 'variable'), body: () => prettyJson(source, color) ?? source, open: true }]
+                : [paint('no top-level variables yet', 90, color)],
         });
     }
 
@@ -373,7 +374,7 @@ export class TerminalView {
                 return [`${paint(SPINNER[tick % SPINNER.length], 36, color)} ${paint('Running', 1, color)}${this.stepping ? paint(' \u00b7 stepping', 90, color) : ''}`];
             case 'paused': {
                 const first = mode.block.source.split('\n').find(line => line.trim()) ?? '';
-                return [`${paint('\u2016', 33, color, true)} ${paint('Paused', 33, color, true)} before ${mode.block.language} block at line ${mode.block.line}`,
+                return [`${paint('\u2016', 33, color, true)} ${paint('Paused', 33, color, true)} before ${stepLabel(mode.block)} at line ${mode.block.line}`,
                     paint(sanitize(first.trim()), 90, color)];
             }
             case 'input': {
@@ -526,7 +527,6 @@ function eventCard(event: LogEvent, color: boolean): Card {
         case 'warning': return { header: strong('!', 33), inline: true, parts };
         case 'info': return { header: paint('\u2022', 34, color), inline: true, parts };
         case 'debug': return { header: dim('\u00b7'), inline: true, parts };
-        case 'generic': return { header: strong(`- ${event.label}`, 35), inline: true, parts };
     }
 }
 

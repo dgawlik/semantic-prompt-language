@@ -8,3 +8,4 @@ build.mjs
 tsconfig.json
 out/**/*.map
 out/test/**
+node_modules/**

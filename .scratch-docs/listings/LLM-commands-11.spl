@@ -1,0 +1,6 @@
+const issue = await readFile('./issue.txt');
+const score = await ask(`Rate this issue from 1 to 5: ${issue}`, {
+    fmt: 'integer',
+    repairs: 1,
+    tokens: 2048,
+});

@@ -220,7 +220,12 @@
     .prose a:not(.heading-anchor):hover { text-decoration-color: var(--accent); }
     .heading-anchor { color: var(--faint); text-decoration: none; margin-inline-start: .55rem; opacity: 0; font-size: .8em; }
     .prose :is(h2, h3, h4):hover .heading-anchor, .heading-anchor:focus-visible { opacity: 1; }
-    .anchor-alias { display: block; position: relative; scroll-margin-block-start: calc(var(--header-height) + 1.5rem); }
+    .prose blockquote { margin: 1.4rem 0; padding: .95rem 1.15rem; border: 1px solid var(--line); border-inline-start: 3px solid var(--accent); border-radius: .5rem; background: var(--subtle); }
+    .prose blockquote > :first-child { margin-block-start: 0; }
+    .prose blockquote > :last-child { margin-block-end: 0; }
+    .prose blockquote > p:first-child:has(> strong:only-child) { padding: 0; margin-block: 0 .6rem; border: 0; background: none; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+    .prose blockquote .table-scroll { margin-block: .7rem; background: var(--surface); }
+    main.standalone { max-inline-size: 52rem; margin-inline: auto; padding: 3rem 1.5rem; }
     .prose ul, .prose ol { padding-inline-start: 1.35rem; }
     .prose li { padding-inline-start: .3rem; margin-block: .45rem; }
     .prose li::marker { color: var(--accent); font-size: .9em; }

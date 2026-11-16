@@ -6,7 +6,7 @@ import { Failure } from '../src/errors.js';
 import { markdown as exported } from '../src/index.js';
 import * as markdown from '../src/markdown-lib.js';
 import { Document, bold, code, document, escape, image, italic, link } from '../src/markdown-lib.js';
-import { cleanTemp, exec, execMarkdown, fence, tempDir } from './helpers.js';
+import { block, cleanTemp, exec, scripted, tempDir } from './helpers.js';
 
 afterEach(cleanTemp);
 
@@ -143,20 +143,20 @@ describe('Markdown builder', () => {
 });
 
 describe('Markdown builder in workflows', () => {
-    it('is the global markdown of every fence and writes reports through restricted tools', async () => {
+    it('is the global markdown of every workflow and writes reports through restricted tools', async () => {
         const cwd = tempDir();
-        const result = await execMarkdown(`${fence("const card = { term: 'closures', definition: 'Functions that remember' };")}
+        const result = await exec(`const card = { term: 'closures', definition: 'Functions that remember' };
 
-${fence(`const doc = markdown.document().heading(card.term, 3).paragraph(markdown.bold(card.definition));
+const doc = markdown.document().heading(card.term, 3).paragraph(markdown.bold(card.definition));
 doc.bulletList([markdown.code('x => x'), markdown.link('MDN', 'https://developer.mozilla.org')]);
 await restrict('./out', () => writeFile('./out/card.md', doc.toString()));
-success([doc instanceof markdown.Document, new markdown.Document().toString(), \`\${doc}\`]);`)}`, { cwd });
+success([doc instanceof markdown.Document, new markdown.Document().toString(), \`\${doc}\`]);`, { cwd });
         const text = '### closures\n\n**Functions that remember**\n\n- `x => x`\n- [MDN](<https://developer.mozilla.org>)\n';
         expect(result).toEqual({ status: 'success', value: [true, '', text], hasValue: true });
         expect(fs.readFileSync(path.join(cwd, 'out', 'card.md'), 'utf8')).toBe(text);
     });
 
-    it.each(['code', 'document'])('imports named bindings and namespaces from spl-lang/markdown in %s, ignoring local packages', async kind => {
+    it('imports named bindings and namespaces from spl-lang/markdown, ignoring local packages', async () => {
         const cwd = tempDir();
         const local = path.join(cwd, 'node_modules', 'spl-lang');
         fs.mkdirSync(local, { recursive: true });
@@ -164,23 +164,49 @@ success([doc instanceof markdown.Document, new markdown.Document().toString(), \
         fs.writeFileSync(path.join(local, 'markdown.js'), "throw new Error('local packages must not shadow the library');");
         const source = `import { Document, bold as strong } from 'spl-lang/markdown';
 import * as md from 'spl-lang/markdown';
-const doc = new Document();
+const doc: Document = new Document();
 doc.heading('Report', 1);
 for (const name of ['Ada', 'Lin']) doc.paragraph(strong(name));
-success([doc.toString(), md.Document === Document, md.document() instanceof Document]);`;
-        expect(await (kind === 'code' ? exec(source, { cwd }) : execMarkdown(fence(source), { cwd })))
-            .toMatchObject({ status: 'success', value: ['# Report\n\n**Ada**\n\n**Lin**\n', true, true] });
+success([doc.toString(), md.Document === Document, md.document() instanceof Document, md.Document === markdown.Document]);`;
+        expect(await exec(source, { cwd })).toMatchObject({ status: 'success', value: ['# Report\n\n**Ada**\n\n**Lin**\n', true, true, true] });
     });
 
-    it('shares the module identity with imports in nested helper modules', async () => {
+    it('shares the module identity with imports in nested helper modules and imported workflows', async () => {
         const cwd = tempDir();
         fs.mkdirSync(path.join(cwd, 'lib'));
         fs.writeFileSync(path.join(cwd, 'lib', 'report.mjs'), `import { Document } from 'spl-lang/markdown';
 export const report = () => new Document().paragraph('Nested');`);
-        expect(await execMarkdown(fence(`import { report } from './lib/report.mjs';
+        fs.writeFileSync(path.join(cwd, 'lib', 'table.spl'), `import { Document } from 'spl-lang/markdown';
+export function table(rows: string[][]): Document {
+    return markdown.document().table(['Name', 'Role'], rows);
+}`);
+        expect(await exec(`import { report } from './lib/report.mjs';
+import { table } from './lib/table.spl';
 import { Document } from 'spl-lang/markdown';
 const doc = report();
-success([doc instanceof Document, doc.toString()]);`), { cwd })).toMatchObject({ status: 'success', value: [true, 'Nested\n'] });
+const rows = table([['Ada', 'author']]);
+success([doc instanceof Document, doc.toString(), rows instanceof markdown.Document, \`\${rows}\`]);`, { cwd }))
+            .toMatchObject({ status: 'success', value: [true, 'Nested\n', true, '| Name | Role |\n| --- | --- |\n| Ada | author |\n'] });
+    });
+
+    it('builds documents from the answers of blocks, and blocks read them as text', async () => {
+        const model = scripted('Closures remember.', 'Fine.');
+        const source = [
+            "const topic = 'closures';",
+            "const doc = markdown.document().heading('Notes');",
+            block('Summarize @topic', 'outputVar: summary'),
+            // A thematic break, or `---` in a string, is not a block fence.
+            "doc.paragraph(markdown.italic(summary)).thematicBreak().raw('---');",
+            'const report = `${doc}`;',
+            block('Review @report', 'outputVar: verdict'),
+            'success({ report, verdict });',
+        ].join('\n');
+        const report = '# Notes\n\n*Closures remember.*\n\n---\n\n---\n';
+        expect(await exec(source, { backend: model })).toMatchObject({ status: 'success', value: { report, verdict: 'Fine.' } });
+        expect(model.calls.map(call => call.prompt)).toEqual([
+            'Summarize @topic\n\nValues referenced above, as JSON:\n@topic = "closures"',
+            `Review @report\n\nValues referenced above, as JSON:\n@report = ${JSON.stringify(report)}`,
+        ]);
     });
 
     it('fails the workflow with the line of an invalid call, unless caught', async () => {

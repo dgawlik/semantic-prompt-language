@@ -1,4 +1,3 @@
-import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     createConnection, ProposedFeatures, TextDocuments, TextDocumentSyncKind,
@@ -6,42 +5,15 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import {
-    completions, definition, diagnostics, documentHighlights, documentSymbols, hover, prepareRename, references, rename,
+    completions, definition, diagnostics, documentHighlights, documentSymbols, foldingRanges, hover, prepareRename, references, rename,
     resolveCompletion, signatureHelp, workflowContext, type CompletionData, type WorkflowContext,
 } from './languageFeatures';
 import { defaultResources, TypeScriptProject } from './typescriptService';
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
-const resources = defaultResources(__dirname);
-const projects = new Map<string, TypeScriptProject>();
 const contexts = new Map<string, WorkflowContext>();
-let folders: string[] = [];
-let versionedEdits = false;
-
-/** Imports resolve against the working directory: the workspace folder, as when running `spl` from its root. */
-function baseDirectory(uri: string): string {
-    if (!uri.startsWith('file:')) return folders[0] ?? process.cwd();
-    const file = fileURLToPath(uri);
-    const inside = folders.filter(folder => {
-        const relative = path.relative(folder, file);
-        return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
-    }).sort((a, b) => b.length - a.length)[0];
-    return inside ?? path.dirname(file);
-}
-
-function refresh(document: TextDocument): WorkflowContext | undefined {
-    const base = baseDirectory(document.uri);
-    let project = projects.get(base);
-    if (!project) {
-        project = new TypeScriptProject(base, resources);
-        projects.set(base, project);
-    }
-    const context = workflowContext(document, project, contexts.get(document.uri));
-    if (context) contexts.set(document.uri, context);
-    else contexts.delete(document.uri);
-    return context;
-}
+let project: TypeScriptProject;
 
 /** Runs a feature and keeps the server alive when TypeScript or the analysis throws. */
 function guarded<T>(uri: string, fallback: T, feature: (context: WorkflowContext) => T): T {
@@ -55,19 +27,26 @@ function guarded<T>(uri: string, fallback: T, feature: (context: WorkflowContext
     }
 }
 
+/** Reports every open document again: a change in one workflow shows in the files that import it. */
+function publish(): void {
+    for (const document of documents.all()) {
+        connection.sendDiagnostics({ uri: document.uri, version: document.version, diagnostics: guarded(document.uri, [], diagnostics) });
+    }
+}
+
 connection.onInitialize(params => {
-    versionedEdits = params.capabilities.workspace?.workspaceEdit?.documentChanges === true;
-    folders = (params.workspaceFolders ?? []).flatMap(folder => folder.uri.startsWith('file:') ? [fileURLToPath(folder.uri)] : []);
-    if (!folders.length && params.rootUri?.startsWith('file:')) folders = [fileURLToPath(params.rootUri)];
+    const folder = params.workspaceFolders?.find(item => item.uri.startsWith('file:'))?.uri ?? params.rootUri;
+    project = new TypeScriptProject(folder?.startsWith('file:') ? fileURLToPath(folder) : process.cwd(), defaultResources(__dirname));
     return {
         capabilities: {
             textDocumentSync: TextDocumentSyncKind.Incremental,
-            completionProvider: { triggerCharacters: ['.', '"', "'", '`', '/', '@', '(', ',', '=', '{', '['], resolveProvider: true },
+            completionProvider: { triggerCharacters: ['.', '"', "'", '`', '/', '@', '<', '#', ' ', '['], resolveProvider: true },
             hoverProvider: true,
             definitionProvider: true,
             documentSymbolProvider: true,
             referencesProvider: true,
             documentHighlightProvider: true,
+            foldingRangeProvider: true,
             renameProvider: { prepareProvider: true },
             signatureHelpProvider: { triggerCharacters: ['(', ','], retriggerCharacters: [')'] },
         },
@@ -77,19 +56,19 @@ connection.onInitialize(params => {
 
 documents.onDidChangeContent(({ document }) => {
     try {
-        const context = refresh(document);
-        connection.sendDiagnostics({ uri: document.uri, version: document.version, diagnostics: context ? diagnostics(context) : [] });
+        contexts.set(document.uri, workflowContext(project, document.uri, document.getText()));
     } catch (error) {
+        contexts.delete(document.uri);
         connection.console.error(`Analysis failed for ${document.uri}: ${error instanceof Error ? error.stack : String(error)}`);
-        connection.sendDiagnostics({ uri: document.uri, version: document.version, diagnostics: [] });
     }
+    publish();
 });
 
 documents.onDidClose(({ document }) => {
-    const context = contexts.get(document.uri);
-    context?.project.remove(context.file);
+    project.close(document.uri);
     contexts.delete(document.uri);
     connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
+    publish();
 });
 
 connection.onCompletion(({ textDocument, position, context }) =>
@@ -103,14 +82,10 @@ connection.onSignatureHelp(({ textDocument, position }) => guarded(textDocument.
 connection.onDefinition(({ textDocument, position }) => guarded(textDocument.uri, [], workflow => definition(workflow, position)));
 connection.onReferences(({ textDocument, position }) => guarded(textDocument.uri, [], workflow => references(workflow, position)));
 connection.onDocumentHighlight(({ textDocument, position }) => guarded(textDocument.uri, [], workflow => documentHighlights(workflow, position)));
-connection.onDocumentSymbol(({ textDocument }) => guarded(textDocument.uri, [], workflow => documentSymbols(workflow)));
+connection.onDocumentSymbol(({ textDocument }) => guarded(textDocument.uri, [], documentSymbols));
+connection.onFoldingRanges(({ textDocument }) => guarded(textDocument.uri, [], foldingRanges));
 connection.onPrepareRename(({ textDocument, position }) => guarded(textDocument.uri, null, workflow => prepareRename(workflow, position)));
-connection.onRenameRequest(({ textDocument, position, newName }) => guarded(textDocument.uri, null, workflow => {
-    const edit = rename(workflow, position, newName);
-    const edits = edit?.changes?.[textDocument.uri];
-    if (!edit || !edits || !versionedEdits) return edit;
-    return { documentChanges: [{ textDocument: { uri: textDocument.uri, version: workflow.analysis.document.version }, edits }] };
-}));
+connection.onRenameRequest(({ textDocument, position, newName }) => guarded(textDocument.uri, null, workflow => rename(workflow, position, newName)));
 
 documents.listen(connection);
 connection.listen();

@@ -1,117 +1,97 @@
 # SPL: Semantic Prompt Language
 
-Run your agentic workflows from single Markdown document or SPL file.
+Interleave natural-language instructions for models and agents with TypeScript, in one `.spl` file.
 
-Its `js` fences/blocks run as native JavaScript with the `spl-lang`
-toolkit already imported; its blockquotes run as agent commands in plain language. Both share
-variables, functions, tools and guards.
+Code runs as TypeScript on Node.js with the `spl-lang` library already in scope. A `---` block is an
+instruction for a model: `@name` reads a variable, and the block's outputs are ordinary typed
+variables for the code that follows.
 
 [Documentation](https://dgawlik.github.io/semantic-prompt-language/) |
 [Examples](lang/examples)
 
-```
-{comment}
-Prose like this is commentary. Only {js} and {agent} scopes run,
-top to bottom, in one shared scope.
-The agent selects a topic and saves a validated Card; the final {js}
-block only renders it as Markdown.
-{/comment}
+```spl
+//*
+# Fibonacci check
 
-{js}
-const topics = ['recursion', 'closures']
-const Topic = enumOf(...topics)
-const Card = struct('Card', {
-    term: Topic,
-    definition: str.describe('Definition one line'),
-    description: str.describe('Several sentences about'),
-});
-{/js}
+This a markdown comment. It is rendered as prose by `spl doc`.
 
+Points:
+* one
+* two
+*//
 
-{agent model='gpt-6.1-sol', reasoning='high'}
-Pick the item of @topics that a beginner would find hardest.
-Create a flashcard for that topic with term set to the selected topic,
-a one-line definition and a description of several sentences.
-@validate[Card] save the flashcard to variable @hardest
-{/agent}
+---
+model: gpt-6-luna
+---
 
-{js}
-const doc = markdown.document()
-    .heading(hardest.term, 3)
-    .paragraph(markdown.bold(hardest.definition))
-    .paragraph(hardest.description);
+const Joke = Struct('Joke', { setup: Str, punchline: Str });
 
-await writeFile('./out/hardest-card.md', doc.toString());
-{/js}
+function fib(n: number): number {
+    return n < 2 ? n : fib(n - 1) + fib(n - 2);
+}
+
+function factorial(n: number): number {
+    return n === 0 ? 1 : n * factorial(n - 1);
+}
+
+---
+mode: agent
+reasoning: high
+
+Invoke @factorial with 15 as argument ->[Int] @fact15
+Invoke @fib with 10 as argument ->[Int] @fib10
+Add 2 to @fib10 ->[Int] @fibPlus2
+Work out the 10th Fibonacci number yourself, without using @fib ->[Int] @modelFib10
+---
+
+assert(fib10 === modelFib10, 'Oops, the model got it wrong');
+
+---
+enforce: Answer in Chinese
+forbid: Mentioning the word cat
+outputVar: joke
+outputType: Joke
+
+A joke about programmers with a setup and a punchline.
+---
+
+---
+outputVar: animal
+
+A paragraph of a funny story about a pet animal.
+---
+
+success({ fib: fib10, modelFib: modelFib10, joke, animal });
 ```
 
 ## Why SPL?
 
-* **Short loops.** One file, run directly. `--check` needs no model; `--trace run.jsonl` resumes
-  recorded work and replays completed runs without repeating model calls or tool effects.
-* **Plain JavaScript where it matters.** Fences are native JavaScript on Node.js with top-level
-  `await`. The standard library, your own `.js` modules and npm packages are one `import` away.
-* **Checked model output.** `ask`/`think` generate values without tools; `fmt`, `schema`,
-  `repairs` and `assert` check what comes back. Types are built in JavaScript
-  (`struct`, `enumOf`, `list`, `typedef`) and carry annotations for the model to read.
-* **Guards you can see.** `agent` calls and blockquotes can act; `restrict` limits their files,
-  network, commands and MCP tools. Prompt guidance (`enforce`, `forbid`) is kept separate from validation.
-* **A library, not a language.** The same functions work in any Node.js program:
-  `import { ask, struct } from 'spl-lang'`.
+* **Short loops.** One file, run in place with `spl run`. `spl check` type-checks without a model;
+  `--trace run.jsonl` resumes recorded work and replays completed runs without repeating model
+  calls or tool effects.
+* **Plain TypeScript where it matters.** Outside its blocks a workflow is TypeScript with top-level
+  `await`. The standard library, your own modules, other `.spl` files and npm packages are one
+  `import` away. Node.js erases the types, so there is no build step.
+* **Checked model output.** An ask block makes one model call and coerces the answer to its
+  `outputType`. An agent block declares typed outputs with `->[Type] @name` and must save every one.
+  Types are built in code (`Struct`, `Enum`, `List`, `Typedef`) and carry annotations for the model.
+* **Guards you can see.** Agents can act; `restrict` limits their files, network, commands and MCP
+  tools. Prompt guidance (`enforce`, `forbid`) is kept separate from validation.
+* **A library and a module format.** The same functions work in any Node.js program:
+  `import { ask, Struct } from 'spl-lang'`. `spl compile` turns a workflow into a TypeScript module
+  that exports `workflow(args, options)`.
 
-Try [typed-data.md](lang/examples/typed-data.md) without a model or login. See
-[Workflow code](docs-template/Language.md) for the JavaScript rules,
-[Types](docs-template/Language.md#types) for the schema builder and
-[Schemas and repairs](docs-template/LLM-commands.md#schemas-and-repairs) for typed generation.
-
-## One to one match with markdown
-
-
-````markdown
----
-extension: 'semantic-prompt-language'
-version: 1
-model: 'gpt-6-luna'
----
-
-# Hello, SPL
-
-Prose like this is commentary. Only `js` fences and blockquotes run, top to bottom, in one shared scope.
-The library (`ask`, `struct`, `writeFile`, `markdown`, ...) is already imported in every fence.
-
-```js
-const Topic = enumOf('recursion', 'closures', 'regular expressions');
-const topics = ['recursion', 'closures', 'regular expressions'];
-
-const Card = struct('Card', {
-    term: Topic,
-    definition: str.annotate({ desc: 'One line about' }),
-    description: str.annotate({ desc: 'A paragraph about' }),
-});
-
-const cards = await Promise.all(topics.map(topic =>
-    ask(`A one-sentence flashcard about ${topic}`, { schema: Card, repairs: 1 })));
-```
-
-> Pick the item of @cards whose card a beginner would find hardest. Save that item to @hardest
-
-```js
-const doc = markdown.document()
-    .heading(hardest.term, 3)
-    .paragraph(markdown.bold(hardest.definition))
-    .paragraph(hardest.description);
-
-await writeFile('./out/hardest-card.md', doc.toString());
-```
-
-````
+Try [typed-data.spl](lang/examples/typed-data.spl) without a model or login. See
+[Workflow code](docs-template/Language.md) for the file format,
+[Types](docs-template/Language.md#types) for the type builders and
+[Natural language & models](docs-template/LLM-commands.md) for blocks.
 
 ## Install
 
 ```sh
 npm install -g spl-lang
 spl login openai         # or anthropic / google
-spl examples/hi.md
+spl run examples/hi.spl
 ```
 
 Requires Node.js >=24.15.0. Model calls use the official OpenAI, Anthropic and Google clients.
@@ -121,45 +101,59 @@ Environment keys override saved keys. With multiple providers and no saved defau
 using `--provider`, `SPL_PROVIDER` or a model such as `--model anthropic/claude-sonnet-4-5`.
 Login configures API keys, not subscription OAuth.
 
+| Command | Effect |
+| --- | --- |
+| `spl run <file.spl>` | Compile in memory and run in place |
+| `spl check <file.spl>` | Scan and type-check with `tsc`, without running |
+| `spl compile <file.spl>` | Write an importable TypeScript module beside the file |
+| `spl doc <file.spl> [--format md\|html]` | Print documentation generated from the file |
 
-## What to know about the JavaScript
+## What to know about the file format
 
-* Every fence and blockquote shares one scope. Top-level declarations are visible in later
-  fences and to agents; redeclaring a name in a later fence rebinds it, even a `const`.
-* The library is already in scope in fences. Always `await` model calls, tools, `human`,
-  `restrict` and `codegen`.
-* Imports and relative paths resolve against the working directory (`--cwd`), not the workflow
-  file. `spl-lang` imported by a helper module is the running copy; no local install is needed.
-* `restrict`, traces and pins cover the library's tools, agents and MCP servers. Node.js APIs
-  that your code calls directly are neither restricted nor recorded, and helper modules are
-  imported again on replay.
-* Fences run on the main thread: a long synchronous loop blocks logs and Ctrl+C until it yields.
+* A `.spl` file is TypeScript with three additions: `//* ... *//` Markdown comments, `---` blocks
+  and `@name` references inside blocks. Only type syntax that can be erased is allowed, so no
+  `enum`, `namespace`, decorators or constructor parameter properties.
+* A block has an optional header of `key: value` lines (`mode`, `model`, `reasoning`, `outputVar`,
+  `outputType`, `enforce`, `forbid`, `restrict`, ...) and then the instruction. `ask` is the default
+  mode; `agent` acts with tools; `codegen` generates functions.
+* A block is a statement: it may stand at the top level, in a function, in a loop or in an `if`.
+  Its outputs are constants in the enclosing scope; `=name` assigns an existing `let`.
+* The library is already in scope. Always `await` model calls, tools, `human`, `restrict` and
+  `codegen`.
+* Imports resolve from the file, as in any ES module. Relative paths given to tools resolve
+  against the working directory (`--cwd`).
+* `restrict` and traces cover the library's tools, agents and MCP servers. Node.js APIs that your
+  code calls directly are neither restricted nor recorded.
 * `success(value)` ends the run and prints the value. Uncaught exceptions become
-  `runtime_error` failures that name the document line.
+  `runtime_error` failures that name the line of the `.spl` file.
+
+Coming from SPL 2.x? Markdown workflows and the `{js}`/`{agent}` block syntax are gone; the
+[migration guide](docs-template/Migration.md) maps every 2.x construct to its 3.0 form.
 
 ## Repository
 
 | Folder | Contents |
 | --- | --- |
-| [lang/](lang/README.md) | The `spl-lang` package: library, runtime, CLI, tests and [examples](lang/examples/) |
-| [vscode/](vscode/README.md) | VS Code extension: JavaScript language features in workflow Markdown and `.spl` files, and runnable notebooks |
+| [lang/](lang/README.md) | The `spl-lang` package: library, compiler, runtime, CLI, tests and [examples](lang/examples/) |
+| [vscode/](vscode/README.md) | VS Code extension: syntax coloring, TypeScript language features and Run and Debug commands for `.spl` files |
 | [docs-template/](docs-template/Introduction.md) | Documentation sources |
 | [docs/](docs/) | Generated documentation site (GitHub Pages); `index.html` is the starter presentation |
 
-[generate-presentation.md](generate-presentation.md) is a workflow that regenerates the
+[generate-presentation.spl](generate-presentation.spl) is a workflow that regenerates the
 starter presentation in `presentations/`; `node docs/build.mjs` publishes it as the site's front page.
 
 ## Development
 
 ```sh
 npm --prefix lang install
-npm test                 # offline library and runtime tests
+npm test                 # builds the package, then runs the offline library and runtime tests
+npm run docs:build       # regenerates docs/ from docs-template/ and the examples
 npm --prefix vscode test # extension tests
 ```
 
-Tests never contact a model. The [VS Code extension](vscode/README.md) reuses the TypeScript
-language service for `js` and `ts` fences and `{js}` and `{ts}` blocks, with the library declared
-as globals, and adds `@name` and `@CTL` support in blockquotes and `{agent}` blocks. Editor analysis is offline and never executes workflows.
+Tests never contact a model. The [VS Code extension](vscode/README.md) feeds the scanner's
+TypeScript to the TypeScript language service, with the library declared as globals, and adds
+header and `@name` support inside blocks. Editor analysis is offline and never executes workflows.
 
 ## Contributing
 

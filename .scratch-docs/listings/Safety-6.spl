@@ -1,0 +1,13 @@
+let summary = '';
+try {
+    ---
+    outputVar: =summary
+    tokens: 256
+
+    Summarize @args in one sentence.
+    ---
+} catch (error) {
+    if (!(error instanceof Failure)) throw error;
+    summary = `no summary: ${error.reason}`;
+}
+success(summary);

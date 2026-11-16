@@ -17,7 +17,6 @@ const RANK: Record<LogLevel, number> = { error: 0, info: 1, debug: 2 };
 const stderr = (line: string): void => { process.stderr.write(line + '\n'); };
 type EventDetail =
     | { kind: 'error' | 'warning' | 'info' | 'debug'; origin: 'diagnostic' | 'script' }
-    | { kind: 'generic'; origin: 'embedding'; label: string }
     | { kind: 'model-input' | 'model-output'; origin: 'model'; interaction: ModelInteraction };
 
 /** Logs go to stderr so that stdout carries only the script result. */
@@ -50,7 +49,7 @@ export class Logger {
         this.options.streamSink!(Object.freeze(detached));
     }
 
-    private emit(min: LogLevel, detail: EventDetail, msg: unknown, values: readonly unknown[] = [], raw = false, preface = ''): void {
+    private emit(min: LogLevel, detail: EventDetail, msg: unknown, values: readonly unknown[] = [], preface = ''): void {
         if (this.level === 'silent' || RANK[this.level] < RANK[min]) return;
         const id = `${this.sessionId}:${++this.nextId}`;
         const segments: BodySegment[] = [];
@@ -61,8 +60,8 @@ export class Logger {
             const parts: BodySegment[] = detail.kind === 'model-output' && detail.interaction.kind === 'codegen'
                 && detail.interaction.role !== 'action' && typeof value === 'string'
                 ? [{ type: 'code', language: 'javascript', source: sanitize(value) }]
-                : valueSegments(value, id, String(index), raw);
-            if (index) segments.push({ type: 'text', text: detail.kind === 'generic' || formatSegments(parts).includes('\n') ? '\n' : ' ' });
+                : valueSegments(value, id, String(index));
+            if (index) segments.push({ type: 'text', text: formatSegments(parts).includes('\n') ? '\n' : ' ' });
             segments.push(...parts);
         });
         this.deliver(freezeEvent({ id, sequence: ++this.sequence, segments, ...detail }));
@@ -89,25 +88,17 @@ export class Logger {
         this.emit('debug', { kind: 'debug', origin: msg === 'log:' ? 'script' : 'diagnostic' }, msg, values);
     }
 
-    llm(msg: unknown, ...values: unknown[]): void {
-        this.emit('error', { kind: 'generic', origin: 'embedding', label: 'message' }, msg, values);
-    }
-
-    modelInput(interaction: ModelInteraction, msg: unknown, ...values: unknown[]): void {
-        this.emit('error', { kind: 'model-input', origin: 'model', interaction: { ...interaction } }, msg, values);
-    }
-
     modelPrompt(interaction: ModelInteraction, prompt: string, preface: string): void {
         if (!prompt.startsWith(preface)) throw new Error('model prompt must start with its generated preface');
         this.emit('error', { kind: 'model-input', origin: 'model', interaction: { ...interaction } },
-            prompt.slice(preface.length), [], false, preface);
+            prompt.slice(preface.length), [], preface);
     }
 
     modelOutput(interaction: ModelInteraction, msg: unknown, ...values: unknown[]): void {
         this.emit('error', { kind: 'model-output', origin: 'model', interaction: { ...interaction } }, msg, values);
     }
 
-    /** A tool call by a fence, blockquote or agent. The terminal view folds its content. */
+    /** A tool call by workflow code or an agent. The terminal view folds its content. */
     tool(call: ToolCallLog): void {
         if (this.level === 'silent' || RANK[this.level] < RANK.info) return;
         const id = `${this.sessionId}:${++this.nextId}`;
@@ -131,10 +122,5 @@ export class Logger {
         const id = `${this.sessionId}:${++this.nextId}`;
         const segments = stateSegments(change, id);
         this.deliver(freezeEvent({ id, sequence: ++this.sequence, kind: 'state', origin: 'state', change, segments }));
-    }
-
-    /** @deprecated Explicit embedding compatibility only; execution never calls this helper. */
-    deterministic(msg: string): void {
-        this.emit('error', { kind: 'generic', origin: 'embedding', label: 'message' }, msg, [], true);
     }
 }

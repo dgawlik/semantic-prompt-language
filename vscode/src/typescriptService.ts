@@ -1,6 +1,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
+import type { Location } from 'vscode-languageserver/node';
+import { CHECK_OPTIONS } from '../../lang/src/scanner.js';
+import { Workflow } from './workflow';
 
 /** Declaration files shipped with the extension. */
 export interface TypeResources {
@@ -23,48 +27,54 @@ const OWN_MODULES: Record<string, string> = {
     'spl-lang/markdown': path.join('dist', 'markdown-lib.d.ts'),
     'spl-lang/globals': 'globals.d.ts',
 };
+/** A `.spl` file is known to TypeScript as the module beside it, as in `spl check`: `flow.spl` is `flow.spl.ts`. */
+const MODULE = '.spl.ts';
+const splSource = (file: string): string | undefined => file.endsWith(MODULE) ? file.slice(0, -'.ts'.length) : undefined;
+
+interface DiskFile {
+    version: string;
+    checked: number;
+    snapshot?: ts.IScriptSnapshot;
+    workflow?: Workflow;
+}
 
 /**
- * One TypeScript language service per working directory. Each workflow contributes a virtual
- * module placed in that directory, so relative imports and `node_modules` resolve the way the
- * runtime resolves them, and the spl-lang globals are part of every program.
+ * The TypeScript language service of the workspace. Every `.spl` file is a virtual module made by the
+ * scanner: open documents from the editor's text, files they import from disk. The modules are checked
+ * the way `spl check` checks them, with the spl-lang globals in every program.
  */
 export class TypeScriptProject {
     readonly service: ts.LanguageService;
-    private readonly virtual = new Map<string, { name: string; text: string; version: number }>();
-    private readonly disk = new Map<string, { version: string; checked: number; snapshot?: ts.IScriptSnapshot }>();
+    private readonly open = new Map<string, { file: string; version: number; workflow: Workflow }>();
+    private readonly disk = new Map<string, DiskFile>();
     private readonly globals: string;
-    private counter = 0;
+    private versions = 0;
 
-    constructor(readonly base: string, private readonly resources: TypeResources) {
+    constructor(private readonly base: string, resources: TypeResources) {
         this.globals = path.join(resources.spl, 'globals.d.ts');
         const options: ts.CompilerOptions = {
-            target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
-            allowJs: true, checkJs: false, strict: false, noEmit: true, skipLibCheck: true, esModuleInterop: true,
-            resolveJsonModule: true, allowImportingTsExtensions: true, lib: ['lib.esnext.d.ts'],
-            types: ['node'], typeRoots: [path.join(base, 'node_modules', '@types'), resources.types],
+            ...ts.convertCompilerOptionsFromJson(CHECK_OPTIONS, base).options,
+            typeRoots: [path.join(base, 'node_modules', '@types'), resources.types],
         };
-        const cache = ts.createModuleResolutionCache(base, name => ts.sys.useCaseSensitiveFileNames ? name : name.toLowerCase(), options);
         const host: ts.LanguageServiceHost = {
             getCompilationSettings: () => options,
             getCurrentDirectory: () => base,
             getDefaultLibFileName: () => path.join(resources.libraries, 'lib.d.ts'),
-            getScriptFileNames: () => [...[...this.virtual.values()].map(file => file.name), this.globals],
-            getScriptVersion: file => this.virtual.get(this.key(file))?.version.toString() ?? this.diskVersion(file),
+            getScriptFileNames: () => [...[...this.open.values()].map(item => item.file), this.globals],
+            getScriptVersion: file => this.open.get(this.key(file))?.version.toString() ?? this.stat(file).version,
             getScriptSnapshot: file => {
-                const own = this.virtual.get(this.key(file));
-                if (own) return ts.ScriptSnapshot.fromString(own.text);
-                this.diskVersion(file);
-                const entry = this.disk.get(file)!;
+                const open = this.open.get(this.key(file));
+                if (open) return ts.ScriptSnapshot.fromString(open.workflow.text);
+                const entry = this.stat(file);
                 if (!entry.snapshot) {
-                    const text = ts.sys.readFile(file);
+                    const text = this.read(file);
                     if (text === undefined) return undefined;
                     entry.snapshot = ts.ScriptSnapshot.fromString(text);
                 }
                 return entry.snapshot;
             },
-            fileExists: file => this.virtual.has(this.key(file)) || ts.sys.fileExists(file),
-            readFile: (file, encoding) => this.virtual.get(this.key(file))?.text ?? ts.sys.readFile(file, encoding),
+            fileExists: file => this.open.has(this.key(file)) || ts.sys.fileExists(splSource(file) ?? file),
+            readFile: file => this.open.get(this.key(file))?.workflow.text ?? this.read(file),
             readDirectory: ts.sys.readDirectory,
             directoryExists: ts.sys.directoryExists,
             getDirectories: ts.sys.getDirectories,
@@ -77,56 +87,77 @@ export class TypeScriptProject {
                         resolvedFileName: path.join(resources.spl, own), extension: ts.Extension.Dts, isExternalLibraryImport: true,
                     } };
                 }
-                return ts.resolveModuleName(literal.text, containingFile, settings, host, cache, redirected,
+                return ts.resolveModuleName(literal.text, containingFile, settings, host, undefined, redirected,
                     ts.getModeForUsageLocation(containingSourceFile, literal, settings));
             }),
         };
         this.service = ts.createLanguageService(host, ts.createDocumentRegistry(ts.sys.useCaseSensitiveFileNames, base));
     }
 
+    /** TypeScript may change the slashes and the letter case of a file name. */
     private key(file: string): string {
         const normalized = path.normalize(file);
         return ts.sys.useCaseSensitiveFileNames ? normalized : normalized.toLowerCase();
     }
 
-    private diskVersion(file: string): string {
-        const now = Date.now();
-        let entry = this.disk.get(file);
-        if (!entry || now - entry.checked > 1500) {
-            const version = ts.sys.getModifiedTime?.(file)?.getTime().toString() ?? '0';
-            entry = { version, checked: now, snapshot: entry?.version === version ? entry.snapshot : undefined };
-            this.disk.set(file, entry);
-        }
-        return entry.version;
-    }
-
-    /** A new virtual module name in the working directory. */
-    allocate(extension: 'mjs' | 'mts'): string {
-        return path.join(this.base, `__spl-workflow-${++this.counter}__.${extension}`);
-    }
-
-    update(file: string, text: string): void {
+    /** The state of a file on disk, looked up at most every 1.5 seconds; a `.spl` module follows its source. */
+    private stat(file: string): DiskFile {
         const key = this.key(file);
-        const current = this.virtual.get(key);
-        if (current?.text !== text) this.virtual.set(key, { name: file, text, version: (current?.version ?? 0) + 1 });
+        const now = Date.now();
+        let entry = this.disk.get(key);
+        if (!entry || now - entry.checked > 1500) {
+            const version = ts.sys.getModifiedTime?.(splSource(file) ?? file)?.getTime().toString() ?? '0';
+            entry = { version, checked: now, ...(entry?.version === version ? { snapshot: entry.snapshot, workflow: entry.workflow } : {}) };
+            this.disk.set(key, entry);
+        }
+        return entry;
     }
 
-    remove(file: string): void {
-        this.virtual.delete(this.key(file));
+    private read(file: string): string | undefined {
+        return splSource(file) ? this.workflow(file)?.text : ts.sys.readFile(file);
     }
 
-    owns(file: string): boolean {
-        return this.virtual.has(this.key(file));
+    /** The module name of a document: beside a file, so its relative imports resolve as they do when it runs. */
+    file(uri: string): string {
+        return uri.startsWith('file:') ? `${fileURLToPath(uri)}.ts` : path.join(this.base, `${encodeURIComponent(uri)}${MODULE}`);
     }
 
-    /** Whether two names denote the same file; TypeScript may change slashes and letter case. */
-    same(a: string, b: string): boolean {
-        return this.key(a) === this.key(b);
+    /** Takes the editor's text of a document as the content of its module, and returns the module name. */
+    update(uri: string, text: string): string {
+        const file = this.file(uri);
+        this.open.set(this.key(file), { file, version: ++this.versions, workflow: new Workflow(uri, text) });
+        return file;
     }
 
-    /** Line and character of an offset in any file of the program. */
-    position(file: string, offset: number): { line: number; character: number } | undefined {
+    /** Forgets the editor's text: the module is read from disk again, if anything still imports it. */
+    close(uri: string): void {
+        this.open.delete(this.key(this.file(uri)));
+    }
+
+    /** The workflow behind a module of the program, when the module stands for a `.spl` file. */
+    workflow(file: string): Workflow | undefined {
+        const open = this.open.get(this.key(file))?.workflow;
+        const source = splSource(file);
+        if (open || !source) return open;
+        const entry = this.stat(file);
+        if (!entry.workflow) {
+            const text = ts.sys.readFile(source);
+            if (text === undefined) return undefined;
+            entry.workflow = new Workflow(pathToFileURL(source).href, text);
+        }
+        return entry.workflow;
+    }
+
+    /** Where the editor shows a span of a file of the program; nowhere for generated code. */
+    location(file: string, start: number, length: number): Location | undefined {
+        const workflow = this.workflow(file);
+        if (workflow) {
+            const range = workflow.range(start, length);
+            return range && { uri: workflow.uri, range };
+        }
         const source = this.service.getProgram()?.getSourceFile(file);
-        return source ? ts.getLineAndCharacterOfPosition(source, Math.min(offset, source.text.length)) : undefined;
+        if (!source) return undefined;
+        const position = (offset: number) => ts.getLineAndCharacterOfPosition(source, Math.min(offset, source.text.length));
+        return { uri: pathToFileURL(file).href, range: { start: position(start), end: position(start + length) } };
     }
 }

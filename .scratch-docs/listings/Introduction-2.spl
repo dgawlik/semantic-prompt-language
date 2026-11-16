@@ -1,0 +1,24 @@
+//*
+# Generate a function, then use it
+
+A codegen block asks the model for JavaScript functions and declares them as typed constants.
+The code is cached next to this file, as `codegen.sieve.js`, and reused on later runs.
+
+    spl run examples/codegen.spl
+*//
+
+---
+model: gpt-6-luna
+---
+
+---
+mode: codegen
+
+Sieve of Eratosthenes that returns the primes up to a given number -> @sieve(limit: number): number[]
+---
+
+log(sieve(100));
+
+const slugify = await codegen<(title: string) => string>(
+    'slugify(title): lowercase, trim, and replace runs of non-alphanumeric characters with single dashes');
+success(slugify('  Hello, Generated World!  '));

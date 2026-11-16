@@ -1,4 +1,8 @@
 {
+  "comments": {
+    "lineComment": "//",
+    "blockComment": ["/*", "*/"]
+  },
   "brackets": [
     ["{", "}"],
     ["[", "]"],
@@ -10,7 +14,8 @@
     { "open": "(", "close": ")" },
     { "open": "'", "close": "'", "notIn": ["string", "comment"] },
     { "open": "\"", "close": "\"", "notIn": ["string", "comment"] },
-    { "open": "`", "close": "`", "notIn": ["string", "comment"] }
+    { "open": "`", "close": "`", "notIn": ["string", "comment"] },
+    { "open": "/**", "close": " */", "notIn": ["string"] }
   ],
   "surroundingPairs": [
     ["{", "}"],
@@ -19,17 +24,5 @@
     ["'", "'"],
     ["\"", "\""],
     ["`", "`"]
-  ],
-  "folding": {
-    "markers": {
-      "start": "^\\s*\\{(?:js|ts|agent|codegen|comment|lock)(?=[\\s}]|$)",
-      "end": "^\\s*\\{/(?:js|ts|agent|codegen|comment|lock)\\}\\s*$"
-    }
-  },
-  "onEnterRules": [
-    {
-      "beforeText": "^\\s*(?:if|elif|else|while)(?![\\w$]).*:\\s*$",
-      "action": { "indent": "indent" }
-    }
   ]
 }

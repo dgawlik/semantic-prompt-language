@@ -2,21 +2,18 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AGENT_TOOLS } from '../src/agent.js';
 import type { ModelCallOptions, ModelStreamPart, ToolOutput } from '../src/ai-native.js';
 import { AiBackend } from '../src/ai.js';
-import { decidePermission } from '../src/copilot.js';
-import type { Failure } from '../src/errors.js';
+import { AGENT_TOOLS } from '../src/blocks.js';
 import { agent, configure, restrict } from '../src/index.js';
 import type { LlmBackend } from '../src/llm.js';
 import { configuredMcpTool, filterMcpServers, loadMcpConfig, type McpServers } from '../src/mcp.js';
-import { parse } from '../src/markdown.js';
 import { makeRestriction, Restrictions } from '../src/restrict.js';
 import { setAmbient } from '../src/runtime.js';
 import { TOOL_SPECS } from '../src/tools.js';
 import { Trace } from '../src/trace.js';
 import { run } from '../src/workflow.js';
-import { NoLlm, cleanTemp, collecting, exec, execMarkdown, fence, scripted, silent, tempDir, text } from './helpers.js';
+import { NoLlm, agentBlock, backend, block, cleanTemp, collecting, exec, scripted, silent, tempDir, text } from './helpers.js';
 
 type Turn = (step: number, outputs: ToolOutput[]) => ModelStreamPart[];
 const sdk = vi.hoisted(() => ({ turn: (() => []) as Turn, requests: [] as ModelCallOptions[] }));
@@ -116,19 +113,6 @@ describe('MCP restriction enforcement', () => {
         expect(configuredMcpTool(servers, 'toString', 'read')).toBe(false);
     });
 
-    it('approves configured MCP permissions and blocks restriction violations', () => {
-        const blocked: Failure[] = [];
-        const decide = (serverName: string, toolName: string, restrictions = new Restrictions(cwd)) =>
-            decidePermission({ kind: 'mcp', serverName, toolName, readOnly: true, toolTitle: toolName },
-                restrictions, failure => blocked.push(failure), servers);
-        expect(decide('docs', 'search').kind).toBe('approve-once');
-        expect(decide('unconfigured', 'search').kind).toBe('reject');
-        expect(decide('issues', 'delete').kind).toBe('reject');
-        expect(decide('docs', 'write', restricted('docs/search')).kind).toBe('reject');
-        expect(blocked).toHaveLength(1);
-        expect(blocked[0].statusCode).toBe('restriction_violation');
-    });
-
     it.each(['', 'docs/', '/search', 'docs/search/other', '*', 'docs/tool*'])('rejects malformed selector %j', value => {
         expect(() => makeRestriction('mcp', value, cwd)).toThrow();
     });
@@ -180,23 +164,32 @@ success([reason, await ask('after invalid entry')]);`, { cwd, backend: model });
         });
     });
 
-    it('narrows MCP access for a blockquote with @CTL and with the agent restrict tool', async () => {
+    it('narrows MCP access for an agent block with the restrict header, within the restrictions around it', async () => {
         const seen: string[][] = [];
-        const model: LlmBackend = {
-            async call(request) {
-                seen.push(request.restrictions.list.map(item => `${item.kind}:${item.values}`));
-                await request.invokeAction!({ name: 'restrict', arguments: { kind: 'mcp', value: ['docs/search', 'docs/read'] } });
-                seen.push(request.currentRestrictions!().list.map(item => `${item.kind}:${item.values}`));
-                expect(() => request.currentRestrictions!().checkMcp('docs', 'search')).not.toThrow();
-                expect(() => request.currentRestrictions!().checkMcp('issues', 'read')).toThrow(/blocked/);
-                expect(() => request.restrictions.checkMcp('issues', 'read')).not.toThrow();
-                return { text: 'Done', effective: {} };
+        const model = backend(request => {
+            seen.push(request.restrictions.list.map(item => `${item.kind}:${item.values}`));
+            if (!request.runtimeTools) return { text: request.prompt, effective: {} };
+            expect(() => request.restrictions.checkMcp('docs', 'search')).not.toThrow();
+            expect(() => request.restrictions.checkMcp('docs', 'write')).toThrow(/blocked/);
+            expect(() => request.restrictions.checkMcp('issues', 'read')).toThrow(/blocked/);
+            expect(request.prompt).toContain('- MCP: you may only call these servers/tools: docs, issues/read. Anything else will be blocked.\n- MCP: you may only call these servers/tools: docs/search, docs/read.');
+            return { text: 'Done', effective: {} };
+        });
+        const result = await exec(`await restrict({ mcp: ['docs', 'issues/read'] }, async () => {
+${agentBlock('Search the docs.', 'restrict: { mcp: [docs/search, docs/read] }')}
+    await ask('inside');
+});
+success(await ask('outside'));`, { cwd, backend: model });
+        expect(result).toMatchObject({ status: 'success', value: 'outside' });
+        expect(seen).toEqual([['mcp:docs,issues/read', 'mcp:docs/search,docs/read'], ['mcp:docs,issues/read'], []]);
+    });
+
+    it.each(['docs/', '*', 'docs/tool*'])('fails an agent block with the malformed selector %j before calling the model', async selector => {
+        expect(await exec(`const before = 1;\n${agentBlock('Search the docs.', `restrict: { mcp: '${selector}' }`)}`, { cwd })).toMatchObject({
+            status: 'failure', failure: {
+                status_code: 'runtime_error', reason: 'restrict mcp expects server names or server/tool selectors', line: 2, command: 'Search the docs.',
             },
-            async close() {},
-        };
-        const result = await execMarkdown(`> @CTL(restrict={mcp: ['docs', 'issues/read']})\n> Search the docs.\n\n${fence("success('done');")}`, { cwd, backend: model });
-        expect(result).toMatchObject({ status: 'success', value: 'done' });
-        expect(seen).toEqual([['mcp:docs,issues/read'], ['mcp:docs,issues/read', 'mcp:docs/search,docs/read']]);
+        });
     });
 });
 
@@ -207,9 +200,10 @@ describe('agents with a real MCP server', () => {
     const finish = (reason = 'stop'): ModelStreamPart => ({ type: 'finish', reason });
     const content = (outputs: ToolOutput[]): string => JSON.parse(outputs[0].value).content[0].text;
     const echoing: Turn = (step, outputs) => step === 0
-        ? [call('mcp_0_0', { message: 'real MCP result' }), finish('tool-calls')]
+        ? [call('mcp0Echo', { message: 'real MCP result' }), finish('tool-calls')]
         : [...say(`Echoed: ${content(outputs)}`), finish()];
-    const advertised = (index = 0) => sdk.requests[index].tools.filter(tool => tool.name.startsWith('mcp_')).map(tool => tool.description);
+    const tools = (index = 0) => sdk.requests[index].tools.map(tool => tool.name);
+    const advertised = (index = 0) => sdk.requests[index].tools.filter(tool => tool.name.startsWith('mcp')).map(tool => tool.description);
     let servers: McpServers;
     let ai: AiBackend;
 
@@ -233,7 +227,7 @@ describe('agents with a real MCP server', () => {
         sdk.turn = echoing;
         expect(await exec("success(await agent('Echo it'));", { backend: ai, cwd })).toEqual({ status: 'success', value: 'Echoed: real MCP result', hasValue: true });
         expect(sdk.requests).toHaveLength(2);
-        expect(sdk.requests[0].tools.map(tool => tool.name)).toEqual([...Object.keys(TOOL_SPECS), 'mcp_0_0', 'mcp_1_0']);
+        expect(tools()).toEqual([...Object.keys(TOOL_SPECS), 'mcp0Echo', 'mcp1Echo']);
         expect(advertised()).toEqual(['MCP docs/echo: Echo a message', 'MCP notes/echo: Echo a message']);
     }, 20_000);
 
@@ -248,42 +242,56 @@ describe('agents with a real MCP server', () => {
         expect(advertised()).toEqual(expected);
     }, 20_000);
 
-    it('never offers MCP tools to ask() or think()', async () => {
-        expect(await exec("success([await ask('One'), await think('Two')]);", { backend: ai, cwd })).toMatchObject({ value: ['Done', 'Done'] });
+    it('never offers MCP tools to ask() or ask blocks', async () => {
+        expect(await exec(`${block('Two', 'outputVar: two')}\nsuccess([await ask('One'), two]);`, { backend: ai, cwd })).toMatchObject({ value: ['Done', 'Done'] });
         expect(sdk.requests.map(request => request.tools)).toEqual([[], []]);
     });
 
-    it('lets a blockquote agent combine an MCP result with runtime tools, within @CTL restrictions', async () => {
-        sdk.turn = (step, outputs) => step === 0 ? [call('mcp_0_0', { message: 'hello' }), finish('tool-calls')]
-            : step === 1 ? [call('save_variable', { name: 'reply', value: content(outputs).toUpperCase() }), finish('tool-calls')]
+    it('names the tools of each server mcp<Index><Tool> for an agent block, which reaches the server it picks', async () => {
+        sdk.turn = (step, outputs) => step === 0 ? [call('mcp1Echo', { message: 'from notes' }), finish('tool-calls')]
+            : step === 1 ? [call('saveVariable', { name: 'reply', value: content(outputs) }), finish('tool-calls')]
             : [...say('Saved.'), finish()];
         const { logger, events } = collecting('info');
-        const result = await execMarkdown(`> @CTL(restrict={mcp: 'notes/echo'})
-> Echo hello with the notes server and save the reply to @reply
+        ai = new AiBackend({ cwd, timeoutMs: 10_000, logger, mcpServers: servers });
+        expect(await exec(`${agentBlock('Echo with the notes server ->[Str] @reply')}\nsuccess(reply);`, { backend: ai, cwd, logger }))
+            .toEqual({ status: 'success', value: 'from notes', hasValue: true });
+        expect(tools()).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp0Echo', 'mcp1Echo']);
+        expect(advertised()).toEqual(['MCP docs/echo: Echo a message', 'MCP notes/echo: Echo a message']);
+        expect(events.filter(event => event.kind === 'tool').map(event => event.kind === 'tool' && event.tool))
+            .toEqual([{ name: 'notes/echo', target: '{"message":"from notes"}', status: 'success' }]);
+    }, 20_000);
 
-${fence('success(reply);')}`, { backend: ai, cwd, logger });
+    it('lets an agent block combine an MCP result with runtime tools, within its restrict header', async () => {
+        sdk.turn = (step, outputs) => step === 0 ? [call('mcp0Echo', { message: 'hello' }), finish('tool-calls')]
+            : step === 1 ? [call('saveVariable', { name: 'reply', value: content(outputs).toUpperCase() }), finish('tool-calls')]
+            : [...say('Saved.'), finish()];
+        const { logger, events } = collecting('info');
+        const result = await exec(`${agentBlock('Echo hello with the notes server and save the reply -> @reply', 'restrict: { mcp: notes/echo }')}
+success(reply);`, { backend: ai, cwd, logger });
         expect(result).toMatchObject({ status: 'success', value: 'HELLO' });
         expect(sdk.requests).toHaveLength(3);
-        expect(sdk.requests[0].tools.map(tool => tool.name)).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp_0_0']);
+        expect(tools()).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp0Echo']);
         expect(advertised()).toEqual(['MCP notes/echo: Echo a message']);
         expect(sdk.requests[0].prompt).toContain('- MCP: you may only call these servers/tools: notes/echo. Anything else will be blocked.');
         const outputs = events.filter(event => event.origin === 'model').filter(event => event.kind === 'model-output');
         expect(outputs.map(event => [event.interaction.role, text(event)])).toEqual([
-            ['action', '{"name":"save_variable","arguments":{"name":"reply","value":"HELLO"}}'], ['response', 'Saved.'],
+            ['action', '{"name":"saveVariable","arguments":{"name":"reply","value":"HELLO"}}'], ['response', 'Saved.'],
         ]);
     }, 20_000);
 
-    it('blocks an MCP call as soon as the agent narrows its own MCP access', async () => {
+    it('blocks an MCP call that the restrict header of an agent block excludes', async () => {
         sdk.turn = step => step === 0
-            ? [call('restrict', { kind: 'mcp', value: 'docs/search' }), call('mcp_0_0', { message: 'blocked?' }), finish('tool-calls')]
+            ? [call('mcp0Echo', { message: 'blocked?' }), finish('tool-calls')]
             : [...say('unreachable'), finish()];
-        expect(await execMarkdown(`> Narrow MCP access, then echo.\n\n${fence("success('unreachable');")}`, { backend: ai, cwd })).toMatchObject({
+        const source = `${agentBlock('Echo with the docs server.', 'restrict: { mcp: [docs/search, notes/unlisted] }')}\nsuccess('unreachable');`;
+        expect(await exec(source, { backend: ai, cwd })).toMatchObject({
             status: 'failure', failure: {
-                status_code: 'restriction_violation', line: 6,
-                reason: "MCP tool 'docs/echo' blocked: allowed MCP servers/tools are docs/search",
+                status_code: 'restriction_violation', line: 1, command: 'Echo with the docs server.',
+                reason: "tool 'mcp0Echo' is not enabled by the runtime",
             },
         });
         expect(sdk.requests).toHaveLength(1);
+        expect(advertised()).toEqual([]);
     }, 20_000);
 
     it('records MCP results of agent calls in the trace and replays them without starting servers', async () => {
@@ -293,7 +301,7 @@ ${fence('success(reply);')}`, { backend: ai, cwd, logger });
         const traced = async (model: LlmBackend) => {
             const trace = Trace.open(journal, { source: code, runtime: 'test', cwd });
             try {
-                const result = await run(parse(code), { backend: model, logger: silent, cwd, trace });
+                const result = await run(code, { backend: model, logger: silent, cwd, trace });
                 trace.finish(result);
                 return result;
             } finally {

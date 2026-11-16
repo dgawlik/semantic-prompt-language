@@ -68,9 +68,9 @@ it.each(['stdio', 'http', 'sse'] as const)('executes a tool over real %s MCP tra
     }
     let step = 0;
     sdk.stream.mockImplementation(async function* (options: ModelCallOptions): AsyncGenerator<ModelStreamPart> {
-        expect(options.tools?.map(tool => tool.name)).toContain('mcp_0_0');
+        expect(options.tools?.map(tool => tool.name)).toContain('mcp0Echo');
         const first = step++ === 0;
-        if (first) yield { type: 'tool-call', toolCallId: 'echo', toolName: 'mcp_0_0', input: { message: 'real MCP result' } };
+        if (first) yield { type: 'tool-call', toolCallId: 'echo', toolName: 'mcp0Echo', input: { message: 'real MCP result' } };
         else {
             expect(JSON.stringify(sdk.outputs)).toContain('real MCP result');
             yield { type: 'text-delta', id: 'text', delta: 'Done' };

@@ -1,0 +1,57 @@
+//*
+# Extract an invoice into accounting-ready JSON
+
+Turns a pasted or OCR'd invoice into structured data. Monetary amounts use integer cents.
+The output type checks the shape; exact arithmetic checks the numbers, because a model can
+produce valid JSON with wrong totals.
+
+    spl run examples/extract-invoice.spl --arg ./examples/data/invoice.txt
+*//
+
+---
+model: gpt-6-luna
+---
+
+const path = args[0] ?? './examples/data/invoice.txt';
+const text = await readFile(path);
+
+const Money = Typedef('Money', Int, { minimum: 0, desc: 'Monetary amount in cents' });
+
+const LineItem = Struct('LineItem', {
+    description: Str,
+    quantity: Int.annotate({ minimum: 1 }),
+    unit_price: Money,
+});
+
+const Invoice = Struct('Invoice', {
+    vendor: Str.annotate({ minLength: 1 }),
+    number: Str.annotate({ minLength: 1 }),
+    date: Str.annotate({ pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' }),
+    currency: Str.annotate({ pattern: '^[A-Z]{3}$' }),
+    lines: List(LineItem),
+    subtotal: Money,
+    tax: Money,
+    total: Money,
+});
+
+---
+outputVar: invoice
+outputType: Invoice
+forbid: filling in values that are not printed on the invoice
+repairs: 1
+
+Extract the invoice in @text. Dates are ISO `YYYY-MM-DD`, currency is an ISO 4217 code,
+and there is one entry per line item. Convert printed monetary amounts to integer cents
+(for example, 12.50 becomes 1250).
+---
+
+const computed = invoice.lines.reduce((sum, line) => sum + line.quantity * line.unit_price, 0);
+
+assert(computed === invoice.subtotal,
+    `line items add up to ${computed} cents but the subtotal is ${invoice.subtotal} cents`);
+assert(invoice.subtotal + invoice.tax === invoice.total,
+    `subtotal ${invoice.subtotal} + tax ${invoice.tax} does not equal total ${invoice.total} cents`);
+
+await restrict('./out/invoices', () =>
+    writeFile(`./out/invoices/${invoice.number}.json`, JSON.stringify(invoice, null, 2)));
+success(invoice);

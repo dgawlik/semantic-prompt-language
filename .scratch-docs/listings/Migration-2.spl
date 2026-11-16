@@ -1,0 +1,40 @@
+//*
+# Rolling journal
+
+Reads and writes its state explicitly in `journal.json`. Initialize the file once:
+
+    echo '{"runs":0,"history":[]}' > journal.json
+    spl run examples/journal.spl --trace journal-run-1.jsonl
+
+Reuse that trace to resume or replay the same run; use a different trace for the next journal entry.
+*//
+
+---
+model: gpt-6-luna
+---
+
+const previous = JSON.parse(await readFile('./journal.json'));
+const runs: number = previous.runs + 1;
+let history: { run: number; summary: string }[] = previous.history;
+const notes = await readFile('./examples/data/notes.txt');
+
+---
+outputVar: today
+
+Summarize these notes in one sentence: @notes
+---
+
+history.push({ run: runs, summary: today });
+history = history.slice(-5);
+let trend = '';
+
+if (history.length > 1) {
+    ---
+    outputVar: =trend
+
+    Describe in one paragraph what changes from run to run in @history
+    ---
+}
+
+await writeFile('./journal.json', JSON.stringify({ runs, history }));
+success({ run: runs, today, trend });

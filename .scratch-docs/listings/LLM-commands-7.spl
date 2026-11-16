@@ -1,0 +1,24 @@
+//*
+# Check an untyped answer in code
+
+An output without a type is saved as plain JSON, typed `unknown`: code decides what to make of it.
+
+    spl run examples/answer.spl
+*//
+
+---
+model: gpt-6-luna
+reasoning: low
+---
+
+---
+mode: agent
+
+Give an answer to everything as an integer -> @response
+---
+
+if (Int.is(response)) {
+    success('Everything works as planned');
+} else {
+    fail('Response is not an integer');
+}

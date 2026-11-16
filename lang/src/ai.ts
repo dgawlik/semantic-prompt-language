@@ -16,7 +16,7 @@ const SYSTEM_MESSAGE = [
 ].join(' ');
 
 const ajv = new Ajv({ strict: false, allErrors: true, addUsedSchema: false });
-const budgets: Record<ReasoningLevel, number> = { low: 1024, medium: 4096, high: 16384 };
+const budgets: Record<Exclude<ReasoningLevel, 'none'>, number> = { low: 1024, medium: 4096, high: 16384, max: 32768 };
 
 export interface AiBackendOptions {
     logger: Logger;
@@ -26,10 +26,16 @@ export interface AiBackendOptions {
     mcpServers?: McpServers;
 }
 
+/**
+ * Provider settings for a reasoning level. Without a requested level the default is `medium`, or `none`
+ * when sampling is set. A level the model lacks falls back to the nearest one it offers; only a level the
+ * workflow asked for is worth a warning.
+ */
 export function reasoningOptions(
-    provider: Provider, model: string, effort: ReasoningLevel | undefined, showReasoning: boolean, logger: Logger,
-    disableThinking = false,
-): { options: ProviderOptions; effort?: ReasoningLevel | 'none' } {
+    provider: Provider, model: string, requested: ReasoningLevel | undefined, showReasoning: boolean, logger: Logger,
+    sampling = false,
+): { options: ProviderOptions; effort?: ReasoningLevel } {
+    const level = requested ?? (sampling ? 'none' : 'medium');
     const openaiReasoning = /^(?:o[134](?:-|$)|gpt-[5-9](?:[.-]|$))/.test(model);
     const googleReasoning = /^gemini-(?:2\.5|[3-9])/.test(model);
     const anthropicReasoning = /^claude-(?:(?:sonnet|opus|haiku|fable)-[4-9]|3-7)/.test(model);
@@ -38,33 +44,48 @@ export function reasoningOptions(
             ...(openaiReasoning ? { reasoningSummary: showReasoning ? 'auto' : null } : {}) } }
         : provider === 'anthropic' ? { anthropic: { disableParallelToolUse: true } }
         : googleReasoning ? { google: { thinkingConfig: { includeThoughts: showReasoning } } } : {};
-    if (!effort) {
-        const supportsReasoning = provider === 'openai' ? openaiReasoning
-            : provider === 'google' ? googleReasoning : anthropicReasoning;
-        return { options, ...(disableThinking && supportsReasoning ? { effort: 'none' } : {}) };
-    }
-    if (provider === 'openai' && openaiReasoning && !/^o1-(?:mini|preview)/.test(model)
-        && (!/^gpt-5-pro(?:-|$)/.test(model) || effort === 'high')) {
-        (options.openai ??= {}).reasoningEffort = effort;
-    } else if (provider === 'anthropic' && anthropicReasoning) {
-        const adaptive = /^claude-(?:(?:opus|sonnet)-4-[6-9]|(?:sonnet|opus|haiku|fable)-[5-9])/.test(model);
-        (options.anthropic ??= {}).thinking = adaptive ? { type: 'adaptive' } : { type: 'enabled', budgetTokens: budgets[effort] };
-        if (adaptive) options.anthropic.effort = effort;
-    } else if (provider === 'google' && googleReasoning) {
-        // Gemini 3 Pro supports low/high, but not medium.
-        if (/^gemini-3(?:\.0)?-pro/.test(model) && effort === 'medium') {
-            logger.warn(`model '${model}' does not support reasoning effort '${effort}'; using the model default`);
-            return { options };
-        }
-        options.google = { thinkingConfig: {
-            ...(/^gemini-2\.5/.test(model) ? { thinkingBudget: budgets[effort] } : { thinkingLevel: effort }),
-            includeThoughts: showReasoning,
-        } };
-    } else {
-        logger.warn(`model '${model}' does not support reasoning effort '${effort}'; using the model default`);
+    const fallback = (used: string): void => {
+        if (requested) logger.warn(`model '${model}' does not support reasoning '${level}'; using ${used}`);
+    };
+    const supported = provider === 'openai' ? openaiReasoning && !/^o1-(?:mini|preview)/.test(model)
+        : provider === 'google' ? googleReasoning : anthropicReasoning;
+    if (!supported) {
+        if (level !== 'none') fallback('the model default');
         return { options };
     }
+    // The provider minimum is chosen per model when the request is built.
+    if (level === 'none') return { options, effort: 'none' };
+    if (provider === 'openai') {
+        const effort = /^gpt-5-pro(?:-|$)/.test(model) ? 'high'
+            : level !== 'max' ? level : /^gpt-(?:5\.[2-9]|[6-9])/.test(model) ? 'xhigh' : 'high';
+        if (level !== 'max' && effort !== level) fallback(`'${effort}'`);
+        (options.openai ??= {}).reasoningEffort = effort;
+        return { options, effort: effort === 'xhigh' ? 'max' : effort };
+    }
+    if (provider === 'anthropic') {
+        const adaptive = /^claude-(?:(?:opus|sonnet)-4-[6-9]|(?:sonnet|opus|haiku|fable)-[5-9])/.test(model);
+        (options.anthropic ??= {}).thinking = adaptive ? { type: 'adaptive' } : { type: 'enabled', budgetTokens: budgets[level] };
+        if (adaptive) options.anthropic.effort = level;
+        return { options, effort: level };
+    }
+    if (/^gemini-2\.5/.test(model)) {
+        const budget = Math.min(budgets[level], /-pro/.test(model) ? 32768 : 24576);
+        options.google = { thinkingConfig: { thinkingBudget: budget, includeThoughts: showReasoning } };
+        return { options, effort: level };
+    }
+    // Gemini 3 Pro offers low and high only; no Gemini model has a level above high.
+    const effort = level === 'max' || level === 'medium' && /^gemini-3(?:\.0)?-pro/.test(model) ? 'high' : level;
+    if (level !== 'max' && effort !== level) fallback(`'${effort}'`);
+    options.google = { thinkingConfig: { thinkingLevel: effort, includeThoughts: showReasoning } };
     return { options, effort };
+}
+
+/** `search_docs` on the first server becomes `mcp0SearchDocs`. */
+function mcpToolName(server: number, tool: string, taken: (name: string) => boolean): string {
+    const base = `mcp${server}${tool.split(/[^A-Za-z0-9]+/).filter(Boolean).map(part => part[0].toUpperCase() + part.slice(1)).join('')}`;
+    let name = base;
+    for (let suffix = 2; taken(name); suffix++) name = `${base}${suffix}`;
+    return name;
 }
 
 interface RegisteredTool {
@@ -117,6 +138,14 @@ export class AiBackend implements LlmBackend {
             const tokens = req.tokens === undefined ? undefined : validateTokens(req.tokens);
             const reasoning = reasoningOptions(selected.provider, selected.model, req.reasoningEffort, req.showReasoning,
                 this.opts.logger, randomness !== undefined);
+            const insisted = req.reasoningEffort !== undefined && req.reasoningEffort !== 'none';
+            // A level nobody asked for must not make a small token budget invalid: think less, or not at all.
+            const thinking = reasoning.options.anthropic?.thinking;
+            if (!req.reasoningEffort && tokens !== undefined && thinking?.type === 'enabled' && tokens <= thinking.budgetTokens) {
+                if (tokens > budgets.low) thinking.budgetTokens = budgets.low;
+                else delete reasoning.options.anthropic!.thinking;
+                reasoning.effort = tokens > budgets.low ? 'low' : undefined;
+            }
             let effectiveReasoningEffort = reasoning.effort;
             const sampling = {
                 seed: randomness?.seed,
@@ -142,9 +171,9 @@ export class AiBackend implements LlmBackend {
             const toolResults: string[] = [];
             let actionExecuted = false;
             if (req.kind === 'agent') {
-                if (req.naturalLanguage) {
-                    for (const spec of req.runtimeTools ?? []) add(spec.name, spec.description, spec.parameters, async input => {
-                        if (!req.invokeAction) throw new LlmError('blockquote runtime action handler is not configured');
+                if (req.runtimeTools) {
+                    for (const spec of req.runtimeTools) add(spec.name, spec.description, spec.parameters, async input => {
+                        if (!req.invokeAction) throw new LlmError('agent block action handler is not configured');
                         try {
                             const value = await req.invokeAction({ name: spec.name, arguments: input });
                             check();
@@ -191,7 +220,6 @@ export class AiBackend implements LlmBackend {
                     }
                     clients.add(client);
                     let cursor: string | undefined;
-                    let toolIndex = 0;
                     do {
                         const page = await client.listTools({
                             params: cursor ? { cursor } : undefined,
@@ -200,11 +228,11 @@ export class AiBackend implements LlmBackend {
                         check();
                         for (const spec of page.tools) {
                             if (!configuredMcpTool(servers, server, spec.name)) continue;
-                            add(`mcp_${serverIndex}_${toolIndex++}`, `MCP ${server}/${spec.name}: ${spec.description ?? spec.name}`, spec.inputSchema, async input => {
+                            add(mcpToolName(serverIndex, spec.name, name => registered.has(name)), `MCP ${server}/${spec.name}: ${spec.description ?? spec.name}`, spec.inputSchema, async input => {
                                 check();
                                 let logged = false;
                                 try {
-                                    (req.currentRestrictions?.() ?? req.restrictions).checkMcp(server, spec.name);
+                                    req.restrictions.checkMcp(server, spec.name);
                                     const result = await client.callTool({
                                         name: spec.name, arguments: input,
                                         options: { signal, timeout: config.timeout ?? this.opts.timeoutMs },
@@ -213,7 +241,7 @@ export class AiBackend implements LlmBackend {
                                     logged = true;
                                     this.opts.logger.tool(describeMcpCall(server, spec.name, input, { result, isError: Boolean(result.isError) }));
                                     toolResults.push(JSON.stringify({ server, tool: spec.name, arguments: input, success: !result.isError, result }));
-                                    if (result.isError && req.naturalLanguage) {
+                                    if (result.isError && req.runtimeTools) {
                                         throw new Failure('tool_error', `MCP ${server}/${spec.name}: ${JSON.stringify(result.content)}`);
                                     }
                                     return JSON.stringify(result);
@@ -223,7 +251,7 @@ export class AiBackend implements LlmBackend {
                                     const failure = error instanceof Failure ? error
                                         : new Failure('tool_error', `MCP ${server}/${spec.name}: ${error instanceof Error ? error.message : String(error)}`);
                                     if (!logged) this.opts.logger.tool(describeMcpCall(server, spec.name, input, { error: failure.reason }));
-                                    if (req.naturalLanguage) return stop(failure);
+                                    if (req.runtimeTools) return stop(failure);
                                     toolResults.push(JSON.stringify({ server, tool: spec.name, arguments: input, success: false, error: failure.reason }));
                                     return JSON.stringify({ isError: true, content: [{ type: 'text', text: failure.reason }] });
                                 }
@@ -276,15 +304,18 @@ export class AiBackend implements LlmBackend {
                         const handler = registered.get(part.toolName)!;
                         const input: unknown = part.input;
                         if (!input || typeof input !== 'object' || Array.isArray(input) || !handler.validate(input)) {
-                            return stop(new Failure(req.naturalLanguage ? 'runtime_error' : 'tool_error', `invalid arguments for tool '${part.toolName}'`));
+                            return stop(new Failure(req.runtimeTools ? 'runtime_error' : 'tool_error', `invalid arguments for tool '${part.toolName}'`));
                         }
                         const output = await handler.invoke({ ...input });
                         check();
                         outputs.push({ toolCallId: part.toolCallId, toolName: part.toolName, value: output });
                     } else if (part.type === 'tool-error') {
-                        stop(new Failure(req.naturalLanguage ? 'runtime_error' : 'tool_error', `tool '${part.toolName}': ${String(part.error)}`));
+                        stop(new Failure(req.runtimeTools ? 'runtime_error' : 'tool_error', `tool '${part.toolName}': ${String(part.error)}`));
                     } else if (part.type === 'stream-start') {
                         for (const warning of part.warnings) {
+                            if (warning.conflict === 'reasoning' && insisted) {
+                                stop(new LlmError(`reasoning '${req.reasoningEffort}' cannot be combined with ${warning.feature} on ${selected.provider}/${selected.model}; drop one of the two settings`));
+                            }
                             if (warning.feature === 'reasoning') effectiveReasoningEffort = undefined;
                             if (warning.type === 'unsupported') {
                                 if (warning.feature === 'seed') effectiveSampling.seed = undefined;
@@ -313,7 +344,7 @@ export class AiBackend implements LlmBackend {
                 }
                 if (finish === 'tool-calls') throw new LlmError('the model ended with no executable tool calls');
                 const content = collected('response');
-                const text = actionExecuted && !content.trim() ? 'Runtime actions completed.' : content;
+                const text = actionExecuted && !content.trim() ? 'Actions completed.' : content;
                 if (!text.trim()) throw new LlmError('the model returned an empty response');
                 return {
                     text, reasoning: reasons.length ? reasons.join('\n') : undefined,

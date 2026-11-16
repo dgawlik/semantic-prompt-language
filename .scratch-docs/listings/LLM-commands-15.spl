@@ -1,0 +1,21 @@
+//*
+# Guidance in code and in blocks
+
+`enforce()` adds an instruction to every model call made inside its callback.
+The `enforce` header key does the same for one block.
+
+    spl run examples/enforce.spl
+*//
+
+const answer = await enforce('Answer in Chinese', () =>
+    ask('Short office story', { tokens: 256, model: 'gpt-6-luna' }));
+
+---
+model: gpt-6-luna
+enforce: Answer in Polish
+outputVar: polishAnswer
+
+Translate this story: @answer
+---
+
+success([answer, polishAnswer]);

@@ -1,0 +1,5 @@
+const report = await readFile('./report.txt');
+const [title, summary] = await Promise.all([
+    ask(`Suggest a title for: ${report}`, { len: 'sentence' }),
+    ask(`Summarize: ${report}`, { len: 'paragraph' }),
+]);

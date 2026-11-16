@@ -1,16 +1,21 @@
+//*
+# Guidance in code and in blocks
 
-{js}
-let answer = enforce('Answer in Chinese', async () => {
-    return await ask('Short office story', 
-        { tokens: 256, model: 'gpt-6-luna' })
-})
-{/js}
+`enforce()` adds an instruction to every model call made inside its callback.
+The `enforce` header key does the same for one block.
 
-{agent model='gpt-6-luna', enforce="Answer in Polish"}
-Translate the answer to Polish.
-Save to -> @polishAnswer
-{/agent}
+    spl run examples/enforce.spl
+*//
 
-{js}
-success([answer, polishAnswer])
-{/js}
+const answer = await enforce('Answer in Chinese', () =>
+    ask('Short office story', { tokens: 256, model: 'gpt-6-luna' }));
+
+---
+model: gpt-6-luna
+enforce: Answer in Polish
+outputVar: polishAnswer
+
+Translate this story: @answer
+---
+
+success([answer, polishAnswer]);

@@ -5,23 +5,27 @@ import type { ContentBlockParam, MessageParam, MessageCreateParamsStreaming, Raw
 import type { Stream } from '@anthropic-ai/sdk/core/streaming';
 import type { Content, Part } from '@google/genai';
 import type { Provider } from './auth.js';
-import { LlmError, type ReasoningLevel, type RuntimeTool } from './llm.js';
+import { LlmError, type RuntimeTool } from './llm.js';
 import type { Logger } from './logger.js';
 
 export interface ProviderOptions {
-    openai?: { parallelToolCalls?: boolean; store?: boolean; reasoningSummary?: 'auto' | null; reasoningEffort?: ReasoningLevel };
+    openai?: { parallelToolCalls?: boolean; store?: boolean; reasoningSummary?: 'auto' | null; reasoningEffort?: Effort | 'xhigh' };
     anthropic?: {
         disableParallelToolUse?: boolean;
         thinking?: { type: 'adaptive' } | { type: 'enabled'; budgetTokens: number };
-        effort?: ReasoningLevel;
+        effort?: Effort | 'max';
     };
-    google?: { thinkingConfig?: { includeThoughts?: boolean; thinkingBudget?: number; thinkingLevel?: ReasoningLevel } };
+    google?: { thinkingConfig?: { includeThoughts?: boolean; thinkingBudget?: number; thinkingLevel?: Effort } };
 }
+
+type Effort = 'low' | 'medium' | 'high';
 
 export interface ModelWarning {
     type: 'unsupported' | 'compatibility';
     feature: string;
     details?: string;
+    /** Set when a sampling setting is dropped because the model is reasoning. */
+    conflict?: 'reasoning';
 }
 
 export type ModelStreamPart =
@@ -70,12 +74,13 @@ function toolCall(toolName: string, toolCallId: string, input: string): ModelStr
 function settings(provider: Provider, model: string, options: ModelCallOptions) {
     const warnings: ModelWarning[] = [];
     let { temperature, topP } = options;
-    let openaiEffort: 'none' | 'minimal' | ReasoningLevel | undefined = options.providerOptions.openai?.reasoningEffort;
+    let openaiEffort: 'none' | 'minimal' | Effort | 'xhigh' | undefined = options.providerOptions.openai?.reasoningEffort;
     let thinking: ThinkingConfigParam | undefined;
     let anthropicEffort = options.providerOptions.anthropic?.effort;
-    const googleThinking: { includeThoughts?: boolean; thinkingBudget?: number; thinkingLevel?: ReasoningLevel | 'minimal' } =
+    const googleThinking: { includeThoughts?: boolean; thinkingBudget?: number; thinkingLevel?: Effort | 'minimal' } =
         { ...options.providerOptions.google?.thinkingConfig };
-    const unsupported = (feature: string, details: string) => warnings.push({ type: 'unsupported', feature, details });
+    const unsupported = (feature: string, details: string, conflict?: 'reasoning') =>
+        warnings.push({ type: 'unsupported', feature, details, ...(conflict ? { conflict } : {}) });
     const compatibility = (details: string) => warnings.push({ type: 'compatibility', feature: 'reasoning', details });
     if (provider === 'openai') {
         if (options.reasoning === 'none') {
@@ -88,8 +93,8 @@ function settings(provider: Provider, model: string, options: ModelCallOptions) 
         const supportsSampling = !reasoningModel || openaiEffort === 'none' && !/^(?:o[134]|gpt-5(?:-|$)|gpt-6(?:\.1)?-astra)/.test(model)
             && !/-pro(?:-|$)/.test(model);
         if (!supportsSampling) {
-            if (temperature !== undefined) unsupported('temperature', 'temperature is not supported with this reasoning setting');
-            if (topP !== undefined) unsupported('topP', 'topP is not supported with this reasoning setting');
+            if (temperature !== undefined) unsupported('temperature', 'temperature is not supported with this reasoning setting', 'reasoning');
+            if (topP !== undefined) unsupported('topP', 'topP is not supported with this reasoning setting', 'reasoning');
             temperature = topP = undefined;
         }
     } else if (provider === 'anthropic') {
@@ -109,8 +114,8 @@ function settings(provider: Provider, model: string, options: ModelCallOptions) 
         const supportsSampling = !/^claude-(?:opus-4-[78]|(?:sonnet|opus|haiku|fable)-[5-9])/.test(model)
             && (!thinking || thinking.type === 'disabled');
         if (!supportsSampling) {
-            if (temperature !== undefined) unsupported('temperature', 'temperature is not supported by this model or while thinking');
-            if (topP !== undefined) unsupported('topP', 'topP is not supported by this model or while thinking');
+            if (temperature !== undefined) unsupported('temperature', 'temperature is not supported by this model or while thinking', 'reasoning');
+            if (topP !== undefined) unsupported('topP', 'topP is not supported by this model or while thinking', 'reasoning');
             temperature = topP = undefined;
         } else if (temperature !== undefined && topP !== undefined) {
             unsupported('topP', 'topP is ignored when temperature is set');

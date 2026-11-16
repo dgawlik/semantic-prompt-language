@@ -1,0 +1,15 @@
+const Person = Struct('Person', { firstName: Str, age: Int }).methods({
+    label() { return `${this.firstName} (${this.age})`; },
+});
+const person = Person.parse({ firstName: 'Ada', age: 36 });
+log(person.label());                    // Ada (36)
+
+class Point {
+    x: number;
+    y: number;
+    constructor(x: number, y: number) { this.x = x; this.y = y; }
+    static fromJSON(data: Record<string, unknown>) { return new Point(Number(data.x), Number(data.y)); }
+    norm() { return Math.hypot(this.x, this.y); }
+}
+const PointType = Struct('Point', { x: Float, y: Float }).class(Point);
+log(PointType.parse({ x: 3, y: 4 }).norm());    // 5

@@ -10,27 +10,30 @@ import { AuthError, login, logout, parseProvider, type Provider } from './auth.j
 import { Failure, SplSyntaxError } from './errors.js';
 import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
-import { parseMarkdown, type Workflow } from './markdown.js';
-import { parseSpl } from './spl.js';
-import { checkWorkflow, run, type RunResult } from './workflow.js';
+import { check } from './check.js';
+import { compile } from './compile.js';
+import { documentHtml, documentMarkdown } from './doc.js';
+import { library } from './library.js';
+import { run, type RunResult } from './workflow.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
 import { Trace, TraceError, fingerprint } from './trace.js';
 import { CliLogging, canInteract } from './cli-logging.js';
 import { formatEvent, sanitize, terminalColor } from './log-format.js';
-import { Pin } from './pin.js';
 
-const HELP = `spl - Semantic Prompt Language: executable Markdown workflows in JavaScript
+const HELP = `spl - Semantic Prompt Language: natural-language instructions for models and agents, interleaved with TypeScript
 
-Usage: spl <workflow.md | workflow.spl> [options]
-       spl login <provider>    configure an API key and default provider: openai | anthropic | google
-       spl logout [provider]   remove saved credentials (environment variables are unchanged)
+Usage: spl run <file.spl> [options]       compile in memory and run in place
+       spl check <file.spl>               scan and type-check with tsc, without running
+       spl compile <file.spl>             write an importable TypeScript module beside the file
+       spl doc <file.spl> [--format md|html]
+                                          print documentation: Markdown by default
+       spl login <provider>               configure an API key and default provider: openai | anthropic | google
+       spl logout [provider]              remove saved credentials (environment variables are unchanged)
 
-Options:
+Options for run:
   --log-level <level>     error | info | debug (default: info). Logs go to stderr.
                           All levels include model input/output; info adds tool calls;
-                          debug adds variable-state changes.
-                          State logs identify defining scopes and before/after values.
-                          No source traces, reads, no-op assignments or baseline dumps.
+                          debug adds state changes of block outputs and top-level variables.
                           Icons: -> input (magenta), <- output (cyan), * tool (green), ~ state (yellow),
                           x error (red), ! warning (yellow), i info (blue), . debug (gray).
                           In a terminal, logs show in a full-screen view on stderr. Preambles, JSON,
@@ -42,10 +45,10 @@ Options:
                           Redirected logs are plain, append-only and fully expanded.
                           NO_COLOR wins over FORCE_COLOR; FORCE_COLOR=0 disables color.
   --silent                suppress all logs; only the result is printed
-  --debug                 step through the workflow in the terminal view: stops before the first block;
-                          n runs the next js/ts block or blockquote, v prints shared variables,
-                          c continues to the end, e exits immediately. Needs a terminal.
-  --model <id>            model override (takes precedence over frontmatter)
+  --debug                 step through the workflow in the terminal view: stops before each --- block
+                          and each top-level statement; n runs the next step, v shows the top-level
+                          variables, c continues to the end, e exits immediately. Needs a terminal.
+  --model <id>            model override (takes precedence over file defaults and block settings)
   --provider <name>       openai | anthropic | google; model IDs may use provider/model
   --arg <value>           script argument exposed in args (repeatable; also --arg=value)
   --human <answer>        answer a human question without prompting (repeatable, in question order)
@@ -56,11 +59,10 @@ Options:
   --trace <file.jsonl>    append external inputs, model decisions, effects and results to a JSONL log
                           Reuse the same path to resume; completed runs replay without external work.
                           Choose another JSONL file to restart.
-  --pin                   on success, save <workflow>.locked.md with responses in double blockquotes
-                          (<workflow>.locked.spl with a {lock} block for a .spl workflow).
-                          Locked workflows replay without models, tools, stores or human prompts.
-  --cwd <dir>             base directory for imports, relative paths and restrictions (default: current directory)
-  --check                 validate fences, controls, relative imports and any --mcp config without executing
+  --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
+
+Other options:
+  --format <md|html>      output of spl doc (default: md)
   -v, --version           print version
   -h, --help              print this help
 
@@ -70,17 +72,15 @@ Provider environment:
   SPL_PROVIDER selects a default; SPL_HOME overrides the saved-credentials folder.
   Environment keys override saved keys. Login configures API keys, not OAuth.
 
-js fences run as native JavaScript (ts fences have their types erased) with the spl-lang library
-already imported: ask, think, agent, human, restrict, enforce, forbid, success, fail and more.
-Blockquotes run as agent commands on the same shared scope.
-
-A .spl file holds the same workflow in blocks, each tag on its own line and closed by {/name}:
-{js} and {ts} are code, {agent restrict={...}, model='...'} is an agent command with its settings,
-{codegen} describes functions to generate and {comment} is commentary. Frontmatter is optional.
+A .spl file is TypeScript with three additions. //* ... *// is a Markdown comment. A --- block holds an
+instruction for a model: an optional header of key: value lines (mode, model, reasoning, outputVar, ...),
+then the text, where @name reads a variable and, in agent blocks, ->[Type] @name declares an output.
+The library (ask, agent, human, restrict, enforce, forbid, success, fail, Str, Int, Struct, ...) needs no import.
+Node.js strips the types; spl check type-checks them.
 
 The script result (the value passed to success(), or the failure payload) is written to stdout.
 Normal runs ask for human input directly, even with --silent.
-Exit codes: 0 success, 1 uncaught script failure, 2 syntax or usage error,
+Exit codes: 0 success, 1 uncaught script failure, 2 syntax, type or usage error,
 70 internal/infrastructure error.`;
 
 function version(): string {
@@ -134,6 +134,73 @@ function logoutCommand(provider?: Provider): number {
     }
 }
 
+/** Paths as the user wrote them: relative when inside the current directory. */
+const shown = (file: string): string => {
+    const relative = path.relative(process.cwd(), file);
+    return relative && !relative.startsWith('..') && !path.isAbsolute(relative) ? relative : file;
+};
+
+function readWorkflow(file: string): string {
+    if (/\.md$/i.test(file)) usageError(`'${file}': Markdown workflows are no longer executable; SPL 3.0 runs .spl files. See the migration guide`);
+    if (!/\.spl$/i.test(file)) usageError(`'${file}' is not a .spl file`);
+    try {
+        return fs.readFileSync(file, 'utf8');
+    } catch (e) {
+        return usageError(`cannot read '${file}': ${(e as Error).message}`);
+    }
+}
+
+/** Runs a command that only reads the workflow; syntax problems are reported like any compiler does. */
+function report(file: string, body: () => number): number {
+    try {
+        return body();
+    } catch (e) {
+        if (!(e instanceof SplSyntaxError)) throw e;
+        new Logger('error').error(e.format(file));
+        return 2;
+    }
+}
+
+function checkCommand(file: string): number {
+    readWorkflow(file);
+    const problems = check(file);
+    for (const problem of problems) new Logger('error').error(`${shown(problem.file)}:${problem.line}:${problem.column}: ${problem.message}`);
+    return problems.length ? 2 : 0;
+}
+
+/** Writes `<name>.ts` beside the workflow and beside every `.spl` file it imports. */
+function compileCommand(file: string): number {
+    const pending = [path.resolve(file)];
+    const written = new Set<string>();
+    while (pending.length) {
+        const current = pending.pop()!;
+        if (written.has(current)) continue;
+        written.add(current);
+        const source = readWorkflow(current);
+        const code = report(current, () => {
+            const compiled = compile(source);
+            for (const item of compiled.imports) {
+                if (/^\.{1,2}\/.*\.spl$/.test(item.specifier)) pending.push(path.resolve(path.dirname(current), item.specifier));
+            }
+            const target = current.replace(/\.spl$/i, '.ts');
+            fs.writeFileSync(target, compiled.emit({ library: Object.keys(library()), from: path.basename(current) }));
+            process.stdout.write(`${shown(target)}\n`);
+            return 0;
+        });
+        if (code) return code;
+    }
+    return 0;
+}
+
+function docCommand(file: string, format: string): number {
+    if (format !== 'md' && format !== 'html') usageError(`invalid --format '${format}'; use md or html`);
+    const source = readWorkflow(file);
+    return report(file, () => {
+        process.stdout.write(format === 'html' ? documentHtml(source, path.basename(file)) : documentMarkdown(source));
+        return 0;
+    });
+}
+
 async function main(): Promise<number> {
     let parsed;
     try {
@@ -147,10 +214,9 @@ async function main(): Promise<number> {
             mcp: { type: 'string' },
             timeout: { type: 'string' },
             trace: { type: 'string' },
-            pin: { type: 'boolean' },
             cwd: { type: 'string' },
-            check: { type: 'boolean' },
             debug: { type: 'boolean' },
+            format: { type: 'string' },
             version: { type: 'boolean', short: 'v' },
             help: { type: 'boolean', short: 'h' },
         } as const;
@@ -174,16 +240,26 @@ async function main(): Promise<number> {
     let provider: Provider | undefined;
     try { provider = values.provider === undefined ? undefined : parseProvider(values.provider); }
     catch (error) { return usageError((error as Error).message); }
-    if (positionals[0] === 'login' || positionals[0] === 'logout') {
-        if (positionals.length > 2 || (positionals[1] !== undefined && provider !== undefined)) {
-            usageError(`use '${positionals[0]} [provider]' or '${positionals[0]} --provider <name>'`);
+    const [command, file] = positionals;
+    if (command === 'login' || command === 'logout') {
+        if (positionals.length > 2 || (file !== undefined && provider !== undefined)) {
+            usageError(`use '${command} [provider]' or '${command} --provider <name>'`);
         }
-        try { provider ??= positionals[1] === undefined ? undefined : parseProvider(positionals[1]); }
+        try { provider ??= file === undefined ? undefined : parseProvider(file); }
         catch (error) { return usageError((error as Error).message); }
-        if (positionals[0] === 'login' && !provider) usageError('login requires a provider: openai, anthropic, or google');
-        return positionals[0] === 'login' ? loginCommand(provider!) : logoutCommand(provider);
+        if (command === 'login' && !provider) usageError('login requires a provider: openai, anthropic, or google');
+        return command === 'login' ? loginCommand(provider!) : logoutCommand(provider);
     }
-    if (positionals.length !== 1) usageError('expected exactly one script file');
+    if (command !== 'run' && command !== 'check' && command !== 'compile' && command !== 'doc') {
+        usageError(command === undefined ? 'expected a command: run, check, compile, doc, login or logout'
+            : /\.(?:spl|md)$/i.test(command) ? `expected a command before the file; to run it, use 'spl run ${command}'`
+            : `unknown command '${command}'`);
+    }
+    if (positionals.length !== 2) usageError(`'spl ${command}' takes exactly one .spl file`);
+    if (values.format !== undefined && command !== 'doc') usageError('--format applies only to spl doc');
+    if (command === 'check') return checkCommand(file);
+    if (command === 'compile') return compileCommand(file);
+    if (command === 'doc') return docCommand(file, values.format ?? 'md');
 
     const level = values['log-level'] ?? 'info';
     if (!['error', 'info', 'debug'].includes(level)) usageError(`invalid --log-level '${level}'`);
@@ -199,42 +275,15 @@ async function main(): Promise<number> {
     const timeoutSec = Number(values.timeout ?? 300);
     if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) usageError('--timeout must be a positive number');
     if (values.trace !== undefined && !values.trace.trim()) usageError('--trace requires a non-empty file path');
-    if (values.pin && values.trace !== undefined) {
-        usageError('--pin cannot be combined with --trace');
-    }
 
     const cwd = path.resolve(values.cwd ?? process.cwd());
-    const file = positionals[0];
-    const format = /\.spl$/i.test(file) ? 'spl' : 'md';
-    if (format === 'md' && !/\.md$/i.test(file)) {
-        usageError('only .md and .spl workflows are executable; put JavaScript in a fenced js block and add extension/version frontmatter, or in a {js} block of a .spl file');
-    }
-    let source: string;
+    const source = readWorkflow(file);
     try {
-        source = fs.readFileSync(file, 'utf8');
+        compile(source);
     } catch (e) {
-        return usageError(`cannot read '${file}': ${(e as Error).message}`);
-    }
-
-    let program: Workflow;
-    try {
-        program = format === 'spl' ? parseSpl(source) : parseMarkdown(source);
-    } catch (e) {
-        if (e instanceof SplSyntaxError) {
-            new Logger('error').error(e.format(file));
-            return 2;
-        }
-        throw e;
-    }
-    const locked = program.markdown?.lock !== undefined;
-    if (/\.locked\.(?:md|spl)$/i.test(file) && !locked) usageError('locked workflow is missing its execution journal');
-    if (locked && (values.pin || [values.trace, values.mcp, values.human]
-        .some(value => value !== undefined))) {
-        usageError('locked workflows cannot use --pin, --trace, --mcp, or --human');
-    }
-    const lockedFile = file.replace(/\.(?:md|spl)$/i, `.locked.${format}`);
-    if (values.pin && !values.check && fs.existsSync(lockedFile)) {
-        usageError(`cannot pin: '${lockedFile}' already exists; move or remove it first`);
+        if (!(e instanceof SplSyntaxError)) throw e;
+        new Logger('error').error(e.format(file));
+        return 2;
     }
     let mcpServers: McpServers | undefined;
     try {
@@ -242,41 +291,28 @@ async function main(): Promise<number> {
     } catch (e) {
         return usageError((e as Error).message);
     }
-    if (values.check) {
-        const problems = checkWorkflow(program, cwd);
-        for (const problem of problems) new Logger('error').error(`${file}:${problem.line}:${problem.column}: ${problem.message}`);
-        return problems.length ? 2 : 0;
-    }
     if (values.debug && (values.silent || !canInteract())) {
         usageError('--debug needs an interactive terminal (stdin and stderr) and cannot be combined with --silent');
     }
 
-    let backend: LlmBackend;
     let trace: Trace | undefined;
     try {
-        if (locked) backend = {
-            async call() { throw new LlmError('locked workflows cannot call a model'); },
-            async close() {},
-        };
-        else {
-            if (values.trace) {
-                const directory = fileURLToPath(new URL('.', import.meta.url));
-                trace = Trace.open(values.trace, {
-                    source: program.lines.join('\n'), cwd, args: values.arg,
-                    runtime: fingerprint([version(), process.version,
-                        ...fs.readdirSync(directory).filter(name => name.endsWith('.js')).sort()
-                            .map(name => [name, fs.readFileSync(path.join(directory, name), 'utf8')])]),
-                    configuration: { model: values.model ?? null, provider: values.provider ?? null, mcp: mcpServers ?? null },
-                });
-            }
-            backend = new AiBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider });
+        if (values.trace) {
+            const directory = fileURLToPath(new URL('.', import.meta.url));
+            trace = Trace.open(values.trace, {
+                source, cwd, args: values.arg,
+                runtime: fingerprint([version(), process.version,
+                    ...fs.readdirSync(directory).filter(name => name.endsWith('.js')).sort()
+                        .map(name => [name, fs.readFileSync(path.join(directory, name), 'utf8')])]),
+                configuration: { model: values.model ?? null, provider: values.provider ?? null, mcp: mcpServers ?? null },
+            });
         }
     } catch (e) {
-        trace?.close();
         if (!(e instanceof Error)) throw e;
         if (e instanceof TraceError && e.kind === 'infrastructure') throw e;
         return usageError(`cannot open trace: ${e.message}`);
     }
+    const backend: LlmBackend = new AiBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider });
     let result: RunResult | undefined;
     let interrupted = false;
     let input: Interface | undefined;
@@ -305,7 +341,6 @@ async function main(): Promise<number> {
             }
         })();
     };
-    const pin = values.pin ? Pin.capture(source, { cwd, args: values.arg ?? [], model: values.model }) : undefined;
     presentation = new CliLogging({
         interactive: !values.silent && canInteract(),
         cancel: interrupt,
@@ -341,11 +376,10 @@ async function main(): Promise<number> {
     let usage: string | undefined;
     try {
         try {
-            result = await run(program, {
-                backend, logger, trace, file: path.resolve(file),
-                cwd: locked && values.cwd === undefined ? undefined : cwd,
-                model: values.model, args: values.arg, human, pin,
-                beforeBlock: values.debug ? async block => { await presentation!.pause(block); } : undefined,
+            result = await run(source, {
+                backend, logger, trace, file: path.resolve(file), cwd,
+                model: values.model, args: values.arg, human,
+                beforeStep: values.debug ? async step => { await presentation!.pause(step); } : undefined,
             });
         } finally {
             try {
@@ -359,8 +393,10 @@ async function main(): Promise<number> {
         if (!interrupted) trace?.finish(result);
     } catch (error) {
         if (interrupted) return 130;
-        if (!(error instanceof TraceError) || error.kind !== 'usage') throw error;
-        usage = `spl: ${error.message}`;
+        // A workflow imported by this one may still have syntax problems.
+        if (error instanceof SplSyntaxError) usage = error.format(file);
+        else if (error instanceof TraceError && error.kind === 'usage') usage = `spl: ${error.message}`;
+        else throw error;
     } finally {
         trace?.close();
         input?.close();
@@ -377,14 +413,6 @@ async function main(): Promise<number> {
     if (result.status === 'failure') {
         process.stdout.write(JSON.stringify(result.failure, null, 4) + '\n');
         return 1;
-    }
-    if (pin) {
-        try {
-            fs.writeFileSync(lockedFile, format === 'spl' ? pin.toSpl(source) : pin.toMarkdown(source), { flag: 'wx', mode: 0o600 });
-        } catch (error) {
-            new Logger('error').error(`spl: cannot save pinned workflow '${lockedFile}': ${error instanceof Error ? error.message : String(error)}`);
-            return 70;
-        }
     }
     if (result.hasValue) {
         const v = result.value;

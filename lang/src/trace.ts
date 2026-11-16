@@ -139,9 +139,9 @@ function validateHistory(events: Event[]): void {
 
 function retryable(request: unknown): boolean {
     if (!record(request)) return false;
-    return request.kind === 'modules' || request.kind === 'human' || request.kind === 'natural' || request.kind === 'codegen' || request.kind === 'restriction' || request.kind === 'environment-value'
+    return request.kind === 'human' || request.kind === 'agent-block' || request.kind === 'codegen' || request.kind === 'restriction' || request.kind === 'environment-value'
         || request.kind === 'llm' && record(request.request) && request.request.kind !== 'agent'
-        || request.kind === 'tool' && ['read_file', 'web_fetch', 'web_search'].includes(String(request.tool));
+        || request.kind === 'tool' && ['readFile', 'webFetch', 'webSearch'].includes(String(request.tool));
 }
 
 /** Reconstructs local execution, replaying sealed effects before appending new work. */

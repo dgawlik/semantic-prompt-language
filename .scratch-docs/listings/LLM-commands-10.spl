@@ -1,0 +1,5 @@
+const draft = await readFile('./draft.md');
+const title = await ask(`Suggest a title for: ${draft}`);
+const tagline = await ask`A tagline for ${title}`;
+const report = await restrict({ fs: './src', exec: 'npm' }, () =>
+    agent('Run the tests, fix the failing source file, and describe the fix'));

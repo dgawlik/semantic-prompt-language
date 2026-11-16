@@ -1,0 +1,19 @@
+//*
+# Import modules, Node.js built-ins and other workflows
+
+Imports resolve from this file, as in any ES module. Another `.spl` file gives its exported
+declarations by name and its workflow as the default export.
+
+    spl run examples/imports/run.spl
+*//
+
+import os from 'node:os';
+import { fib as f, factorial } from './functions.js';
+import squares, { square } from './math.spl';
+
+log(f(10));
+log(factorial(10));
+success({
+    fib: f(10), factorial: factorial(10), square: square(7),
+    squares: await squares(['2', '3']), platform: os.platform(),
+});

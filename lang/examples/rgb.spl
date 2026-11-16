@@ -1,16 +1,19 @@
+//*
+# Ask a person, then a model
 
-{js}
-let RGB = struct('RGB', {
-    r: int.describe('Red component'),
-    g: int.describe('Green component'),
-    b: int.describe('Blue component'),
-})
+`human()` asks in the terminal; `--human "navy blue"` answers without prompting.
 
-let colorString = await human('What color is it?')
+    spl run examples/rgb.spl
+*//
 
-let color = await ask(`Convert users color (${colorString}) to RGB`, {
-    schema: RGB
-})
+const RGB = Struct('RGB', {
+    r: Int.describe('Red component'),
+    g: Int.describe('Green component'),
+    b: Int.describe('Blue component'),
+});
 
-success(JSON.stringify(color))
-{/js}
+const colorString = await human('What color is it?');
+
+const color = await ask(`Convert the user's color (${colorString}) to RGB`, { schema: RGB });
+
+success(JSON.stringify(color));

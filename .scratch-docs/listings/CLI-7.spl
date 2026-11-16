@@ -1,0 +1,4 @@
+import workflow, { square } from './math.ts';
+
+const squares = await workflow(['2', '3'], { logLevel: 'error' });
+console.log(squares, square(7));

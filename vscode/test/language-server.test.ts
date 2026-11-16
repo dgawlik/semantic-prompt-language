@@ -1,105 +1,122 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { after, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import {
     CompletionItemKind, CompletionRequest, CompletionResolveRequest, CompletionTriggerKind, createProtocolConnection,
     DefinitionRequest, DiagnosticSeverity, DidChangeTextDocumentNotification, DidOpenTextDocumentNotification,
-    DocumentSymbolRequest, ExitNotification, HoverRequest, InitializedNotification, InitializeRequest,
-    PublishDiagnosticsNotification, RenameRequest, ShutdownRequest, SignatureHelpRequest, StreamMessageReader,
-    StreamMessageWriter, SymbolKind, type Position, type PublishDiagnosticsParams,
+    DocumentSymbolRequest, FoldingRangeRequest, HoverRequest, InitializedNotification, InitializeRequest,
+    PublishDiagnosticsNotification, RenameRequest, SignatureHelpRequest, StreamMessageReader, StreamMessageWriter,
+    SymbolKind, type Diagnostic, type Position, type PublishDiagnosticsParams, type Range,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { library } from '../../lang/src/library.js';
+import { HEADER_KEYS } from '../../lang/src/scanner.js';
 import { library as catalog } from '../src/catalog';
 import {
-    completions, definition, diagnostics, documentHighlights, documentSymbols, hover, prepareRename, references, rename,
+    completions, definition, diagnostics, documentHighlights, documentSymbols, foldingRanges, hover, prepareRename, references, rename,
     resolveCompletion, signatureHelp, workflowContext, type WorkflowContext,
 } from '../src/languageFeatures';
 import { defaultResources, TypeScriptProject } from '../src/typescriptService';
-import { analyzeWorkflow } from '../src/workflow';
-import { library } from '../../lang/src/library.js';
 
-const base = realpathSync(mkdtempSync(path.join(tmpdir(), 'spl-language-server-')));
+const resources = defaultResources(__dirname);
+const examples = path.resolve(__dirname, '..', '..', '..', 'lang', 'examples');
+const base = mkdtempSync(path.join(__dirname, 'workspace-'));
 after(() => rmSync(base, { recursive: true, force: true }));
-writeFileSync(path.join(base, 'helpers.js'), '/** Doubles a number. */\nexport function twice(value) { return value * 2; }\nexport const LIMIT = 10;\n');
+writeFileSync(path.join(base, 'helpers.ts'), '/** Doubles a number. */\nexport function twice(value: number): number { return value * 2; }\nexport const LIMIT = 10;\n');
+writeFileSync(path.join(base, 'legacy.js'), 'export function half(value) { return value / 2; }\n');
+writeFileSync(path.join(base, 'math.spl'), [
+    '//*', '# Squares', '*//', '',
+    'export function square(n: number): number {', '    return n * n;', '}', '',
+    'success(args.map(Number).map(square));', '',
+].join('\n'));
 mkdirSync(path.join(base, 'node_modules', 'left-pad-ish'), { recursive: true });
-writeFileSync(path.join(base, 'node_modules', 'left-pad-ish', 'package.json'), '{"name":"left-pad-ish","type":"module","exports":"./index.js"}');
-writeFileSync(path.join(base, 'node_modules', 'left-pad-ish', 'index.js'), 'export function pad(text, width) { return String(text).padStart(width); }\n');
+writeFileSync(path.join(base, 'node_modules', 'left-pad-ish', 'package.json'), '{"name":"left-pad-ish","type":"module","exports":{"types":"./index.d.ts","default":"./index.js"}}');
+writeFileSync(path.join(base, 'node_modules', 'left-pad-ish', 'index.d.ts'), 'export declare function pad(text: unknown, width: number): string;\n');
 
-const project = new TypeScriptProject(base, defaultResources(__dirname));
-const uri = pathToFileURL(path.join(base, 'workflow.md')).href;
-const header = '---\nextension: semantic-prompt-language\nversion: 1\nmodel: test-model\n---\n\n';
-const fence = (code: string, language = 'js') => `\`\`\`${language}\n${code}\n\`\`\``;
-let version = 0;
-let previous: WorkflowContext | undefined;
+const project = new TypeScriptProject(base, resources);
+const uri = pathToFileURL(path.join(base, 'workflow.spl')).href;
+const CURSOR = '<|>';
 
-/** Opens a workflow body; `|` marks the cursor and is removed. */
-function open(body: string): { context: WorkflowContext; position: Position; source: string } {
-    const marked = header + body;
-    const cursor = marked.indexOf('|');
-    const source = cursor < 0 ? marked : marked.slice(0, cursor) + marked.slice(cursor + 1);
-    const document = TextDocument.create(uri, 'markdown', ++version, source);
-    previous = workflowContext(document, project, previous);
-    assert.ok(previous, 'document is a workflow');
-    return { context: previous, position: document.positionAt(Math.max(0, cursor)), source };
+/** Opens a workflow; `<|>` marks the cursor and is removed. */
+function open(marked: string, target = uri): { context: WorkflowContext; position: Position; source: string } {
+    const cursor = marked.indexOf(CURSOR);
+    const source = cursor < 0 ? marked : marked.slice(0, cursor) + marked.slice(cursor + CURSOR.length);
+    return { context: workflowContext(project, target, source), position: TextDocument.create(target, 'spl', 0, source).positionAt(Math.max(0, cursor)), source };
 }
 const at = (source: string, text: string, offset = 0): Position => {
     const index = source.indexOf(text);
     assert.ok(index >= 0, `'${text}' not found`);
-    return TextDocument.create(uri, 'markdown', 0, source).positionAt(index + offset);
+    return TextDocument.create(uri, 'spl', 0, source).positionAt(index + offset);
 };
-const labels = (body: string) => {
-    const { context, position } = open(body);
+/** The range of `part` inside the first occurrence of `text`. */
+const span = (source: string, text: string, part = text): Range => {
+    const start = at(source, text, text.indexOf(part));
+    return { start, end: { line: start.line, character: start.character + part.length } };
+};
+const labels = (marked: string): string[] => {
+    const { context, position } = open(marked);
     return completions(context, position).map(item => item.label);
 };
-const hoverText = (body: string): string => {
-    const { context, position } = open(body);
+const hoverText = (marked: string): string => {
+    const { context, position } = open(marked);
     const result = hover(context, position);
     return result && typeof result.contents === 'object' && 'value' in result.contents ? result.contents.value : '';
 };
+/** Source, line, start and end character, and the first sentence of the message. */
+const brief = (items: Diagnostic[]): unknown[] => items.map(({ source, range, message }) =>
+    [source, range.start.line, range.start.character, range.end.character, message.split(/\.(?:\s|$)/)[0]]);
+const lines = (...text: string[]): string => text.join('\n');
 
-test('the catalog and the ambient declarations cover exactly the fence globals', () => {
+const TYPES = ['Str', 'Int', 'Float', 'Bool', 'Char', 'Nil', 'Any', 'Dict', 'Fn', 'List', 'Union', 'Nullable', 'Enum', 'Struct', 'Typedef', 'JsonSchema'];
+
+test('the catalog, the ambient declarations and library() name the same 3.0 library', () => {
     const names = Object.keys(library()).sort();
     assert.deepEqual(Object.keys(catalog).sort(), names);
-    const { context } = open(fence('const probe = 1;'));
-    const globals = context.project.service.getProgram()!.getSourceFile(path.join(defaultResources(__dirname).spl, 'globals.d.ts'))!.text;
-    const declared = [...globals.matchAll(/^    const ([A-Za-z_$][\w$]*):/gm)].map(match => match[1]).sort();
+    const globals = readFileSync(path.join(resources.spl, 'globals.d.ts'), 'utf8');
+    const declared = [...globals.matchAll(/^    const ([A-Za-z_$][\w$]*):/gm)].map(match => match[1]).filter(name => !name.startsWith('__')).sort();
     assert.deepEqual(declared, names);
+    for (const name of [...TYPES, 't', 'readFile', 'writeFile', 'webFetch', 'webSearch', 'shell', 'env', 'args']) assert.ok(Object.hasOwn(catalog, name), name);
+    assert.deepEqual(names.filter(name => /^[A-Z]/.test(name) && name !== 'Failure'), [...TYPES].sort(), 'types start with an uppercase letter');
+    for (const name of ['think', 'go', 'str', 'int', 'object', 'enumOf', 'struct']) assert.ok(!Object.hasOwn(catalog, name), name);
+    assert.doesNotMatch(JSON.stringify(catalog), /\b[a-z]+_[a-z]+\(|read_file|write_file|web_fetch|web_search|get_env|\bt\.[a-z]/,
+        'tools are camelCase and types uppercase in the help texts');
 });
 
-test('non-workflow Markdown is left alone', () => {
-    const analysis = analyzeWorkflow(TextDocument.create(uri, 'markdown', 1, '# Notes\n\n```js\nconst = 1;\n```\n'));
-    assert.equal(analysis.workflow, false);
-    assert.deepEqual(analysis.diagnostics, []);
-});
-
-test('fences complete the pre-imported library, JavaScript globals and earlier declarations', () => {
-    const names = labels(`${fence('const notes = "raw";\nfunction shout(text) { return text.toUpperCase(); }')}\n\n${fence('|')}`);
-    for (const name of ['ask', 'agent', 'restrict', 'struct', 'markdown', 'notes', 'shout', 'console', 'Promise', 'process', 'JSON']) {
-        assert.ok(names.includes(name), name);
+test('every example type-checks without diagnostics', () => {
+    const files = readdirSync(examples, { recursive: true, encoding: 'utf8' }).filter(file => file.endsWith('.spl')).sort();
+    assert.ok(files.length > 20, `examples found in ${examples}`);
+    const exampleProject = new TypeScriptProject(examples, resources);
+    for (const file of files) {
+        const context = workflowContext(exampleProject, pathToFileURL(path.join(examples, file)).href, readFileSync(path.join(examples, file), 'utf8'));
+        assert.deepEqual(brief(diagnostics(context)), [], file);
+        assert.ok(documentSymbols(context).every(symbol => !symbol.name.startsWith('__')), file);
     }
-    assert.ok(!names.includes('document'), 'browser globals are not offered');
+    const readme = /```spl\n([\s\S]*?)```/.exec(readFileSync(path.resolve(__dirname, '..', '..', 'README.md'), 'utf8').replaceAll('\r\n', '\n'));
+    assert.deepEqual(brief(diagnostics(open(readme?.[1] ?? 'missing').context)), [], 'the example in README.md');
 });
 
-test('members are typed: library results, schema inference, strings and Node.js modules', () => {
-    assert.ok(labels(fence('const title = await ask("Title?");\ntitle.|')).includes('toUpperCase'));
-    assert.ok(labels(fence('const n = await ask("How many?", { fmt: "integer" });\nn.|')).includes('toFixed'));
-    const card = "const Card = struct('Card', { term: str, score: int.annotate({ minimum: 1 }) }).methods({ label() { return this.term; } });\n";
-    const members = labels(fence(`${card}const card = await ask('Card', { schema: Card });\ncard.|`));
-    for (const name of ['term', 'score', 'label']) assert.ok(members.includes(name), name);
-    assert.ok(labels(fence(`${card}Card.|`)).includes('parse'));
-    assert.ok(labels(fence('markdown.document().|')).includes('bulletList'));
-    assert.ok(labels(fence("import fs from 'node:fs';\nfs.|")).includes('readFileSync'));
-    assert.ok(labels(fence("import { twice } from './helpers.js';\nimport { pad } from 'left-pad-ish';\ntwice(1).|")).includes('toFixed'));
-    assert.ok(labels(fence("await ask('x', { | })")).includes('repairs'));
-    assert.ok(labels(fence("await ask('x', { fmt: '|' })")).includes('integer'));
+test('code completes the library, JavaScript globals, declarations and typed members', () => {
+    const names = labels(lines('const notes = "raw";', 'function shout(text: string) { return text.toUpperCase(); }', '<|>'));
+    for (const name of ['ask', 'agent', 'restrict', 'Struct', 'markdown', 'notes', 'shout', 'console', 'Promise', 'process', 'JSON']) assert.ok(names.includes(name), name);
+    assert.ok(!names.includes('document'), 'browser globals are not offered');
+    assert.ok(labels('const title = await ask("Title?");\ntitle.<|>').includes('toUpperCase'));
+    const card = "const Card = Struct('Card', { term: Str, score: Int });\n";
+    const members = labels(`${card}const card = await ask('Card', { schema: Card });\ncard.<|>`);
+    assert.ok(members.includes('term') && members.includes('score'));
+    assert.ok(labels(`${card}Card.<|>`).includes('coerce'));
+    assert.ok(labels("import fs from 'node:fs';\nfs.<|>").includes('readFileSync'));
+    assert.ok(labels("import { twice } from './helpers.ts';\nimport { pad } from 'left-pad-ish';\npad(twice(1), 2).<|>").includes('padStart'));
+    assert.ok(labels("import { half } from './legacy.js';\nhalf(1).<|>").includes('toFixed'), 'imported JavaScript is typed by inference');
+    assert.ok(labels("await ask('x', { fmt: '<|>' })").includes('integer'));
+    assert.deepEqual(labels(lines('//*', '# Title <|>', '*//')), [], 'Markdown comments are prose');
+    assert.ok(!labels(lines('const text = `', '---', '<|>', '---', '`;')).includes('mode'), 'a fence inside a template literal does not start a block');
 });
 
 test('completion details, hovers and signature help come from the library documentation', () => {
-    const { context, position } = open(fence('restr|'));
+    const { context, position } = open('restr<|>');
     const item = completions(context, position).find(candidate => candidate.label === 'restrict');
     assert.ok(item);
     assert.equal(item.kind, CompletionItemKind.Constant);
@@ -107,304 +124,322 @@ test('completion details, hovers and signature help come from the library docume
     assert.match(String(resolved.detail), /restrict/);
     assert.match(JSON.stringify(resolved.documentation), /Limits/);
 
-    assert.match(hoverText(fence('await as|k("x");')), /const ask[\s\S]*Asks the model for a value/);
-    assert.match(hoverText(fence('const total = 1 + 1;\nto|tal;')), /const total: number/);
-    assert.equal(hoverText('Plain pro|se with ask in it.'), '');
+    assert.match(hoverText('await as<|>k("x");'), /const ask[\s\S]*Asks the model for a value/);
+    assert.match(hoverText('const total = 1 + 1;\nto<|>tal;'), /const total: number/);
+    assert.equal(hoverText(lines('//*', 'Prose with a<|>sk in it.', '*//')), '');
 
-    const help = open(fence("await writeFile('./out.txt', |)"));
+    const help = open("await writeFile('./out.txt', <|>)");
     const signature = signatureHelp(help.context, help.position);
     assert.ok(signature);
     assert.match(signature.signatures[0].label, /writeFile\(path: string, content: string\)/);
     assert.equal(signature.activeParameter, 1);
-    assert.equal(signatureHelp(help.context, { line: 2, character: 0 }), null);
 });
 
-test('diagnostics report workflow, control and JavaScript syntax problems with document positions', () => {
-    const broken = open(`${fence('const a = ;')}\n\n> @CTL(model=42) Go\n\n${fence('return 1;')}`);
-    const found = diagnostics(broken.context);
-    assert.deepEqual(found.map(item => [item.range.start.line, item.message.replace(/:.*/, '')]), [
-        [7, 'Unexpected token'], [13, "'return' outside of function"], [10, '@CTL'],
-    ]);
-    assert.ok(found.every(item => item.severity === DiagnosticSeverity.Error && item.source === 'spl'));
-
-    assert.deepEqual(diagnostics(open(fence('const maybe = undefinedName + 1;\nmaybe.anything();')).context), []);
-    const missing = diagnostics(open(fence("import { x } from './missing.js';\nimport { twice } from './helpers.js';")).context);
-    assert.equal(missing.length, 1);
-    assert.match(missing[0].message, /cannot find module '.\/missing.js'/);
-
-    const frontmatter = TextDocument.create(uri, 'markdown', ++version, '---\nextension: semantic-prompt-language\nversion: 2\n---\n\n```js\nconst ok = 1;\nok.|\n```');
-    const context = workflowContext(frontmatter, project, previous)!;
-    previous = context;
-    assert.match(diagnostics(context)[0].message, /version: 1/);
-    assert.equal(context.analysis.blocks.length, 1, 'fences stay usable while the frontmatter is invalid');
-});
-
-test('ts fences are type-checked; js fences in the same document are not', () => {
-    const { context, source } = open(`${fence('const loose = 1;\nloose.missing();')}\n\n${fence("const count: number = 'three';\nconst fine: string = await ask('x');\ninterface Shape { a: number }", 'ts')}`);
-    assert.equal(context.analysis.language, 'ts');
+test('TypeScript diagnostics in code keep their positions', () => {
+    const { context, source } = open(lines(
+        '//*', '# Title', '*//', '',
+        "const count: number = 'three';",
+        'function wait() { await ask("x"); }',
+        'const maybe: string | undefined = env.NAME;',
+        'maybe.length;',
+    ));
     const found = diagnostics(context);
-    assert.equal(found.length, 1);
-    assert.equal(found[0].source, 'ts');
-    assert.match(found[0].message, /Type 'string' is not assignable to type 'number'/);
-    assert.deepEqual(found[0].range.start, at(source, 'count: number'));
-    assert.match(diagnostics(open(fence('const x: number = ;', 'ts')).context)[0].message, /Expression expected/);
+    assert.deepEqual(found.map(item => [item.code, item.range]), [
+        [2322, span(source, 'count: number', 'count')],
+        [1308, span(source, 'await ask', 'await')],
+        [18048, span(source, 'maybe.length', 'maybe')],
+    ]);
+    assert.ok(found.every(item => item.source === 'ts' && item.severity === DiagnosticSeverity.Error));
+    const broken = open(lines('---', 'model: m', '---', '', 'const a = ;'));
+    assert.deepEqual(brief(diagnostics(broken.context)), [['ts', 4, 10, 11, 'Expression expected']]);
+    assert.deepEqual(diagnostics(open('const fine: number = 1;\nlog(fine);').context), []);
 });
 
-test('blockquotes complete shared names, library functions and markers', () => {
-    const body = `${fence("const notes = 'raw';\nconst Review = struct('Review', { score: int });\nfunction shout(text) { return text; }")}\n\n> Summarize @|\n\n${fence('const later = 1;')}`;
-    const names = labels(body);
-    for (const name of ['notes', 'Review', 'shout', 'readFile', 'ask', 'success', 'fail', 'validate', 'env', 'args']) assert.ok(names.includes(name), name);
-    for (const name of ['later', 'struct', 'restrict', 'CTL', 'console']) assert.ok(!names.includes(name), name);
-    assert.deepEqual(labels(`${fence("const notes = 'raw';\nconst Review = struct('Review', { score: int });")}\n\n> Save it. @validate[|`), ['Review']);
-    assert.ok(labels('> @|').includes('CTL'));
-    assert.ok(labels('> @|').includes('CODEGEN'));
-    const settings = labels('> @CTL(|) Go');
-    assert.deepEqual(settings.sort(), ['enforce', 'forbid', 'model', 'reasoning', 'restrict']);
-    assert.deepEqual(labels("> @CTL(reasoning='|') Go"), ['low', 'medium', 'high']);
-    assert.deepEqual(labels("> @CTL(model='|') Go"), ['test-model']);
-    assert.deepEqual(labels('Prose mentioning @|'), []);
+test('TypeScript diagnostics inside blocks map back through the spans of the scanner', () => {
+    const { context, source } = open(lines(
+        'const notes = "raw";', '',
+        '---', 'outputVar: summary', 'outputType: Sumary', '', 'Summarize @notes for @reader and @notes.size', '---', '',
+        '---', 'mode: agent', '', 'Count the words of @note ->[Lisst(Int)] @counts', 'and tag them ->[List(Str, Int)] @tags', '---', '',
+        '---', 'mode: codegen', '', 'Slug -> @slugify(text: Strng): string', '---',
+    ));
+    assert.deepEqual(brief(diagnostics(context)), [
+        ['ts', ...where(source, 'outputType: Sumary', 'Sumary'), "Cannot find name 'Sumary'"],
+        ['ts', ...where(source, '@reader', 'reader'), "Cannot find name 'reader'"],
+        ['ts', ...where(source, '@notes.size', 'size'), "Property 'size' does not exist on type '\"raw\"'"],
+        ['ts', ...where(source, '@note ', 'note'), "Cannot find name 'note'"],
+        ['ts', ...where(source, 'Lisst(Int)', 'Lisst'), "Cannot find name 'Lisst'"],
+        ['ts', ...where(source, 'List(Str, Int)', 'Int'), 'Expected 1 arguments, but got 2'],
+        ['ts', ...where(source, 'text: Strng', 'Strng'), "Cannot find name 'Strng'"],
+    ]);
+    assert.deepEqual(diagnostics(open(source.replaceAll('\n', '\r\n')).context), diagnostics(open(source).context), 'line endings do not move positions');
 });
 
-test('values saved by agents are visible to later fences, typed through @validate', () => {
-    const body = `${fence("const Invoice = struct('Invoice', { vendor: str, total: int });")}\n\n> Extract it. @validate[Invoice] save to @invoice, and a note -> @note\n\n${fence('invoice.|')}`;
-    const members = labels(body);
-    assert.ok(members.includes('vendor') && members.includes('total'));
-    const { context, source } = open(body.replace('|', 'vendor;\nnote;'));
-    assert.deepEqual(context.analysis.ambient.map(item => [item.name, item.schema]), [['invoice', 'Invoice'], ['note', undefined]]);
-    const target = definition(context, at(source, 'invoice.vendor', 2));
-    assert.deepEqual(target, [{ uri, range: { start: at(source, '@invoice', 1), end: at(source, '@invoice', 8) } }]);
-    assert.match(hoverText(body.replace('invoice.|', 'inv|oice;')), /let invoice: \{\s*vendor: string;\s*total: number;?\s*\}/);
-    assert.match(hoverText(`${fence('const x = 1;')}\n\n> Save to @inv|oice`), /Saved by a blockquote agent/);
+test('diagnostics in generated code without a span are reported on the source line, outputs at their names', () => {
+    const { context, source } = open(lines(
+        'const notes = "raw";',
+        'const fixed = 1;',
+        'function later() {',
+        '    ---',
+        '    mode: agent',
+        '',
+        '    Summarize @notes -> @notes and count -> @=fixed',
+        '    ---',
+        '}',
+    ));
+    const found = brief(diagnostics(context));
+    assert.deepEqual(found, [
+        ['ts', 3, 4, 7, "'await' expressions are only allowed within async functions and at the top levels of modules"],
+        ['ts', ...where(source, '-> @=fixed', 'fixed'), "Cannot assign to 'fixed' because it is a constant"],
+    ]);
+    const clash = open(lines('const answer = 1;', '', '---', 'outputVar: answer', '', 'Say something', '---'));
+    assert.deepEqual(brief(diagnostics(clash.context)), [
+        ['ts', 0, 6, 12, "Cannot redeclare block-scoped variable 'answer'"],
+        ['ts', ...where(clash.source, 'outputVar: answer', 'answer'), "Cannot redeclare block-scoped variable 'answer'"],
+    ]);
 });
 
-test('definitions, references, highlights and rename connect fences and @markers', () => {
-    const body = `${fence('const notes = "raw";\nfunction inner() { const notes = 1; return notes; }')}\n\n> Summarize @notes and save to @summary\n\n${fence('log(notes, summary);')}`;
+test('scanner problems are errors at their ranges and replace what TypeScript says about the same line', () => {
+    const { context, source } = open(lines(
+        'enum Color { Red }', '',
+        '---', 'modle: gpt', 'outputVar: x', '', 'Go', '---', '',
+        '---', 'Say hi', '---', '',
+        '---', 'mode: agent', 'outputVar: y', '', 'Go on', '---', '',
+        '{js}', '',
+        '---', 'never closed',
+    ));
+    const found = diagnostics(context);
+    assert.deepEqual(brief(found).map(item => (item as unknown[]).slice(0, 4)), [
+        ['spl', ...where(source, 'enum Color', 'enum')],
+        ['spl', ...where(source, 'modle: gpt', 'modle')],
+        ['spl', 9, 0, 3],
+        ['spl', ...where(source, 'outputVar: y', 'outputVar')],
+        ['spl', 20, 0, 4],
+        ['spl', 22, 0, 3],
+    ]);
+    assert.ok(found.every(item => item.severity === DiagnosticSeverity.Error));
+    assert.match(found[0].message, /use a union of string literals instead of enum/);
+    assert.match(found[1].message, /did you mean `model`\?/);
+    assert.match(found[2].message, /ask block needs outputVar/);
+    assert.match(found[3].message, /applies only to ask blocks/);
+    assert.match(found[4].message, /SPL 2\.x syntax/);
+    assert.match(found[5].message, /Unmatched block opened at line 23/);
+});
+
+/** Line, start and end character of `part` inside `text`. */
+function where(source: string, text: string, part = text): [number, number, number] {
+    const { start, end } = span(source, text, part);
+    return [start.line, start.character, end.character];
+}
+
+const SCOPE = lines(
+    '---', 'model: gpt-6-luna', '---', '',
+    "import { twice } from './helpers.ts';",
+    "const Joke = Struct('Joke', { setup: Str, punchline: Str });",
+    'const notes = "raw";',
+    'let count = 0;',
+    'function fib(n: number): number { return n < 2 ? n : fib(n - 1) + fib(n - 2); }',
+    '',
+    '---', 'mode: agent', '', 'Call @fib with 10 ->[Int] @fib10', '---', '',
+);
+
+test('@ in a block completes the names in scope at that point and the library', () => {
+    const { context, position } = open(`${SCOPE}---\noutputVar: joke\n\nA joke about @<|>\n---\n\nconst below = 1;\nfunction hoisted() {}\n`);
+    const items = completions(context, position);
+    const names = items.map(item => item.label);
+    for (const name of ['twice', 'Joke', 'notes', 'count', 'fib', 'fib10', 'hoisted', 'env', 'args', 'readFile', 'Str']) assert.ok(names.includes(name), name);
+    for (const name of ['below', 'joke', 'console', 'Promise', '__spl', '__workflow']) assert.ok(!names.includes(name), name);
+    const item = (name: string) => items.find(candidate => candidate.label === name)!;
+    assert.deepEqual([item('fib').kind, item('fib').detail], [CompletionItemKind.Function, '(n: number) => number']);
+    assert.deepEqual([item('fib10').kind, item('fib10').detail], [CompletionItemKind.Variable, 'number']);
+    assert.equal(item('Joke').kind, CompletionItemKind.Struct);
+    assert.deepEqual([item('env').detail, item('env').documentation], [catalog.env.signature, catalog.env.description]);
+    assert.ok(item('notes').sortText! < item('env').sortText!, 'names of the workflow come first');
+    assert.deepEqual(item('notes').textEdit, { range: { start: position, end: position }, newText: 'notes' });
+
+    const typed = open(`${SCOPE}---\nmode: agent\n\nUse @no<|>te and more\n---\n`);
+    const edit = completions(typed.context, typed.position).find(candidate => candidate.label === 'notes')!.textEdit;
+    assert.deepEqual(edit, { range: span(typed.source, '@note ', 'note'), newText: 'notes' });
+});
+
+test('@ completion follows the syntax of references and outputs', () => {
+    const block = (text: string, mode = 'agent'): string[] => labels(`${SCOPE}---\nmode: ${mode}\n\n${text}\n---\n`);
+    assert.deepEqual(block('Read @env.<|>'), [], 'environment variables are not known');
+    assert.deepEqual(block('Mail user@<|>'), [], 'an @ inside a word is text');
+    assert.deepEqual(block('A literal @@<|>'), []);
+    assert.deepEqual(block('Count the lines -> @<|>'), [], 'an output names a new variable');
+    assert.deepEqual(block('Count the lines ->[Int] @<|>'), []);
+    assert.deepEqual(block('Count the lines ->[Int] @=<|>'), ['count'], '@= assigns a variable that can change');
+    assert.ok(block('Summarize @notes and @<|> -> @summary').includes('notes'));
+    assert.deepEqual(block('Plain text <|>'), []);
+    assert.deepEqual(block('---\n<|>'.slice(4)).filter(name => name === 'fib'), [], 'only header keys start a line');
+
+    const nested = labels(lines('const outer = 1;', 'async function work(item: string) {', '    const local = 2;', '    ---', '    mode: agent', '',
+        '    Use @<|>', '    ---', '    const after = 3;', '}', 'const afterwards = 4;'));
+    for (const name of ['outer', 'item', 'local', 'work', 'afterwards']) assert.ok(nested.includes(name), name);
+    assert.ok(!nested.includes('after'), 'a constant below the block in the same function has no value yet');
+});
+
+test('hover on @name shows the value, on an output its variable, on a type expression the type', () => {
+    const body = `${SCOPE}---\noutputVar: joke\noutputType: Joke\n\nA joke about @notes and @fib10, using @notes.length\n---\n\nlog(joke);\n`;
+    const cursor = (text: string, offset: number) => body.replace(text, text.slice(0, offset) + CURSOR + text.slice(offset));
+    assert.match(hoverText(cursor('@notes and', 3)), /const notes: "raw"/);
+    assert.match(hoverText(cursor('@fib10, using', 1)), /const fib10: number/);
+    assert.match(hoverText(cursor('@notes.length', 9)), /\(property\) String\.length: number/);
+    assert.match(hoverText(cursor('@fib with', 2)), /function fib\(n: number\): number/);
+    assert.match(hoverText(cursor('@fib10\n', 3)), /const fib10: number/);
+    assert.match(hoverText(cursor('outputVar: joke', 13)), /const joke: \{\s*setup: string;\s*punchline: string;\s*\}/);
+    assert.match(hoverText(cursor('outputType: Joke', 14)), /const Joke: /);
+    assert.match(hoverText(cursor('->[Int]', 4)), /const Int: /);
+    assert.equal(hoverText(cursor('A joke about', 4)), '', 'instruction text is prose');
+
+    const { context, position, source } = open(cursor('@notes and', 3));
+    assert.deepEqual(hover(context, position)?.range, span(source, '@notes and', 'notes'));
+    const output = open(cursor('@fib10\n', 3));
+    assert.deepEqual(hover(output.context, output.position)?.range, span(output.source, '@fib10\n', 'fib10'));
+
+    const assigned = `let total = 0;\n\n---\nmode: agent\n\nAdd them up ->[Int] @=to${CURSOR}tal\n---\n`;
+    assert.match(hoverText(assigned), /let total: number/);
+    const generated = `---\nmode: codegen\n\nSlug -> @slu${CURSOR}gify(text: string): string\n---\n`;
+    assert.match(hoverText(generated), /const slugify: \(text: string\) => string/);
+    assert.match(hoverText(generated.replace(CURSOR, '').replace('text: str', `te${CURSOR}xt: str`)), /text: string/);
+    assert.match(hoverText(`---\nmode: codegen\n\nPad a string -> @pa${CURSOR}d\n---\n`), /const pad: \(\.\.\.args: any\[\]\) => any/, 'the default signature is not in the source');
+});
+
+test('header keys complete for the mode of the block, with their values and types', () => {
+    const header = (text: string): string[] => labels(`${SCOPE}---\n${text}\n---\n`);
+    const names = (mode: string) => HEADER_KEYS.filter(key => key.applies === 'all' || key.applies === mode).map(key => key.name);
+    assert.deepEqual(header('<|>'), names('ask'), 'ask is the default mode');
+    assert.deepEqual(header('mode: agent\n<|>'), names('agent').filter(name => name !== 'mode'));
+    assert.deepEqual(header('mode: codegen\nmodel: m\nto<|>\n\nSlug -> @slug()'), names('codegen').filter(name => name !== 'mode' && name !== 'model'));
+    assert.ok(header('mode: agent\n<|>').includes('restrict') && !header('mode: agent\n<|>').includes('outputVar'));
+    assert.deepEqual(header('mode: <|>'), ['ask', 'agent', 'codegen']);
+    assert.deepEqual(header('mode: ag<|>\n\nGo -> @x'), ['ask', 'agent', 'codegen']);
+    assert.deepEqual(header('outputVar: x\nreasoning: <|>\n\nGo'), ['none', 'low', 'medium', 'high', 'max']);
+    assert.deepEqual(header('outputVar: x\nhide: <|>\n\nGo'), ['true', 'false']);
+    assert.deepEqual(header('model: <|>'), [], 'models are free text');
+    assert.deepEqual(header('enforce:\n  - <|>'), [], 'YAML values are free text');
+    assert.deepEqual(header('outputVar: x\n\n<|>'), [], 'a blank line ends the header');
+    assert.deepEqual(header('outputVar: x\n\nmo<|>'), []);
+    assert.deepEqual(labels('---\nmo<|>'), names('ask'), 'a block that is still open has a header');
+
+    const { context, position, source } = open(`---\nou<|>\n\nSay hi\n---\n`);
+    const item = completions(context, position).find(candidate => candidate.label === 'outputType')!;
+    assert.deepEqual(item.textEdit, { range: span(source, 'ou\n', 'ou'), newText: 'outputType: ' });
+    assert.equal(item.kind, CompletionItemKind.Property);
+    assert.match(JSON.stringify(item.documentation), /Type expression the answer is coerced to[\s\S]*Applies only to ask blocks/);
+    assert.equal(item.command?.command, 'editor.action.triggerSuggest', 'the types are offered next');
+    const renamed = open(`---\nou<|>tputVar: x\n\nSay hi\n---\n`);
+    assert.deepEqual(completions(renamed.context, renamed.position).find(candidate => candidate.label === 'outputType')!.textEdit,
+        { range: span(renamed.source, 'outputVar'), newText: 'outputType' });
+
+    const types = header('outputVar: x\noutputType: <|>\n\nGo');
+    for (const name of [...TYPES, 'Joke']) assert.ok(types.includes(name), name);
+    for (const name of ['notes', 'fib', 'ask', 't', 'env', 'validate']) assert.ok(!types.includes(name), name);
+    assert.deepEqual(header('outputVar: x\noutputType: List(Jo<|>)\n\nGo').filter(name => name === 'Joke'), ['Joke']);
+    assert.deepEqual(header('mode: agent\n\nList the files ->[<|>').sort(), types.sort());
+    assert.ok(header('mode: agent\n\nList the files ->[List(<|>)] @files').includes('Str'));
+    assert.deepEqual(header('mode: agent\n\nList the files ->[Str.<|>'), [], 'members are not types');
+    assert.deepEqual(header('mode: agent\n\nList the files [<|>'), [], 'only an arrow declares an output');
+});
+
+test('trigger characters complete only what they start', () => {
+    const triggered = (marked: string, character: string): string[] => {
+        const { context, position } = open(marked);
+        return completions(context, position, { triggerKind: CompletionTriggerKind.TriggerCharacter, triggerCharacter: character }).map(item => item.label);
+    };
+    assert.deepEqual(triggered('---\n <|>\n---\n', ' '), [], 'indenting a line does not offer header keys');
+    assert.deepEqual(triggered('---\nmode: <|>\n---\n', ' '), ['ask', 'agent', 'codegen']);
+    assert.deepEqual(triggered(`${SCOPE}---\nmode: agent\n\nGo on. <|>\n---\n`, ' '), []);
+    assert.ok(triggered(`${SCOPE}---\nmode: agent\n\nUse @<|>\n---\n`, '@').includes('notes'));
+    assert.ok(triggered(`${SCOPE}---\nmode: agent\n\nList them ->[<|>\n---\n`, '[').includes('Joke'));
+    assert.deepEqual(triggered(`${SCOPE}---\nmode: agent\n\nUse notes.<|>\n---\n`, '.'), []);
+    assert.ok(triggered('const list = [1];\nlist.<|>', '.').includes('map'));
+    assert.deepEqual(triggered('const list = [1];\nconst other = <|>', ' '), []);
+    assert.deepEqual(triggered('const list = [<|>', '['), []);
+});
+
+test('hover explains header keys', () => {
+    const text = hoverText(`---\noutputVar: x\nrea<|>soning: high\n\nGo\n---\n`);
+    assert.match(text, /`reasoning: none \| low \| medium \| high \| max`/);
+    assert.match(text, /Reasoning level/);
+    assert.match(hoverText(`---\nmode: agent\nrest<|>rict: ./out\n\nGo\n---\n`), /Limits for this block[\s\S]*Applies only to agent blocks/);
+    assert.equal(hoverText(`---\noutputVar: x\nreasoning: hi<|>gh\n\nGo\n---\n`), '', 'values are not explained');
+    assert.match(hoverText(`---\nmod<|>el: gpt-6-luna\n---\n`), /Model id/);
+});
+
+test('imports of other .spl files resolve to their virtual modules, on disk and open', () => {
+    const body = lines("import squares, { square } from './math.spl';", "import { twice } from './helpers.ts';", '',
+        'const four: number = square(2);', "const all = await squares(['2', '3']);", 'log(twice(four), all);', '');
     const { context, source } = open(body);
-    const declaration = { uri, range: { start: at(source, 'notes'), end: at(source, 'notes', 5) } };
+    assert.deepEqual(diagnostics(context), []);
+    const math = pathToFileURL(path.join(base, 'math.spl')).href;
+    assert.deepEqual(definition(context, at(source, 'square(2)', 2)), [{ uri: math, range: { start: { line: 4, character: 16 }, end: { line: 4, character: 22 } } }]);
+    assert.match(hoverText(body.replace('square(2)', `squ${CURSOR}are(2)`)), /square\(n: number\): number/);
+    assert.match(hoverText(body.replace('await squares', `await squ${CURSOR}ares`)), /Workflow/);
+    assert.match(hoverText(body.replace('const all', `const a${CURSOR}ll`)), /const all: unknown/);
+
+    assert.match(String(diagnostics(open(body.replace('./math.spl', './missing.spl')).context).map(item => item.message)), /^Cannot find module '\.\/missing\.spl'/);
+
+    // The editor's text of an imported workflow wins over the file on disk, and its uses are found across files.
+    const edited = open(lines('export function cube(n: number): number {', '    return n * n * n;', '}', ''), math);
+    assert.match(brief(diagnostics(open(body).context)).join(), /has no exported member 'square'/);
+    const fixed = open(body.replaceAll('square(', 'cube(').replace('{ square }', '{ cube }'));
+    assert.deepEqual(diagnostics(fixed.context), []);
+    assert.deepEqual(references(edited.context, at(edited.source, 'cube')).map(item => [item.uri, item.range.start.line]),
+        [[math, 0], [uri, 0], [uri, 3]].sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+    assert.deepEqual(Object.keys(rename(edited.context, at(edited.source, 'cube'), 'third')?.changes ?? {}).sort(), [math, uri].sort());
+    project.close(math);
+    assert.deepEqual(diagnostics(open(body).context), [], 'a closed document is read from disk again');
+});
+
+test('definitions, references, rename and symbols connect code, @names and outputs', () => {
+    const body = lines(
+        'const notes = "raw";',
+        'function inner() { const notes = 1; return notes; }',
+        '',
+        '---', 'mode: agent', '', 'Summarize @notes -> @summary', 'and count the words ->[Int] @words', '---', '',
+        '---', 'outputVar: title', '', 'A title for @summary', '---', '',
+        'log(notes, summary, words, title);',
+        '',
+    );
+    const { context, source } = open(body);
+    assert.deepEqual(diagnostics(context), []);
+    const declaration = { uri, range: span(source, 'notes') };
     assert.deepEqual(definition(context, at(source, '@notes', 3)), [declaration]);
     assert.deepEqual(definition(context, at(source, 'log(notes', 5)), [declaration]);
-    const uses = references(context, at(source, 'log(notes', 5));
-    assert.deepEqual(uses.map(item => item.range.start), [at(source, 'notes'), at(source, '@notes', 1), at(source, 'log(notes', 4)]);
-    assert.equal(documentHighlights(context, at(source, '@notes', 2)).length, 3);
-    assert.equal(references(context, at(source, 'const notes = 1', 7)).length, 2, 'a local shadow does not reach markers');
+    assert.deepEqual(definition(context, at(source, 'summary, words', 2)), [{ uri, range: span(source, '-> @summary', 'summary') }]);
+    assert.deepEqual(definition(context, at(source, 'title);', 2)), [{ uri, range: span(source, 'outputVar: title', 'title') }]);
+    assert.deepEqual(definition(context, at(source, '@summary\n---', 3)), [{ uri, range: span(source, '-> @summary', 'summary') }]);
 
-    assert.deepEqual(prepareRename(context, at(source, '@notes', 2)), {
-        range: { start: at(source, '@notes', 1), end: at(source, '@notes', 6) }, placeholder: 'notes',
-    });
-    const edit = rename(context, at(source, 'notes'), 'draft');
-    assert.equal(edit?.changes?.[uri].length, 3);
-    assert.ok(edit.changes[uri].every(item => item.newText === 'draft'));
-    assert.equal(rename(context, at(source, 'notes'), 'not valid'), null);
+    assert.deepEqual(references(context, at(source, 'log(notes', 5)).map(item => item.range),
+        [span(source, 'notes'), span(source, '@notes', 'notes'), span(source, 'log(notes', 'notes')]);
+    assert.equal(references(context, at(source, 'const notes = 1', 7)).length, 2, 'a local of the same name is another variable');
+    const uses = [span(source, '-> @summary', 'summary'), span(source, 'for @summary', 'summary'), span(source, 'log(notes, summary', 'summary')];
+    assert.deepEqual(references(context, at(source, '-> @summary', 5)).map(item => item.range), uses);
+    assert.deepEqual(documentHighlights(context, at(source, 'for @summary', 6)).map(item => [item.range, item.kind]), [[uses[0], 3], [uses[1], 2], [uses[2], 2]]);
+
+    assert.deepEqual(prepareRename(context, at(source, 'for @summary', 6)), { range: uses[1], placeholder: 'summary' });
+    assert.deepEqual(rename(context, at(source, 'for @summary', 6), 'digest'), { changes: { [uri]: uses.map(range => ({ range, newText: 'digest' })) } });
+    assert.equal(rename(context, at(source, 'notes'), 'draft')?.changes?.[uri].length, 3);
+    assert.equal(rename(context, at(source, 'title);', 1), 'heading')?.changes?.[uri].length, 2);
+    assert.equal(rename(context, at(source, 'notes'), 'not a name'), null);
     assert.equal(prepareRename(context, at(source, 'log(notes')), null, 'library names cannot be renamed');
-    assert.equal(rename(context, at(source, '@summary', 2), 'digest')?.changes?.[uri].length, 2);
+    assert.equal(prepareRename(context, at(source, 'Summarize', 2)), null, 'instruction text is not a name');
 
-    const external = definition(open(fence("import { twice } from './helpers.js';\ntwi|ce(2);")).context, previous!.virtual.positionAt(0));
-    assert.deepEqual(external, []);
-    const imported = open(fence("import { twice } from './helpers.js';\ntwice(2);"));
-    const jump = definition(imported.context, at(imported.source, 'twice(2)', 2));
-    assert.equal(jump[jump.length - 1].uri, pathToFileURL(path.join(base, 'helpers.js')).href);
-});
-
-test('document symbols list the declarations of every fence', () => {
-    const { context } = open(`${fence('const notes = 1;\nfunction shout() {}\nclass Card { label() {} }')}\n\n> Save to @summary\n\n${fence('let later = 2;')}`);
-    const symbols = documentSymbols(context);
-    assert.deepEqual(symbols.map(item => [item.name, item.kind]), [
-        ['Card', SymbolKind.Class], ['later', SymbolKind.Variable], ['notes', SymbolKind.Constant], ['shout', SymbolKind.Function],
+    assert.deepEqual(documentSymbols(context).map(item => [item.name, item.kind, item.selectionRange.start.line]).sort(), [
+        ['inner', SymbolKind.Function, 1], ['notes', SymbolKind.Constant, 0], ['summary', SymbolKind.Constant, 6],
+        ['title', SymbolKind.Constant, 11], ['words', SymbolKind.Constant, 7],
     ]);
-    assert.deepEqual(symbols[0].children?.map(item => item.name), ['label']);
-});
+    assert.deepEqual(foldingRanges(open(lines('//*', '# Title', '*//', '', body, 'function long() {', '    return 1;', '}', '')).context)
+        .map(item => [item.startLine, item.endLine, item.kind]).sort((a, b) => Number(a[0]) - Number(b[0])),
+    [[0, 2, 'comment'], [7, 12, undefined], [14, 18, undefined], [22, 24, undefined]]);
 
-// ---- .spl files: the same workflow in {js}, {ts}, {agent}, {codegen} and {comment} blocks ----
-
-const splUri = pathToFileURL(path.join(base, 'workflow.spl')).href;
-const block = (tag: string, body: string, settings = '') => `{${tag}${settings && ` ${settings}`}}\n${body}\n{/${tag}}`;
-const js = (code: string) => block('js', code);
-let previousSpl: WorkflowContext | undefined;
-
-/** Opens a `.spl` document; `|` marks the cursor and is removed. */
-function openSpl(marked: string): { context: WorkflowContext; position: Position; source: string } {
-    const cursor = marked.indexOf('|');
-    const source = cursor < 0 ? marked : marked.slice(0, cursor) + marked.slice(cursor + 1);
-    const document = TextDocument.create(splUri, 'spl', ++version, source);
-    previousSpl = workflowContext(document, project, previousSpl);
-    assert.ok(previousSpl, 'a .spl document is a workflow');
-    return { context: previousSpl, position: document.positionAt(Math.max(0, cursor)), source };
-}
-const splAt = (source: string, text: string, offset = 0): Position => {
-    const index = source.indexOf(text);
-    assert.ok(index >= 0, `'${text}' not found`);
-    return TextDocument.create(splUri, 'spl', 0, source).positionAt(index + offset);
-};
-const splLabels = (body: string) => {
-    const { context, position } = openSpl(body);
-    return completions(context, position).map(item => item.label);
-};
-const splHover = (body: string): string => {
-    const { context, position } = openSpl(body);
-    const result = hover(context, position);
-    return result && typeof result.contents === 'object' && 'value' in result.contents ? result.contents.value : '';
-};
-
-test('.spl files are workflows by their type, with or without frontmatter', () => {
-    const plain = analyzeWorkflow(TextDocument.create(splUri, 'spl', 1, js('const a = 1;')));
-    assert.equal(plain.workflow, true);
-    assert.deepEqual(plain.blocks.map(item => [item.kind, item.line, item.endLine]), [['code', 2, 2]]);
-    assert.equal(analyzeWorkflow(TextDocument.create(splUri, 'plaintext', 1, js('const a = 1;'))).workflow, true, 'the file name is enough');
-    assert.equal(analyzeWorkflow(TextDocument.create('untitled:Untitled-1', 'spl', 1, '')).workflow, true, 'so is the language of an unsaved file');
-    const full = analyzeWorkflow(TextDocument.create(splUri, 'spl', 1, `---\nmodel: test-model\n---\n\n${block('comment', js('const hidden = 1;'))}\n\n${block('js', 'const shown = 1;', 'ignore')}\n\n${block('agent', 'Save to @out')}\n\n${block('ts', 'const n: number = 1;')}`));
-    assert.equal(full.model, 'test-model');
-    assert.equal(full.language, 'ts');
-    assert.deepEqual(full.blocks.map(item => [item.kind, item.spl?.tag]), [['natural', 'agent'], ['code', 'ts']]);
-    assert.deepEqual(full.spl?.blocks.map(item => item.tag), ['comment', 'js', 'agent', 'ts']);
-    assert.deepEqual(full.diagnostics, []);
-});
-
-test('js and ts blocks of a .spl file complete, hover and check like fences', () => {
-    const names = splLabels(`${js('const notes = "raw";\nfunction shout(text) { return text.toUpperCase(); }')}\n\n${block('comment', js('const hidden = 1;'))}\n\n${js('|')}`);
-    for (const name of ['ask', 'agent', 'restrict', 'struct', 'markdown', 'notes', 'shout', 'console', 'JSON']) assert.ok(names.includes(name), name);
-    assert.ok(!names.includes('hidden'), 'commentary declares nothing');
-    assert.ok(splLabels(js('const title = await ask("Title?");\ntitle.|')).includes('toUpperCase'));
-    assert.ok(splLabels(js("import { twice } from './helpers.js';\ntwice(1).|")).includes('toFixed'));
-    assert.ok(splLabels(js("await ask('x', { | })")).includes('repairs'));
-    assert.match(splHover(js('await as|k("x");')), /const ask[\s\S]*Asks the model for a value/);
-    assert.deepEqual(splLabels(block('js', 'const shown = 1;\nsho|', 'ignore')), [], 'blocks that do not run are not analyzed');
-
-    const help = openSpl(js("await writeFile('./out.txt', |)"));
-    assert.equal(signatureHelp(help.context, help.position)?.activeParameter, 1);
-
-    const typed = openSpl(`${js('const loose = 1;\nloose.missing();')}\n\n${block('ts', "const count: number = 'three';")}`);
-    const found = diagnostics(typed.context);
-    assert.deepEqual(found.map(item => [item.source, item.range.start]), [['ts', splAt(typed.source, 'count: number')]]);
-    assert.match(found[0].message, /Type 'string' is not assignable to type 'number'/);
-});
-
-test('.spl diagnostics report structure, tag settings and JavaScript problems at their positions', () => {
-    const broken = openSpl(`---\nmodel: ''\n---\nstray text\n\n${js('const a = ;')}\n\n${block('agent', '@CTL(model="m") Go', 'model=42')}\n\n{python}\n\n${js("import { x } from './missing.js';")}\n\n{js}\nreturn 1;`);
-    const found = diagnostics(broken.context);
-    assert.deepEqual(found.map(item => [item.range.start.line, item.range.start.character, item.message]), [
-        [1, 0, 'frontmatter model must be a non-empty string'],
-        [3, 0, 'text outside a block; wrap commentary in {comment} and {/comment}'],
-        [9, 13, '{agent}: expected a literal string'],
-        [10, 0, '@CTL is not used in .spl files; write the settings in the tag: {agent restrict=..., model=...}'],
-        [13, 0, 'unknown block {python}; expected {js}, {ts}, {agent}, {codegen} or {comment}'],
-        [19, 0, 'unterminated {js} block; close it with {/js}'],
-        [6, 10, 'Unexpected token'],
-        [20, 0, "'return' outside of function"],
-        [16, 0, `cannot find module './missing.js' (imports resolve against the working directory ${base})`],
-    ]);
-    assert.ok(found.every(item => item.severity === DiagnosticSeverity.Error && item.source === 'spl'));
-    assert.deepEqual(found[4].range, { start: { line: 13, character: 0 }, end: { line: 13, character: 8 } }, 'a tag is underlined as a whole');
-    assert.equal(broken.context.analysis.blocks.length, 4, 'blocks stay usable while the document has problems');
-});
-
-test('agent blocks complete shared names, library functions and markers', () => {
-    const body = `${js("const notes = 'raw';\nconst Review = struct('Review', { score: int });\nfunction shout(text) { return text; }")}\n\n${block('agent', 'Summarize @|')}\n\n${js('const later = 1;')}`;
-    const names = splLabels(body);
-    for (const name of ['notes', 'Review', 'shout', 'readFile', 'ask', 'success', 'fail', 'validate', 'env', 'args']) assert.ok(names.includes(name), name);
-    for (const name of ['later', 'struct', 'restrict', 'CTL', 'CODEGEN', 'console']) assert.ok(!names.includes(name), name);
-    assert.deepEqual(splLabels(`${js("const notes = 'raw';\nconst Review = struct('Review', { score: int });")}\n\n${block('agent', 'Save it. @validate[|')}`), ['Review']);
-    assert.ok(!splLabels(block('agent', '@|')).includes('CTL'), 'settings are written in the tag');
-    assert.deepEqual(splLabels(block('agent', 'Mention notes|')), [], 'only @ refers to shared names');
-    assert.deepEqual(splLabels(block('codegen', 'Define answer() using @|')), [], 'a description is literal');
-    assert.deepEqual(splLabels(`${js('const notes = 1;')}\nStray @|`), []);
-});
-
-test('agent and codegen tags complete their settings, restriction kinds and values', () => {
-    const all = ['alias', 'enforce', 'forbid', 'model', 'reasoning', 'restrict'];
-    assert.deepEqual(splLabels('{agent |}\nGo\n{/agent}').sort(), all);
-    assert.deepEqual(splLabels('{codegen |}\nDefine f()\n{/codegen}').sort(), all);
-    assert.deepEqual(splLabels("{agent model='m', |\n}\nGo\n{/agent}").sort(), ['alias', 'enforce', 'forbid', 'reasoning', 'restrict']);
-    assert.deepEqual(splLabels("{agent restrict={fs: ['./src'], |}}\nGo\n{/agent}").sort(), ['exec', 'mcp', 'net']);
-    assert.deepEqual(splLabels("{agent restrict={fs: ['|']}}\nGo\n{/agent}"), []);
-    assert.deepEqual(splLabels("{agent reasoning='|'}\nGo\n{/agent}"), ['low', 'medium', 'high']);
-    assert.deepEqual(splLabels("---\nmodel: test-model\n---\n{agent model='|'}\nGo\n{/agent}"), ['test-model']);
-    assert.deepEqual(splLabels('{agent|}\nGo\n{/agent}'), [], 'settings start after the tag name');
-    assert.deepEqual(splLabels("{agent model='m'}|\nGo\n{/agent}"), []);
-
-    const typing = openSpl("{agent restrict={fs: ['./src'], ex|\nList files\n{/agent}\n\n{js}\nconst kept = 1;\n{/js}");
-    const [exec] = completions(typing.context, typing.position).filter(item => item.label === 'exec');
-    assert.deepEqual(exec.textEdit, { range: { start: { line: 0, character: 32 }, end: { line: 0, character: 34 } }, newText: 'exec:' });
-    assert.deepEqual(typing.context.analysis.blocks.map(item => item.kind), ['natural', 'code'], 'an unfinished tag does not swallow later blocks');
-
-    assert.match(splHover("{agent restrict={fs: ['./src']}, reas|oning='high'}\nGo\n{/agent}"), /reasoning='low' \| 'medium' \| 'high'/);
-    assert.match(splHover("{agent ali|as='draft'}\nGo\n{/agent}"), /alias='name'[\s\S]*go\('name'\)/);
-    assert.match(splHover('{ag|ent}\nGo\n{/agent}'), /\{agent restrict=[\s\S]*agent command in plain language/);
-    assert.match(splHover('{js}\nconst a = 1;\n{/j|s}'), /\{js\} \.\.\. \{\/js\}/);
-    assert.match(splHover('{comment}\nNotes\n{/comm|ent}'), /never executed/);
-    assert.equal(splHover('{agent}\nJust pro|se\n{/agent}'), '');
-});
-
-test('typing a brace between blocks offers the blocks of a .spl file', () => {
-    const { context, position } = openSpl(`---\nmodel: m\n---\n\n${js('const a = 1;')}\n\n{|}\n`);
-    const items = completions(context, position);
-    assert.deepEqual(items.map(item => item.label), ['{js}', '{ts}', '{agent}', '{codegen}', '{comment}']);
-    assert.deepEqual(items[2].textEdit, { range: { start: { line: 8, character: 0 }, end: { line: 8, character: 2 } }, newText: '{agent}\n$0\n{/agent}' });
-    assert.equal(items[2].filterText, '{agent');
-    assert.deepEqual(splLabels(`${js('const a = 1;')}\n\n  {ag|`), ['{js}', '{ts}', '{agent}', '{codegen}', '{comment}']);
-    assert.deepEqual(splLabels(`${js('const a = 1;')}\n\n|`), ['{js}', '{ts}', '{agent}', '{codegen}', '{comment}', 'if', 'elif', 'else', 'while']);
-    for (const body of ['---\nmodel: |\n---\n', '{comment}\n{|}\n{/comment}', '{agent}\n{|}\n{/agent}', `${js('const a = 1;')}\ntext {|}`, '{js}|']) {
-        assert.ok(!splLabels(body).includes('{agent}'), body);
-    }
-});
-
-test('.spl control lines complete, hover and check their JavaScript conditions', () => {
-    const keywords = openSpl(`${js('let i = 0;')}\n\n  wh|`);
-    const loop = completions(keywords.context, keywords.position).find(item => item.label === 'while');
-    assert.deepEqual(loop?.textEdit, { range: { start: { line: 4, character: 2 }, end: { line: 4, character: 4 } }, newText: 'while ${1:condition}:\n\t$0' });
-    assert.ok(!splLabels(`${js('let i = 0;')}\n\n{|}`).includes('if'), 'a brace starts a block');
-
-    const body = `${js("let _switch = args[0];\nlet i = 0;")}\n\nif _sw|itch == 'color':\n    ${js("let result = await ask('Color?');").replace(/\n/g, '\n    ')}\nelif _switch == 'food':\n    ${js("let result = await ask('Food?');").replace(/\n/g, '\n    ')}\nelse:\n    ${js("let result = await ask('Hobby?');").replace(/\n/g, '\n    ')}\n\nwhile i < 3:\n    ${js('i++;').replace(/\n/g, '\n    ')}\n\n${js('success({ result, i });')}`;
-    const names = splLabels(body);
-    for (const name of ['_switch', 'i', 'args', 'ask']) assert.ok(names.includes(name), name);
-    assert.ok(splLabels(body.replace('_sw|itch', '_switch').replace('{ result, i }', '{ res| }')).includes('result'), 'variables of nested blocks are shared');
-    assert.ok(splLabels(body.replace("_sw|itch == 'color'", '_switch.|')).includes('toUpperCase'), 'conditions complete members');
-    assert.match(splHover(body), /let _switch: string/);
-    assert.match(splHover(body.replace('_sw|itch', '_switch').replace('wh', 'w|h')), /while condition:[\s\S]*Run the indented blocks/);
-    const { context, source } = openSpl(body.replace('|', ''));
-    assert.deepEqual(diagnostics(context), []);
-    assert.deepEqual(definition(context, splAt(source, 'i < 3')), [{ uri: splUri, range: { start: splAt(source, 'i = 0'), end: splAt(source, 'i = 0', 1) } }]);
-    assert.deepEqual(context.analysis.blocks.filter(item => item.condition).map(item => [item.line, item.text]), [[6, "_switch == 'color'"], [10, "_switch == 'food'"], [19, 'i < 3']]);
-
-    const broken = openSpl(`${js('let ready = true;')}\nif ready\n${js('ready;')}\nelse ready:\n${js('ready;')}\nwhile ready ===:\n  ${js('ready = false;')}`);
-    assert.deepEqual(diagnostics(broken.context).map(item => [item.range.start.line, item.range.start.character, item.message]), [
-        [3, 0, "expected an indented block after 'if'"],
-        [3, 8, "expected ':' at the end of the 'if' line"],
-        [7, 0, "'else' without a matching 'if'"],
-        [7, 0, "expected an indented block after 'else'"],
-        [7, 5, "'else' takes no condition; use 'elif'"],
-        [11, 15, 'Unexpected token'],
-    ]);
-});
-
-test('values saved by agent blocks are visible to later blocks, typed through @validate', () => {
-    const body = `${js("const Invoice = struct('Invoice', { vendor: str, total: int });")}\n\n${block('agent', 'Extract it. @validate[Invoice] save to @invoice,\nand a note -> @note', "restrict={fs: ['./in']},\n       model='m'")}\n\n${js('invoice.|')}`;
-    const members = splLabels(body);
-    assert.ok(members.includes('vendor') && members.includes('total'));
-    const { context, source } = openSpl(body.replace('|', 'vendor;\nnote;'));
-    assert.deepEqual(context.analysis.ambient.map(item => [item.name, item.schema]), [['invoice', 'Invoice'], ['note', undefined]]);
-    assert.deepEqual(definition(context, splAt(source, 'invoice.vendor', 2)),
-        [{ uri: splUri, range: { start: splAt(source, '@invoice', 1), end: splAt(source, '@invoice', 8) } }]);
-    assert.match(splHover(body.replace('invoice.|', 'inv|oice;')), /let invoice: \{\s*vendor: string;\s*total: number;?\s*\}/);
-    assert.match(splHover(`${js('const x = 1;')}\n\n${block('agent', 'Save to @inv|oice')}`), /Saved by a blockquote agent/);
-    assert.deepEqual(openSpl(`${block('codegen', 'Define f() and save to @generated')}\n\n${block('agent', 'Go', "forbid='saving to @quoted'")}`).context.analysis.ambient, [],
-        'descriptions and settings are literal');
-});
-
-test('definitions, references, rename and symbols connect the blocks of a .spl file and @markers', () => {
-    const body = `${js('const notes = "raw";\nfunction inner() { const notes = 1; return notes; }')}\n\n${block('agent', 'Summarize @notes and save to @summary')}\n\n${js('log(notes, summary);')}`;
-    const { context, source } = openSpl(body);
-    const declaration = { uri: splUri, range: { start: splAt(source, 'notes'), end: splAt(source, 'notes', 5) } };
-    assert.deepEqual(definition(context, splAt(source, '@notes', 3)), [declaration]);
-    assert.deepEqual(definition(context, splAt(source, 'log(notes', 5)), [declaration]);
-    assert.deepEqual(references(context, splAt(source, 'log(notes', 5)).map(item => item.range.start),
-        [splAt(source, 'notes'), splAt(source, '@notes', 1), splAt(source, 'log(notes', 4)]);
-    assert.equal(documentHighlights(context, splAt(source, '@notes', 2)).length, 3);
-    assert.equal(references(context, splAt(source, 'const notes = 1', 7)).length, 2, 'a local shadow does not reach markers');
-    const edit = rename(context, splAt(source, 'notes'), 'draft');
-    assert.equal(edit?.changes?.[splUri].length, 3);
-    assert.equal(rename(context, splAt(source, '@summary', 2), 'digest')?.changes?.[splUri].length, 2);
-    assert.equal(prepareRename(context, splAt(source, 'log(notes')), null, 'library names cannot be renamed');
-    assert.deepEqual(documentSymbols(context).map(item => [item.name, item.kind]), [['inner', SymbolKind.Function], ['notes', SymbolKind.Constant]]);
+    const short = open(lines('---', 'outputVar: a', '', 'Say hi', '---', 'log(a);'));
+    assert.deepEqual(references(short.context, { line: 5, character: 4 }).map(item => [item.range.start, item.range.end]), [
+        [{ line: 1, character: 11 }, { line: 1, character: 12 }], [{ line: 5, character: 4 }, { line: 5, character: 5 }],
+    ], 'an output is found after its key, not inside it');
+    assert.match(JSON.stringify(hover(short.context, { line: 1, character: 11 })), /const a: string/);
+    assert.equal(hover(short.context, { line: 1, character: 7 })?.range?.start.character, 0, 'the key is explained as a key');
 });
 
 test('the server speaks LSP end to end', { timeout: 60_000 }, async t => {
@@ -415,9 +450,9 @@ test('the server speaks LSP end to end', { timeout: 60_000 }, async t => {
     const published: PublishDiagnosticsParams[] = [];
     let notify: (() => void) | undefined;
     connection.onNotification(PublishDiagnosticsNotification.type, params => { published.push(params); notify?.(); });
-    const nextDiagnostics = async (documentVersion: number): Promise<PublishDiagnosticsParams> => {
+    const nextDiagnostics = async (document: string, version: number): Promise<PublishDiagnosticsParams> => {
         for (;;) {
-            const found = published.find(item => item.version === documentVersion);
+            const found = published.find(item => item.uri === document && item.version === version);
             if (found) return found;
             await new Promise<void>(resolve => { notify = resolve; });
         }
@@ -427,67 +462,62 @@ test('the server speaks LSP end to end', { timeout: 60_000 }, async t => {
         workspaceFolders: [{ uri: pathToFileURL(base).href, name: 'workspace' }],
     });
     assert.ok(initialized.capabilities.completionProvider?.resolveProvider);
-    assert.ok(initialized.capabilities.renameProvider);
+    assert.ok(initialized.capabilities.completionProvider?.triggerCharacters?.includes('@'));
+    assert.ok(initialized.capabilities.renameProvider && initialized.capabilities.foldingRangeProvider);
     await connection.sendNotification(InitializedNotification.type, {});
 
-    const document = pathToFileURL(path.join(base, 'docs', 'flow.md')).href;
-    const first = header + fence("import { twice } from './helpers.js';\nconst value = twice(2);\nvalue;\nconst = 1;");
-    await connection.sendNotification(DidOpenTextDocumentNotification.type, { textDocument: { uri: document, languageId: 'markdown', version: 1, text: first } });
-    const initial = await nextDiagnostics(1);
-    assert.equal(initial.diagnostics.length, 1);
-    assert.equal(initial.diagnostics[0].range.start.line, 10);
+    const flow = pathToFileURL(path.join(base, 'flows', 'flow.spl')).href;
+    const first = lines("import { square } from '../math.spl';", 'const value = square(2);', '', '---', 'mode: agent', '',     'Double @valu -> @doubled', '---', '', 'const a = ;', '');
+    await connection.sendNotification(DidOpenTextDocumentNotification.type, { textDocument: { uri: flow, languageId: 'spl', version: 1, text: first } });
+    assert.deepEqual((await nextDiagnostics(flow, 1)).diagnostics.map(item => [item.source, item.range.start.line, item.range.start.character, item.message.split('.')[0]]), [
+            ['ts', 9, 10, 'Expression expected'], ['ts', 6, 8, "Cannot find name 'valu'"],
+    ]);
 
-    const text = header + fence("import { twice } from './helpers.js';\nconst value = twice(2);\nvalue.\ntoFixed;\nawait writeFile('a', )") + '\n\n> Use @value and @\n';
-    await connection.sendNotification(DidChangeTextDocumentNotification.type, { textDocument: { uri: document, version: 2 }, contentChanges: [{ text }] });
-    assert.deepEqual((await nextDiagnostics(2)).diagnostics, []);
-    const position = (needle: string, offset = 0) => TextDocument.create(document, 'markdown', 2, text).positionAt(text.indexOf(needle) + offset);
+    const text = lines("import { square } from '../math.spl';", 'const value = square(2);', 'value.', 'toFixed;', "await writeFile('a', )", '',
+        '---', 'mode: agent', '', 'Double @value and @ -> @doubled', '---', '', 'log(doubled);', '');
+    await connection.sendNotification(DidChangeTextDocumentNotification.type, { textDocument: { uri: flow, version: 2 }, contentChanges: [{ text }] });
+    assert.deepEqual((await nextDiagnostics(flow, 2)).diagnostics.map(item => item.message), ['Expected 2 arguments, but got 1.']);
+    const position = (needle: string, offset = 0) => TextDocument.create(flow, 'spl', 2, text).positionAt(text.indexOf(needle) + offset);
 
     const members = await connection.sendRequest(CompletionRequest.type, {
-        textDocument: { uri: document }, position: position('value.\n', 6),
+        textDocument: { uri: flow }, position: position('value.\n', 6),
         context: { triggerKind: CompletionTriggerKind.TriggerCharacter, triggerCharacter: '.' },
     });
     const items = Array.isArray(members) ? members : members?.items ?? [];
     const toFixed = items.find(item => item.label === 'toFixed');
-    assert.ok(toFixed, 'imports resolve against the workspace folder, not the document folder');
+    assert.ok(toFixed, 'the imported workflow is typed');
     assert.match(String((await connection.sendRequest(CompletionResolveRequest.type, toFixed)).detail), /toFixed/);
     const ignored = await connection.sendRequest(CompletionRequest.type, {
-        textDocument: { uri: document }, position: position("'a', )", 5),
-        context: { triggerKind: CompletionTriggerKind.TriggerCharacter, triggerCharacter: ',' },
+        textDocument: { uri: flow }, position: position("'a', )", 5),
+        context: { triggerKind: CompletionTriggerKind.TriggerCharacter, triggerCharacter: '[' },
     });
     assert.deepEqual(ignored, []);
-    const shared = await connection.sendRequest(CompletionRequest.type, { textDocument: { uri: document }, position: position('and @', 5) });
-    assert.ok((Array.isArray(shared) ? shared : shared?.items ?? []).some(item => item.label === 'value'));
+    const shared = await connection.sendRequest(CompletionRequest.type, {
+        textDocument: { uri: flow }, position: position('and @', 5),
+        context: { triggerKind: CompletionTriggerKind.TriggerCharacter, triggerCharacter: '@' },
+    });
+    const sharedLabels = (Array.isArray(shared) ? shared : shared?.items ?? []).map(item => item.label);
+    assert.ok(sharedLabels.includes('value') && sharedLabels.includes('square') && sharedLabels.includes('args'));
 
-    const info = await connection.sendRequest(HoverRequest.type, { textDocument: { uri: document }, position: position('writeFile', 2) });
-    assert.match(JSON.stringify(info?.contents), /Creates or overwrites a UTF-8 text file/);
-    const help = await connection.sendRequest(SignatureHelpRequest.type, { textDocument: { uri: document }, position: position("'a', )", 5) });
+    const info = await connection.sendRequest(HoverRequest.type, { textDocument: { uri: flow }, position: position('@value', 2) });
+    assert.match(JSON.stringify(info?.contents), /const value: number/);
+    const help = await connection.sendRequest(SignatureHelpRequest.type, { textDocument: { uri: flow }, position: position("'a', )", 5) });
     assert.equal(help?.activeParameter, 1);
-    const target = await connection.sendRequest(DefinitionRequest.type, { textDocument: { uri: document }, position: position('@value', 2) });
-    assert.deepEqual(target, [{ uri: document, range: { start: position('value = '), end: position('value = ', 5) } }]);
-    const symbols = await connection.sendRequest(DocumentSymbolRequest.type, { textDocument: { uri: document } });
-    assert.ok(symbols?.some(item => item.name === 'value'));
-    const edit = await connection.sendRequest(RenameRequest.type, { textDocument: { uri: document }, position: position('value = '), newName: 'result' });
-    assert.equal(edit?.changes?.[document].length, 3);
+    const target = await connection.sendRequest(DefinitionRequest.type, { textDocument: { uri: flow }, position: position('log(doubled', 6) });
+    assert.deepEqual(target, [{ uri: flow, range: { start: position('@doubled', 1), end: position('@doubled', 8) } }]);
+    const symbols = await connection.sendRequest(DocumentSymbolRequest.type, { textDocument: { uri: flow } });
+    assert.deepEqual(symbols?.map(item => item.name).sort(), ['doubled', 'value']);
+    const folds = await connection.sendRequest(FoldingRangeRequest.type, { textDocument: { uri: flow } });
+    assert.deepEqual(folds?.map(item => [item.startLine, item.endLine]), [[6, 10]]);
+    const edit = await connection.sendRequest(RenameRequest.type, { textDocument: { uri: flow }, position: position('value = '), newName: 'result' });
+    assert.equal(edit?.changes?.[flow].length, 3);
 
-    const flow = pathToFileURL(path.join(base, 'docs', 'flow.spl')).href;
-    const spl = "---\nmodel: test-model\n---\n\n{js}\nimport { twice } from './helpers.js';\nconst value = twice(2);\nvalue.\ntoFixed;\n{/js}\n\n{agent reasoning=''}\nUse @value and @\n{/agent}\n\n{js}\nconst = 1;\n{/js}\n";
-    await connection.sendNotification(DidOpenTextDocumentNotification.type, { textDocument: { uri: flow, languageId: 'spl', version: 7, text: spl } });
-    const reported = (await nextDiagnostics(7)).diagnostics;
-    assert.deepEqual(reported.map(item => [item.range.start.line, item.message]), [[11, '{agent}: reasoning must be low, medium, or high'], [16, 'Unexpected token']]);
-    const inSpl = (needle: string, offset = 0) => TextDocument.create(flow, 'spl', 7, spl).positionAt(spl.indexOf(needle) + offset);
-    const listed = async (position: Position, triggerCharacter?: string) => {
-        const result = await connection.sendRequest(CompletionRequest.type, {
-            textDocument: { uri: flow }, position,
-            ...(triggerCharacter ? { context: { triggerKind: CompletionTriggerKind.TriggerCharacter, triggerCharacter } } : {}),
-        });
-        return (Array.isArray(result) ? result : result?.items ?? []).map(item => item.label);
-    };
-    assert.ok((await listed(inSpl('value.\n', 6), '.')).includes('toFixed'), 'js blocks complete through the TypeScript service');
-    assert.ok((await listed(inSpl('and @', 5), '@')).includes('value'), 'agent blocks complete shared names');
-    assert.deepEqual(await listed(inSpl("reasoning=''", 11), "'"), ['low', 'medium', 'high']);
-    const jump = await connection.sendRequest(DefinitionRequest.type, { textDocument: { uri: flow }, position: inSpl('@value', 2) });
-    assert.deepEqual(jump, [{ uri: flow, range: { start: inSpl('value = '), end: inSpl('value = ', 5) } }]);
-
-    await connection.sendRequest(ShutdownRequest.type);
-    await connection.sendNotification(ExitNotification.type);
+    // A change in an imported workflow shows in the open documents that import it.
+    const math = pathToFileURL(path.join(base, 'math.spl')).href;
+    await connection.sendNotification(DidOpenTextDocumentNotification.type, {
+        textDocument: { uri: math, languageId: 'spl', version: 1, text: 'export function cube(n: number): number { return n ** 3; }\n' },
+    });
+    await nextDiagnostics(math, 1);
+    const stale = published.findLast(item => item.uri === flow)!;
+    assert.match(stale.diagnostics.map(item => item.message).join(), /has no exported member 'square'/);
 });

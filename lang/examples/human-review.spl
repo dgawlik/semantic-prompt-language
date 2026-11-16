@@ -1,0 +1,43 @@
+//*
+# Human review
+
+Drafts an announcement, asks a reviewer directly in the shell, then applies the feedback.
+Supply `--human` to answer without prompting:
+
+    spl run examples/human-review.spl
+    spl run examples/human-review.spl --human "Make the wording clearer"
+
+To record and automatically resume the same run:
+
+    spl run examples/human-review.spl --trace run.jsonl
+    spl run examples/human-review.spl --trace run.jsonl --human "Make the wording clearer"
+
+Completed runs replay without prompts or side effects. Choose another JSONL file to restart.
+*//
+
+---
+model: gpt-6-luna
+---
+
+const changes = await readFile('./examples/data/product-update.md');
+
+---
+outputVar: draft
+
+Draft a two-sentence English release announcement for these changes: @changes
+---
+
+await restrict('./out', () => writeFile('./out/review-draft.txt', draft));
+const feedback = await human(`Reply "ok" to accept this draft, or describe what to change:\n\n${draft}`);
+let final = draft;
+
+if (feedback.trim().toLowerCase() !== 'ok') {
+    ---
+    outputVar: =final
+
+    Rewrite @draft applying this feedback: @feedback
+    ---
+}
+
+await restrict('./out', () => writeFile('./out/announcement.txt', final));
+success({ draft, feedback, final });

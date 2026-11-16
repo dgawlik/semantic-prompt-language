@@ -1,18 +1,24 @@
-{comment} 
-asks the model for JavaScript functions and defines them in the shared scope.
-With `--trace`, the code is saved next to this file as `codegen.sieve.js` 
-and reused on later runs.
-    spl examples/codegen.md --trace sieve.jsonl
-{/comment}
+//*
+# Generate a function, then use it
 
-{codegen}
-Generate sieve(number) sieve of eratosthenes function that returns primes until given number'
-{/codegen}
+A codegen block asks the model for JavaScript functions and declares them as typed constants.
+The code is cached next to this file, as `codegen.sieve.js`, and reused on later runs.
 
-{js}
+    spl run examples/codegen.spl
+*//
+
+---
+model: gpt-6-luna
+---
+
+---
+mode: codegen
+
+Sieve of Eratosthenes that returns the primes up to a given number -> @sieve(limit: number): number[]
+---
+
 log(sieve(100));
 
-const slugify = await codegen('slugify(title): lowercase, trim, and replace' + 
-' runs of non-alphanumeric characters with single dashes');
+const slugify = await codegen<(title: string) => string>(
+    'slugify(title): lowercase, trim, and replace runs of non-alphanumeric characters with single dashes');
 success(slugify('  Hello, Generated World!  '));
-{/js}

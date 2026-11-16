@@ -1,0 +1,17 @@
+//*
+# Totals
+*//
+
+import { readFileSync } from 'node:fs';
+
+export const Money = Typedef('Money', Int, { desc: 'Amount in cents' });
+
+export function total(lines: { quantity: number; price: number }[]): number {
+    return lines.reduce((sum, line) => sum + line.quantity * line.price, 0);
+}
+
+const lines = args.map(arg => ({ quantity: 1, price: Money.coerce(arg) }));
+let count = 0;
+for (const line of lines) count += line.quantity;
+assert(count > 0, 'pass at least one price with --arg');
+success({ count, total: total(lines) });

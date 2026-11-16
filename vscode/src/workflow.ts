@@ -1,284 +1,76 @@
-import { DiagnosticSeverity, type Diagnostic, type Position, type Range } from 'vscode-languageserver/node';
-import type { TextDocument } from 'vscode-languageserver-textdocument';
-import { compileCell, FENCE_LANGUAGES, type CellLanguage } from '../../lang/src/cell.js';
-import { parseNatural } from '../../lang/src/controls.js';
-import { SplSyntaxError } from '../../lang/src/errors.js';
-import { extractMarkdown, isWorkflowMarkdown, type MarkdownBlock } from '../../lang/src/markdown.js';
-import { compileCondition, scanSpl, type SplBlock, type SplControl } from '../../lang/src/spl.js';
-import { blockquoteText, scanCodegen, scanControls, type WorkflowBlock } from './blockquoteFeatures';
-import { library, markers } from './catalog';
-
-/** A `@name` in a blockquote. */
-export interface Marker {
-    name: string;
-    /** Position of the name, after the `@`. */
-    line: number;
-    character: number;
-    /** The blockquote or agent block it belongs to. */
-    block: WorkflowBlock;
-    /** `@validate[Schema]` naming the type of the value saved to this marker. */
-    schema?: string;
-    /** The instruction saves a value to this name. */
-    output: boolean;
-}
-
-/** A name an agent may define, declared for the type checker after the document text. */
-export interface AmbientName {
-    name: string;
-    schema?: string;
-    marker: Marker;
-    /** Offset of the name inside the virtual text. */
-    offset: number;
-}
-
-export interface WorkflowAnalysis {
-    document: TextDocument;
-    /** The document opted in with SPL frontmatter. */
-    workflow: boolean;
-    model?: string;
-    blocks: WorkflowBlock[];
-    /** Present for `.spl` files: every block and control line, including commentary, and the first line after the frontmatter. */
-    spl?: { blocks: SplBlock[]; controls: SplControl[]; start: number };
-    markers: Marker[];
-    /** Names agents may save that no fence declares. */
-    ambient: AmbientName[];
-    /** Workflow, control and JavaScript syntax problems. TypeScript adds its own for `ts` fences. */
-    diagnostics: Diagnostic[];
-    /** `ts` when any fence is TypeScript: the whole document is then checked as one TypeScript module. */
-    language: CellLanguage;
-    /** The document with everything except fence code blanked, followed by generated declarations. */
-    virtual: string;
-    /** Length of the part of `virtual` that mirrors the document. */
-    mirrored: number;
-}
-
-const MARKER = /(?<![\w@\\])@([A-Za-z_]\w*)/g;
-
-function range(line: number, character: number, length = 1): Range {
-    return { start: { line, character }, end: { line, character: character + length } };
-}
-
-function problem(error: SplSyntaxError, document: TextDocument): Diagnostic {
-    const line = Math.min(Math.max(0, error.line - 1), document.lineCount - 1);
-    const text = document.getText({ start: { line, character: 0 }, end: { line: line + 1, character: 0 } }).replace(/\r?\n$/, '');
-    const character = Math.min(Math.max(0, error.col - 1), text.length);
-    const word = /^(?:\{\/?[\w-]+\}?|[\w$@]+)/.exec(text.slice(character))?.[0].length ?? 1;
-    return { range: range(line, character, Math.max(1, word)), severity: DiagnosticSeverity.Error, source: 'spl', message: error.message };
-}
+import type { Position, Range } from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import { DEFAULT_EXPORT, scan, sourceColumn, type BlockOutput, type Region, type Scan, type Span } from '../../lang/src/scanner.js';
 
 /**
- * Finds fences and blockquotes while the document is being typed and does not parse as a
- * whole: an unterminated fence runs to the end, and frontmatter problems do not hide the body.
+ * A `.spl` document and the TypeScript module the language service sees in its place. The module keeps
+ * every construct on its line: code keeps its columns too, blocks map through the scanner's spans.
+ * Positions are 0-based, as editors count; the scanner's lines and columns are 1-based.
  */
-function scanBlocks(lines: string[]): MarkdownBlock[] {
-    const blocks: MarkdownBlock[] = [];
-    let start = 0;
-    if (lines[0] === '---') {
-        const end = lines.findIndex((line, index) => index > 0 && /^(---|\.\.\.)\s*$/.test(line));
-        start = end < 0 ? lines.length : end + 1;
-    }
-    for (let index = start; index < lines.length; index++) {
-        const fence = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`]*)([^\n]*)$/.exec(lines[index]);
-        if (fence) {
-            const closing = new RegExp(`^ {0,3}${fence[1][0]}{${fence[1].length},}\\s*$`);
-            let end = index + 1;
-            while (end < lines.length && !closing.test(lines[end])) end++;
-            const info = fence[2].toLowerCase();
-            const language = Object.hasOwn(FENCE_LANGUAGES, info) ? FENCE_LANGUAGES[info] : undefined;
-            if (language && !/(?:^|\s)(?:ignore|no-run)(?:\s|$)/i.test(fence[3])) {
-                blocks.push({ kind: 'code', language, text: lines.slice(index + 1, end).join('\n'), line: index + 2, endLine: end });
-            }
-            index = end;
-        } else if (/^ {0,3}>/.test(lines[index])) {
-            let end = index;
-            while (end + 1 < lines.length && /^ {0,3}>/.test(lines[end + 1])) end++;
-            blocks.push({
-                kind: 'natural', line: index + 1, endLine: end + 1,
-                text: lines.slice(index, end + 1).map(line => line.replace(/^ {0,3}>[ \t]?/, '')).join('\n'),
-            });
-            index = end;
-        }
-    }
-    return blocks;
-}
+export class Workflow {
+    readonly scan: Scan;
+    readonly virtual: TextDocument;
 
-export function codeBlockAt(analysis: WorkflowAnalysis, position: Position): WorkflowBlock | undefined {
-    return analysis.blocks.find(block => {
-        if (block.kind !== 'code' || position.line + 1 < block.line || position.line + 1 > block.endLine) return false;
-        if (!block.condition) return true;
-        const start = block.condition.conditionColumn! - 1;
-        return position.character >= start && position.character <= start + block.text.length;
-    });
-}
-
-export function blockquoteAt(analysis: WorkflowAnalysis, position: Position): WorkflowBlock | undefined {
-    return analysis.blocks.find(block => block.kind === 'natural' && position.line + 1 >= block.line && position.line + 1 <= block.endLine);
-}
-
-/** Top-level names declared by fences, as far as they can be read from possibly incomplete code. */
-export function declaredNames(blocks: readonly MarkdownBlock[]): Set<string> {
-    const names = new Set<string>();
-    for (const block of blocks) {
-        if (block.kind !== 'code') continue;
-        try {
-            if (block.language === 'js') {
-                for (const declaration of compileCell(block.text).declarations) names.add(declaration.name);
-                continue;
-            }
-        } catch (error) {
-            if (!(error instanceof SplSyntaxError)) throw error;
-        }
-        for (const match of block.text.matchAll(/^(?:export\s+)?(?:async\s+)?(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)/gm)) names.add(match[1]);
-        for (const match of block.text.matchAll(/^import\s+(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\*\s+as\s+([A-Za-z_$][\w$]*)|\{([^}]*)\})?\s*from\b/gm)) {
-            for (const name of [match[1], match[2], ...(match[3] ?? '').split(',').map(item => item.trim().split(/\s+as\s+/).at(-1))]) {
-                if (name) names.add(name);
-            }
-        }
-    }
-    return names;
-}
-
-/** `.spl` files are workflows by their type; Markdown opts in with frontmatter. */
-export function isSplDocument(document: TextDocument): boolean {
-    return document.languageId === 'spl' || /\.spl$/i.test(document.uri.replace(/[?#].*$/, ''));
-}
-
-export function analyzeWorkflow(document: TextDocument): WorkflowAnalysis {
-    const source = document.getText();
-    const lines = source.replace(/^\uFEFF/, '').split(/\r?\n/);
-    if (isSplDocument(document)) {
-        const scanned = scanSpl(source);
-        const blocks = scanned.blocks.flatMap((block): WorkflowBlock[] => {
-            if (block.tag === 'agent' || block.tag === 'codegen') return [{ kind: 'natural', text: block.text, line: block.line, endLine: block.endLine, spl: block }];
-            if (block.tag !== 'js' && block.tag !== 'ts' || block.ignored) return [];
-            return [{
-                kind: 'code', language: block.tag, text: block.text, spl: block,
-                line: block.headerEndLine + 1, endLine: block.closed ? block.endLine - 1 : block.endLine,
-            }];
-        });
-        for (const control of scanned.controls) {
-            if (control.condition === undefined) continue;
-            blocks.push({ kind: 'code', language: 'js', text: control.condition, line: control.line, endLine: control.line, condition: control });
-        }
-        blocks.sort((a, b) => a.line - b.line);
-        const diagnostics = scanned.problems.map(item => problem(new SplSyntaxError(item.message, item.line, item.column), document));
-        const start = lines[0] === '---' ? lines.findIndex((line, index) => index > 0 && /^(---|\.\.\.)\s*$/.test(line)) + 1 || lines.length : 0;
-        return { ...analyzeBlocks(document, lines, blocks, diagnostics, scanned.model), spl: { blocks: scanned.blocks, controls: scanned.controls, start } };
-    }
-    if (!isWorkflowMarkdown(source)) {
-        return { document, workflow: false, blocks: [], markers: [], ambient: [], diagnostics: [], language: 'js', virtual: '', mirrored: 0 };
-    }
-    const diagnostics: Diagnostic[] = [];
-    let blocks: MarkdownBlock[];
-    let model: string | undefined;
-    try {
-        const extracted = extractMarkdown(source);
-        blocks = extracted.blocks;
-        model = extracted.model;
-    } catch (error) {
-        if (!(error instanceof SplSyntaxError)) throw error;
-        diagnostics.push(problem(error, document));
-        blocks = scanBlocks(lines);
-    }
-    return analyzeBlocks(document, lines, blocks, diagnostics, model);
-}
-
-/** Checks the code, collects the `@name` markers and builds the virtual module of a workflow in either format. */
-function analyzeBlocks(
-    document: TextDocument, lines: string[], blocks: WorkflowBlock[], diagnostics: Diagnostic[], model: string | undefined,
-): WorkflowAnalysis {
-    const language: CellLanguage = blocks.some(block => block.language === 'ts') ? 'ts' : 'js';
-    const masked = lines.map(line => ' '.repeat(line.length));
-    for (const block of blocks) {
-        if (block.kind !== 'code') continue;
-        if (block.condition) {
-            // `if x:` becomes ` ; x;`, so the condition is a standalone statement at its own position.
-            const { column, keyword, conditionColumn } = block.condition;
-            const line = lines[block.line - 1];
-            const at = conditionColumn! - 1;
-            const end = at + block.text.length;
-            masked[block.line - 1] = (' '.repeat(column + keyword.length - 2) + ';').padEnd(at) + block.text + ';'
-                + ' '.repeat(Math.max(0, line.length - end - 1));
-            if (!block.text.trim()) continue;
-            try {
-                compileCondition(block.condition);
-            } catch (error) {
-                if (!(error instanceof SplSyntaxError)) throw error;
-                diagnostics.push(problem(error, document));
-            }
-            continue;
-        }
-        for (let line = block.line; line <= block.endLine; line++) masked[line - 1] = lines[line - 1];
-        // TypeScript reports its own syntax errors; JavaScript is checked exactly as the runtime compiles it.
-        if (block.language !== 'js') continue;
-        try {
-            compileCell(block.text, { line: block.line });
-        } catch (error) {
-            if (!(error instanceof SplSyntaxError)) throw error;
-            diagnostics.push(problem(error, document));
-        }
+    constructor(readonly uri: string, source: string) {
+        this.scan = scan(source);
+        this.virtual = TextDocument.create(uri, 'typescript', 0, `${this.scan.code}\n${DEFAULT_EXPORT}\n`);
     }
 
-    const markerList: Marker[] = [];
-    for (const block of blocks) {
-        if (block.kind !== 'natural') continue;
-        // The tag and instruction of a `.spl` block were checked when its structure was read.
-        if (!block.spl) {
-            try {
-                parseNatural(block.text, block.line);
-            } catch (error) {
-                if (!(error instanceof SplSyntaxError)) throw error;
-                diagnostics.push(problem(error, document));
-            }
-        }
-        const quote = blockquoteText(document, block);
-        if (block.spl ? block.spl.tag === 'codegen' : scanCodegen(quote.text)) continue;
-        const controls = scanControls(quote.text, block.spl?.tag);
-        const text = controls ? quote.text.slice(0, controls.end).replace(/[^\r\n]/g, ' ') + quote.text.slice(controls.end) : quote.text;
-        const found: (Marker & { at: number })[] = [];
-        const schemas: { name: string; at: number }[] = [];
-        for (const match of text.matchAll(MARKER)) {
-            const position = document.positionAt(quote.from + match.index + 1);
-            found.push({ name: match[1], line: position.line, character: position.character, block, output: false, at: match.index });
-            const schema = /^@validate[ \t]*\[[ \t]*([A-Za-z_$][\w$]*)[ \t]*\]/i.exec(text.slice(match.index));
-            if (schema) schemas.push({ name: schema[1], at: match.index });
-        }
-        for (const marker of found) {
-            const before = text.slice(0, marker.at);
-            const after = text.slice(marker.at + marker.name.length + 1);
-            marker.output = /(?:\bsave\b[^.!?;@]*\b(?:to|as|in)|->|\binto)\s*$/i.test(before) || /^\s*=(?!=)/.test(after);
-        }
-        // `@validate[Type]` describes the value saved next, or the one saved just before it.
-        const outputs = found.filter(marker => marker.output);
-        for (const schema of schemas) {
-            const target = outputs.find(marker => marker.at > schema.at) ?? outputs.findLast(marker => marker.at < schema.at);
-            if (target) target.schema ??= schema.name;
-        }
-        for (const { at: _at, ...marker } of found) markerList.push(marker);
+    get text(): string {
+        return this.virtual.getText();
     }
 
-    // Agents can save any variable; declaring the referenced ones lets later fences use them with types.
-    const declared = declaredNames(blocks);
-    const ambient: AmbientName[] = [];
-    let virtual = masked.join('\n');
-    const mirrored = virtual.length;
-    virtual += '\nexport {};\n';
-    for (const marker of markerList) {
-        const lower = marker.name.toLowerCase();
-        if (declared.has(marker.name) || Object.hasOwn(library, marker.name) || Object.hasOwn(markers, lower)) continue;
-        const known = ambient.find(item => item.name === marker.name);
-        if (known) {
-            if (marker.output && !known.marker.output) known.marker = marker;
-            if (!known.schema && marker.schema) known.schema = marker.schema;
-            continue;
+    /** The block a line belongs to, fences included. */
+    region(line: number): Region | undefined {
+        return this.scan.regions.find(region => line + 1 >= region.line && line + 1 <= region.endLine);
+    }
+
+    /** What the block around a line declares; nothing when the scanner rejects the block. */
+    outputs(line: number): BlockOutput[] {
+        return this.scan.blocks.find(block => line + 1 >= block.line && line + 1 <= block.endLine)?.outputs ?? [];
+    }
+
+    /** The span of the scanner around a column of the source or of the module. */
+    private span(line: number, character: number, side: 'column' | 'generatedColumn'): Span | undefined {
+        return this.scan.spans.find(item => item.line === line + 1 && character + 1 >= item[side] && character + 1 <= item[side] + item.length);
+    }
+
+    /** The offset in the module a source position stands for, if it stands for code. */
+    offset(position: Position): number | undefined {
+        const { line, character } = position;
+        if (this.scan.comments.some(comment => line + 1 >= comment.line && line + 1 <= comment.endLine)) return undefined;
+        if (!this.region(line)) return this.virtual.offsetAt(position);
+        const span = this.span(line, character, 'column');
+        return span && this.virtual.offsetAt({ line, character: span.generatedColumn + character - span.column });
+    }
+
+    /** The source range a span of the module was generated from, if the source has that text. */
+    range(start: number, length: number): Range | undefined {
+        const from = this.virtual.positionAt(start);
+        const { line } = from;
+        if (line >= this.scan.lines.length) return undefined;
+        const region = this.region(line);
+        if (!region) return { start: from, end: this.virtual.positionAt(start + length) };
+        const span = this.span(line, from.character, 'generatedColumn');
+        if (span) {
+            const character = sourceColumn(this.scan, line + 1, from.character + 1) - 1;
+            return { start: { line, character }, end: { line, character: Math.min(character + length, span.column - 1 + span.length) } };
         }
-        ambient.push({ name: marker.name, schema: marker.schema, marker, offset: 0 });
+        // Outputs are declared on the fences; the source names them where the instruction or the header does.
+        const name = this.text.slice(start, start + length);
+        const output = (line + 1 === region.line || line + 1 === region.endLine) && this.text[start - 1] !== '.'
+            ? this.outputs(line).find(item => item.name === name) : undefined;
+        return output && {
+            start: { line: output.line - 1, character: output.column - 1 },
+            end: { line: output.line - 1, character: output.column - 1 + name.length },
+        };
     }
-    for (const item of ambient) {
-        const type = item.schema && declared.has(item.schema) ? `import('spl-lang').Infer<typeof ${item.schema}>` : 'any';
-        virtual += 'declare let ';
-        item.offset = virtual.length;
-        virtual += `${item.name}: ${type};\n`;
+
+    /** Where to report a problem in generated code that has no counterpart in the source: on its source line. */
+    lineRange(start: number): Range | undefined {
+        const { line, character } = this.virtual.positionAt(start);
+        const text = this.scan.lines[line];
+        return text === undefined ? undefined
+            : { start: { line, character: sourceColumn(this.scan, line + 1, character + 1) - 1 }, end: { line, character: text.trimEnd().length } };
     }
-    return { document, workflow: true, model, blocks, markers: markerList, ambient, diagnostics, language, virtual, mirrored };
 }

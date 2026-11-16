@@ -3,15 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Everything a workflow can use on one page: the document format, every library global with its
-signature and options, the type builder, blockquote tools and controls, and failure codes.">
+<meta name="description" content="Everything a workflow can use on one page: the file format, every header key, the errors the
+scanner reports, every library global with its signature and options, the type builder, the
+agent tools and the failure codes.">
 <meta name="color-scheme" content="light dark">
 <title>API reference - SPL docs</title>
-<link rel="icon" type="image/png" href="assets/icon.png?v=8f8492bb709a">
-<link rel="stylesheet" href="assets/style.css?v=8f8492bb709a">
+<link rel="icon" type="image/png" href="assets/icon.png?v=cff9ec1f36c0">
+<link rel="stylesheet" href="assets/style.css?v=cff9ec1f36c0">
 <script>try{const theme=localStorage.getItem('spl-theme');if(theme==='light'||theme==='dark')document.documentElement.dataset.theme=theme}catch(error){console.warn('Could not restore theme preference.',error)}</script>
-<script defer src="assets/search-index.js?v=8f8492bb709a"></script>
-<script defer src="assets/site.js?v=8f8492bb709a"></script>
+<script defer src="assets/search-index.js?v=cff9ec1f36c0"></script>
+<script defer src="assets/site.js?v=cff9ec1f36c0"></script>
 </head>
 <body data-page="reference">
 <a class="skip-link" href="#page">Skip to content</a>
@@ -23,142 +24,394 @@ signature and options, the type builder, blockquote tools and controls, and fail
   </div>
 </header>
 <div class="docs-layout">
-  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v2.4.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="introduction.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
-  <details class="mobile-nav"><summary>Browse documentation <span>API reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="introduction.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 1.x</span></a></li></ul></div></nav></details>
+  <aside class="sidebar"><a class="version-label" href="getting-started.html"><span class="status-dot" aria-hidden="true"></span>v3.0.0<span class="version-status">Stable</span></a><nav aria-label="Documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="introduction.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 2.x</span></a></li></ul></div></nav><div class="sidebar-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><p>Short loops.<br><strong>Clear boundaries.</strong></p></div><a class="sidebar-source" href="https://github.com/dgawlik/semantic-prompt-language">Open source on GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></aside>
+  <details class="mobile-nav"><summary>Browse documentation <span>API reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav aria-label="Mobile documentation"><div class="nav-group"><p class="nav-label">Start here</p><ul><li><a href="introduction.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Introduction</span></a></li><li><a href="getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Getting started</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Writing workflows</p><ul><li><a href="language.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg><span>Workflow code</span></a></li><li><a href="llm-commands.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg><span>Natural language & models</span></a></li><li><a href="safety.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><span>Guards & failures</span></a></li></ul></div><div class="nav-group"><p class="nav-label">Reference</p><ul><li><a href="cli.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3m6 0h4"/></svg><span>CLI & runtime</span></a></li><li><a href="reference.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H6v6l-3 3 3 3v6h2m8-18h2v6l3 3-3 3v6h-2"/></svg><span>API reference</span><span class="nav-indicator" aria-hidden="true"></span></a></li></ul></div><div class="nav-group"><p class="nav-label">Guides</p><ul><li><a href="examples.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg><span>Examples</span></a></li><li><a href="migration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span>Migrating from 2.x</span></a></li></ul></div></nav></details>
   <main id="page" tabindex="-1">
-    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>API reference</span><span class="reading-time">12 min read</span></div>
-    <header class="page-heading"><h1>API reference</h1><div class="lead"><p>Everything a workflow can use on one page: the document format, every library global with its
-signature and options, the type builder, blockquote tools and controls, and failure codes.</p></div></header>
-    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#document-format">Document format</a></li><li class="toc-level-2"><a href="#model-calls">Model calls</a></li><li class="toc-level-2"><a href="#guidance-and-restrictions">Guidance and restrictions</a></li><li class="toc-level-2"><a href="#control-people-and-logging">Control, people and logging</a></li><li class="toc-level-2"><a href="#tools">Tools</a></li><li class="toc-level-2"><a href="#inputs-and-code-generation">Inputs and code generation</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-2"><a href="#markdown-builder">Markdown builder</a></li><li class="toc-level-2"><a href="#blockquote-tools">Blockquote tools</a></li><li class="toc-level-2"><a href="#blockquote-markers-and-controls">Blockquote markers and controls</a></li><li class="toc-level-2"><a href="#failure-codes">Failure codes</a></li><li class="toc-level-2"><a href="#package-entry-points">Package entry points</a></li><li class="toc-level-2"><a href="#maintaining-this-page">Maintaining this page</a></li></ul></nav></details>
-    <article class="prose"><h2 id="document-format">Document format<a class="heading-anchor" href="#document-format" aria-label="Link to Document format">#</a></h2>
-<p>A workflow is a Markdown file that starts with YAML frontmatter.</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Document format reference table"><table>
+    <div class="page-meta"><span>Reference</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>API reference</span><span class="reading-time">15 min read</span></div>
+    <header class="page-heading"><h1>API reference</h1><div class="lead"><p>Everything a workflow can use on one page: the file format, every header key, the errors the
+scanner reports, every library global with its signature and options, the type builder, the
+agent tools and the failure codes.</p></div></header>
+    <details class="mobile-toc"><summary>On this page <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#file-format">File format</a></li><li class="toc-level-2"><a href="#header-keys">Header keys</a></li><li class="toc-level-2"><a href="#references-and-outputs">References and outputs</a></li><li class="toc-level-2"><a href="#errors-the-scanner-reports">Errors the scanner reports</a></li><li class="toc-level-2"><a href="#model-calls">Model calls</a></li><li class="toc-level-2"><a href="#guidance-and-restrictions">Guidance and restrictions</a></li><li class="toc-level-2"><a href="#control-people-and-logging">Control, people and logging</a></li><li class="toc-level-2"><a href="#tools">Tools</a></li><li class="toc-level-2"><a href="#inputs-and-code-generation">Inputs and code generation</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-2"><a href="#markdown-builder">Markdown builder</a></li><li class="toc-level-2"><a href="#agent-tools">Agent tools</a></li><li class="toc-level-2"><a href="#failure-codes">Failure codes</a></li><li class="toc-level-2"><a href="#package-entry-points">Package entry points</a></li><li class="toc-level-2"><a href="#maintaining-this-page">Maintaining this page</a></li></ul></nav></details>
+    <article class="prose"><h2 id="file-format">File format<a class="heading-anchor" href="#file-format" aria-label="Link to File format">#</a></h2>
+<p>A workflow is a <code>.spl</code> file: TypeScript with Markdown comments and blocks.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="File format reference table"><table>
 <thead>
 <tr>
-<th scope="col">Frontmatter field</th>
-<th scope="col">Required</th>
+<th scope="col">Construct</th>
+<th scope="col">Treatment</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>//*</code> ... <code>*//</code>, each on a line of its own</td>
+<td><a href="language.html#markdown-comments">Markdown comment</a>: never runs; prose in <code>spl doc</code>. Top level only</td>
+</tr>
+<tr>
+<td><code>---</code> ... <code>---</code> with an instruction</td>
+<td><a href="language.html#blocks">Block</a>: an instruction for a model, with an optional header</td>
+</tr>
+<tr>
+<td><code>---</code> ... <code>---</code> with header lines only</td>
+<td><a href="language.html#file-defaults">File defaults</a>; must be the first item that is not a comment</td>
+</tr>
+<tr>
+<td>Everything else</td>
+<td>TypeScript with <a href="language.html#the-typescript-dialect">erasable syntax</a>, run as an ES module</td>
+</tr>
+</tbody></table>
+</div>
+<p>A block may stand wherever a statement may. Blocks, references and outputs compile to calls on
+the lines they occupy; see <a href="language.html#how-a-file-is-compiled">How a file is compiled</a>.</p>
+<h2 id="header-keys">Header keys<a class="heading-anchor" href="#header-keys" aria-label="Link to Header keys">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Header keys reference table"><table>
+<thead>
+<tr>
+<th scope="col">Key</th>
+<th scope="col">Modes</th>
+<th scope="col">File default</th>
 <th scope="col">Value</th>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>extension</code></td>
-<td>Yes</td>
-<td><code>semantic-prompt-language</code></td>
-</tr>
-<tr>
-<td><code>version</code></td>
-<td>Yes</td>
-<td><code>1</code></td>
+<td><code>mode</code></td>
+<td>all</td>
+<td>No</td>
+<td><code>ask</code> (default), <code>agent</code> or <code>codegen</code></td>
 </tr>
 <tr>
 <td><code>model</code></td>
-<td>No</td>
-<td>Default model ID for the document</td>
+<td>all</td>
+<td>Yes</td>
+<td>Model id; <code>provider/model</code> selects a provider</td>
 </tr>
 <tr>
-<td><code>preamble</code></td>
+<td><code>reasoning</code></td>
+<td>all</td>
+<td>Yes</td>
+<td><code>none</code>, <code>low</code>, <code>medium</code> (default), <code>high</code> or <code>max</code></td>
+</tr>
+<tr>
+<td><code>enforce</code></td>
+<td>all</td>
+<td>Yes</td>
+<td>Guidance the model must follow: a string or a list of strings</td>
+</tr>
+<tr>
+<td><code>forbid</code></td>
+<td>all</td>
+<td>Yes</td>
+<td>Guidance on what the model must avoid: a string or a list of strings</td>
+</tr>
+<tr>
+<td><code>hide</code></td>
+<td>all</td>
+<td>Yes</td>
+<td><code>true</code> or <code>false</code>: hide reasoning in logs</td>
+</tr>
+<tr>
+<td><code>tokens</code></td>
+<td>all</td>
+<td>Yes</td>
+<td>Maximum generated tokens per model turn: a positive integer</td>
+</tr>
+<tr>
+<td><code>restrict</code></td>
+<td>agent</td>
 <td>No</td>
-<td>Text added to every model request</td>
+<td>A folder, a list of folders, or <code>{ fs, exec, net, mcp }</code> with strings or lists of strings</td>
+</tr>
+<tr>
+<td><code>outputVar</code></td>
+<td>ask</td>
+<td>No</td>
+<td>Name of the output variable; <code>=name</code> assigns an existing <code>let</code>. Required</td>
+</tr>
+<tr>
+<td><code>outputType</code></td>
+<td>ask</td>
+<td>No</td>
+<td>Type expression the answer is converted to; <code>Str</code> by default. TypeScript, not YAML</td>
+</tr>
+<tr>
+<td><code>repairs</code></td>
+<td>ask</td>
+<td>No</td>
+<td>Retries when the answer cannot be converted: an integer from 0 to 5</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td>ask</td>
+<td>No</td>
+<td>Sampling seed: an integer from 0 to 2147483647</td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td>ask</td>
+<td>No</td>
+<td>Sampling temperature: a number from 0 to 2</td>
+</tr>
+<tr>
+<td><code>topP</code></td>
+<td>ask</td>
+<td>No</td>
+<td>Nucleus sampling: a number from 0 to 1</td>
 </tr>
 </tbody></table>
 </div>
-<p>Unknown fields are syntax errors. After the frontmatter, blocks run in document order:</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Document format reference table"><table>
+<p>Values are YAML, except <code>outputType</code>. The header ends at a blank line or at the first line
+whose key is not in this table. See <a href="llm-commands.html#the-header">The header</a>.</p>
+<h2 id="references-and-outputs">References and outputs<a class="heading-anchor" href="#references-and-outputs" aria-label="Link to References and outputs">#</a></h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="References and outputs reference table"><table>
 <thead>
 <tr>
-<th scope="col">Block</th>
-<th scope="col">Treatment</th>
+<th scope="col">Written in a block</th>
+<th scope="col">Mode</th>
+<th scope="col">Meaning</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>Fence <code>js</code>, <code>javascript</code>, <code>mjs</code></td>
-<td>Runs as JavaScript</td>
+<td><code>@name</code>, <code>@name.property</code></td>
+<td>all</td>
+<td>An input: a variable, function or type of the surrounding code</td>
 </tr>
 <tr>
-<td>Fence <code>ts</code>, <code>typescript</code>, <code>mts</code></td>
-<td>Types are erased, then it runs as JavaScript</td>
+<td><code>@env.NAME</code></td>
+<td>all</td>
+<td>An environment variable</td>
 </tr>
 <tr>
-<td>Fence with <code>ignore</code> or <code>no-run</code> after the language</td>
-<td>Not run</td>
+<td><code>@args</code></td>
+<td>all</td>
+<td>The script arguments</td>
 </tr>
 <tr>
-<td>Fence <code>spl</code></td>
-<td>Syntax error with a migration hint</td>
+<td><code>@@</code></td>
+<td>all</td>
+<td>A literal <code>@</code></td>
 </tr>
 <tr>
-<td>Any other fence, headings, prose</td>
-<td>Commentary</td>
+<td><code>outputVar: name</code></td>
+<td>ask</td>
+<td>Declares the constant <code>name</code></td>
 </tr>
 <tr>
-<td>Top-level blockquote</td>
-<td>Agent command; <code>@CODEGEN</code> generates functions instead</td>
+<td><code>outputVar: =name</code></td>
+<td>ask</td>
+<td>Assigns the existing variable <code>name</code></td>
 </tr>
 <tr>
-<td>Double blockquote with a <code>spl-lock</code> fence</td>
-<td>The journal of a <a href="cli.html#pinned-workflows">pinned workflow</a></td>
+<td><code>-&gt;[Type] @name</code>, <code>-&gt; @name</code></td>
+<td>agent</td>
+<td>Declares an output, typed or untyped</td>
+</tr>
+<tr>
+<td><code>-&gt;[Type] @=name</code>, <code>-&gt; @=name</code></td>
+<td>agent</td>
+<td>Assigns the existing variable <code>name</code></td>
+</tr>
+<tr>
+<td><code>-&gt; @name(params): Type</code>, <code>-&gt; @name</code></td>
+<td>codegen</td>
+<td>Declares a generated function, with or without a signature</td>
 </tr>
 </tbody></table>
 </div>
-<p>A <a href="language.html#dedicated-spl-files"><code>.spl</code> file</a> holds the same workflow as blocks. Frontmatter is
-optional there and needs neither <code>extension</code> nor <code>version</code>. Each tag stands on its own line, and
-other text outside blocks is a syntax error. <a href="language.html#control-flow">Control lines</a> choose and
-repeat indented blocks.</p>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Document format reference table"><table>
+<p>A reference starts a word: <code>user@example.com</code> is literal text. There is no <code>${...}</code> interpolation.</p>
+<h2 id="errors-the-scanner-reports">Errors the scanner reports<a class="heading-anchor" href="#errors-the-scanner-reports" aria-label="Link to Errors the scanner reports">#</a></h2>
+<p>Syntax problems are found before anything runs. <code>spl run</code>, <code>spl compile</code> and <code>spl doc</code> print
+them as <code>file:line:column: syntax error: message</code> and exit with code 2; <code>spl check</code> prints
+them without the <code>syntax error:</code> label.</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Errors the scanner reports reference table"><table>
 <thead>
 <tr>
-<th scope="col">Block of a <code>.spl</code> file</th>
-<th scope="col">Treatment</th>
+<th scope="col">Situation</th>
+<th scope="col">Error</th>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>{js}</code> ... <code>{/js}</code></td>
-<td>Runs as JavaScript</td>
+<td>Odd number of <code>---</code> fences</td>
+<td><code>Unmatched block opened at line N: every `---` needs a closing `---`</code></td>
 </tr>
 <tr>
-<td><code>{ts}</code> ... <code>{/ts}</code></td>
-<td>Types are erased, then it runs as JavaScript</td>
+<td>Block in expression position</td>
+<td><code>Blocks are statements: a `---` block cannot be used as an expression</code></td>
 </tr>
 <tr>
-<td><code>{js ignore}</code>, <code>{js no-run}</code>, likewise for <code>ts</code></td>
-<td>Not run</td>
+<td><code>//*</code> below top level or inside a block</td>
+<td><code>Markdown comments (`//*`) are only allowed at the top level</code></td>
 </tr>
 <tr>
-<td><code>{js alias=&quot;name&quot;}</code>, <code>{ts alias=&quot;name&quot;}</code></td>
-<td>Runs; <code>go(&#39;name&#39;)</code> continues here</td>
+<td>Unclosed <code>//*</code></td>
+<td><code>Unclosed Markdown comment: `//*` needs a closing `*//` at the start of a line</code></td>
 </tr>
 <tr>
-<td><code>{agent restrict=..., enforce=..., forbid=..., model=..., reasoning=..., alias=...}</code> ... <code>{/agent}</code></td>
-<td>Agent command; the optional settings are those of <code>@CTL</code>, plus the block alias</td>
+<td>Text on the line of <code>*//</code></td>
+<td><code>`*//` must be alone on its line</code></td>
 </tr>
 <tr>
-<td><code>{codegen ...}</code> ... <code>{/codegen}</code></td>
-<td>Generates functions from the description; accepts the settings of <code>{agent}</code></td>
+<td>Misspelled header key</td>
+<td><code>unknown header key `modle`; did you mean `model`?</code></td>
 </tr>
 <tr>
-<td><code>{comment}</code> ... <code>{/comment}</code></td>
-<td>Commentary</td>
+<td>Header key not valid for the mode</td>
+<td><code>`outputVar` applies only to ask blocks</code>, <code>`restrict` applies only to agent blocks</code></td>
 </tr>
 <tr>
-<td><code>{lock}</code> ... <code>{/lock}</code></td>
-<td>The journal of a <a href="cli.html#pinned-workflows">pinned workflow</a></td>
+<td>Ask block without <code>outputVar</code></td>
+<td><code>ask block needs outputVar: name the variable that receives the answer, such as `outputVar: summary`</code></td>
 </tr>
 <tr>
-<td><code>if condition:</code>, <code>elif condition:</code>, <code>else:</code></td>
-<td>Run the first indented body whose JavaScript condition is truthy</td>
+<td>Ask block with <code>-&gt;</code></td>
+<td><code>ask block needs outputVar: `-&gt;` declares outputs only in agent and codegen blocks</code></td>
 </tr>
 <tr>
-<td><code>while condition:</code></td>
-<td>Repeat the indented body while its JavaScript condition is truthy</td>
+<td>Header-only block that is not first</td>
+<td><code>File defaults must come first: a block without an instruction sets defaults for the whole file</code></td>
+</tr>
+<tr>
+<td>Key that cannot be a file default</td>
+<td><code>`mode` cannot be a file default; it belongs to a block with an instruction</code></td>
+</tr>
+<tr>
+<td>Block with no header and no instruction</td>
+<td><code>empty block: write an instruction between the `---` lines</code></td>
+</tr>
+<tr>
+<td>Header key set twice</td>
+<td><code>header key `model` is set twice</code></td>
+</tr>
+<tr>
+<td>Header value that is not valid YAML</td>
+<td><code>`enforce` is not valid YAML:</code> followed by the parser&#39;s message</td>
+</tr>
+<tr>
+<td><code>outputType</code> without a value</td>
+<td><code>`outputType` needs a type expression such as Int or List(Str)</code></td>
+</tr>
+<tr>
+<td>Agent output declared twice</td>
+<td><code>output @notes is declared twice in this block</code></td>
+</tr>
+<tr>
+<td>Codegen block without a function</td>
+<td><code>codegen block needs a function to generate, such as `-&gt; @slugify(text: string): string`</code></td>
+</tr>
+<tr>
+<td><code>@=name</code> in a codegen block</td>
+<td><code>generated functions are always new constants; write `@name`, not `@=name`</code></td>
+</tr>
+<tr>
+<td>2.x syntax</td>
+<td><code>SPL 2.x syntax; see the migration guide</code>; see <a href="migration.html">Migrating from 2.x</a></td>
+</tr>
+<tr>
+<td><code>enum</code></td>
+<td><code>Unsupported TypeScript syntax: `enum` cannot be erased; use a union of string literals instead of enum</code></td>
+</tr>
+<tr>
+<td><code>namespace</code> or <code>module</code> with a body</td>
+<td><code>Unsupported TypeScript syntax: `namespace` cannot be erased; use an ES module or a plain object instead of namespace</code></td>
+</tr>
+<tr>
+<td>Decorator</td>
+<td><code>Unsupported TypeScript syntax: decorators cannot be erased; call the decorator as a function instead</code></td>
+</tr>
+<tr>
+<td>Constructor parameter property</td>
+<td><code>Unsupported TypeScript syntax: parameter properties cannot be erased; declare the field and assign it in the constructor</code></td>
 </tr>
 </tbody></table>
 </div>
-<p>Fences are compiled as ES-module code in strict mode: top-level <code>await</code>, <code>import</code>, <code>import()</code>
-and <code>import.meta.url</code>, <code>.filename</code>, <code>.dirname</code> are available; top-level <code>return</code>,
-<code>export default</code> and <code>export { ... }</code> are not. <code>import.meta</code> describes the workflow file, while
-imports and relative tool paths resolve against the working directory. Imported names are
-live, read-only bindings. All blocks share one top-level scope; see
-<a href="language.html#one-shared-scope">One shared scope</a>.</p>
+<p>A header value of the wrong kind names the key and what it accepts:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Errors the scanner reports reference table"><table>
+<thead>
+<tr>
+<th scope="col">Key</th>
+<th scope="col">Error</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mode</code></td>
+<td><code>`mode` must be ask, agent or codegen</code></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>`model` must be a model id</code></td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td><code>`reasoning` must be none, low, medium, high or max</code></td>
+</tr>
+<tr>
+<td><code>enforce</code>, <code>forbid</code></td>
+<td><code>`enforce` must be a string or a list of strings</code></td>
+</tr>
+<tr>
+<td><code>hide</code></td>
+<td><code>`hide` must be true or false</code></td>
+</tr>
+<tr>
+<td><code>tokens</code></td>
+<td><code>`tokens` must be a positive integer</code></td>
+</tr>
+<tr>
+<td><code>restrict</code></td>
+<td><code>`restrict` must be a folder or { fs, exec, net, mcp } with strings or lists of strings</code></td>
+</tr>
+<tr>
+<td><code>outputVar</code></td>
+<td><code>`outputVar` must be a variable name, or =name to assign an existing variable</code></td>
+</tr>
+<tr>
+<td><code>repairs</code></td>
+<td><code>`repairs` must be an integer from 0 to 5</code></td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td><code>`seed` must be an integer from 0 to 2147483647</code></td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td><code>`temperature` must be a number from 0 to 2</code></td>
+</tr>
+<tr>
+<td><code>topP</code></td>
+<td><code>`topP` must be a number from 0 to 1</code></td>
+</tr>
+</tbody></table>
+</div>
+<p>After the scanner, the generated TypeScript is erased and parsed. Problems found there are
+reported the same way:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Errors the scanner reports reference table"><table>
+<thead>
+<tr>
+<th scope="col">Situation</th>
+<th scope="col">Error</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Code that is not valid TypeScript</td>
+<td><code>invalid TypeScript:</code> followed by the parser&#39;s message</td>
+</tr>
+<tr>
+<td>Other syntax that cannot be erased</td>
+<td><code>Unsupported TypeScript syntax:</code> followed by the detail and <code>; only type syntax that can be erased is allowed</code></td>
+</tr>
+<tr>
+<td><code>export default</code></td>
+<td><code>the default export of a .spl file is its workflow; remove `export default`</code></td>
+</tr>
+<tr>
+<td>Exported declaration that uses a workflow variable</td>
+<td><code>exported `double` uses the workflow variable `base`; exports live outside the workflow, so export `base` too or pass it as a parameter</code></td>
+</tr>
+<tr>
+<td><code>export { name }</code> of a workflow variable</td>
+<td><code>cannot export the workflow variable `base`; write `export` on its declaration instead</code></td>
+</tr>
+</tbody></table>
+</div>
+<p>Type errors, including references to names that do not exist, are reported by
+<a href="cli.html#spl-check"><code>spl check</code></a> with TypeScript&#39;s own messages.</p>
 <h2 id="model-calls">Model calls<a class="heading-anchor" href="#model-calls" aria-label="Link to Model calls">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Model calls reference table"><table>
 <thead>
@@ -172,16 +425,12 @@ live, read-only bindings. All blocks share one top-level scope; see
 <td>The answer; no tools</td>
 </tr>
 <tr>
-<td><code>think(prompt, options?)</code></td>
-<td>Like <code>ask</code>, with <code>reasoning: &#39;medium&#39;</code> by default</td>
-</tr>
-<tr>
 <td><code>agent(prompt, options?)</code></td>
-<td>The answer after the model acted with runtime and MCP tools</td>
+<td>The answer after the model acted with the exact tools and MCP tools</td>
 </tr>
 <tr>
 <td><code>ask`Text ${value}`</code></td>
-<td>Tagged-template form of all three calls, without options</td>
+<td>Tagged-template form of both calls, without options</td>
 </tr>
 </tbody></table>
 </div>
@@ -217,30 +466,30 @@ live, read-only bindings. All blocks share one top-level scope; see
 <td><code>repairs</code></td>
 <td>Integer <code>0</code> to <code>5</code></td>
 <td><code>0</code></td>
-<td><code>ask</code>, <code>think</code></td>
+<td><code>ask</code></td>
 </tr>
 <tr>
 <td><code>reasoning</code></td>
-<td><code>&#39;low&#39;</code>, <code>&#39;medium&#39;</code>, <code>&#39;high&#39;</code></td>
-<td>none for <code>ask</code>, <code>&#39;medium&#39;</code> otherwise</td>
+<td><code>&#39;none&#39;</code>, <code>&#39;low&#39;</code>, <code>&#39;medium&#39;</code>, <code>&#39;high&#39;</code>, <code>&#39;max&#39;</code></td>
+<td>File default, else <code>&#39;medium&#39;</code>; <code>&#39;none&#39;</code> when sampling is set</td>
 <td>all</td>
 </tr>
 <tr>
 <td><code>hide</code></td>
 <td>Boolean</td>
-<td><code>false</code></td>
+<td>File default, else <code>false</code></td>
 <td>all</td>
 </tr>
 <tr>
 <td><code>model</code></td>
 <td>Nonempty string</td>
-<td>document or provider default</td>
+<td>File default, else the provider&#39;s</td>
 <td>all</td>
 </tr>
 <tr>
 <td><code>tokens</code></td>
 <td>Positive safe integer</td>
-<td>provider default</td>
+<td>File default, else the provider&#39;s</td>
 <td>all</td>
 </tr>
 <tr>
@@ -256,16 +505,16 @@ live, read-only bindings. All blocks share one top-level scope; see
 <td><code>ask</code></td>
 </tr>
 <tr>
-<td><code>topP</code> (alias <code>top_p</code>)</td>
+<td><code>topP</code></td>
 <td>Number <code>0</code> to <code>1</code></td>
 <td>provider default</td>
 <td><code>ask</code></td>
 </tr>
 </tbody></table>
 </div>
-<p>The result is a string for text output, the parsed JSON value for <code>fmt</code>, and the parsed value of
-the type for <code>schema</code>. In TypeScript the return type follows the options. Invalid options are a
-<code>runtime_error</code> raised before any model call. See <a href="llm-commands.html#options">Options</a>.</p>
+<p>The result is a string for text output, the parsed JSON value for <code>fmt</code>, and the converted
+value of the type for <code>schema</code>. In TypeScript the return type follows the options. Invalid
+options are a <code>runtime_error</code> raised before any model call. See <a href="llm-commands.html#options">Options</a>.</p>
 <h2 id="guidance-and-restrictions">Guidance and restrictions<a class="heading-anchor" href="#guidance-and-restrictions" aria-label="Link to Guidance and restrictions">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Guidance and restrictions reference table"><table>
 <thead>
@@ -331,11 +580,7 @@ the type for <code>schema</code>. In TypeScript the return type follows the opti
 </thead>
 <tbody><tr>
 <td><code>success(value?)</code></td>
-<td>Ends the document with a result (<code>null</code> when omitted)</td>
-</tr>
-<tr>
-<td><code>go(alias)</code></td>
-<td>Continues a <code>.spl</code> workflow at the block with this alias; see <a href="language.html#jumping-to-a-block">Jumping to a block</a></td>
+<td>Ends the workflow with a result (<code>null</code> when omitted)</td>
 </tr>
 <tr>
 <td><code>fail(reason?)</code></td>
@@ -359,7 +604,7 @@ the type for <code>schema</code>. In TypeScript the return type follows the opti
 </tr>
 <tr>
 <td><code>Failure</code></td>
-<td>The class of failures: <code>error instanceof Failure</code>, <code>statusCode</code>, <code>status_code</code>, <code>reason</code>, <code>payload()</code></td>
+<td>The class of failures: <code>error instanceof Failure</code>, <code>statusCode</code>, <code>status_code</code>, <code>reason</code>, <code>line</code>, <code>command</code>, <code>payload()</code></td>
 </tr>
 </tbody></table>
 </div>
@@ -369,37 +614,32 @@ the type for <code>schema</code>. In TypeScript the return type follows the opti
 <tr>
 <th scope="col">Call</th>
 <th scope="col">Resolves to</th>
-<th scope="col">Agent tool name</th>
 </tr>
 </thead>
 <tbody><tr>
 <td><code>readFile(path)</code></td>
 <td>The file&#39;s UTF-8 text</td>
-<td><code>read_file</code></td>
 </tr>
 <tr>
 <td><code>writeFile(path, content)</code></td>
 <td>A confirmation; parent folders are created</td>
-<td><code>write_file</code></td>
 </tr>
 <tr>
 <td><code>webFetch(url)</code></td>
 <td>The body of an http(s) GET</td>
-<td><code>web_fetch</code></td>
 </tr>
 <tr>
 <td><code>webSearch(query)</code></td>
 <td>The top results as text</td>
-<td><code>web_search</code></td>
 </tr>
 <tr>
 <td><code>shell(command)</code></td>
 <td>Combined stdout and stderr</td>
-<td><code>shell</code></td>
 </tr>
 </tbody></table>
 </div>
-<p>Arguments are strings. Failures are <code>tool_error</code>; blocked calls are <code>restriction_violation</code>.</p>
+<p>Arguments are strings. Failures are <code>tool_error</code>; blocked calls are <code>restriction_violation</code>.
+Tool names are camelCase everywhere: in code, as the tools an agent sees and in logs.</p>
 <h2 id="inputs-and-code-generation">Inputs and code generation<a class="heading-anchor" href="#inputs-and-code-generation" aria-label="Link to Inputs and code generation">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Inputs and code generation reference table"><table>
 <thead>
@@ -418,7 +658,7 @@ the type for <code>schema</code>. In TypeScript the return type follows the opti
 </tr>
 <tr>
 <td><code>codegen(description, options?)</code></td>
-<td>Resolves to a generated function, also defined in the shared scope; options are <code>model</code> and <code>reasoning</code></td>
+<td>Resolves to a generated function; options are <code>model</code>, <code>reasoning</code>, <code>hide</code> and <code>tokens</code></td>
 </tr>
 </tbody></table>
 </div>
@@ -432,82 +672,82 @@ the type for <code>schema</code>. In TypeScript the return type follows the opti
 </tr>
 </thead>
 <tbody><tr>
-<td><code>str</code></td>
+<td><code>Str</code></td>
 <td><code>str</code></td>
 <td><code>{ &quot;type&quot;: &quot;string&quot; }</code></td>
 </tr>
 <tr>
-<td><code>int</code></td>
+<td><code>Int</code></td>
 <td><code>int</code></td>
 <td><code>{ &quot;type&quot;: &quot;integer&quot; }</code></td>
 </tr>
 <tr>
-<td><code>float</code></td>
+<td><code>Float</code></td>
 <td><code>float</code></td>
 <td><code>{ &quot;type&quot;: &quot;number&quot; }</code></td>
 </tr>
 <tr>
-<td><code>bool</code></td>
+<td><code>Bool</code></td>
 <td><code>bool</code></td>
 <td><code>{ &quot;type&quot;: &quot;boolean&quot; }</code></td>
 </tr>
 <tr>
-<td><code>char</code></td>
+<td><code>Char</code></td>
 <td><code>char</code></td>
 <td>String with <code>minLength</code> and <code>maxLength</code> of 1</td>
 </tr>
 <tr>
-<td><code>nil</code></td>
+<td><code>Nil</code></td>
 <td><code>null</code></td>
 <td><code>{ &quot;type&quot;: &quot;null&quot; }</code></td>
 </tr>
 <tr>
-<td><code>any</code></td>
+<td><code>Any</code></td>
 <td><code>any</code></td>
 <td><code>{}</code></td>
 </tr>
 <tr>
-<td><code>object</code></td>
-<td><code>object</code></td>
+<td><code>Dict</code></td>
+<td><code>dict</code></td>
 <td><code>{ &quot;type&quot;: &quot;object&quot; }</code></td>
 </tr>
 <tr>
-<td><code>fn</code></td>
+<td><code>Fn</code></td>
 <td><code>fn</code></td>
 <td>None: describing it is a <code>runtime_error</code></td>
 </tr>
 <tr>
-<td><code>list(T)</code></td>
+<td><code>List(T)</code></td>
 <td><code>list</code></td>
 <td><code>{ &quot;type&quot;: &quot;array&quot;, &quot;items&quot;: T }</code></td>
 </tr>
 <tr>
-<td><code>union(A, B, ...)</code></td>
+<td><code>Union(A, B, ...)</code></td>
 <td><code>union</code></td>
 <td><code>{ &quot;anyOf&quot;: [A, B, ...] }</code></td>
 </tr>
 <tr>
-<td><code>nullable(T)</code></td>
+<td><code>Nullable(T)</code></td>
 <td><code>union</code></td>
 <td><code>{ &quot;anyOf&quot;: [T, { &quot;type&quot;: &quot;null&quot; }] }</code></td>
 </tr>
 <tr>
-<td><code>enumOf(&#39;a&#39;, &#39;b&#39;)</code>, <code>enumOf([&#39;a&#39;, &#39;b&#39;])</code></td>
+<td><code>Enum(&#39;a&#39;, &#39;b&#39;)</code>, <code>Enum([&#39;a&#39;, &#39;b&#39;])</code></td>
 <td><code>enum</code></td>
 <td><code>{ &quot;type&quot;: &quot;string&quot;, &quot;enum&quot;: [&quot;a&quot;, &quot;b&quot;] }</code></td>
 </tr>
 <tr>
-<td><code>struct(name, fields?)</code></td>
+<td><code>Struct(name, fields?)</code></td>
 <td><code>struct</code></td>
 <td>Object with every field in <code>required</code> and <code>additionalProperties: false</code></td>
 </tr>
 <tr>
-<td><code>typedef(name, type, annotations?)</code></td>
+<td><code>Typedef(name, type, annotations?)</code></td>
 <td>Kind of <code>type</code></td>
 <td>Schema of <code>type</code> plus annotations</td>
 </tr>
 <tr>
-<td><code>jsonSchema(schema, name?)</code></td>
+<td><code>JsonSchema(schema, name?)</code></td>
 <td><code>schema</code></td>
 <td>The given schema</td>
 </tr>
@@ -534,15 +774,19 @@ the type for <code>schema</code>. In TypeScript the return type follows the opti
 </tr>
 <tr>
 <td><code>as(name, annotations?)</code></td>
-<td>A named copy; <code>typedef</code> is the function form</td>
+<td>A named copy; <code>Typedef</code> is the function form</td>
 </tr>
 <tr>
 <td><code>nullable()</code>, <code>list()</code>, <code>or(other)</code></td>
-<td><code>union(T, nil)</code>, <code>list(T)</code>, <code>union(T, other)</code></td>
+<td><code>Union(T, Nil)</code>, <code>List(T)</code>, <code>Union(T, other)</code></td>
 </tr>
 <tr>
 <td><code>parse(value)</code></td>
-<td>The validated value; throws <code>validation_failed</code> with a path such as <code>$.lines[0].total</code> (the variable name replaces <code>$</code> when an agent saves with a schema)</td>
+<td>The validated value; throws <code>validation_failed</code> with a path such as <code>$.lines[0].total</code></td>
+</tr>
+<tr>
+<td><code>coerce(value)</code></td>
+<td>The value converted to the type, then validated; see <a href="language.html#parse-and-coerce">Parse and coerce</a></td>
 </tr>
 <tr>
 <td><code>parseJson(text)</code></td>
@@ -588,17 +832,18 @@ the type for <code>schema</code>. In TypeScript the return type follows the opti
 </tbody></table>
 </div>
 <p><code>validate(value, type)</code> equals <code>type.parse(value)</code>; <code>validate(value, schema)</code> checks raw JSON
-Schema and returns the value. <code>t</code> holds every builder under one name: <code>t.str</code>, <code>t.list</code>,
-<code>t.struct</code>, with <code>t.enum</code>, <code>t.null</code> and <code>t.schema</code> as aliases of <code>enumOf</code>, <code>nil</code> and
-<code>jsonSchema</code>. TypeScript code gets the parsed type with <code>Infer&lt;typeof Type&gt;</code>, imported from
-<code>spl-lang</code>. See <a href="language.html#types">Types</a>.</p>
+Schema and returns the value. <code>t</code> holds every builder under one name: <code>t.Str</code>, <code>t.List</code>,
+<code>t.Struct</code>. Type names in messages follow the builders: <code>expected Int, got &quot;x&quot;</code>,
+<code>List(Str)</code>, <code>Str | Nil</code>. TypeScript code gets the parsed type with <code>Infer&lt;typeof Type&gt;</code>,
+a global in <code>.spl</code> files and an export of <code>spl-lang</code>. See <a href="language.html#types">Types</a>.</p>
 <h2 id="markdown-builder">Markdown builder<a class="heading-anchor" href="#markdown-builder" aria-label="Link to Markdown builder">#</a></h2>
 <p><code>markdown.document()</code> (or <code>new markdown.Document()</code>) has the chainable methods <code>heading</code>,
 <code>paragraph</code>, <code>bulletList</code>, <code>orderedList</code>, <code>quote</code>, <code>codeBlock</code>, <code>table</code>, <code>thematicBreak</code>, <code>raw</code>
 and <code>toString</code>. <code>markdown.bold</code>, <code>italic</code>, <code>code</code>, <code>link</code>, <code>image</code> and <code>escape</code> return inline
 strings. See <a href="language.html#markdown-builder">Markdown builder</a>.</p>
-<h2 id="blockquote-tools">Blockquote tools<a class="heading-anchor" href="#blockquote-tools" aria-label="Link to Blockquote tools">#</a></h2>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquote tools reference table"><table>
+<h2 id="agent-tools">Agent tools<a class="heading-anchor" href="#agent-tools" aria-label="Link to Agent tools">#</a></h2>
+<p>The tools of an <a href="llm-commands.html#agent-blocks">agent block</a>:</p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Agent tools reference table"><table>
 <thead>
 <tr>
 <th scope="col">Tool</th>
@@ -607,115 +852,51 @@ strings. See <a href="language.html#markdown-builder">Markdown builder</a>.</p>
 </tr>
 </thead>
 <tbody><tr>
-<td><code>load_variable</code></td>
+<td><code>loadVariable</code></td>
 <td><code>name</code></td>
-<td>The value; a type&#39;s JSON Schema; the script arguments for <code>args</code></td>
+<td>The value of an input; a type&#39;s JSON Schema</td>
 </tr>
 <tr>
-<td><code>save_variable</code></td>
-<td><code>name</code>, <code>value</code>, optional <code>schema</code></td>
-<td>The saved value</td>
+<td><code>saveVariable</code></td>
+<td><code>name</code>, <code>value</code></td>
+<td>The saved value, or a rejection with a hint when it does not fit the output&#39;s type</td>
 </tr>
 <tr>
-<td><code>call_function</code></td>
+<td><code>callFunction</code></td>
 <td><code>name</code>, <code>args</code> (list)</td>
 <td>The function&#39;s result</td>
 </tr>
 <tr>
-<td><code>get_env</code></td>
+<td><code>getEnv</code></td>
 <td><code>name</code></td>
 <td>The value, or <code>null</code></td>
 </tr>
 <tr>
-<td><code>ask_human</code></td>
+<td><code>askHuman</code></td>
 <td><code>question</code></td>
 <td>The answer</td>
 </tr>
 <tr>
-<td><code>read_file</code>, <code>write_file</code>, <code>web_fetch</code>, <code>web_search</code>, <code>shell</code></td>
-<td>As the tools above</td>
-<td>As the tools above</td>
-</tr>
-<tr>
-<td><code>restrict</code></td>
-<td><code>kind</code>, <code>value</code></td>
-<td>Narrows permissions for the rest of the command</td>
-</tr>
-<tr>
-<td><code>set_guidance</code></td>
+<td><code>setGuidance</code></td>
 <td><code>kind</code> (<code>enforce</code> or <code>forbid</code>), <code>text</code></td>
-<td>Adds guidance for the rest of the command</td>
+<td>Adds guidance to model calls made by functions called later in the block</td>
 </tr>
 <tr>
-<td><code>success</code></td>
-<td><code>value</code></td>
-<td>Ends the document</td>
+<td><code>readFile</code>, <code>writeFile</code>, <code>webFetch</code>, <code>webSearch</code>, <code>shell</code></td>
+<td>As the tools above</td>
+<td>As the tools above</td>
 </tr>
 <tr>
-<td><code>fail</code></td>
-<td><code>reason</code></td>
-<td>Ends the document with <code>explicit_failure</code></td>
+<td><code>mcp&lt;Index&gt;&lt;Tool&gt;</code></td>
+<td>The MCP tool&#39;s own</td>
+<td>The MCP result; see <a href="cli.html#mcp-servers">MCP servers</a></td>
 </tr>
 </tbody></table>
 </div>
-<p>Names must be JavaScript identifiers that are not reserved words. <code>load_variable</code> refuses <code>env</code>;
-<code>save_variable</code> refuses to replace functions, types, imported names and library names.</p>
-<h2 id="blockquote-markers-and-controls">Blockquote markers and controls<a class="heading-anchor" href="#blockquote-markers-and-controls" aria-label="Link to Blockquote markers and controls">#</a></h2>
-<div class="table-scroll" tabindex="0" role="region" aria-label="Blockquote markers and controls reference table"><table>
-<thead>
-<tr>
-<th scope="col">Marker</th>
-<th scope="col">Meaning</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>@name</code></td>
-<td>A shared variable or function, or a library function such as <code>@readFile</code></td>
-</tr>
-<tr>
-<td><code>@validate[Type]</code></td>
-<td>Validate the value being saved against a declared type or schema</td>
-</tr>
-<tr>
-<td><code>@success</code>, <code>@fail</code></td>
-<td>End the document</td>
-</tr>
-<tr>
-<td><code>@env.NAME</code></td>
-<td>One environment variable</td>
-</tr>
-<tr>
-<td><code>@args</code></td>
-<td>The script arguments</td>
-</tr>
-<tr>
-<td><code>@CTL(...)</code></td>
-<td>Runtime settings; must open the blockquote</td>
-</tr>
-<tr>
-<td><code>@CODEGEN &#39;description&#39;</code></td>
-<td>Generate functions; must open the blockquote, after optional <code>@CTL</code></td>
-</tr>
-</tbody></table>
-</div>
-<p><code>@CTL</code> and <code>@CODEGEN</code> are case-insensitive and parsed by the runtime; the other markers are
-conventions the agent follows. <code>@restrict</code>, <code>@enforce</code>, <code>@forbid</code> and <code>@human</code> are rejected.</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">text</span><span class="code-language">text</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy text code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="text code example"><code class="language-text" id="code-1">blockquote = [ controls ] ( codegen | instruction )
-controls   = &quot;@CTL&quot; &quot;(&quot; [ setting { &quot;,&quot; setting } [ &quot;,&quot; ] ] &quot;)&quot;
-setting    = &quot;restrict&quot; &quot;=&quot; &quot;{&quot; [ entry { &quot;,&quot; entry } [ &quot;,&quot; ] ] &quot;}&quot;
-           | ( &quot;enforce&quot; | &quot;forbid&quot; ) &quot;=&quot; strings
-           | &quot;model&quot; &quot;=&quot; string
-           | &quot;reasoning&quot; &quot;=&quot; string            (low, medium or high)
-entry      = ( &quot;fs&quot; | &quot;exec&quot; | &quot;net&quot; | &quot;mcp&quot; ) &quot;:&quot; strings
-strings    = string | &quot;[&quot; [ string { &quot;,&quot; string } [ &quot;,&quot; ] ] &quot;]&quot;
-codegen    = &quot;@CODEGEN&quot; string
-string     = &#39;text&#39; | &quot;text&quot; | `text` | &#39;&#39;&#39;text&#39;&#39;&#39; | &quot;&quot;&quot;text&quot;&quot;&quot; | r&#39;text&#39; | r&quot;text&quot;
-</code></pre></figure>
-<p>Strings are literals. Escapes are <code>\n</code>, <code>\t</code>, <code>\r</code>, <code>\0</code>, <code>\b</code>, <code>\f</code>, <code>\v</code>, <code>\xHH</code>, <code>\uHHHH</code>
-and <code>\u{H...}</code>; any other escaped character stands for itself, and raw strings (<code>r&#39;...&#39;</code>) have
-no escapes. Single- and double-quoted strings end on their line; backtick and triple-quoted
-strings may span lines. <code>${...}</code> inside backticks is rejected. Each setting and each restriction
-kind may appear once.</p>
+<p><code>name</code> is an identifier, optionally followed by <code>.property</code> parts, as written after <code>@</code> in the
+instruction. <code>loadVariable</code> and <code>callFunction</code> accept only names the instruction references;
+<code>saveVariable</code> accepts only declared outputs. An <code>agent()</code> call in code has the exact tools and
+MCP tools only.</p>
 <h2 id="failure-codes">Failure codes<a class="heading-anchor" href="#failure-codes" aria-label="Link to Failure codes">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Failure codes reference table"><table>
 <thead>
@@ -726,11 +907,11 @@ kind may appear once.</p>
 </thead>
 <tbody><tr>
 <td><code>invalid_format</code></td>
-<td><code>fmt</code> parsing, <code>parseJson</code>, invalid generated code</td>
+<td><code>fmt</code> and JSON parsing of answers, <code>parseJson</code>, invalid generated code</td>
 </tr>
 <tr>
 <td><code>validation_failed</code></td>
-<td>Types, raw JSON Schema, <code>@validate</code></td>
+<td>Types and raw JSON Schema: <code>outputType</code>, <code>schema</code>, <code>parse</code>, <code>coerce</code>, agent outputs</td>
 </tr>
 <tr>
 <td><code>assertion_failed</code></td>
@@ -738,7 +919,7 @@ kind may appear once.</p>
 </tr>
 <tr>
 <td><code>explicit_failure</code></td>
-<td><code>fail</code>, the agent&#39;s <code>fail</code> tool</td>
+<td><code>fail</code></td>
 </tr>
 <tr>
 <td><code>restriction_violation</code></td>
@@ -746,11 +927,11 @@ kind may appear once.</p>
 </tr>
 <tr>
 <td><code>tool_error</code></td>
-<td><code>readFile</code>, <code>writeFile</code>, <code>webFetch</code>, <code>webSearch</code>, <code>shell</code></td>
+<td><code>readFile</code>, <code>writeFile</code>, <code>webFetch</code>, <code>webSearch</code>, <code>shell</code>, MCP tools</td>
 </tr>
 <tr>
 <td><code>llm_error</code></td>
-<td>Providers: credentials, access, timeouts, token limits</td>
+<td>Providers: credentials, access, timeouts, token limits, rejected settings</td>
 </tr>
 <tr>
 <td><code>runtime_error</code></td>
@@ -758,7 +939,8 @@ kind may appear once.</p>
 </tr>
 </tbody></table>
 </div>
-<p>See <a href="safety.html#failure-payload">Failure payload</a> for the JSON shape and exit codes.</p>
+<p>See <a href="safety.html#failure-payload">Failure payload</a> for the JSON shape and
+<a href="cli.html#output-and-exit-codes">Output and exit codes</a> for the exit codes.</p>
 <h2 id="package-entry-points">Package entry points<a class="heading-anchor" href="#package-entry-points" aria-label="Link to Package entry points">#</a></h2>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Package entry points reference table"><table>
 <thead>
@@ -769,7 +951,7 @@ kind may appear once.</p>
 </thead>
 <tbody><tr>
 <td><code>spl-lang</code></td>
-<td>The library globals, <code>configure</code>, the type classes and <code>Infer</code>, plus the embedding API: <code>parseMarkdown</code>, <code>parseSpl</code>, <code>parse</code>, <code>parseInstruction</code>, <code>run</code>, <code>ExecutionSession</code>, <code>checkWorkflow</code>, <code>Logger</code>, <code>AiBackend</code>, <code>Trace</code>, <code>Pin</code>, <code>loadMcpConfig</code> and their types</td>
+<td>The library globals, <code>configure</code>, the type classes and <code>Infer</code>, plus the embedding API: <code>run</code>, <code>scan</code>, <code>compile</code>, <code>check</code>, <code>documentMarkdown</code>, <code>documentHtml</code>, <code>Runtime</code>, <code>Logger</code>, <code>AiBackend</code>, <code>Trace</code>, <code>loadMcpConfig</code>, <code>HEADER_KEYS</code>, <code>MODES</code> and their types. <code>__spl</code> is what compiled workflows call</td>
 </tr>
 <tr>
 <td><code>spl-lang/markdown</code></td>
@@ -777,28 +959,29 @@ kind may appear once.</p>
 </tr>
 <tr>
 <td><code>spl-lang/globals</code></td>
-<td>Types only: the fence globals as ambient declarations</td>
+<td>Types only: the globals of a <code>.spl</code> file as ambient declarations</td>
 </tr>
 </tbody></table>
 </div>
-<p>Inside a workflow, in fences and in the helper modules they import, <code>spl-lang</code> and
+<p>Inside a workflow, in <code>.spl</code> files and in the modules they import, <code>spl-lang</code> and
 <code>spl-lang/markdown</code> always resolve to the running copy of the package: no local install is
 needed, and helpers share the runtime and the <code>Failure</code> class.</p>
-<p>To type-check your own helper modules as if they were fences, add the globals to a
+<p>To type-check your own helper modules with the globals of a <code>.spl</code> file, add them to a
 <code>jsconfig.json</code> or <code>tsconfig.json</code>:</p>
-<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-2" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-2"><span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;compilerOptions&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;types&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;spl-lang/globals&quot;</span><span class="hljs-punctuation">]</span> <span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span>
+<figure class="code-block"><figcaption><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="code-filename">json</span><span class="code-language">json</span><button type="button" class="copy-button" data-copy="code-1" aria-label="Copy json code" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy</span></button></figcaption><pre tabindex="0" aria-label="json code example"><code class="language-json" id="code-1"><span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;compilerOptions&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;types&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;spl-lang/globals&quot;</span><span class="hljs-punctuation">]</span> <span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span>
 </code></pre></figure>
 <h2 id="maintaining-this-page">Maintaining this page<a class="heading-anchor" href="#maintaining-this-page" aria-label="Link to Maintaining this page">#</a></h2>
 <p>The globals listed here are the keys of <code>library()</code> in <code>lang/src/library.ts</code>, which
-<code>lang/globals.d.ts</code> and the VS Code catalog mirror. When the library changes, update this page
-with them and run <code>npm run docs:build</code> from the repository root. The documentation tests compile
-every <code>js</code> and <code>ts</code> example and keep embedded example files in sync.</p>
+<code>lang/globals.d.ts</code> and the VS Code catalog mirror. The header keys are <code>HEADER_KEYS</code> in
+<code>lang/src/scanner.ts</code>, which also holds every scanner message. When they change, update this
+page with them and run <code>npm run docs:build</code> from the repository root. The documentation tests
+compile every <code>spl</code> listing and keep embedded example files in sync.</p>
 </article>
     <footer class="page-footer"><a href="https://github.com/dgawlik/semantic-prompt-language/blob/HEAD/docs-template/Reference.md"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14z"/></svg>View this page in Markdown <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a><span>Good tools make intent clear.</span></footer>
     <nav class="page-pagination" aria-label="Previous and next pages"><a class="page-link previous" href="cli.html"><span>Previous</span><strong>CLI & runtime</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a><a class="page-link next" href="examples.html"><span>Next</span><strong>Examples</strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="https://github.com/dgawlik/semantic-prompt-language">GitHub <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#document-format">Document format</a></li><li class="toc-level-2"><a href="#model-calls">Model calls</a></li><li class="toc-level-2"><a href="#guidance-and-restrictions">Guidance and restrictions</a></li><li class="toc-level-2"><a href="#control-people-and-logging">Control, people and logging</a></li><li class="toc-level-2"><a href="#tools">Tools</a></li><li class="toc-level-2"><a href="#inputs-and-code-generation">Inputs and code generation</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-2"><a href="#markdown-builder">Markdown builder</a></li><li class="toc-level-2"><a href="#blockquote-tools">Blockquote tools</a></li><li class="toc-level-2"><a href="#blockquote-markers-and-controls">Blockquote markers and controls</a></li><li class="toc-level-2"><a href="#failure-codes">Failure codes</a></li><li class="toc-level-2"><a href="#package-entry-points">Package entry points</a></li><li class="toc-level-2"><a href="#maintaining-this-page">Maintaining this page</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
+  <aside class="right-rail"><div class="toc-heading"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></svg>On this page</div><nav class="toc-links" aria-label="On this page"><ul><li class="toc-level-2"><a href="#file-format">File format</a></li><li class="toc-level-2"><a href="#header-keys">Header keys</a></li><li class="toc-level-2"><a href="#references-and-outputs">References and outputs</a></li><li class="toc-level-2"><a href="#errors-the-scanner-reports">Errors the scanner reports</a></li><li class="toc-level-2"><a href="#model-calls">Model calls</a></li><li class="toc-level-2"><a href="#guidance-and-restrictions">Guidance and restrictions</a></li><li class="toc-level-2"><a href="#control-people-and-logging">Control, people and logging</a></li><li class="toc-level-2"><a href="#tools">Tools</a></li><li class="toc-level-2"><a href="#inputs-and-code-generation">Inputs and code generation</a></li><li class="toc-level-2"><a href="#types">Types</a></li><li class="toc-level-2"><a href="#markdown-builder">Markdown builder</a></li><li class="toc-level-2"><a href="#agent-tools">Agent tools</a></li><li class="toc-level-2"><a href="#failure-codes">Failure codes</a></li><li class="toc-level-2"><a href="#package-entry-points">Package entry points</a></li><li class="toc-level-2"><a href="#maintaining-this-page">Maintaining this page</a></li></ul></nav><div class="rail-note"><span class="rail-note-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg></span><strong>Iterate on a small workflow.</strong><p>Keep TypeScript, model instructions, and guards visible in one readable file.</p><a href="getting-started.html">Write your first workflow <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

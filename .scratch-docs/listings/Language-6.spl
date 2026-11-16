@@ -1,0 +1,5 @@
+const { fact15, fib10, fibPlus2, modelFib10 } = await __spl.agent({ line: 25, reasoning: 'high', text: '...' })
+    .in('factorial', factorial).out('fact15', Int)
+    .in('fib', fib).out('fib10', Int)
+    .out('fibPlus2', Int)
+    .in('fib', fib).out('modelFib10', Int);

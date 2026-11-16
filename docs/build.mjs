@@ -1,12 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { Marked, Renderer } from 'marked';
-import hljs from './highlight.mjs';
 
 const output = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(output);
+// The highlighter and `spl doc` come from the language package, so the site and the CLI render alike.
+const dist = (name) => pathToFileURL(path.join(root, 'lang', 'dist', name)).href;
+if (!fs.existsSync(path.join(root, 'lang', 'dist', 'doc.js'))) throw new Error('Build the language package first: npm run build');
+const { default: hljs } = await import(dist('highlight.js'));
+const { documentMarkdown } = await import(dist('doc.js'));
+const examples = path.join(root, 'lang', 'examples');
 const source = path.join(root, 'docs-template');
 const startPage = path.join(root, 'presentations', 'SPL-Start-Here.html');
 const site = 'https://dgawlik.github.io/semantic-prompt-language/';
@@ -25,22 +30,31 @@ const pages = [
     ['CLI', 'cli', 'CLI & runtime', 'Reference', 'terminal'],
     ['Reference', 'reference', 'API reference', 'Reference', 'braces'],
     ['Examples', 'examples', 'Examples', 'Guides', 'layers'],
-    ['Migration', 'migration', 'Migrating from 1.x', 'Guides', 'arrow'],
+    ['Migration', 'migration', 'Migrating from 2.x', 'Guides', 'arrow'],
 ].map(([file, slug, label, group, icon]) => ({ file, slug, label, group, icon }));
 const fingerprint = createHash('sha256');
 for (const file of [
     fileURLToPath(import.meta.url),
-    path.join(output, 'highlight.mjs'),
+    ...['highlight.ts', 'doc.ts', 'scanner.ts'].map((file) => path.join(root, 'lang', 'src', file)),
     ...['style.css', 'site.js'].map((file) => path.join(output, 'assets', file)),
     ...pages.map((page) => path.join(source, `${page.file}.md`)),
+    ...fs.readdirSync(examples, { recursive: true, encoding: 'utf8' }).filter((name) => name.endsWith('.spl')).sort().map((name) => path.join(examples, name)),
 ]) fingerprint.update(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n'));
 fingerprint.update(logo);
 const revision = fingerprint.digest('hex').slice(0, 12);
 
-// Published anchors that must keep resolving after headings are renamed.
-const legacy = {
-    'llm-commands': { 'output-formats': 'fmt-object' },
-};
+/**
+ * A `spl-doc` fence lists example files, one per line. Each is replaced by what `spl doc` prints for it,
+ * nested under the surrounding section, and followed by a link to the file.
+ */
+function expandExamples(markdown, page) {
+    return markdown.replace(/^```spl-doc\n([\s\S]*?)\n```$/gm, (_, names) => names.split('\n').filter(Boolean).map((name) => {
+        const file = path.join(examples, name.trim());
+        if (!fs.existsSync(file)) throw new Error(`${page.file}: unknown example ${name}`);
+        const relative = path.relative(source, file).split(path.sep).join('/');
+        return `${documentMarkdown(fs.readFileSync(file, 'utf8'), { demote: 2 }).trimEnd()}\n\nSource: [${name.trim()}](${relative})`;
+    }).join('\n\n'));
+}
 
 const paths = {
     book: '<path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4z"/><path d="M13 7a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/>',
@@ -110,7 +124,7 @@ function navigation(current, label) {
 }
 
 function renderPage(page, index) {
-    const markdown = fs.readFileSync(path.join(source, `${page.file}.md`), 'utf8');
+    const markdown = expandExamples(fs.readFileSync(path.join(source, `${page.file}.md`), 'utf8').replace(/\r\n/g, '\n'), page);
     const parser = new Marked({ gfm: true });
     const tokens = parser.lexer(markdown);
     if (tokens[0]?.type !== 'heading' || tokens[0].depth !== 1) throw new Error(`${page.file}: expected a page title`);
@@ -149,9 +163,7 @@ function renderPage(page, index) {
             headings.push({ id, text, depth: token.depth });
             currentEntry = { title: text, page: page.label, href: `${page.slug}.html#${id}`, text: '', group: page.group };
             entries.push(currentEntry);
-            const alias = legacy[page.slug]?.[id];
-            const prefix = alias ? [].concat(alias).map((id) => `<span id="${id}" class="anchor-alias" aria-hidden="true"></span>`).join('') : '';
-            return `${prefix}<h${token.depth} id="${id}">${this.parser.parseInline(token.tokens)}<a class="heading-anchor" href="#${id}" aria-label="Link to ${escape(text)}">#</a></h${token.depth}>\n`;
+            return `<h${token.depth} id="${id}">${this.parser.parseInline(token.tokens)}<a class="heading-anchor" href="#${id}" aria-label="Link to ${escape(text)}">#</a></h${token.depth}>\n`;
         },
         paragraph(token) {
             currentEntry.text += ` ${plain(token.tokens)}`;
@@ -159,6 +171,7 @@ function renderPage(page, index) {
         },
         code(token) {
             const language = token.lang?.split(/\s/)[0] || 'text';
+            if (language === 'spl-doc') throw new Error(`${page.file}: a spl-doc fence must start and end at the beginning of a line`);
             if (language !== 'text' && !hljs.getLanguage(language)) throw new Error(`${page.file}: unsupported code language ${language}`);
             const content = language === 'text' ? escape(token.text)
                 : hljs.highlight(token.text, { language }).value;
@@ -184,9 +197,6 @@ function renderPage(page, index) {
     } });
     const body = parser.parser(tokens);
     const leadHtml = parser.parseInline(lead.text);
-    for (const key of Object.keys(legacy[page.slug] ?? {})) {
-        if (!ids.has(key)) throw new Error(`${page.file}: legacy permalink target ${key} is missing`);
-    }
     const toc = `<nav class="toc-links" aria-label="On this page"><ul>${headings.map((heading) => `<li class="toc-level-${heading.depth}"><a href="#${heading.id}">${escape(heading.text)}</a></li>`).join('')}</ul></nav>`;
     const neighbors = [[pages[index - 1], 'Previous'], [pages[index + 1], 'Next']].map(([neighbor, direction]) => neighbor
         ? `<a class="page-link ${direction.toLowerCase()}" href="${neighbor.slug}.html"><span>${direction}</span><strong>${neighbor.label}</strong>${icon('arrow')}</a>` : '<div></div>').join('');
@@ -226,7 +236,7 @@ function renderPage(page, index) {
     <nav class="page-pagination" aria-label="Previous and next pages">${neighbors}</nav>
     <div class="site-colophon"><a class="colophon-brand" href="index.html">spl.</a><span>Short loops. Clear boundaries.</span><a href="${repository}">GitHub ${icon('external')}</a></div>
   </main>
-  <aside class="right-rail"><div class="toc-heading">${icon('layers')}On this page</div>${toc}<div class="rail-note"><span class="rail-note-icon">${icon('code')}</span><strong>Iterate on a small workflow.</strong><p>Keep JavaScript, model calls, and guards visible in one readable document.</p><a href="getting-started.html">Write your first workflow ${icon('arrow')}</a></div></aside>
+  <aside class="right-rail"><div class="toc-heading">${icon('layers')}On this page</div>${toc}<div class="rail-note"><span class="rail-note-icon">${icon('code')}</span><strong>Iterate on a small workflow.</strong><p>Keep TypeScript, model instructions, and guards visible in one readable file.</p><a href="getting-started.html">Write your first workflow ${icon('arrow')}</a></div></aside>
 </div>
 <dialog class="search-dialog" aria-labelledby="search-title"><div class="search-header"><h2 id="search-title">Find your way</h2><form method="dialog"><button class="icon-button" aria-label="Close search">${icon('close')}</button></form></div><search><label class="visually-hidden" for="search-input">Search documentation</label><div class="search-field">${icon('search')}<input id="search-input" type="search" placeholder="Search concepts, functions, and examples..." autocomplete="off" spellcheck="false" aria-controls="search-results"></div></search><p id="search-status" class="search-status" role="status"></p><ul id="search-results" class="search-results"></ul><div class="search-footer"><span><kbd>Tab</kbd> to navigate</span><span><kbd>Esc</kbd> to close</span><span>Search stays on your device</span></div></dialog>
 <p class="visually-hidden" id="announcement" role="status"></p>

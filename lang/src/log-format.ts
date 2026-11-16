@@ -79,11 +79,6 @@ function highlightCode(text: string, color: boolean): string {
     return formatted + text.slice(consumed);
 }
 
-/** Generated JavaScript with line numbers, for the terminal transcript. */
-export function prettyCode(source: string, color = false): string {
-    return paint('JS', 90, color, true) + '\n' + numbered(highlightCode(sanitize(source).replace(/\n$/, ''), color), color);
-}
-
 function numbered(highlighted: string, color: boolean): string {
     const lines = highlighted.split('\n');
     const digits = String(lines.length).length;
@@ -103,7 +98,7 @@ export function languageOf(file: string): string {
 }
 
 /** Tool content highlighted for its language, without line numbers. */
-export function highlightListing(source: string, language: string, color = false): string {
+function highlightListing(source: string, language: string, color = false): string {
     const text = sanitize(source);
     if (language === 'javascript' || language === 'typescript') return highlightCode(text, color);
     if (language === 'json') return prettyJson(text, color) ?? text;
@@ -156,8 +151,7 @@ export function textSegments(text: string, eventId: string, identity: string): B
     return segments;
 }
 
-export function valueSegments(value: unknown, eventId: string, identity: string, raw = false): BodySegment[] {
-    if (raw) return [{ type: 'text', text: sanitize(String(value)) }];
+export function valueSegments(value: unknown, eventId: string, identity: string): BodySegment[] {
     if (typeof value === 'string') return textSegments(value, eventId, identity);
     if (!(value instanceof Error) && !(typeof value === 'number' && !Number.isFinite(value))) {
         try {
@@ -203,7 +197,6 @@ export function eventHeader(event: LogEvent, color = false): string {
         case 'warning': return marker('! warning', 33);
         case 'info': return marker('i info', 34);
         case 'debug': return marker('. debug', 90);
-        case 'generic': return marker(`- ${sanitize(event.label)}`, 35);
         case 'tool': return event.tool.status === 'success'
             ? marker(`* tool ${sanitize(event.tool.name)}`, 32) : marker(`* tool ${sanitize(event.tool.name)} failed`, 31);
     }

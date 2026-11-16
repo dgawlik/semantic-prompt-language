@@ -1,0 +1,5 @@
+import { ask, Enum, Str, Struct } from 'spl-lang';
+
+const Triage = Struct('Triage', { label: Enum('bug', 'feature'), reason: Str });
+const triage = await ask('Classify: the app crashes on start', { schema: Triage, repairs: 1 });
+console.log(triage.label);

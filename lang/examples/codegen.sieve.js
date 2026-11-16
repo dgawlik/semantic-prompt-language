@@ -1,20 +1,20 @@
-// @CODEGEN sha256:7ea03b00dc318ae56ff81791fb68046b29cb0ce252c3b373d2ffee76bb22273d
-function sieve(number) {
-    if (typeof number !== 'number' || number < 2) {
+// @CODEGEN sha256:63a8c1402b9798b9c5bddb266580ae8096505425bfb62dee3ef7da257007760f
+function sieve(limit) {
+    if (typeof limit !== 'number' || limit < 2) {
         return [];
     }
-    const isPrime = new Array(number + 1).fill(true);
+    const isPrime = new Array(limit + 1).fill(true);
     isPrime[0] = false;
     isPrime[1] = false;
-    for (let i = 2; i * i <= number; i++) {
+    for (let i = 2; i * i <= limit; i++) {
         if (isPrime[i]) {
-            for (let j = i * i; j <= number; j += i) {
+            for (let j = i * i; j <= limit; j += i) {
                 isPrime[j] = false;
             }
         }
     }
     const primes = [];
-    for (let i = 2; i <= number; i++) {
+    for (let i = 2; i <= limit; i++) {
         if (isPrime[i]) primes.push(i);
     }
     return primes;

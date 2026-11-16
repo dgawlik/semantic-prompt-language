@@ -1,25 +1,35 @@
+//*
+# Conditional workflows
 
+Blocks are statements, so they can sit inside `if` and `while`. An output written as `=name`
+assigns an existing variable instead of declaring a new one.
 
-{js}
-let cond = args[0]
-let i = 0
-let result = null
-{/js}
+    spl run examples/conditional-workflows.spl --arg color
+*//
 
-if cond == 'color':
-    {agent model='gpt-6-luna', reasoning='low'}
-    What is your favorite color? Save to -> @result
-    {/agent}
-else:
-    {js}
-    go('final')
-    {/js}
+---
+model: gpt-6-luna
+reasoning: low
+---
 
-while i < 2:
-    {agent model='gpt-6-luna', reasoning='low'}
-    Increment the number @i by one. Save to -> @i
-    {/agent}
+const [topic] = args;
+let i = 0;
+let result: string | null = null;
 
-{js alias="final"}
-success({result, i})
-{/js}
+if (topic === 'color') {
+    ---
+    outputVar: =result
+
+    What is your favorite color? Answer with one word.
+    ---
+}
+
+while (i < 2) {
+    ---
+    mode: agent
+
+    Increment the number @i by one ->[Int] @=i
+    ---
+}
+
+success({ result, i });

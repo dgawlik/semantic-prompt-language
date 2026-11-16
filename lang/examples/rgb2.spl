@@ -1,14 +1,20 @@
+//*
+# Name a color
 
-{js}
-let rgbString = await human('What color is it?')
-{/js}
+The settings of a block are the lines of its header.
 
-{agent model='gpt-6-luna', reasoning='low'}
-Find common name for @rgbString.
-Don't search the web, give approximation.
-Save to -> @colorName
-{/agent}
+    spl run examples/rgb2.spl --human "rgb(0, 0, 128)"
+*//
 
-{js}
-success(colorName)
-{/js}
+const rgbString = await human('What color is it?');
+
+---
+mode: agent
+model: gpt-6-luna
+reasoning: low
+
+Find the common name for @rgbString.
+Don't search the web, give an approximation ->[Str] @colorName
+---
+
+success(colorName);

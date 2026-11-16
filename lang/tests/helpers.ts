@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import type { LlmBackend, LlmRequest, LlmResponse, RuntimeAction } from '../src/llm.js';
 import { Logger } from '../src/logger.js';
 import type { LogEvent } from '../src/log-events.js';
-import { parse, parseMarkdown } from '../src/markdown.js';
 import { run, type RunOptions, type RunResult } from '../src/workflow.js';
 
 /** Backend for tests that must not reach an LLM: any call is a test failure. */
@@ -16,11 +15,9 @@ export class NoLlm implements LlmBackend {
 }
 
 export const silent = new Logger('silent');
-export const header = '---\nextension: semantic-prompt-language\nversion: 1\n';
-/** A workflow document with the given body and extra frontmatter lines. */
-export const document = (body: string, metadata = ''): string => `${header}${metadata}---\n\n${body}`;
-export const fence = (code: string, language = 'js'): string => `\`\`\`${language}\n${code}\n\`\`\``;
-export const quote = (text: string): string => text.split('\n').map(line => `> ${line}`).join('\n');
+/** A `---` block with the given header lines and instruction. */
+export const block = (instruction: string, ...header: string[]): string => ['---', ...header, ...(header.length ? [''] : []), instruction, '---'].join('\n');
+export const agentBlock = (instruction: string, ...header: string[]): string => block(instruction, 'mode: agent', ...header);
 
 export function backend(call: (request: LlmRequest) => Promise<LlmResponse> | LlmResponse): LlmBackend {
     return { call: async request => call(request), async close() {} };
@@ -41,7 +38,7 @@ export function scripted(...replies: (string | ((request: LlmRequest) => string 
     };
 }
 
-/** A blockquote agent that performs the given tool calls, then finishes. */
+/** An agent in an agent block: performs the given tool calls, then finishes. Each call may depend on earlier results. */
 export function acting(...actions: (RuntimeAction | ((results: unknown[]) => RuntimeAction))[]): LlmBackend & { calls: LlmRequest[]; results: unknown[] } {
     const calls: LlmRequest[] = [];
     const results: unknown[] = [];
@@ -49,7 +46,7 @@ export function acting(...actions: (RuntimeAction | ((results: unknown[]) => Run
         calls, results,
         async call(request) {
             calls.push(request);
-            if (!request.naturalLanguage) throw new Error('unexpected generation call');
+            if (!request.runtimeTools) throw new Error('unexpected generation call');
             for (const action of actions) results.push(await request.invokeAction!(typeof action === 'function' ? action(results) : action));
             return { text: 'Done.', effective: {} };
         },
@@ -58,6 +55,7 @@ export function acting(...actions: (RuntimeAction | ((results: unknown[]) => Run
 }
 
 export const action = (name: string, args: Record<string, unknown>): RuntimeAction => ({ name, arguments: args });
+export const save = (name: string, value: unknown): RuntimeAction => action('saveVariable', { name, value });
 
 const temporary: string[] = [];
 export function tempDir(prefix = 'spl-test-'): string {
@@ -69,14 +67,16 @@ export function cleanTemp(): void {
     for (const dir of temporary.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 }
 
-/** Runs JavaScript as a one-fence workflow. */
-export function exec(code: string, options: Partial<RunOptions> = {}): Promise<RunResult> {
-    return run(parse(code), { backend: new NoLlm(), logger: silent, ...options });
+/** Runs `.spl` source: TypeScript, Markdown comments and `---` blocks. */
+export function exec(source: string, options: Partial<RunOptions> = {}): Promise<RunResult> {
+    return run(source, { backend: new NoLlm(), logger: silent, ...options });
 }
 
-/** Runs a Markdown workflow body (fences and blockquotes) with default frontmatter. */
-export function execMarkdown(body: string, options: Partial<RunOptions> = {}, metadata = ''): Promise<RunResult> {
-    return run(parseMarkdown(document(body, metadata)), { backend: new NoLlm(), logger: silent, ...options });
+/** The value a workflow passed to `success()`; a failure fails the test with its reason. */
+export async function value(source: string, options: Partial<RunOptions> = {}): Promise<unknown> {
+    const result = await exec(source, options);
+    if (result.status === 'failure') throw new Error(`${result.failure.status_code}: ${result.failure.reason} (line ${result.failure.line})`);
+    return result.value;
 }
 
 export function collecting(level: 'error' | 'info' | 'debug' = 'info'): { logger: Logger; events: LogEvent[] } {
