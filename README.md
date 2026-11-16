@@ -144,7 +144,7 @@ Coming from SPL 2.x? Markdown workflows and the `{js}`/`{agent}` block syntax ar
 | [vscode/](vscode/README.md) | VS Code extension: syntax coloring, TypeScript language features and Run and Debug commands for `.spl` files |
 | [docs-template/](docs-template/Introduction.md) | Documentation sources |
 | [docs/](docs/) | Generated documentation site (GitHub Pages); `index.html` is the starter presentation |
-| [examples/](langs/examples) | Many examples how SPL can help you|
+| [examples/](lang/examples) | Many examples how SPL can help you|
 
 ## Development
 
