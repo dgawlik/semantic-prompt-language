@@ -4,6 +4,18 @@ import { REASONING_LEVELS } from './llm.js';
 export const MODES = ['ask', 'agent', 'codegen'] as const;
 export type BlockMode = typeof MODES[number];
 
+export interface ScanOptions {
+    /** Allow `eval '...' { ... --- ... }` blocks (only for `*.eval.spl` files). */
+    eval?: boolean;
+}
+
+export interface EvalCase {
+    name: string;
+    line: number;
+    endLine: number;
+    dividerLine: number;
+}
+
 type Applies = 'all' | 'agent' | 'ask';
 
 export interface HeaderKey {
@@ -151,6 +163,7 @@ export interface Scan {
     regions: Region[];
     comments: SplComment[];
     defaults?: FileDefaults;
+    evals: EvalCase[];
     spans: Span[];
     problems: SplProblem[];
     lines: readonly string[];
@@ -287,11 +300,26 @@ function arrows(text: string, mode: BlockMode): Arrow[] {
     return found;
 }
 
+function unescapeString(raw: string): string {
+    return raw.replace(/\\(.)/g, (_, ch: string) => {
+        switch (ch) {
+            case 'n': return '\n';
+            case 'r': return '\r';
+            case 't': return '\t';
+            case '\\': return '\\';
+            case "'": return "'";
+            case '"': return '"';
+            default: return ch;
+        }
+    });
+}
+
 class Scanner {
     readonly problems: SplProblem[] = [];
     readonly blocks: SplBlock[] = [];
     readonly regions: Region[] = [];
     readonly comments: SplComment[] = [];
+    readonly evals: EvalCase[] = [];
     readonly spans: Span[] = [];
     readonly out: string[] = [];
     defaults?: FileDefaults;
@@ -305,8 +333,16 @@ class Scanner {
     private started = false;
     /** Depth of the parameter list of a constructor, where `private x` would declare a field. */
     private constructorDepth = -1;
+    private currentEval?: {
+        name: string;
+        line: number;
+        depth: number;
+        dividerCount: number;
+        dividerLine: number;
+        openLine: number;
+    };
 
-    constructor(private readonly lines: readonly string[]) {}
+    constructor(private readonly lines: readonly string[], private readonly isEval = false) {}
 
     problem(line: number, column: number, length: number, message: string): void {
         this.problems.push({ line: line + 1, column: column + 1, endColumn: column + 1 + Math.max(1, length), message });
@@ -329,7 +365,19 @@ class Scanner {
             const text = lines[index];
             const trimmed = text.trim();
             if (this.inCode) {
-                if (trimmed === '---') {
+                if (this.currentEval && trimmed === '---') {
+                    if (this.stack.length !== this.currentEval.depth) {
+                        this.wholeLine(index, '`---` phase divider must be at the top level of the `eval` block');
+                    } else if (this.currentEval.dividerCount > 0) {
+                        this.wholeLine(index, 'eval block can only have one `---` phase divider');
+                    } else {
+                        this.currentEval.dividerLine = index + 1;
+                    }
+                    this.currentEval.dividerCount++;
+                    this.out.push('await __spl.phase();');
+                    continue;
+                }
+                if (!this.currentEval && trimmed === '---') {
                     index = this.block(index);
                     continue;
                 }
@@ -342,10 +390,96 @@ class Scanner {
                     this.out.push('');
                     continue;
                 }
+                const evalMatch = /^(\s*)eval\s+(['"])((?:\\.|(?!\2)[^\\])*)\2\s*\{(.*)$/.exec(text);
+                if (evalMatch) {
+                    const [, indent, , rawName, rest] = evalMatch;
+                    const name = unescapeString(rawName);
+                    if (!this.isEval) {
+                        this.wholeLine(index, 'eval blocks are only allowed in *.eval.spl files');
+                        this.out.push(text);
+                        continue;
+                    }
+                    if (this.stack.length > 0 || this.currentEval) {
+                        this.wholeLine(index, 'eval blocks are only allowed at the top level');
+                        this.code(index);
+                        this.out.push(text);
+                        continue;
+                    }
+                    this.started = true;
+                    this.previous = '{';
+                    this.previousWord = false;
+                    this.stack.push('{');
+                    this.currentEval = {
+                        name, line: index + 1, depth: this.stack.length,
+                        dividerCount: 0, dividerLine: 0, openLine: index,
+                    };
+                    const restStart = text.length - rest.length;
+                    const closeAt = this.code(index, restStart);
+                    const prefix = `${indent}__spl.eval(${JSON.stringify(name)}, async () => {`;
+                    if (closeAt !== undefined) {
+                        const rel = closeAt - restStart;
+                        this.out.push(`${prefix}${rest.slice(0, rel)}});${rest.slice(rel + 1)}`);
+                    } else {
+                        this.out.push(`${prefix}${rest}`);
+                    }
+                    continue;
+                }
+                if (this.currentEval && this.currentEval.dividerCount === 0) {
+                    const lowered = this.lowerEvalAgentCall(index, text);
+                    if (lowered !== undefined) {
+                        this.started = true;
+                        this.previous = ';';
+                        this.previousWord = false;
+                        this.out.push(lowered);
+                        continue;
+                    }
+                }
             }
-            this.code(index);
-            this.out.push(text);
+            const closeAt = this.code(index);
+            if (closeAt !== undefined) {
+                this.out.push(`${text.slice(0, closeAt)}});${text.slice(closeAt + 1)}`);
+            } else {
+                this.out.push(text);
+            }
         }
+        if (this.currentEval) {
+            this.wholeLine(this.currentEval.openLine, `Unclosed eval block '${this.currentEval.name}'`);
+        }
+    }
+
+    /** Lowers `agent('... @x ... -> @=x ...')` inside an eval block into an `AgentBlock` call when `@` or `-> @` is used. */
+    private lowerEvalAgentCall(line: number, text: string): string | undefined {
+        const match = /^(\s*)(?:await\s+)?agent\(\s*(['"])((?:\\.|(?!\2)[^\\])*)\2\s*\)\s*;?\s*$/.exec(text);
+        if (!match) return undefined;
+        const [, indent, , rawPrompt] = match;
+        const promptText = unescapeString(rawPrompt);
+        const foundArrows = arrows(promptText, 'agent');
+        const outputs: { name: string; assign: boolean; type?: string }[] = [];
+        for (const arrow of foundArrows) {
+            outputs.push({ name: arrow.name, assign: arrow.assign, ...(arrow.type !== undefined ? { type: arrow.type } : {}) });
+        }
+        const produced = new Set(outputs.filter(o => !o.assign).map(o => o.name));
+        const inputs: string[] = [];
+        REFERENCE.lastIndex = 0;
+        for (let m = REFERENCE.exec(promptText); m; m = REFERENCE.exec(promptText)) {
+            const at = m.index;
+            const name = m[1];
+            if (name === '@' || /[\w@]/.test(promptText[at - 1] ?? '') || foundArrows.some(a => at >= a.start && at < a.end)) continue;
+            if (produced.has(name.split('.')[0])) continue;
+            inputs.push(name);
+        }
+        if (!inputs.length && !outputs.length) return undefined;
+        const options = JSON.stringify({ line: line + 1, local: true, text: promptText.replace(/@@/g, '@') });
+        let chain = `await __spl.agent(${options})`;
+        for (const name of inputs) chain += `.in(${JSON.stringify(name)}, ${name})`;
+        for (const out of outputs) chain += out.type ? `.out(${JSON.stringify(out.name)}, ${out.type})` : `.out(${JSON.stringify(out.name)})`;
+        const declare = outputs.filter(o => !o.assign).map(o => o.name);
+        const assign = outputs.filter(o => o.assign).map(o => o.name);
+        if (!assign.length) {
+            return `${indent}${declare.length ? `const { ${declare.join(', ')} } = ` : ''}${chain};`;
+        }
+        const result = `__spl${line + 1}`;
+        return `${indent}const ${result} = ${chain};${declare.length ? ` const { ${declare.join(', ')} } = ${result};` : ''}${assign.map(name => ` ${name} = ${result}.${name};`).join('')}`;
     }
 
     private comment(start: number): number {
@@ -367,9 +501,10 @@ class Scanner {
     }
 
     /** Tracks strings, templates, regular expressions, comments and brackets across one line of code. */
-    private code(line: number): void {
+    private code(line: number, startCol = 0): number | undefined {
         const text = this.lines[line];
-        let index = 0;
+        let index = startCol;
+        let evalCloseAt: number | undefined;
         const significant = (token: string, word = false): void => {
             this.previous = token;
             this.previousWord = word;
@@ -379,7 +514,7 @@ class Scanner {
             const char = text[index];
             if (this.blockComment) {
                 const end = text.indexOf('*/', index);
-                if (end < 0) return;
+                if (end < 0) return evalCloseAt;
                 this.blockComment = false;
                 index = end + 2;
             } else if (this.quote) {
@@ -388,7 +523,7 @@ class Scanner {
                     if (text[index] === '\\') index++;
                     else if (text[index] === this.quote) break;
                 }
-                if (index >= text.length && text.endsWith('\\')) return;
+                if (index >= text.length && text.endsWith('\\')) return evalCloseAt;
                 this.quote = '';
                 index++;
                 significant('string');
@@ -404,7 +539,7 @@ class Scanner {
                     significant('(');
                 } else index++;
             } else if (char === ' ' || char === '\t') index++;
-            else if (char === '/' && text[index + 1] === '/') return;
+            else if (char === '/' && text[index + 1] === '/') return evalCloseAt;
             else if (char === '/' && text[index + 1] === '*') {
                 this.blockComment = true;
                 index += 2;
@@ -439,6 +574,19 @@ class Scanner {
                 else if (char === '}' || char === ')' || char === ']') {
                     this.stack.pop();
                     if (this.stack.length < this.constructorDepth) this.constructorDepth = -1;
+                    if (char === '}' && this.currentEval && this.stack.length === this.currentEval.depth - 1) {
+                        if (this.currentEval.dividerCount === 0) {
+                            this.wholeLine(this.currentEval.openLine, `eval block '${this.currentEval.name}' must contain a '---' phase divider`);
+                        }
+                        this.evals.push({
+                            name: this.currentEval.name,
+                            line: this.currentEval.line,
+                            endLine: line + 1,
+                            dividerLine: this.currentEval.dividerLine,
+                        });
+                        this.currentEval = undefined;
+                        evalCloseAt = index;
+                    }
                 } else if (char === '@') {
                     this.problem(line, index, 1, 'Unsupported TypeScript syntax: decorators cannot be erased; call the decorator as a function instead');
                 }
@@ -447,6 +595,7 @@ class Scanner {
                 index++;
             }
         }
+        return evalCloseAt;
     }
 
     /** TypeScript that produces code cannot be erased, so Node cannot run it. */
@@ -688,12 +837,12 @@ class Scanner {
  * become blank lines and each `---` block becomes a call on the lines it occupied, so positions in the
  * result are positions in the source.
  */
-export function scan(source: string): Scan {
+export function scan(source: string, options: ScanOptions = {}): Scan {
     const lines = source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
-    const scanner = new Scanner(lines);
+    const scanner = new Scanner(lines, Boolean(options.eval));
     scanner.run();
     return {
         code: scanner.out.join('\n'), blocks: scanner.blocks, regions: scanner.regions, comments: scanner.comments, defaults: scanner.defaults,
-        spans: scanner.spans, problems: scanner.problems.sort((a, b) => a.line - b.line || a.column - b.column), lines,
+        evals: scanner.evals, spans: scanner.spans, problems: scanner.problems.sort((a, b) => a.line - b.line || a.column - b.column), lines,
     };
 }

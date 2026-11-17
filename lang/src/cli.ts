@@ -13,6 +13,7 @@ import { Logger, type LogLevel } from './logger.js';
 import { check } from './check.js';
 import { compile } from './compile.js';
 import { documentHtml, documentMarkdown } from './doc.js';
+import { EvalUsageError, discoverEvalFiles, runEvals } from './eval.js';
 import { library } from './library.js';
 import { run, type RunResult } from './workflow.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
@@ -24,6 +25,7 @@ import { formatEvent, sanitize, terminalColor } from './log-format.js';
 const HELP = `spl - Semantic Prompt Language: natural-language instructions for models and agents, interleaved with TypeScript
 
 Usage: spl run <file.spl> [options]       compile in memory and run in place
+       spl eval [paths...] [options]      discover and run *.eval.spl evaluations
        spl check <file.spl>               scan and type-check with tsc, without running
        spl compile <file.spl>             write an importable TypeScript module beside the file
        spl doc <file.spl> [--format md|html]
@@ -64,6 +66,11 @@ Options for run:
 
 Other options:
   --format <md|html>      output of spl doc (default: md)
+  -g, --filter <pattern>  filter evals by description (spl eval)
+  --runs <N>              repeat each eval N times; all must pass (default: 1)
+  --concurrency <N>       max concurrent evals (default: 1)
+  --judge-model <model>   override model used by judge.faithful
+  --json                  emit machine-readable JSON results (spl eval)
   -v, --version           print version
   -h, --help              print this help
 
@@ -179,7 +186,7 @@ function compileCommand(file: string): number {
         written.add(current);
         const source = readWorkflow(current);
         const code = report(current, () => {
-            const compiled = compile(source);
+            const compiled = compile(source, { eval: /\.eval\.spl$/i.test(current) });
             for (const item of compiled.imports) {
                 if (/^\.{1,2}\/.*\.spl$/.test(item.specifier)) pending.push(path.resolve(path.dirname(current), item.specifier));
             }
@@ -218,6 +225,11 @@ async function main(): Promise<number> {
             cwd: { type: 'string' },
             debug: { type: 'boolean' },
             format: { type: 'string' },
+            filter: { type: 'string', short: 'g' },
+            runs: { type: 'string' },
+            concurrency: { type: 'string' },
+            'judge-model': { type: 'string' },
+            json: { type: 'boolean' },
             version: { type: 'boolean', short: 'v' },
             help: { type: 'boolean', short: 'h' },
         } as const;
@@ -251,8 +263,86 @@ async function main(): Promise<number> {
         if (command === 'login' && !provider) usageError('login requires a provider: openai, anthropic, or google');
         return command === 'login' ? loginCommand(provider!) : logoutCommand(provider);
     }
+    if (command === 'eval') {
+        const cwd = path.resolve(values.cwd ?? process.cwd());
+        const runs = values.runs === undefined ? 1 : Number(values.runs);
+        if (!Number.isInteger(runs) || runs < 1) usageError('--runs must be a positive integer');
+        const concurrency = values.concurrency === undefined ? 1 : Number(values.concurrency);
+        if (!Number.isInteger(concurrency) || concurrency < 1) usageError('--concurrency must be a positive integer');
+        const timeoutSec = Number(values.timeout ?? 300);
+        if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) usageError('--timeout must be a positive number');
+        if (values.trace !== undefined && !values.trace.trim()) usageError('--trace requires a non-empty file path');
+        const level = values['log-level'] ?? 'error';
+        if (!['error', 'info', 'debug'].includes(level)) usageError(`invalid --log-level '${level}'`);
+        let mcpServers: McpServers | undefined;
+        try {
+            mcpServers = values.mcp ? loadMcpConfig(values.mcp, cwd) : undefined;
+        } catch (e) {
+            return usageError((e as Error).message);
+        }
+        let files: string[];
+        try {
+            files = discoverEvalFiles(positionals.slice(1), cwd);
+        } catch (e) {
+            if (e instanceof EvalUsageError) return usageError(e.message);
+            throw e;
+        }
+        const directory = fileURLToPath(new URL('.', import.meta.url));
+        const runtimeFingerprint = fingerprint([version(), process.version,
+            ...fs.readdirSync(directory).filter(name => name.endsWith('.js')).sort()
+                .map(name => [name, fs.readFileSync(path.join(directory, name), 'utf8')])]);
+        const logger = new Logger(values.silent || values.json ? 'silent' : (level as LogLevel), undefined, {
+            eventSink: event => process.stderr.write(formatEvent(event, terminalColor()) + '\n'),
+        });
+        try {
+            const suite = await runEvals({
+                files,
+                cwd,
+                filter: values.filter,
+                runs,
+                concurrency,
+                model: values.model,
+                judgeModel: values['judge-model'],
+                trace: values.trace,
+                runtimeFingerprint,
+                traceConfig: { model: values.model ?? null, judgeModel: values['judge-model'] ?? null, provider: values.provider ?? null, mcp: mcpServers ?? null },
+                logger,
+                backendFactory: log => new AiBackend({ logger: log, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider }),
+            });
+            if (values.json) {
+                process.stdout.write(JSON.stringify(suite, null, 2) + '\n');
+            } else {
+                for (const item of suite.results) {
+                    const icon = item.pass ? 'PASS' : 'FAIL';
+                    const suffix = item.runs.length > 1 ? ` (${item.runs.filter(r => r.pass).length}/${item.runs.length} runs)` : '';
+                    process.stdout.write(`${icon} ${shown(item.file)}: ${item.name}${suffix}\n`);
+                    if (!item.pass) {
+                        for (const run of item.runs) {
+                            if (run.error) process.stdout.write(`  run ${run.run}: error: ${run.error}\n`);
+                            for (const assertion of run.assertions) {
+                                if (!assertion.pass) {
+                                    const score = assertion.score !== undefined ? ` (score ${assertion.score})` : '';
+                                    process.stdout.write(`  run ${run.run}: ${assertion.judge} failed${score}: ${assertion.reason}\n`);
+                                }
+                            }
+                        }
+                    }
+                }
+                process.stdout.write(`\n${suite.passed}/${suite.total} evals passed (${suite.durationMs} ms)\n`);
+            }
+            return suite.pass ? 0 : 1;
+        } catch (e) {
+            if (e instanceof EvalUsageError) return usageError(e.message);
+            if (e instanceof SplSyntaxError) {
+                new Logger('error').error(e.format(e.file ?? files[0] ?? 'eval'));
+                return 2;
+            }
+            if (e instanceof TraceError && e.kind === 'usage') return usageError(e.message);
+            throw e;
+        }
+    }
     if (command !== 'run' && command !== 'check' && command !== 'compile' && command !== 'doc') {
-        usageError(command === undefined ? 'expected a command: run, check, compile, doc, login or logout'
+        usageError(command === undefined ? 'expected a command: run, eval, check, compile, doc, login or logout'
             : /\.(?:spl|md)$/i.test(command) ? `expected a command before the file; to run it, use 'spl run ${command}'`
             : `unknown command '${command}'`);
     }
@@ -261,6 +351,9 @@ async function main(): Promise<number> {
     if (command === 'check') return checkCommand(file);
     if (command === 'compile') return compileCommand(file);
     if (command === 'doc') return docCommand(file, values.format ?? 'md');
+    if (/\.eval\.spl$/i.test(file)) {
+        usageError(`'${file}' is an eval file; run it with 'spl eval ${file}'`);
+    }
 
     const level = values['log-level'] ?? 'info';
     if (!['error', 'info', 'debug'].includes(level)) usageError(`invalid --log-level '${level}'`);

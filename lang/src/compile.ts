@@ -122,9 +122,15 @@ export function stripTypes(source: string): string {
 
 const blank = (text: string): string => text.replace(/[^\n]/g, ' ');
 
+export interface CompileOptions {
+    /** Allow `eval` blocks and `judge` library (only for `*.eval.spl` files). */
+    eval?: boolean;
+}
+
 /** Scans, erases types and analyses a `.spl` file. Throws `SplSyntaxError` with every problem found. */
-export function compile(source: string): Compiled {
-    const scanned = scan(source);
+export function compile(source: string, options: CompileOptions = {}): Compiled {
+    const isEval = Boolean(options.eval);
+    const scanned = scan(source, { eval: isEval });
     if (scanned.problems.length) throw new SplSyntaxError(scanned.problems);
     const javascript = stripTypes(scanned.code);
     let program: Node;
@@ -185,7 +191,23 @@ export function compile(source: string): Compiled {
     });
     const imports = specifiers.map(literal => ({ specifier: String(literal.value), line: literal.loc.start.line, column: literal.loc.start.column + 1 }));
     const used = new Set<string>();
-    walk(program, (node, parent, key) => { if (node.type === 'Identifier' && isReference(parent, key)) used.add(String(node.name)); });
+    walk(program, (node, parent, key) => {
+        if (node.type !== 'Identifier' || !isReference(parent, key)) return;
+        const name = String(node.name);
+        used.add(name);
+        if (name === 'judge' && !moduleNames.has('judge') && !workflowNames.has('judge')
+            && !(parent?.type === 'VariableDeclarator' && key === 'id')
+            && !(parent?.type === 'FunctionDeclaration' && key === 'id')
+            && !(parent?.type === 'ClassDeclaration' && key === 'id')
+            && !(parent?.type === 'CatchClause' && key === 'param')) {
+            if (!isEval) fail(node, '`judge` is only available in *.eval.spl files');
+            const line = node.loc.start.line;
+            const ev = scanned.evals.find(item => line >= item.line && line <= item.endLine);
+            if (!ev || ev.dividerLine === 0 || line <= ev.dividerLine) {
+                fail(node, '`judge` calls are only valid below `---` inside an `eval` block');
+            }
+        }
+    });
 
     const lineCount = scanned.lines.length;
     const settings = scanned.defaults?.settings ?? {};

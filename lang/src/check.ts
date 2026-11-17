@@ -35,14 +35,15 @@ export function check(file: string): CheckProblem[] {
             problems.push({ ...(from ?? { file: current, line: 1, column: 1 }), message: `cannot read '${current}': ${(error as Error).message}` });
             return;
         }
-        const result = scan(source);
+        const isEval = /\.eval\.spl$/i.test(current);
+        const result = scan(source, { eval: isEval });
         scanned.set(current, result);
         if (result.problems.length) {
             problems.push(...result.problems.map(problem => ({ file: current, line: problem.line, column: problem.column, message: problem.message })));
             return;
         }
         try {
-            for (const item of compile(source).imports) {
+            for (const item of compile(source, { eval: isEval }).imports) {
                 if (/^\.{1,2}\/.*\.spl$/.test(item.specifier)) visit(path.resolve(path.dirname(current), item.specifier), { file: current, line: item.line, column: item.column });
             }
         } catch (error) {

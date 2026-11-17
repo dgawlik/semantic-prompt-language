@@ -12,7 +12,7 @@ export class Workflow {
     readonly virtual: TextDocument;
 
     constructor(readonly uri: string, source: string) {
-        this.scan = scan(source);
+        this.scan = scan(source, { eval: /\.eval\.spl$/i.test(uri) });
         this.virtual = TextDocument.create(uri, 'typescript', 0, `${this.scan.code}\n${DEFAULT_EXPORT}\n`);
     }
 

@@ -1,5 +1,6 @@
 import { generateFunctions } from './codegen.js';
 import { Failure, SuccessSignal } from './errors.js';
+import { judge, type JudgeResult } from './judge.js';
 import type { LogLevel } from './logger.js';
 import * as markdownLibrary from './markdown-lib.js';
 import type { RestrictKind } from './restrict.js';
@@ -13,6 +14,7 @@ import {
 export { Any, Bool, Char, Dict, Enum, Float, Fn, Int, JsonSchema, List, Nil, Nullable, Str, Struct, Typedef, Union, t, validate };
 export { Failure } from './errors.js';
 export { configure, type ConfigureOptions } from './configure.js';
+export { judge, type JudgeResult };
 export { markdownLibrary as markdown };
 
 type Awaitable<T> = T | Promise<T>;
@@ -51,14 +53,19 @@ function located<T>(context: Context, work: Promise<T>): Promise<T> {
     });
 }
 
+function trackArrange<T>(context: Context, work: Promise<T>): Promise<T> {
+    if (context.evalScope?.phase === 'arrange') context.evalScope.pendingArrange.push(work);
+    return work;
+}
+
 function generate(kind: GenerationKind, prompt: unknown, rest: unknown[]): Promise<unknown> {
     const context = currentContext();
     if (template(prompt)) {
         const text = prompt.reduce((out, part, index) => out + part + (index < rest.length ? display(rest[index]) : ''), '');
-        return located(context, context.runtime.generate(kind, text, undefined, context));
+        return trackArrange(context, located(context, context.runtime.generate(kind, text, undefined, context)));
     }
     if (rest.length > 1) return Promise.reject(runtimeError(`${kind}() takes a prompt and one options object`));
-    return located(context, context.runtime.generate(kind, prompt, rest[0] as GenerateOptions | undefined, context));
+    return trackArrange(context, located(context, context.runtime.generate(kind, prompt, rest[0] as GenerateOptions | undefined, context)));
 }
 
 /**
@@ -193,12 +200,12 @@ export function shell(command: string): Promise<string> { return tool('shell', [
  *
  *     const sieve = await codegen('sieve(n): primes up to n, using the sieve of Eratosthenes');
  */
-export async function codegen<F extends (...args: any[]) => unknown = (...args: any[]) => unknown>(description: string, options: CodegenOptions = {}): Promise<F> {
+export function codegen<F extends (...args: any[]) => unknown = (...args: any[]) => unknown>(description: string, options: CodegenOptions = {}): Promise<F> {
     const context = currentContext();
-    const functions = await located(context, generateFunctions({
+    const work = located(context, generateFunctions({
         text: description, line: context.runtime.callerLine(context), names: [], inputs: new Map(), ...options,
-    }, context));
-    return Object.values(functions)[0] as F;
+    }, context)).then(functions => Object.values(functions)[0] as F);
+    return trackArrange(context, work);
 }
 
 /** Script arguments (`--arg` in the CLI). Missing entries are `undefined`. */
@@ -228,7 +235,7 @@ export const env: Readonly<Record<string, string | undefined>> = new Proxy({} as
 export function library(): Record<string, unknown> {
     return {
         ask, agent, human, decision, enforce, forbid, restrict, success, fail, assert, log, codegen,
-        readFile, writeFile, webFetch, webSearch, shell, args, env, validate, markdown: markdownLibrary, Failure,
+        readFile, writeFile, webFetch, webSearch, shell, args, env, validate, markdown: markdownLibrary, judge, Failure,
         t, Str, Int, Float, Bool, Char, Nil, Any, Dict, Fn, List, Union, Nullable, Enum, Struct, Typedef, JsonSchema,
     };
 }

@@ -140,7 +140,7 @@ describe('commands and usage', () => {
     });
 
     it.each([
-        ['', 'expected a command: run, check, compile, doc, login or logout'],
+        ['', 'expected a command: run, eval, check, compile, doc, login or logout'],
         ['s.spl', "expected a command before the file; to run it, use 'spl run s.spl'"],
         ['notes.md', "expected a command before the file; to run it, use 'spl run notes.md'"],
         ['frobnicate s.spl', "unknown command 'frobnicate'"],

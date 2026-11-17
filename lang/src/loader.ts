@@ -76,7 +76,7 @@ function register(): void {
             if (!/\.spl(?:\?|$)/.test(url)) return nextLoad(url, context);
             const text = state.virtual.get(url) ?? fs.readFileSync(fileURLToPath(url), 'utf8');
             try {
-                const compiled = compile(text);
+                const compiled = compile(text, { eval: /\.eval\.spl(?:\?|$)/i.test(url) });
                 const { code, header } = compiled.module({ library: state.library, instrument: state.instrument });
                 state.sources.set(url, { lines: compiled.scan.lines, pageOffset: compiled.pageOffset, header });
                 return { format: 'module', shortCircuit: true, source: code };

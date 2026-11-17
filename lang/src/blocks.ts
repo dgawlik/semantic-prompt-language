@@ -261,8 +261,16 @@ class AgentBlock<O> extends Block<O> {
                 const args = actionArguments(action);
                 builtin = Object.hasOwn(TOOL_SPECS, action.name);
                 value = describeValue(await this.act(action, args, local, saved, rejected));
+                if (!builtin) {
+                    const rejectedSave = action.name === 'saveVariable'
+                        && typeof value === 'object' && value !== null && Object.hasOwn(value, 'rejected');
+                    runtime.toolCalls.push({ name: action.name, arguments: args, success: !rejectedSave });
+                }
             } catch (error) {
                 if (control(error)) throw error;
+                if (!builtin) {
+                    runtime.toolCalls.push({ name: action.name, arguments: action.arguments, success: false });
+                }
                 // Errors thrown by workflow functions keep their own kind and line.
                 const failure = runtime.failure(error);
                 if (!runtime.replaying && !builtin) {
@@ -415,3 +423,34 @@ export function step(line: number, endLine: number): Promise<void> {
     const context = currentContext();
     return context.runtime.step(context, { kind: 'code', line, endLine, language: 'ts' });
 }
+
+/** Registers a top-level `eval '...' { ... }` block during `*.eval.spl` discovery. */
+function evalCase(name: string, fn: () => Promise<void>): void {
+    const context = currentContext();
+    if (!context.evalCollector) return;
+    const { defaults, constraints, url } = context;
+    context.evalCollector.push({
+        name,
+        fn: () => {
+            const active = currentContext();
+            return runInContext({
+                ...active,
+                defaults: { ...defaults, ...active.defaults },
+                constraints: [...constraints, ...active.constraints],
+                url: url ?? active.url,
+            }, fn);
+        },
+    });
+}
+
+/** Phase divider (`---`) inside an `eval` block: awaits pending arrange/act calls and enters assert phase. */
+async function evalPhase(): Promise<void> {
+    const scope = currentContext().evalScope;
+    if (!scope) return;
+    if (scope.pendingArrange.length) {
+        await Promise.all(scope.pendingArrange.splice(0));
+    }
+    scope.phase = 'assert';
+}
+
+export { evalCase as eval, evalPhase as phase };

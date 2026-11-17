@@ -10,6 +10,7 @@ import {
     type ReasoningLevel,
 } from './llm.js';
 import { sources } from './loader.js';
+import type { EvalRegistration, EvalScope } from './judge.js';
 import type { ModelInteraction } from './log-events.js';
 import type { Logger, LogLevel } from './logger.js';
 import { ScopeObserver } from './observer.js';
@@ -87,6 +88,14 @@ export interface Step {
     variables(): Record<string, unknown>;
 }
 
+export interface CapturedToolCall {
+    name: string;
+    shortName?: string;
+    server?: string;
+    arguments: Record<string, unknown> | unknown[];
+    success: boolean;
+}
+
 export interface RuntimeOptions {
     backend: LlmBackend;
     logger: Logger;
@@ -96,6 +105,8 @@ export interface RuntimeOptions {
     model?: string;
     /** Used when neither the call nor the file names a model. */
     defaultModel?: string;
+    /** Overrides the model used by `judge.faithful()`. */
+    judgeModel?: string;
     /** Script arguments exposed as the read-only `args`. */
     args?: readonly string[];
     trace?: Trace;
@@ -128,6 +139,10 @@ export interface Context {
     scope?: { variables?: () => Record<string, () => unknown>; readonly observer: ScopeObserver };
     /** Orders the journaled work started inside an agent block; outside one, the runtime's own gate does. */
     gate?: Gate;
+    /** Active `eval` case execution scope for phase tracking and soft assertions. */
+    evalScope?: EvalScope;
+    /** Active `eval` case collector during `*.eval.spl` discovery. */
+    evalCollector?: EvalRegistration[];
 }
 
 /** A queue of journaled work: each piece starts when the one before it has finished. */
@@ -270,6 +285,8 @@ export class Runtime {
     /** Read-only environment; the first access is recorded for deterministic replay. */
     readonly env: Readonly<Record<string, string>>;
     readonly root: Context;
+    readonly judgeModel?: string;
+    readonly toolCalls: CapturedToolCall[] = [];
     private readonly environment: Readonly<Record<string, string>>;
     private readonly model?: string;
     private readonly defaultModel?: string;
@@ -286,6 +303,7 @@ export class Runtime {
         this.cwd = options.cwd ?? process.cwd();
         this.model = options.model;
         this.defaultModel = options.defaultModel;
+        this.judgeModel = options.judgeModel;
         this.humanHandler = options.human;
         this.beforeStep = options.beforeStep;
         const environment: Record<string, string> = {};
@@ -471,9 +489,11 @@ export class Runtime {
             const output = await (this.trace
                 ? this.effect({ kind: 'tool', tool, params, restrictions: context.restrictions.list }, perform, (value): value is string => typeof value === 'string')
                 : perform());
+            this.toolCalls.push({ name: tool, arguments: params, success: true });
             if (!this.replaying) this.logger.tool(describeToolCall(tool, params, { output }));
             return output;
         } catch (error) {
+            this.toolCalls.push({ name: tool, arguments: params, success: false });
             if (!this.replaying && error instanceof Failure) this.logger.tool(describeToolCall(tool, params, { error: error.reason }));
             throw error;
         }
@@ -533,6 +553,21 @@ export class Runtime {
                 ? await this.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
                 : await perform();
             if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response');
+            if (res.toolResults?.length) {
+                for (const raw of res.toolResults) {
+                    try {
+                        const parsed = JSON.parse(raw) as { tool?: string; server?: string; arguments?: Record<string, unknown> | unknown[]; success?: boolean };
+                        if (typeof parsed.tool === 'string' && typeof parsed.success === 'boolean') {
+                            this.toolCalls.push({
+                                name: parsed.server ? `${parsed.server}/${parsed.tool}` : parsed.tool,
+                                ...(parsed.server ? { shortName: parsed.tool, server: parsed.server } : {}),
+                                arguments: parsed.arguments ?? {},
+                                success: parsed.success,
+                            });
+                        }
+                    } catch { /* ignore malformed tool result entries */ }
+                }
+            }
             if (!replaying) {
                 receiving = false;
                 logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: res.text,

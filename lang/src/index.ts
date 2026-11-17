@@ -1,10 +1,10 @@
 // The library: everything a `.spl` file can use without importing it.
 export {
     ask, agent, human, decision, enforce, forbid, restrict, success, fail, assert, log, codegen,
-    readFile, writeFile, webFetch, webSearch, shell, args, env, markdown, configure, validate,
+    readFile, writeFile, webFetch, webSearch, shell, args, env, markdown, configure, validate, judge,
     t, Str, Int, Float, Bool, Char, Nil, Any, Dict, Fn, List, Union, Nullable, Enum, Struct, Typedef, JsonSchema,
     type AskOptions, type AgentOptions, type CodegenOptions, type ConfigureOptions, type DecisionOptions,
-    type GenerationResult, type RestrictSpec,
+    type GenerationResult, type JudgeResult, type RestrictSpec,
 } from './library.js';
 export { Type, StructType, isType, type Infer, type InferShape, type Shape, type Annotations, type TypeKind } from './types.js';
 export { Failure, SuccessSignal, SplSyntaxError, type FailurePayload, type StatusCode, type SyntaxProblem } from './errors.js';
@@ -13,9 +13,10 @@ export { Failure, SuccessSignal, SplSyntaxError, type FailurePayload, type Statu
 export * as __spl from './blocks.js';
 
 // Compiling and running workflows, and embedding the runtime.
-export { scan, sourceColumn, CHECK_OPTIONS, DEFAULT_EXPORT, HEADER_KEYS, MODES, type Scan, type Region, type HeaderEntry, type SplBlock, type SplComment, type SplProblem, type BlockMode, type BlockInput, type BlockOutput, type HeaderKey, type Span } from './scanner.js';
-export { compile, type Compiled } from './compile.js';
+export { scan, sourceColumn, CHECK_OPTIONS, DEFAULT_EXPORT, HEADER_KEYS, MODES, type Scan, type ScanOptions, type EvalCase, type Region, type HeaderEntry, type SplBlock, type SplComment, type SplProblem, type BlockMode, type BlockInput, type BlockOutput, type HeaderKey, type Span } from './scanner.js';
+export { compile, type CompileOptions, type Compiled } from './compile.js';
 export { check, type CheckProblem } from './check.js';
+export { discoverEvalFiles, runEvals, EvalUsageError, type EvalAttemptResult, type EvalCaseResult, type EvalRunOptions, type EvalSuiteResult } from './eval.js';
 export { documentMarkdown, documentHtml, type DocOptions } from './doc.js';
 export { run, type RunOptions, type RunResult } from './workflow.js';
 export { Runtime, type RuntimeOptions, type GenerateOptions, type HumanHandler, type Step } from './runtime.js';

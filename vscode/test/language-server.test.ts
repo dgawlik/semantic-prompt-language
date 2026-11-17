@@ -442,6 +442,26 @@ test('definitions, references, rename and symbols connect code, @names and outpu
     assert.equal(hover(short.context, { line: 1, character: 7 })?.range?.start.character, 0, 'the key is explained as a key');
 });
 
+test('eval files (*.eval.spl) type-check eval blocks and judge assertions', () => {
+    const evalUri = pathToFileURL(path.join(base, 'suite.eval.spl')).href;
+    const evalSource = lines(
+        "eval 'Color check' {",
+        "  let answer = ask('Color blue in hex notation')",
+        '',
+        '  ---',
+        '',
+        "  judge.faithful(answer, 'color is blue', 0.99)",
+        "  judge.toolUse('webFetch', 'https://www.google.com')",
+        '}',
+        '',
+    );
+    const { context } = open(evalSource, evalUri);
+    assert.deepEqual(diagnostics(context), []);
+    const { context: compContext, position } = open(evalSource.replace('judge.faithful', 'judge.fa<|>ithful'), evalUri);
+    assert.ok(completions(compContext, position).some(item => item.label === 'faithful'));
+    project.close(evalUri);
+});
+
 test('the server speaks LSP end to end', { timeout: 60_000 }, async t => {
     const child = spawn(process.execPath, [path.resolve(__dirname, '..', 'server.cjs'), '--stdio'], { stdio: ['pipe', 'pipe', 'inherit'] });
     const connection = createProtocolConnection(new StreamMessageReader(child.stdout), new StreamMessageWriter(child.stdin));

@@ -26,6 +26,7 @@ export const library: Record<string, Help> = {
     env: { signature: 'env', description: 'Read-only environment variables: env.NAME, or @env.NAME in a block. Missing names are undefined. Access is recorded for trace replay.' },
     validate: { signature: 'validate(value, Type)', description: 'Parse a value with a type (returning plain objects or class instances), or check it against raw JSON Schema. Never coerces or fills defaults.' },
     markdown: { signature: 'markdown', description: 'Markdown builder: markdown.document().heading(text, level).paragraph(text).bulletList(items).table(headers, rows).toString(), plus bold, italic, code, link, image and escape.' },
+    judge: { signature: 'judge', description: 'Eval assertions (only in *.eval.spl below ---): judge.faithful(actual, criterion, threshold?) and judge.toolUse(toolName, ...args).' },
     Failure: { signature: 'Failure', description: 'The class of workflow failures: error instanceof Failure, error.statusCode, error.reason, error.line.' },
     t: { signature: 't', description: 'The type builders under one name: t.Str, t.Int, t.List(t.Str), t.Enum(...), t.Struct(name, fields).' },
     Str: { signature: 'Str', description: 'String type. Add annotations for the model with .annotate({...}) or .describe(text).' },

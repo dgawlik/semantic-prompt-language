@@ -6,5 +6,6 @@ function quote(file: string, platform: NodeJS.Platform): string {
 
 /** The command line that runs a workflow, or steps through it with `--debug`. */
 export function commandLine(executable: string, file: string, debug: boolean, platform: NodeJS.Platform = process.platform): string {
-    return `${executable.trim() || 'spl'} run ${quote(file, platform)}${debug ? ' --debug' : ''}`;
+    const cmd = !debug && /\.eval\.spl$/i.test(file) ? 'eval' : 'run';
+    return `${executable.trim() || 'spl'} ${cmd} ${quote(file, platform)}${debug ? ' --debug' : ''}`;
 }

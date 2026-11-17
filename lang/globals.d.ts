@@ -46,6 +46,8 @@ declare global {
     const validate: typeof spl.validate;
     /** Markdown builder: `markdown.document().heading('Report')`. */
     const markdown: typeof spl.markdown;
+    /** Eval assertions (`*.eval.spl` only, below `---`): `judge.faithful(...)`, `judge.toolUse(...)`. */
+    const judge: typeof spl.judge;
     /** A workflow failure: `error instanceof Failure`, `error.statusCode`, `error.reason`. */
     const Failure: typeof spl.Failure;
     type Failure = spl.Failure;

@@ -45,7 +45,7 @@ provideLibrary({ 'spl-lang': packageModule, 'spl-lang/markdown': markdownModule 
 export async function run(source: string, options: RunOptions): Promise<RunResult> {
     const { logger, trace } = options;
     // Compiled here first, so problems are reported before a runtime or a trace is touched.
-    const { imports, scan } = compile(source);
+    const { imports, scan } = compile(source, { eval: /\.eval\.spl$/i.test(options.file ?? '') });
     const runtime = new Runtime({
         backend: options.backend, logger, cwd: options.cwd, model: options.model,
         args: options.args, trace, human: options.human, beforeStep: options.beforeStep,
