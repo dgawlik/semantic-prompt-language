@@ -33,7 +33,7 @@ Save to ->[Str] @article
 success({article, length: article.length})
 ```
 
-After funning `spl compile random-article.spl` it is transpiled to ordinary TypeScript file
+After running `spl compile random-article.spl` it is transpiled to ordinary TypeScript file
 which you can step with debugger and normally run within your stack.
 
 ```ts 
