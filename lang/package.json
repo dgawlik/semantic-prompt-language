@@ -1,6 +1,6 @@
 {
   "name": "spl-lang",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "Semantic Prompt Language: natural-language instructions for models and agents, interleaved with TypeScript",
   "type": "module",
   "main": "./dist/index.js",
