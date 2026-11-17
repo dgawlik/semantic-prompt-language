@@ -258,7 +258,10 @@ describe('agents with a real MCP server', () => {
         expect(tools()).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp0Echo', 'mcp1Echo']);
         expect(advertised()).toEqual(['MCP docs/echo: Echo a message', 'MCP notes/echo: Echo a message']);
         expect(events.filter(event => event.kind === 'tool').map(event => event.kind === 'tool' && event.tool))
-            .toEqual([{ name: 'notes/echo', target: '{"message":"from notes"}', status: 'success' }]);
+            .toEqual([
+                { name: 'notes/echo', target: '{"message":"from notes"}', status: 'success' },
+                { name: 'saveVariable', target: '@reply', status: 'success' },
+            ]);
     }, 20_000);
 
     it('lets an agent block combine an MCP result with runtime tools, within its restrict header', async () => {

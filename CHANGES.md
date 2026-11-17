@@ -1,28 +1,14 @@
 
-# Decision API
+# Full tracing of workflow run 
 
-As now in Google and OpenAI decision Api is present add decision builtin to the language 
+I want ask/agent inputs outputs to be logged (present).
 
+When running in a loop (agent) all tool usage should be logged in TUI and in trace. Log inputs and outputs. For the contents of files or web fetch web search show them in compressed form in TUI. For shell execution show them expanded in TUI. 
 
-## Decision 
+## Pretty documents 
 
-The SPL language should use official endpoints (for OpenAI decision endpoint) and for Anthropic
-simulate it with existing API. 
+The --trace option should produce two files:
+* <name>.jsonl with actual trace 
+* <name>.html with beautiful site presenting the run 
 
-Example:
-
-```ts
-
-if (decision(evidence: ['The color red is #ff0000'], 
-             question: 'Is this color shade of red? {color}', cutoff: 0.85)) {
-  success('Color is red')
-} else (
-  failure('Color is not red')
-)
-```
-
-There are 2 overloads:
-
-* first one selects from labels converted to True/False
-* second one uses probability cutoff to return true if the prop is > cutoff
 

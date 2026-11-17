@@ -193,10 +193,12 @@ export class AiBackend implements LlmBackend {
                         try {
                             const output = await req.tools.invoke(spec.name, input);
                             this.opts.logger.tool(describeToolCall(spec.name, input, { output }));
+                            toolResults.push(JSON.stringify({ tool: spec.name, arguments: input, success: true, output }));
                             return output;
                         } catch (error) {
                             if (!(error instanceof Failure)) throw error;
                             this.opts.logger.tool(describeToolCall(spec.name, input, { error: error.reason }));
+                            toolResults.push(JSON.stringify({ tool: spec.name, arguments: input, success: false, error: error.reason }));
                             if (error.statusCode === 'restriction_violation') return stop(error);
                             return error.reason;
                         }

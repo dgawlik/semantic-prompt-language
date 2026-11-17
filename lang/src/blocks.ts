@@ -14,7 +14,7 @@ import {
     type Context, type Defaults, type GenerateOptions,
 } from './runtime.js';
 import { compileSchema } from './schema.js';
-import { TOOL_SPECS, ToolHost } from './tools.js';
+import { TOOL_SPECS, ToolHost, describeRuntimeToolCall } from './tools.js';
 import { TraceError } from './trace.js';
 import { Any, isType, type Type } from './types.js';
 
@@ -188,10 +188,9 @@ class AgentBlock<O> extends Block<O> {
         });
     }
 
-    private async act(action: RuntimeAction, local: Context, saved: Map<string, unknown>, rejected: Map<string, number>): Promise<unknown> {
+    private async act(action: RuntimeAction, args: Record<string, unknown>, local: Context, saved: Map<string, unknown>, rejected: Map<string, number>): Promise<unknown> {
         const { runtime } = local;
         const { line } = this.options;
-        const args = actionArguments(action);
         const input = (name: string): unknown => {
             if (saved.has(name)) return saved.get(name);
             if (!this.inputs.has(name)) throw runtimeError(`@${name} is not referenced in this block; an agent reaches only the names its instruction mentions`);
@@ -257,12 +256,22 @@ class AgentBlock<O> extends Block<O> {
         const execute = async (action: RuntimeAction): Promise<unknown> => {
             if (!runtime.replaying) runtime.logger.modelOutput({ ...interaction, role: 'action' }, JSON.stringify(action));
             let value: unknown;
+            let builtin = false;
             try {
-                value = describeValue(await this.act(action, local, saved, rejected));
+                const args = actionArguments(action);
+                builtin = Object.hasOwn(TOOL_SPECS, action.name);
+                value = describeValue(await this.act(action, args, local, saved, rejected));
             } catch (error) {
                 if (control(error)) throw error;
                 // Errors thrown by workflow functions keep their own kind and line.
-                throw runtime.failure(error);
+                const failure = runtime.failure(error);
+                if (!runtime.replaying && !builtin) {
+                    runtime.logger.tool(describeRuntimeToolCall(action.name, action.arguments, { error: failure.reason }));
+                }
+                throw failure;
+            }
+            if (!runtime.replaying && !builtin) {
+                runtime.logger.tool(describeRuntimeToolCall(action.name, action.arguments, { value }));
             }
             // A copy: the backend owns the action it sent and may change it later.
             history.push({ action: structuredClone(action), result: { value } });

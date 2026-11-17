@@ -2,6 +2,7 @@ import stringWidth from 'string-width';
 import wrapAnsi from 'wrap-ansi';
 import type { BodySegment, LogEvent, ModelInteraction, ModelStreamEvent } from './log-events.js';
 import { formatSegments, paint, prettyJson, prettyListing, sanitize, textSegments } from './log-format.js';
+import { runtimeToolTarget, TOOL_SPECS, type ToolName } from './tools.js';
 
 export type Outcome = 'completed' | 'failed' | 'cancelled';
 export type StepChoice = 'next' | 'continue';
@@ -103,6 +104,7 @@ export class TerminalView {
     private readonly owners = new Map<string, Card>();
     private readonly cache = new Map<Card, { width: number; rows: string[]; offsets: Map<string, number> }>();
     private readonly streams = new Map<string, Stream>();
+    private readonly pendingActions: { name: string; card: Card }[] = [];
     private readonly listeners = new Set<() => void>();
     private revision = 0;
     private mode: Mode = { kind: 'running' };
@@ -134,6 +136,24 @@ export class TerminalView {
     get status(): Mode['kind'] { return this.mode.kind; }
 
     append(event: LogEvent): void {
+        if (event.kind === 'model-output' && event.interaction.role === 'action') {
+            const parsed = parseActionEvent(event);
+            const card = eventCard(event, this.options.color, parsed);
+            this.add(card);
+            if (parsed) this.pendingActions.push({ name: parsed.name, card });
+            return;
+        }
+        if (event.kind === 'tool') {
+            for (let index = this.pendingActions.length - 1; index >= 0; index--) {
+                if (this.pendingActions[index].name === event.tool.name) {
+                    const [{ card }] = this.pendingActions.splice(index, 1);
+                    this.remove(card);
+                    break;
+                }
+            }
+        } else if (event.kind === 'model-output' && event.interaction.role === 'response') {
+            this.pendingActions.length = 0;
+        }
         this.add(eventCard(event, this.options.color));
     }
 
@@ -284,6 +304,19 @@ export class TerminalView {
         const gap = width - stringWidth(title) - stringWidth(badge);
         const header = gap > 0 ? title + ' '.repeat(gap) + badge : fit(title, width);
         return { header, rows: visible, viewport, footer, hints };
+    }
+
+    private remove(card: Card): void {
+        const cardIndex = this.cards.indexOf(card);
+        if (cardIndex >= 0) this.cards.splice(cardIndex, 1);
+        this.cache.delete(card);
+        for (const part of card.parts) {
+            if (typeof part === 'string') continue;
+            const foldIndex = this.folds.indexOf(part);
+            if (foldIndex >= 0) this.folds.splice(foldIndex, 1);
+            this.owners.delete(part.id);
+            if (this.selected === part.id) this.selected = this.folds.at(-1)?.id;
+        }
     }
 
     private add(card: Card): void {
@@ -474,13 +507,34 @@ function jsonSummary(source: string, container: 'object' | 'array'): string {
     return container === 'object' ? '{\u2026}' : '[\u2026]';
 }
 
+function parseActionEvent(event: LogEvent): { name: string; target: string } | undefined {
+    const raw = event.segments.map(segment => 'source' in segment ? segment.source : segment.text).join('');
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+        const { name, arguments: args } = parsed as { name?: unknown; arguments?: unknown };
+        if (typeof name !== 'string' || !args || typeof args !== 'object' || Array.isArray(args)) return undefined;
+        const params = args as Record<string, unknown>;
+        const field = (key: string): string => typeof params[key] === 'string' ? params[key] : '';
+        const target = Object.hasOwn(TOOL_SPECS, name)
+            ? ((name as ToolName) === 'readFile' || (name as ToolName) === 'writeFile' ? field('path')
+                : (name as ToolName) === 'webFetch' ? field('url')
+                : (name as ToolName) === 'webSearch' ? JSON.stringify(field('query')) : field('command'))
+            : runtimeToolTarget(name, params);
+        return { name: sanitize(name), target: sanitize(target).replace(/\s*\n\s*/g, ' ') };
+    } catch {
+        return undefined;
+    }
+}
+
 function segmentParts(event: LogEvent, color: boolean): Part[] {
+    const response = event.kind === 'model-output' && event.interaction.role === 'response';
     return event.segments.map((segment: BodySegment, index): Part => {
         switch (segment.type) {
             case 'text': case 'inspection': return segment.text;
             case 'json': return {
                 id: segment.payloadId, summary: jsonSummary(segment.source, segment.container),
-                body: () => prettyJson(segment.source, color) ?? segment.source, open: false,
+                body: () => prettyJson(segment.source, color) ?? segment.source, open: response,
             };
             case 'preface': return {
                 id: segment.payloadId, summary: `preamble \u00b7 ${plural(lineCount(segment.source), 'line')}`,
@@ -492,13 +546,13 @@ function segmentParts(event: LogEvent, color: boolean): Part[] {
             };
             case 'listing': return {
                 id: segment.payloadId, summary: segment.summary,
-                body: () => prettyListing(segment.source, segment.language, color), open: false,
+                body: () => prettyListing(segment.source, segment.language, color), open: Boolean(segment.expanded),
             };
         }
     });
 }
 
-function eventCard(event: LogEvent, color: boolean): Card {
+function eventCard(event: LogEvent, color: boolean, action?: { name: string; target: string }): Card {
     const strong = (text: string, shade: number) => paint(text, shade, color, true);
     const dim = (text: string) => paint(text, 90, color);
     const parts = segmentParts(event, color);
@@ -510,9 +564,12 @@ function eventCard(event: LogEvent, color: boolean): Card {
             return { header: `${strong('\u276f', 35)} ${strong(event.interaction.kind, 35)} ${dim('prompt')}`, inline: false,
                 gutter: paint('\u2502', 35, color), parts };
         case 'model-output':
-            return event.interaction.role === 'action'
-                ? { header: `${strong('\u25cf', 36)} ${strong(event.interaction.kind, 36)} ${dim('action')}`, inline: false, parts }
-                : { header: `${strong('\u25cf', 36)} ${strong(event.interaction.kind, 36)} ${dim('response')}`, inline: false, parts };
+            if (event.interaction.role === 'action') {
+                return action
+                    ? { header: `${strong('\u25cf', 36)} ${paint(action.name, 1, color)} ${action.target}`.trimEnd(), inline: false, parts }
+                    : { header: `${strong('\u25cf', 36)} ${strong(event.interaction.kind, 36)} ${dim('action')}`, inline: false, parts };
+            }
+            return { header: `${strong('\u25cf', 36)} ${strong(event.interaction.kind, 36)} ${dim('response')}`, inline: false, parts };
         case 'tool': {
             const ok = event.tool.status === 'success';
             const listing = parts.filter(part => typeof part !== 'string');

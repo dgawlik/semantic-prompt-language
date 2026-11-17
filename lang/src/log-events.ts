@@ -4,12 +4,13 @@ export type BodySegment =
     | { readonly type: 'text' | 'inspection'; readonly text: string }
     | { readonly type: 'code'; readonly language: 'javascript'; readonly source: string }
     | {
-        /** Tool content shown as it appears in a file: folded in the terminal view, with line numbers. */
+        /** Tool content shown as it appears in a file: folded in the terminal view unless `expanded`, with line numbers. */
         readonly type: 'listing';
         readonly payloadId: string;
         readonly language: string;
         readonly source: string;
         readonly summary: string;
+        readonly expanded?: boolean;
     }
     | {
         readonly type: 'preface';

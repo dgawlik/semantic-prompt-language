@@ -628,14 +628,18 @@ describe('agent block transcripts', () => {
         });
         expect(result).toMatchObject({ status: 'success', value: 1 });
         expect(outline(events)).toEqual([
-            'model-input agent -', 'model-output agent action', 'model-output agent action', 'info', 'model-output agent response',
+            'model-input agent -', 'model-output agent action', 'tool', 'model-output agent action', 'tool', 'info', 'model-output agent response',
         ]);
         const models = events.filter(event => event.origin === 'model');
         expect(new Set(models.map(event => event.interaction.requestId)).size).toBe(1);
         expect(formatEvent(events[1])).toBe('<- output agent action {\n  "name": "loadVariable",\n  "arguments": {\n    "name": "notes"\n  }\n}');
-        expect(text(events[2])).toBe('{"name":"saveVariable","arguments":{"name":"count","value":1}}');
-        expect(text(events[3])).toMatch(/^llm agent call:\n\{"model":"fake"\} \(\d+ ms\)$/);
-        expect(formatEvent(events[4])).toBe('<- output agent Saved.');
+        expect(events[2]).toMatchObject({ kind: 'tool', tool: { name: 'loadVariable', target: '@notes', status: 'success' } });
+        expect(formatEvent(events[2])).toBe('* tool loadVariable @notes\n[\n  "a"\n]');
+        expect(text(events[3])).toBe('{"name":"saveVariable","arguments":{"name":"count","value":1}}');
+        expect(events[4]).toMatchObject({ kind: 'tool', tool: { name: 'saveVariable', target: '@count', status: 'success' } });
+        expect(formatEvent(events[4])).toBe('* tool saveVariable @count\n1');
+        expect(text(events[5])).toMatch(/^llm agent call:\n\{"model":"fake"\} \(\d+ ms\)$/);
+        expect(formatEvent(events[6])).toBe('<- output agent Saved.');
     });
 
     it('logs the failing action and the located error without inventing a response', async () => {
@@ -677,12 +681,14 @@ describe('agent block transcripts', () => {
         expect(await exec(source, { logger, cwd, backend: model })).toMatchObject({ status: 'success' });
         expect(outline(events)).toEqual([
             'model-input agent -',
-            'model-output agent action', 'model-input ask -', 'info', 'model-output ask response',
+            'model-output agent action', 'model-input ask -', 'info', 'model-output ask response', 'tool',
             'model-output agent action', 'tool',
-            'model-output agent action', 'info', 'model-output agent response',
+            'model-output agent action', 'tool', 'info', 'model-output agent response',
         ]);
-        expect(events[6]).toMatchObject({ tool: { name: 'writeFile', target: 'note.md', status: 'success' } });
-        expect(formatEvent(events[6])).toBe('* tool writeFile note.md\n# Pears\n');
+        expect(events[5]).toMatchObject({ tool: { name: 'callFunction', target: '@title("fruit")', status: 'success' } });
+        expect(events[7]).toMatchObject({ tool: { name: 'writeFile', target: 'note.md', status: 'success' } });
+        expect(formatEvent(events[7])).toBe('* tool writeFile note.md\n# Pears\n');
+        expect(events[9]).toMatchObject({ tool: { name: 'saveVariable', target: '@note', status: 'success' } });
         const requests = events.filter(event => event.origin === 'model').map(event => [event.interaction.kind, event.interaction.requestId]);
         expect(new Set(requests.filter(([kind]) => kind === 'agent').map(([, id]) => id)).size).toBe(1);
         expect(new Set(requests.map(([, id]) => id)).size).toBe(2);
@@ -900,8 +906,8 @@ describe('state logs', () => {
             previous: { presence: 'unbound' }, next: { presence: 'value', valueKind: 'scalar', display: '5' },
         }] } });
         // Each output is reported after its block's transcript and before the next model call.
-        expect(outline(events).filter(kind => kind !== 'info').slice(2, 11)).toEqual([
-            'model-input agent -', 'model-output agent action', 'model-output agent action', 'model-output agent response', 'state', 'state',
+        expect(outline(events).filter(kind => kind !== 'info').slice(2, 13)).toEqual([
+            'model-input agent -', 'model-output agent action', 'tool', 'model-output agent action', 'tool', 'model-output agent response', 'state', 'state',
             'model-input ask -', 'model-output ask response', 'state',
         ]);
     });

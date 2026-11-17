@@ -17,6 +17,7 @@ import { library } from './library.js';
 import { run, type RunResult } from './workflow.js';
 import { loadMcpConfig, type McpServers } from './mcp.js';
 import { Trace, TraceError, fingerprint } from './trace.js';
+import { traceHtml, tracePaths } from './trace-html.js';
 import { CliLogging, canInteract } from './cli-logging.js';
 import { formatEvent, sanitize, terminalColor } from './log-format.js';
 
@@ -37,8 +38,8 @@ Options for run:
                           Icons: -> input (magenta), <- output (cyan), * tool (green), ~ state (yellow),
                           x error (red), ! warning (yellow), i info (blue), . debug (gray).
                           In a terminal, logs show in a full-screen view on stderr. Preambles, JSON,
-                          generated code and tool content start collapsed: Up/Down select,
-                          Space/Enter expand, PgUp/PgDn scroll, Home/End reach ends.
+                          generated code and file/web tool content start collapsed; shell output starts
+                          expanded: Up/Down select, Space/Enter expand, PgUp/PgDn scroll, Home/End reach ends.
                           Model responses stream live; human questions are answered in the view.
                           When the run ends, press e to exit: the screen is restored and only
                           the result is printed on stdout.
@@ -56,9 +57,9 @@ Options for run:
                           from stdin when logs are redirected; prompts go to stderr.
   --mcp <file.json>       MCP servers in VS Code mcp.json format
   --timeout <seconds>     per LLM call timeout (default: 300)
-  --trace <file.jsonl>    append external inputs, model decisions, effects and results to a JSONL log
-                          Reuse the same path to resume; completed runs replay without external work.
-                          Choose another JSONL file to restart.
+  --trace <name>          write execution trace to <name>.jsonl and an HTML report to <name>.html
+                          (<name>.jsonl is also accepted). Reuse the same path to resume; completed runs
+                          replay without external work. Choose another trace name to restart.
   --cwd <dir>             base directory for relative paths and restrictions (default: current directory)
 
 Other options:
@@ -295,11 +296,12 @@ async function main(): Promise<number> {
         usageError('--debug needs an interactive terminal (stdin and stderr) and cannot be combined with --silent');
     }
 
+    const traceTarget = values.trace ? tracePaths(values.trace) : undefined;
     let trace: Trace | undefined;
     try {
-        if (values.trace) {
+        if (traceTarget) {
             const directory = fileURLToPath(new URL('.', import.meta.url));
-            trace = Trace.open(values.trace, {
+            trace = Trace.open(traceTarget.jsonl, {
                 source, cwd, args: values.arg,
                 runtime: fingerprint([version(), process.version,
                     ...fs.readdirSync(directory).filter(name => name.endsWith('.js')).sort()
@@ -312,6 +314,13 @@ async function main(): Promise<number> {
         if (e instanceof TraceError && e.kind === 'infrastructure') throw e;
         return usageError(`cannot open trace: ${e.message}`);
     }
+    const writeTraceHtml = (): void => {
+        if (!traceTarget || !fs.existsSync(traceTarget.jsonl)) return;
+        const journal = fs.readFileSync(traceTarget.jsonl, 'utf8');
+        fs.writeFileSync(traceTarget.html, traceHtml(journal, {
+            title: shown(path.resolve(file)), source, traceFile: shown(traceTarget.jsonl),
+        }), 'utf8');
+    };
     const backend: LlmBackend = new AiBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider });
     let result: RunResult | undefined;
     let interrupted = false;
@@ -336,6 +345,7 @@ async function main(): Promise<number> {
             finally {
                 clearTimeout(deadline);
                 trace?.close();
+                writeTraceHtml();
                 await presentation!.close('cancelled');
                 process.exit(130);
             }
@@ -399,6 +409,7 @@ async function main(): Promise<number> {
         else throw error;
     } finally {
         trace?.close();
+        if (usage === undefined) writeTraceHtml();
         input?.close();
         if (input) process.stdin.pause();
         // An interactive run that finished keeps its screen until the user presses `e`; nothing is replayed after it closes.

@@ -42,7 +42,7 @@ is a usage error that suggests `spl run`.
 | `--debug` | Step through the workflow in the [terminal view](#stepping-with---debug) |
 | `--timeout <s>` | Per model call (default 300) |
 | `--mcp <file.json>` | MCP servers, see [MCP servers](#mcp-servers) |
-| `--trace <file.jsonl>` | Append execution history, automatically resume or replay the same file; see [Traces and replay](#traces-and-replay) |
+| `--trace <name>` | Write execution history to `<name>.jsonl` and an HTML report to `<name>.html` (`<name>.jsonl` is also accepted); see [Traces and replay](#traces-and-replay) |
 
 Each `--arg` is one string; use `--arg=--value` for values starting with a dash.
 
@@ -244,13 +244,14 @@ under it.
 | Item | Shown as |
 | --- | --- |
 | Model prompt | `❯ ask prompt`; generated text such as guidance, restrictions and the instructions for agents is a collapsed `▸ preamble` line, and the workflow's own prompt follows with a `│` gutter |
-| Model response | `● ask response` with the text; generated code is a collapsed `▸ JavaScript · N lines` |
-| Tool call | `● readFile path` (green) or `✗` (red) and a collapsed summary such as `▸ 42 lines` |
+| Model response | `● ask response` with the text or expanded JSON output; generated code is a collapsed `▸ JavaScript · N lines` |
+| Tool call | `● readFile path` (green) or `✗` (red): files, `webFetch`, `webSearch`, MCP and multi-line variable payloads start compressed (`▸ 42 lines`), while `shell` execution starts expanded (`▾ N lines`) |
 | Diagnostics | `✗` error, `!` warning, `•` info, `·` debug, `~` state, `▪` script `log(...)` |
 
-Tool content, generated code, preambles and every object/array start collapsed. Up/Down selects a
-collapsed item, Space or Enter expands or collapses it, Page Up/Down scrolls and Home/End reach the
-ends. Until you navigate, the newest item is selected, so Space expands the latest tool call. Expanded
+File contents, `webFetch`, `webSearch`, generated code and preambles start collapsed; `shell`
+output and model JSON responses start expanded. Up/Down selects a
+foldable item, Space or Enter expands or collapses it, Page Up/Down scrolls and Home/End reach the
+ends. Until you navigate, the newest item is selected, so Space toggles the latest tool call. Expanded
 files, fetched pages, search results and generated code appear as they would in a file: line numbers,
 preserved indentation and syntax colors for JavaScript, TypeScript, JSON and Markdown. Expanded JSON
 uses two-space indentation and preserves original numeric/string tokens and duplicate keys.
@@ -338,17 +339,19 @@ For example, `log('review:', review)` produces:
 ## Traces and replay
 
 ```bash
-spl run flow.spl --trace run.jsonl
-spl run flow.spl --trace run.jsonl --silent  # resume or replay the same run
-spl run flow.spl --trace next-run.jsonl      # start a fresh run
+spl run flow.spl --trace run
+spl run flow.spl --trace run --silent       # resume or replay the same run
+spl run flow.spl --trace next-run           # start a fresh run
 ```
 
-`--trace` is the only persistence and replay option. A missing file starts a run. With an
-existing file, the workflow's code runs again from the top while every recorded effect
+`--trace <name>` (or `--trace <name>.jsonl`) produces two files: `<name>.jsonl` with the durable
+append-only execution trace, and `<name>.html` with a self-contained HTML report presenting the
+workflow run, its `ask` and `agent` inputs and outputs, agent loop tool calls, result and source.
+A missing `.jsonl` file starts a run. With an existing `.jsonl` file, the workflow's code runs again from the top while every recorded effect
 returns its recorded result, which rebuilds variables, functions and loops; execution then
 continues live at the first unrecorded effect. Records are appended and flushed durably:
-existing bytes are never rewritten. A completed success or failure replays, prints the same
-result and leaves the trace unchanged. To restart, choose a different JSONL file.
+existing bytes in `<name>.jsonl` are never rewritten. A completed success or failure replays, prints the same
+result and leaves `<name>.jsonl` unchanged. To restart, choose a different trace name.
 
 The JSONL journal records the effects of the library: model requests, raw responses and
 failures (including repairs, reasoning, sampling and token budgets), `decision()` answers, every

@@ -46,16 +46,32 @@ describe('terminal view', () => {
         expect(screen().text).not.toContain('const a = 1;');
     });
 
-    it('shows failed tool calls and MCP results collapsed', () => {
+    it('shows shell output expanded and file, web and MCP tool results compressed', () => {
         const { logger, screen } = setup();
+        logger.tool(describeToolCall('webFetch', { url: 'https://a.test' }, { output: '<html>\n<body>page</body>\n</html>' }));
+        logger.tool(describeToolCall('webSearch', { query: 'spl' }, { output: '1. Result\n   https://a.test\n   snippet' }));
+        logger.tool(describeToolCall('shell', { command: 'echo hello' }, { output: 'hello\nworld\n' }));
         logger.tool(describeToolCall('shell', { command: 'git status' }, { error: 'shell: exit 1\nfatal' }));
         logger.tool(describeMcpCall('docs', 'search', { q: 'x' }, { result: { content: [] }, isError: false }));
         logger.tool(describeToolCall('shell', { command: 'true' }, { output: '' }));
-        const { text } = screen();
-        expect(text).toContain('\u2717 shell git status\n  \u25b8 shell: exit 1');
-        expect(text).not.toContain('fatal');
-        expect(text).toContain('\u25cf docs/search {"q":"x"}\n\u203a');
+        const { text } = screen(80, 60);
+        expect(text).toContain('\u25cf webFetch https://a.test\n  \u25b8 3 lines');
+        expect(text).not.toContain('<body>page</body>');
+        expect(text).toContain('\u25cf webSearch "spl"\n  \u25b8 1 result');
+        expect(text).not.toContain('snippet');
+        expect(text).toContain('\u25cf shell echo hello\n  \u25be 2 lines\n    1 | hello\n    2 | world');
+        expect(text).toContain('\u2717 shell git status\n  \u25be shell: exit 1\n    1 | shell: exit 1\n    2 | fatal');
+        expect(text).toContain('\u25cf docs/search {"q":"x"}\n\u203a \u25b8 result');
         expect(text).toContain('\u25cf shell true\n  no output');
+    });
+
+    it('shows structured ask and agent responses expanded (present)', () => {
+        const { logger, screen } = setup();
+        logger.modelOutput({ requestId: 'a', kind: 'ask', role: 'response' }, '{"setup":"Why?","punchline":"Because."}');
+        const { text } = screen();
+        expect(text).toContain('\u25cf ask response\n\u203a \u25be {\u2026} 2 keys');
+        expect(text).toContain('"setup": "Why?"');
+        expect(text).toContain('"punchline": "Because."');
     });
 
     it('folds preambles, JSON and generated code apart from the workflow prompt', () => {
@@ -72,18 +88,17 @@ describe('terminal view', () => {
         expect(screen().text).toContain('\u25be preamble \u00b7 2 lines  space to collapse\n    GENERATED RULES\n    more rules');
     });
 
-    it('shows the transcript of an agent block: folded context, visible instruction, actions, tools and state', async () => {
+    it('shows the transcript of an agent block: folded context, visible instruction, tool inputs/outputs and state', async () => {
         const { logger, screen } = setup();
         const source = `const draft = { title: 'T' };\n${agentBlock('Review @draft ->[Int] @score', 'enforce: Be brief')}`;
         expect(await run(source, { logger, backend: acting(save('score', 4)) })).toMatchObject({ status: 'success' });
         const { text } = screen(100, 60);
         expect(text).toContain('~ draft @ global (scope-1): <unbound> ->\n  \u25b8 {\u2026} 1 key');
         expect(text).toMatch(/\u276f agent prompt\n {2}\u25b8 preamble \u00b7 \d+ lines\n {2}\u2502 Instruction:\n {2}\u2502 Review @draft ->\[Int\] @score\n {2}\u2502 \n {2}\u2502 Completed actions and their results:\n {2}\u25b8 \[\u2026\] 0 items/);
-        expect(text).toContain('\u25cf agent action\n  \u25b8 {\u2026} 2 keys');
+        expect(text).toContain('\u25cf saveVariable @score\n  \u25b8 4');
         expect(text).toContain('\u25cf agent response\n  Done.');
         expect(text).toContain('~ score @ global (scope-1): <unbound> -> 4');
         expect(text).not.toContain('Be brief');
-        expect(text).not.toContain('saveVariable');
     });
 
     it('streams responses until the final event replaces them', () => {

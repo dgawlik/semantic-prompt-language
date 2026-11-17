@@ -520,7 +520,10 @@ export class Runtime {
         try {
             const perform = async (): Promise<LlmResponse> => {
                 try {
-                    return await backend.call(req);
+                    const reply = await backend.call(req);
+                    return req.kind === 'agent' && !req.runtimeTools && reply.toolResults === undefined && req.tools.calls.length
+                        ? { ...reply, toolResults: [...req.tools.calls] }
+                        : reply;
                 } catch (error) {
                     if (error instanceof Failure || control(error)) throw error;
                     throw new Failure('llm_error', error instanceof Error ? error.message : String(error));

@@ -98,7 +98,7 @@ export class Logger {
         this.emit('error', { kind: 'model-output', origin: 'model', interaction: { ...interaction } }, msg, values);
     }
 
-    /** A tool call by workflow code or an agent. The terminal view folds its content. */
+    /** A tool call by workflow code or an agent. Files and web results fold in the terminal view; shell expands. */
     tool(call: ToolCallLog): void {
         if (this.level === 'silent' || RANK[this.level] < RANK.info) return;
         const id = `${this.sessionId}:${++this.nextId}`;
@@ -108,6 +108,7 @@ export class Logger {
             segments.push({ type: 'text', text: '\n' }, {
                 type: 'listing', payloadId: `${id}:listing`, language: call.language,
                 source: sanitize(call.source), summary: sanitize(call.summary).replace(/\n/g, ' ') || 'output',
+                ...(call.expanded ? { expanded: true } : {}),
             });
         }
         this.deliver(freezeEvent({

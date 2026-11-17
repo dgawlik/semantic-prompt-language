@@ -60,10 +60,11 @@ export interface ToolCallLog {
     name: string;
     target: string;
     status: 'success' | 'error';
-    /** Content shown folded: the file read or written, fetched body, search results, output or error. */
+    /** Content shown in the terminal view: folded for files/web, expanded for shell. */
     source: string;
     language: string;
     summary: string;
+    expanded?: boolean;
 }
 
 const count = (text: string, noun: string): string => {
@@ -76,8 +77,9 @@ export function describeToolCall(name: ToolName, params: Record<string, unknown>
     const field = (key: string): string => typeof params[key] === 'string' ? params[key] : '';
     const target = name === 'readFile' || name === 'writeFile' ? field('path')
         : name === 'webFetch' ? field('url') : name === 'webSearch' ? JSON.stringify(field('query')) : field('command');
+    const expanded = name === 'shell' ? { expanded: true } : {};
     if ('error' in outcome) {
-        return { name, target, status: 'error', source: outcome.error, language: 'text', summary: outcome.error.split('\n')[0] };
+        return { name, target, status: 'error', source: outcome.error, language: 'text', summary: outcome.error.split('\n')[0], ...expanded };
     }
     const { output } = outcome;
     switch (name) {
@@ -95,7 +97,7 @@ export function describeToolCall(name: ToolName, params: Record<string, unknown>
             const results = output.match(/^\d+\. /gm)?.length ?? 0;
             return { name, target, status: 'success', source: output, language: 'text', summary: `${results} result${results === 1 ? '' : 's'}` };
         }
-        case 'shell': return { name, target, status: 'success', source: output, language: 'text', summary: output ? count(output, 'line') : 'no output' };
+        case 'shell': return { name, target, status: 'success', source: output, language: 'text', summary: output ? count(output, 'line') : 'no output', expanded: true };
     }
 }
 
@@ -106,6 +108,65 @@ export function describeMcpCall(server: string, tool: string, input: unknown, ou
     if ('error' in outcome) return { name, target, status: 'error', source: outcome.error, language: 'text', summary: outcome.error.split('\n')[0] };
     const source = JSON.stringify(outcome.result) ?? 'null';
     return { name, target, status: outcome.isError ? 'error' : 'success', source, language: 'json', summary: outcome.isError ? 'error result' : 'result' };
+}
+
+function runtimeValueDisplay(value: unknown, noun = 'line'): { source: string; language: string; summary: string } {
+    if (typeof value === 'string') {
+        if (value.includes('\n') || value.length > 100) {
+            return { source: value, language: 'text', summary: count(value, noun) };
+        }
+        const quoted = JSON.stringify(value);
+        return { source: quoted, language: 'json', summary: quoted };
+    }
+    if (value !== null && typeof value === 'object') {
+        const source = JSON.stringify(value) ?? 'null';
+        const summary = Array.isArray(value)
+            ? `${value.length} item${value.length === 1 ? '' : 's'}`
+            : `${Object.keys(value).length} key${Object.keys(value).length === 1 ? '' : 's'}`;
+        return { source, language: 'json', summary };
+    }
+    const scalar = JSON.stringify(value ?? null) ?? String(value);
+    return { source: scalar, language: 'json', summary: scalar };
+}
+
+/** Formats the target of an agent runtime tool (`@name`, `@fn(args)`, question, env var or guidance). */
+export function runtimeToolTarget(name: string, args: Record<string, unknown>): string {
+    switch (name) {
+        case 'loadVariable':
+        case 'saveVariable':
+            return typeof args.name === 'string' ? `@${args.name}` : '';
+        case 'callFunction': {
+            const fn = typeof args.name === 'string' ? `@${args.name}` : '';
+            const params = Array.isArray(args.args) ? args.args.map(item => JSON.stringify(item)).join(', ') : '';
+            return `${fn}(${params})`;
+        }
+        case 'getEnv':
+            return typeof args.name === 'string' ? args.name : '';
+        case 'askHuman':
+            return typeof args.question === 'string' ? JSON.stringify(args.question) : '';
+        case 'setGuidance':
+            return typeof args.kind === 'string' && typeof args.text === 'string' ? `${args.kind} ${JSON.stringify(args.text)}` : JSON.stringify(args);
+        default:
+            return JSON.stringify(args) ?? '';
+    }
+}
+
+/** What an agent block runtime tool (`loadVariable`, `saveVariable`, `callFunction`, `getEnv`, `askHuman`, `setGuidance`) did, for the log. */
+export function describeRuntimeToolCall(name: string, args: Record<string, unknown>, outcome: { value: unknown } | { error: string }): ToolCallLog {
+    const target = runtimeToolTarget(name, args);
+    if ('error' in outcome) {
+        return { name, target, status: 'error', source: outcome.error, language: 'text', summary: outcome.error.split('\n')[0] };
+    }
+    const { value } = outcome;
+    if (name === 'saveVariable' && value !== null && typeof value === 'object' && !Array.isArray(value)
+        && 'rejected' in value && 'hint' in value && Object.keys(value).length === 2) {
+        const rejected = String((value as { rejected: unknown }).rejected);
+        return { name, target, status: 'error', source: JSON.stringify(value), language: 'json', summary: `rejected: ${rejected.split('\n')[0]}` };
+    }
+    if (name === 'setGuidance') {
+        return { name, target, status: 'success', source: '', language: 'text', summary: 'applied' };
+    }
+    return { name, target, status: 'success', ...runtimeValueDisplay(value) };
 }
 
 function needString(tool: string, params: Record<string, unknown>, name: string): string {
@@ -300,6 +361,9 @@ function isDirSwitch(executable: string, arg: string): boolean {
  * whether it comes from the script itself or from the LLM.
  */
 export class ToolHost {
+    /** Serialized built-in tool records captured during this host's lifetime. */
+    readonly calls: string[] = [];
+
     constructor(
         private readonly restrictions: Restrictions,
         private readonly cwd: string,
@@ -308,6 +372,19 @@ export class ToolHost {
     ) {}
 
     async invoke(name: ToolName, params: Record<string, unknown>): Promise<string> {
+        try {
+            const output = await this.dispatch(name, params);
+            this.calls.push(JSON.stringify({ tool: name, arguments: params, success: true, output }));
+            return output;
+        } catch (error) {
+            if (error instanceof Failure) {
+                this.calls.push(JSON.stringify({ tool: name, arguments: params, success: false, error: error.reason }));
+            }
+            throw error;
+        }
+    }
+
+    private async dispatch(name: ToolName, params: Record<string, unknown>): Promise<string> {
         switch (name) {
             case 'readFile': return this.readFile(needString(name, params, 'path'));
             case 'writeFile': {

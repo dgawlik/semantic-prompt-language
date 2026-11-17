@@ -9,6 +9,7 @@ import type { ModelStreamEvent } from '../src/log-events.js';
 import { setAmbient } from '../src/runtime.js';
 import { ToolHost } from '../src/tools.js';
 import { Trace, TraceError, type TraceContext } from '../src/trace.js';
+import { traceHtml, tracePaths } from '../src/trace-html.js';
 import { run, type RunOptions, type RunResult } from '../src/workflow.js';
 import { NoLlm, acting, action, agentBlock, backend, block, cleanTemp, exec, save, scripted, silent, tempDir } from './helpers.js';
 
@@ -1088,5 +1089,80 @@ describe('human input', () => {
         human.mockClear();
         expect(await traced(source, { human })).toEqual(first);
         expect(human).not.toHaveBeenCalled();
+    });
+});
+
+describe('HTML trace report', () => {
+    it('maps --trace names and .jsonl paths to sibling .jsonl and .html files', () => {
+        const bare = tracePaths(path.join(cwd, 'run'));
+        expect(bare).toEqual({
+            base: path.join(cwd, 'run'),
+            jsonl: path.join(cwd, 'run.jsonl'),
+            html: path.join(cwd, 'run.html'),
+        });
+        expect(tracePaths(path.join(cwd, 'run.jsonl'))).toEqual(bare);
+        expect(tracePaths(path.join(cwd, 'run.html'))).toEqual(bare);
+    });
+
+    it('renders ask/agent inputs and outputs, agent loop tool usage, source lines and results into self-contained HTML', async () => {
+        fs.writeFileSync(path.join(cwd, 'note.txt'), 'line one\nline two');
+        const source = [
+            'function twice(n: number): number { return n * 2; }',
+            agentBlock('Read note.txt, double 21 with @twice ->[Int] @doubled, run shell'),
+            block('Summarize @doubled', 'outputVar: summary'),
+            "const report = await agent('Inspect workspace');",
+            'success({ doubled, summary, report });',
+        ].join('\n');
+        const loopModel = backend(async request => {
+            if (request.runtimeTools) {
+                const content = await request.invokeAction!(action('readFile', { path: 'note.txt' }));
+                const n = await request.invokeAction!(action('callFunction', { name: 'twice', args: [21] }));
+                await request.invokeAction!(save('doubled', n));
+                return { text: `Read ${String(content).split('\n').length} lines.`, reasoning: 'Used readFile and twice.', effective: { provider: 'openai', model: 'gpt-6-luna', reasoningEffort: 'medium' } };
+            }
+            if (request.kind === 'agent') {
+                await request.tools.invoke('readFile', { path: 'note.txt' });
+                return {
+                    text: 'Workspace inspected.',
+                    toolResults: [
+                        JSON.stringify({ tool: 'readFile', arguments: { path: 'note.txt' }, success: true, output: 'line one\nline two' }),
+                        JSON.stringify({ tool: 'shell', arguments: { command: 'echo ready' }, success: true, output: 'ready\n' }),
+                    ],
+                    effective: { provider: 'openai', model: 'gpt-6-luna' },
+                };
+            }
+            return { text: 'Forty-two is the answer.', effective: { provider: 'openai', model: 'gpt-6-luna' } };
+        });
+        await traced(source, { backend: loopModel });
+        const html = traceHtml(journal(), { title: 'demo.spl', source, traceFile: 'run.jsonl' });
+        expect(html).toContain('<!DOCTYPE html>');
+        expect(html).toContain('<meta name="color-scheme" content="light dark">');
+        expect(html).toContain('demo.spl — SPL Trace');
+        expect(html).toContain('✓ Completed');
+        expect(html).toContain('Read note.txt, double 21 with @twice -&gt;[Int] @doubled, run shell');
+        expect(html).toContain('@twice(21)');
+        expect(html).toContain('Forty-two is the answer.');
+        expect(html).toContain('Workspace inspected.');
+        expect(html).toContain('echo ready');
+        // Shell disclosure starts open; readFile disclosure starts closed.
+        expect(html).toMatch(/<span class="tool-badge">shell<\/span>[\s\S]*?<details class="disclosure" open>/);
+        expect(html).toMatch(/<span class="tool-badge">readFile<\/span>[\s\S]*?<details class="disclosure">/);
+        expect(html).toContain('id="L2"');
+        expect(html).not.toMatch(/<link[^>]+href="https?:/);
+    });
+
+    it('renders bigint completions and failed runs with their source line', async () => {
+        const exact = 'const big = 123456789012345678901234567890n;\nsuccess(big);';
+        await traced(exact);
+        expect(traceHtml(journal(), { title: 'big.spl', source: exact })).toContain('123456789012345678901234567890n');
+
+        fs.unlinkSync(file);
+        const failing = "const x = 1;\nfail('boom');";
+        await traced(failing);
+        const failedHtml = traceHtml(journal(), { title: 'fail.spl', source: failing });
+        expect(failedHtml).toContain('✗ Failed');
+        expect(failedHtml).toContain('explicit_failure');
+        expect(failedHtml).toContain('boom');
+        expect(failedHtml).toContain('href="#L2"');
     });
 });

@@ -23,6 +23,7 @@ export { Logger, type LogLevel, type LoggerOptions } from './logger.js';
 export type { LogEvent, LogEventSink, BodySegment, ModelInteraction, ModelStreamEvent, ModelStreamSink, StateChange, BindingDelta, BindingReference, ScopeReference, ObservedValue, ToolUse } from './log-events.js';
 export { AiBackend, type AiBackendOptions } from './ai.js';
 export { Trace, TraceError, type TraceContext } from './trace.js';
+export { traceHtml, tracePaths, type TraceHtmlOptions, type TracePaths } from './trace-html.js';
 export { loadMcpConfig, type McpServers } from './mcp.js';
 export { login, logout, authStatus, AuthError, type Provider } from './auth.js';
 export type { DecisionRequest, DecisionResponse, LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, ReasoningLevel, RuntimeAction, RuntimeTool } from './llm.js';

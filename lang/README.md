@@ -26,7 +26,7 @@ replay work without signing in.
 
 ```text
 spl run <file.spl> [--arg value ...] [--model id] [--provider openai|anthropic|google] [--cwd dir]
-                   [--mcp file.json] [--timeout s] [--human answer ...] [--trace file.jsonl]
+                   [--mcp file.json] [--timeout s] [--human answer ...] [--trace name]
                    [--log-level error|info|debug] [--silent] [--debug]
 spl check <file.spl>
 spl compile <file.spl>
@@ -130,9 +130,10 @@ The [API reference](../docs-template/Reference.md) lists every signature and opt
 
 ## Traces and human input
 
-`--trace run.jsonl` appends durable execution history. Reusing the same path automatically resumes
+`--trace run` (or `--trace run.jsonl`) writes `run.jsonl` with the durable execution history and
+`run.html` with a self-contained HTML report presenting the run. Reusing the same path automatically resumes
 recorded work or replays a completed success/failure without model/MCP calls, repeated tool effects
-or repeated human prompts. Existing trace bytes never change. Choose another JSONL file to restart.
+or repeated human prompts. Existing `.jsonl` trace bytes never change. Choose another trace name to restart.
 Source, runtime and execution configuration must match; unsafe interrupted effects require manual
 recovery. Only library effects are recorded, blocks included: the workflow's own code runs again
 on replay, including any Node.js APIs it calls directly and the modules it imports.
@@ -156,8 +157,9 @@ report changes to top-level variables and the outputs of blocks, with their befo
 values. Tool calls (files, web, shell, MCP) are logged from `info` with their content.
 
 When stdin and stderr are terminals, logs appear in a full-screen Ink view on stderr's alternate
-screen. Preambles, JSON, generated code and tool content (files read or written, fetched pages,
-search results) start collapsed: Up/Down selects, Space/Enter expands with line numbers and syntax
+screen. Preambles, generated code and file/web tool content (files read or written, fetched pages,
+search results) start collapsed, while `shell` output and structured model responses start expanded:
+Up/Down selects, Space/Enter expands or collapses with line numbers and syntax
 colors, Page Up/Down scrolls and Home/End reaches the ends. Output follows the tail; scrolling away
 pauses following without pausing execution. Human questions are answered inside the view. When the
 run ends the view waits for `e`; exiting restores the terminal, prints nothing to stderr and leaves

@@ -116,7 +116,7 @@ describe('commands and usage', () => {
         ]) expect(help).toContain(usage);
         for (const option of [
             '--log-level <level>', '--silent', '--debug', '--model <id>', '--provider <name>', '--arg <value>', '--human <answer>',
-            '--mcp <file.json>', '--timeout <seconds>', '--trace <file.jsonl>', '--cwd <dir>', '--format <md|html>',
+            '--mcp <file.json>', '--timeout <seconds>', '--trace <name>', '--cwd <dir>', '--format <md|html>',
         ]) expect(help).toContain(`\n  ${option} `);
         expect(help).toContain('debug adds state changes of block outputs and top-level variables.');
         expect(help).toContain('Space/Enter expand');
@@ -126,7 +126,9 @@ describe('commands and usage', () => {
         expect(help).toContain('and each top-level statement; n runs the next step, v shows the top-level');
         expect(help).toContain('--arg <value>           script argument exposed in args');
         expect(help).toContain('--cwd <dir>             base directory for relative paths and restrictions');
-        expect(help).toContain('--trace <file.jsonl>');
+        expect(help).toContain('--trace <name>');
+        expect(help).toContain('<name>.jsonl');
+        expect(help).toContain('<name>.html');
         expect(help).toContain('Reuse the same path to resume');
         expect(help).toContain('the value passed to success()');
         expect(help).toContain('A .spl file is TypeScript with three additions.');
@@ -1064,7 +1066,7 @@ describe('blocks and models', () => {
         expect(logged.code).toBe(0);
         const lines = logged.err.split('\n');
         expect(lines.filter(line => /^(?:->|<-|i info|\* tool|x error|~ state) /.test(line)).map(line => line.replace(/ You are running.*| Generate JavaScript.*/, ''))).toEqual([
-            '-> input agent', '<- output agent action {', '<- output agent action {', 'i info llm agent call:', '<- output agent Saved.',
+            '-> input agent', '<- output agent action {', '* tool callFunction @twice(4)', '<- output agent action {', '* tool saveVariable @doubled', 'i info llm agent call:', '<- output agent Saved.',
             '-> input ask Describe @doubled', 'i info llm ask call:', '<- output ask Reply 2',
             '-> input codegen', 'i info llm ask call:', '<- output codegen function shout(text) {', `i info codegen saved ${path.join(dir, 'flow.shout.js')}`,
             '-> input ask More', 'i info llm ask call:', '<- output ask Reply 4',
@@ -1374,6 +1376,36 @@ success([first, second]);`);
         }
         expect(fs.readFileSync(trace, 'utf8')).toBe(original);
         expect(spl('success(args);', '--trace', trace, '--silent')).toEqual({ code: 0, out: json(['one']), err: '' });
+    });
+
+    it('writes both <name>.jsonl and <name>.html for --trace <name> and --trace <name>.jsonl', () => {
+        write('note.txt', 'hello trace');
+        const file = write('traced.spl', [
+            agentBlock('Read note.txt and save it ->[Str] @loaded'),
+            block('Summarize @loaded', 'outputVar: summary'),
+            'success({ loaded, summary });',
+        ].join('\n'));
+        const playing = `async request => {
+    if (!request.runtimeTools) return 'Summary of hello trace.';
+    const loaded = await act(request, 'readFile', { path: 'note.txt' });
+    await act(request, 'saveVariable', { name: 'loaded', value: loaded });
+    return 'Agent done.';
+}`;
+        const res = run(['run', file, '--trace', 'report', '--silent'], model(playing));
+        expect(res).toEqual({ code: 0, out: json({ loaded: 'hello trace', summary: 'Summary of hello trace.' }), err: '' });
+        expect(exists('report.jsonl')).toBe(true);
+        expect(exists('report.html')).toBe(true);
+        const html = read('report.html');
+        expect(html).toContain('traced.spl — SPL Trace');
+        expect(html).toContain('✓ Completed');
+        expect(html).toContain('Read note.txt and save it -&gt;[Str] @loaded');
+        expect(html).toContain('Summary of hello trace.');
+        expect(html).toContain('hello trace');
+        // Replaying with --trace report (without model) preserves report.jsonl and refreshes report.html.
+        const before = read('report.jsonl');
+        expect(run(['run', file, '--trace', 'report', '--silent'])).toEqual(res);
+        expect(read('report.jsonl')).toBe(before);
+        expect(exists('report.html')).toBe(true);
     });
 });
 

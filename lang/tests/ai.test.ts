@@ -368,7 +368,7 @@ it('stops on an unsuccessful MCP result before any subsequent runtime action', a
     expect(mcp.close).toHaveBeenCalledOnce();
 });
 
-it('logs agent built-in and MCP tool calls once each', async () => {
+it('logs agent built-in and MCP tool calls once each and retains all inputs and outputs for traces', async () => {
     const events: LogEvent[] = [];
     const mcp = client();
     mcp.callTool.mockResolvedValueOnce({ isError: true, content: [{ type: 'text', text: 'server failed' }] });
@@ -383,11 +383,17 @@ it('logs agent built-in and MCP tool calls once each', async () => {
         [call('mcp0Search', { query: 'SPL' }), finish('tool-calls')],
         [...text('Done'), finish()],
     ];
-    expect(await backend.call(request({ kind: 'agent', tools }))).toMatchObject({ text: 'Done' });
+    const result = await backend.call(request({ kind: 'agent', tools }));
+    expect(result).toMatchObject({ text: 'Done' });
     expect(events.filter(event => event.kind === 'tool').map(event => event.kind === 'tool' && event.tool)).toEqual([
         { name: 'readFile', target: 'a.md', status: 'success' },
         { name: 'readFile', target: 'b.md', status: 'error' },
         { name: 'docs/search', target: '{"query":"SPL"}', status: 'error' },
+    ]);
+    expect(result.toolResults!.map(item => JSON.parse(item))).toEqual([
+        { tool: 'readFile', arguments: { path: 'a.md' }, success: true, output: 'file text' },
+        { tool: 'readFile', arguments: { path: 'b.md' }, success: false, error: 'missing file' },
+        { server: 'docs', tool: 'search', arguments: { query: 'SPL' }, success: false, result: { isError: true, content: [{ type: 'text', text: 'server failed' }] } },
     ]);
 });
 
