@@ -110,6 +110,15 @@ export function describeMcpCall(server: string, tool: string, input: unknown, ou
     return { name, target, status: outcome.isError ? 'error' : 'success', source, language: 'json', summary: outcome.isError ? 'error result' : 'result' };
 }
 
+/** What a custom TypeScript tool call did, for the log. */
+export function describeCustomToolCall(name: string, input: unknown, outcome: { output: string } | { error: string }): ToolCallLog {
+    const target = JSON.stringify(input) ?? '';
+    if ('error' in outcome) return { name, target, status: 'error', source: outcome.error, language: 'text', summary: outcome.error.split('\n')[0] };
+    const { output } = outcome;
+    const isJson = prettyJson(output.trimStart()) !== undefined;
+    return { name, target, status: 'success', source: output, language: isJson ? 'json' : 'text', summary: count(output, 'line') };
+}
+
 function runtimeValueDisplay(value: unknown, noun = 'line'): { source: string; language: string; summary: string } {
     if (typeof value === 'string') {
         if (value.includes('\n') || value.length > 100) {

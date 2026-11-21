@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { inspect } from 'node:util';
 import { Failure, SplSyntaxError, SuccessSignal } from './errors.js';
 import {
-    LlmError, REASONING_LEVELS, buildPromptParts, parseJsonResponse, validateRandomness, validateTokens,
-    type AskMods, type Constraint, type DecisionRequest, type DecisionResponse, type LlmBackend, type LlmRequest, type LlmResponse,
-    type ReasoningLevel,
+    LlmError, REASONING_LEVELS, addTokenUsage, buildPromptParts, parseJsonResponse, validateMaxSteps, validateRandomness, validateTokens,
+    type AskMods, type Attachment, type Constraint, type CustomTool, type DecisionRequest, type DecisionResponse,
+    type LlmBackend, type LlmRequest, type LlmResponse, type ReasoningLevel, type TokenUsage,
 } from './llm.js';
 import { sources } from './loader.js';
 import type { EvalRegistration, EvalScope } from './judge.js';
@@ -23,6 +23,8 @@ import { isType, type JsonSchema, type Type } from './types.js';
 
 export type HumanHandler = (question: string, line: number) => string | Promise<string>;
 export type GenerationKind = 'ask' | 'agent';
+
+export type CustomToolsMap = Readonly<Record<string, Omit<CustomTool, 'name'> & { name?: string }>>;
 
 export interface GenerateOptions {
     /** Length hint for the model; guidance only. */
@@ -40,6 +42,14 @@ export interface GenerateOptions {
     model?: string;
     /** Maximum generated tokens per model turn, including reasoning. */
     tokens?: number;
+    /** `agent` only: maximum model turns per agent call. */
+    maxSteps?: number;
+    /** Multimodal attachments (images, PDFs, files) sent alongside the prompt. */
+    attachments?: readonly Attachment[];
+    /** `agent` only: custom TypeScript tools available to the agent. */
+    tools?: readonly CustomTool[] | CustomToolsMap;
+    /** `agent` only: enable/disable or select built-in tools (`true` by default). */
+    builtinTools?: boolean | readonly ToolName[];
     /** `ask` only. */
     seed?: number;
     /** `ask` only. */
@@ -107,6 +117,12 @@ export interface RuntimeOptions {
     defaultModel?: string;
     /** Overrides the model used by `judge.faithful()`. */
     judgeModel?: string;
+    /** Default step limit per agent call. */
+    maxSteps?: number;
+    /** Maximum cumulative tokens allowed across all model calls in this runtime. */
+    maxTotalTokens?: number;
+    /** Maximum cumulative estimated USD cost allowed across all model calls in this runtime. */
+    maxCostUsd?: number;
     /** Script arguments exposed as the read-only `args`. */
     args?: readonly string[];
     trace?: Trace;
@@ -121,6 +137,7 @@ export interface Defaults {
     reasoning?: ReasoningLevel;
     hide?: boolean;
     tokens?: number;
+    maxSteps?: number;
 }
 
 /** The dynamic scope of a call: which runtime, which restrictions and which guidance apply. */
@@ -189,7 +206,11 @@ export function runInContext<T>(context: Context, body: () => T): T {
     return shared.storage.run(context, body);
 }
 
-const GENERATION_OPTIONS = ['len', 'fmt', 'schema', 'repairs', 'reasoning', 'hide', 'model', 'tokens', 'seed', 'temperature', 'topP'];
+const GENERATION_OPTIONS = [
+    'len', 'fmt', 'schema', 'repairs', 'reasoning', 'hide', 'model', 'tokens',
+    'maxSteps', 'attachments', 'tools', 'builtinTools',
+    'seed', 'temperature', 'topP',
+];
 const runtimeError = (message: string): Failure => new Failure('runtime_error', message);
 /** Signals that end a run on purpose; they pass through every failure handler untouched. */
 export const control = (error: unknown): boolean =>
@@ -286,7 +307,14 @@ export class Runtime {
     readonly env: Readonly<Record<string, string>>;
     readonly root: Context;
     readonly judgeModel?: string;
+    readonly maxSteps?: number;
+    readonly maxTotalTokens?: number;
+    readonly maxCostUsd?: number;
     readonly toolCalls: CapturedToolCall[] = [];
+    /** Cumulative token usage across all model calls in this runtime. */
+    readonly usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    /** Cumulative estimated USD cost across model calls whose pricing is known. */
+    estimatedCostUsd = 0;
     private readonly environment: Readonly<Record<string, string>>;
     private readonly model?: string;
     private readonly defaultModel?: string;
@@ -304,6 +332,12 @@ export class Runtime {
         this.model = options.model;
         this.defaultModel = options.defaultModel;
         this.judgeModel = options.judgeModel;
+        this.maxSteps = options.maxSteps !== undefined ? validateMaxSteps(options.maxSteps) : undefined;
+        this.maxTotalTokens = options.maxTotalTokens !== undefined ? validateTokens(options.maxTotalTokens) : undefined;
+        if (options.maxCostUsd !== undefined && (typeof options.maxCostUsd !== 'number' || !Number.isFinite(options.maxCostUsd) || options.maxCostUsd <= 0)) {
+            throw runtimeError('maxCostUsd must be a positive finite number');
+        }
+        this.maxCostUsd = options.maxCostUsd;
         this.humanHandler = options.human;
         this.beforeStep = options.beforeStep;
         const environment: Record<string, string> = {};
@@ -553,6 +587,15 @@ export class Runtime {
                 ? await this.effect({ kind: 'llm', request: traceRequest(req), restrictions: req.restrictions.list }, perform, isResponse)
                 : await perform();
             if (!isResponse(res)) throw new Failure('llm_error', 'backend returned an invalid response');
+            if (res.usage) {
+                const next = addTokenUsage(this.usage, res.usage)!;
+                this.usage.inputTokens = next.inputTokens;
+                this.usage.outputTokens = next.outputTokens;
+                this.usage.totalTokens = next.totalTokens;
+                if (next.cachedTokens !== undefined) this.usage.cachedTokens = next.cachedTokens;
+                if (next.reasoningTokens !== undefined) this.usage.reasoningTokens = next.reasoningTokens;
+            }
+            if (res.costUsd !== undefined) this.estimatedCostUsd += res.costUsd;
             if (res.toolResults?.length) {
                 for (const raw of res.toolResults) {
                     try {
@@ -573,8 +616,18 @@ export class Runtime {
                 logger.modelStream({ type: 'end', interaction, outcome: 'completed', response: res.text,
                     ...(req.showReasoning && res.reasoning !== undefined ? { reasoning: res.reasoning } : {}) });
                 completed = true;
-                logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms)`);
+                const usageNote = res.usage
+                    ? `, tokens=${res.usage.inputTokens}+${res.usage.outputTokens}=${res.usage.totalTokens}`
+                        + (res.costUsd !== undefined ? `, cost=$${res.costUsd.toFixed(4)}` : '')
+                    : '';
+                logger.info(`llm ${req.kind} call: ${JSON.stringify(res.effective)} (${Date.now() - started} ms${usageNote})`);
                 logger.modelOutput({ ...interaction, role: 'response' }, res.text);
+            }
+            if (this.maxTotalTokens !== undefined && this.usage.totalTokens > this.maxTotalTokens) {
+                throw new Failure('llm_error', `total token budget exceeded (${this.usage.totalTokens} > ${this.maxTotalTokens})`);
+            }
+            if (this.maxCostUsd !== undefined && this.estimatedCostUsd > this.maxCostUsd) {
+                throw new Failure('llm_error', `cost budget exceeded ($${this.estimatedCostUsd.toFixed(4)} > $${this.maxCostUsd.toFixed(4)})`);
             }
             return res;
         } catch (error) {
@@ -603,11 +656,79 @@ export class Runtime {
             ...('topP' in given ? { top_p: given.topP } : {}),
         };
         if (kind !== 'ask' && Object.keys(sampling).length) throw runtimeError(`seed, temperature and topP are exclusive to ask(); ${kind}() does not accept them`);
+        if (kind !== 'agent' && ('maxSteps' in given || 'tools' in given || 'builtinTools' in given)) {
+            throw runtimeError(`maxSteps, tools and builtinTools are exclusive to agent(); ${kind}() does not accept them`);
+        }
         const randomness = Object.keys(sampling).length ? validateRandomness(sampling) : undefined;
         const { len, repairs = 0, model } = given;
         const reasoning = 'reasoning' in given ? given.reasoning : context.defaults.reasoning;
         const hide = 'hide' in given ? given.hide : context.defaults.hide ?? false;
         const tokens = 'tokens' in given ? validateTokens(given.tokens) : context.defaults.tokens;
+        const maxSteps = kind === 'agent'
+            ? ('maxSteps' in given ? validateMaxSteps(given.maxSteps) : (context.defaults.maxSteps ?? this.maxSteps))
+            : undefined;
+        let attachments: Attachment[] | undefined;
+        if ('attachments' in given) {
+            if (!Array.isArray(given.attachments)) throw runtimeError('attachments must be a list of Attachment objects');
+            attachments = given.attachments.map((item, idx) => {
+                if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+                    throw runtimeError(`attachments[${idx}] must be an Attachment object`);
+                }
+                const att = item as Record<string, unknown>;
+                if (att.kind !== 'image' && att.kind !== 'file') throw runtimeError(`attachments[${idx}].kind must be 'image' or 'file'`);
+                if (typeof att.mediaType !== 'string' || !att.mediaType.trim()) throw runtimeError(`attachments[${idx}].mediaType must be a non-empty string`);
+                if (typeof att.data !== 'string' && !(att.data instanceof Uint8Array)) throw runtimeError(`attachments[${idx}].data must be a string or Uint8Array`);
+                return {
+                    kind: att.kind,
+                    mediaType: att.mediaType,
+                    data: att.data,
+                    ...(typeof att.name === 'string' && att.name ? { name: att.name } : {}),
+                };
+            });
+        }
+        let customTools: CustomTool[] | undefined;
+        if ('tools' in given) {
+            const rawTools = given.tools;
+            const list: unknown[] = Array.isArray(rawTools)
+                ? rawTools
+                : (typeof rawTools === 'object' && rawTools !== null && !isType(rawTools))
+                    ? Object.entries(rawTools as Record<string, unknown>).map(([name, spec]) => (
+                        typeof spec === 'object' && spec !== null ? { name, ...(spec as Record<string, unknown>) } : spec
+                    ))
+                    : (() => { throw runtimeError('tools must be an array or map of tool definitions'); })();
+            customTools = list.map((item, idx) => {
+                if (typeof item !== 'object' || item === null) throw runtimeError(`tools[${idx}] must be a tool definition object`);
+                const t = item as Record<string, unknown>;
+                if (typeof t.name !== 'string' || !/^[A-Za-z_][\w.-]*$/.test(t.name)) {
+                    throw runtimeError(`tool name '${String(t.name)}' must be a valid identifier`);
+                }
+                if (typeof t.description !== 'string' || !t.description.trim()) {
+                    throw runtimeError(`tool '${t.name}' requires a non-empty description`);
+                }
+                if (!isType(t.input) && (typeof t.input !== 'object' || t.input === null || Array.isArray(t.input))) {
+                    throw runtimeError(`tool '${t.name}' input must be a Type or JSON Schema object`);
+                }
+                if (!isType(t.input)) compileSchema(t.input as JsonSchema);
+                if (typeof t.execute !== 'function') throw runtimeError(`tool '${t.name}' requires an execute function`);
+                return {
+                    name: t.name,
+                    description: t.description,
+                    input: t.input as Type<unknown> | JsonSchema,
+                    execute: t.execute as (input: unknown) => unknown,
+                };
+            });
+        }
+        let builtinTools: boolean | readonly ToolName[] | undefined;
+        if ('builtinTools' in given) {
+            const raw = given.builtinTools;
+            if (typeof raw === 'boolean') {
+                builtinTools = raw;
+            } else if (Array.isArray(raw) && raw.every(item => typeof item === 'string' && Object.hasOwn(TOOL_SPECS, item))) {
+                builtinTools = [...new Set(raw as ToolName[])];
+            } else {
+                throw runtimeError(`builtinTools must be a boolean or a list of built-in tool names (${Object.keys(TOOL_SPECS).join(', ')})`);
+            }
+        }
         // A Str answer is the reply itself; every other type is read from JSON.
         const target = isType(given.schema) && given.schema.kind !== 'str' ? given.schema : undefined;
         const structured = 'schema' in given && (target !== undefined || !isType(given.schema));
@@ -624,6 +745,9 @@ export class Runtime {
         if (fmt === 'text' && (structured || repairs !== 0)) throw runtimeError('schema and repairs require JSON output: use a type other than Str');
         const schema = target ? target.schema() : given.schema;
         const validate = structured && !target ? compileSchema(schema) : undefined;
+        const responseSchema = structured && typeof schema === 'object' && schema !== null && !Array.isArray(schema)
+            ? schema as Record<string, unknown>
+            : undefined;
         const built = buildPromptParts({
             prompt: display(prompt),
             mods: { len, fmt },
@@ -640,6 +764,11 @@ export class Runtime {
                 model: this.resolveModel(model, context),
                 reasoningEffort: reasoning as ReasoningLevel | undefined,
                 ...(tokens !== undefined ? { tokens } : {}),
+                ...(maxSteps !== undefined ? { maxSteps } : {}),
+                ...(responseSchema !== undefined ? { responseSchema } : {}),
+                ...(attachments?.length ? { attachments } : {}),
+                ...(customTools?.length ? { customTools } : {}),
+                ...(builtinTools !== undefined ? { builtinTools } : {}),
                 ...(randomness !== undefined ? { randomness: { ...randomness } } : {}),
                 showReasoning: !hide,
                 restrictions: context.restrictions,

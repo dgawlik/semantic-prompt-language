@@ -2,7 +2,7 @@
   "name": "spl-lang-vscode",
   "displayName": "SPL - Semantic Prompt Language",
   "description": "Language support for .spl workflows: natural-language instructions for models and agents, interleaved with TypeScript",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "publisher": "spl-lang",
   "icon": "icon.png",
   "license": "ISC",

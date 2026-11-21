@@ -1,6 +1,7 @@
 import { Failure } from './errors.js';
 import type { Restrictions } from './restrict.js';
-import type { ToolHost } from './tools.js';
+import type { ToolHost, ToolName } from './tools.js';
+import type { JsonSchema, Type } from './types.js';
 
 export interface AskMods {
     len?: 'word' | 'sentence' | 'paragraph' | 'long';
@@ -17,6 +18,54 @@ export function isTokenBudget(value: unknown): value is number {
 export function validateTokens(value: unknown): number {
     if (!isTokenBudget(value)) throw new Failure('runtime_error', 'tokens must be a positive safe integer');
     return value;
+}
+
+export function validateMaxSteps(value: unknown): number {
+    if (!isTokenBudget(value)) throw new Failure('runtime_error', 'maxSteps must be a positive safe integer');
+    return value;
+}
+
+export interface TokenUsage {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cachedTokens?: number;
+    reasoningTokens?: number;
+}
+
+export function addTokenUsage(a: TokenUsage | undefined, b: TokenUsage | undefined): TokenUsage | undefined {
+    if (!a) return b ? { ...b } : undefined;
+    if (!b) return { ...a };
+    const cachedTokens = a.cachedTokens !== undefined || b.cachedTokens !== undefined
+        ? (a.cachedTokens ?? 0) + (b.cachedTokens ?? 0)
+        : undefined;
+    const reasoningTokens = a.reasoningTokens !== undefined || b.reasoningTokens !== undefined
+        ? (a.reasoningTokens ?? 0) + (b.reasoningTokens ?? 0)
+        : undefined;
+    return {
+        inputTokens: a.inputTokens + b.inputTokens,
+        outputTokens: a.outputTokens + b.outputTokens,
+        totalTokens: a.totalTokens + b.totalTokens,
+        ...(cachedTokens !== undefined ? { cachedTokens } : {}),
+        ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+    };
+}
+
+/** A multimodal attachment passed alongside a prompt (image, PDF, audio or document). */
+export interface Attachment {
+    readonly kind: 'image' | 'file';
+    readonly mediaType: string;
+    /** Base64 string, `data:` URL, `http(s):` URL, or raw bytes. */
+    readonly data: string | Uint8Array;
+    readonly name?: string;
+}
+
+/** A user-defined tool passed to `agent()` from TypeScript or `.spl` code. */
+export interface CustomTool<I = any, O = unknown> {
+    readonly name: string;
+    readonly description: string;
+    readonly input: Type<I> | JsonSchema;
+    execute(input: I): O | Promise<O>;
 }
 
 export interface Randomness {
@@ -80,11 +129,21 @@ export interface LlmRequest {
     randomness?: Randomness;
     /** Maximum generated tokens per model turn, including reasoning. */
     tokens?: number;
+    /** Maximum model turns per agent call. */
+    maxSteps?: number;
+    /** JSON Schema forwarded to native provider structured output parameters when supported. */
+    responseSchema?: Record<string, unknown>;
+    /** Multimodal inputs (images, PDFs, files) sent alongside the prompt. */
+    attachments?: readonly Attachment[];
     showReasoning: boolean;
     /** Live preview only; the returned response remains authoritative. */
     onStream?: (update: LlmStreamUpdate) => void;
     restrictions: Restrictions;
     tools: ToolHost;
+    /** Custom TypeScript tools available to an explicit `agent()` call. */
+    customTools?: readonly CustomTool[];
+    /** Controls which built-in tools are registered for an explicit `agent()` call (`true` by default). */
+    builtinTools?: boolean | readonly ToolName[];
     /** Agent blocks: tools that act on the block's variables. Each call runs at once through `invokeAction`. */
     runtimeTools?: readonly RuntimeTool[];
     invokeAction?: (action: RuntimeAction) => Promise<unknown>;
@@ -95,6 +154,10 @@ export interface LlmResponse {
     reasoning?: string;
     /** Effective model and parameters, recorded in the logs. */
     effective: Record<string, unknown>;
+    /** Aggregated token usage across all turns of this call, when reported by the provider. */
+    usage?: TokenUsage;
+    /** Estimated USD cost of this call, when usage and model pricing are known. */
+    costUsd?: number;
     /** Recorded runtime decision, replayed through invokeAction before continuing. */
     action?: RuntimeAction;
     /** MCP results retained in traces. */

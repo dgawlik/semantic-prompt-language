@@ -1,13 +1,16 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { generateFunctions } from './codegen.js';
 import { Failure, SuccessSignal } from './errors.js';
 import { judge, type JudgeResult } from './judge.js';
+import type { Attachment, CustomTool } from './llm.js';
 import type { LogLevel } from './logger.js';
 import * as markdownLibrary from './markdown-lib.js';
 import type { RestrictKind } from './restrict.js';
-import { currentContext, display, runInContext, type Context, type DecisionOptions, type GenerateOptions, type GenerationKind } from './runtime.js';
+import { activeContext, currentContext, display, runInContext, type Context, type CustomToolsMap, type DecisionOptions, type GenerateOptions, type GenerationKind } from './runtime.js';
 import type { ToolName } from './tools.js';
 import {
-    Any, Bool, Char, Dict, Enum, Float, Fn, Int, JsonSchema, List, Nil, Nullable, Str, Struct, Typedef, Union, t, validate,
+    Any, Bool, Char, Dict, Enum, Float, Fn, Int, JsonSchema, List, Nil, Nullable, Str, Struct, Typedef, Union, isType, t, validate,
     type Type,
 } from './types.js';
 
@@ -16,6 +19,7 @@ export { Failure } from './errors.js';
 export { configure, type ConfigureOptions } from './configure.js';
 export { judge, type JudgeResult };
 export { markdownLibrary as markdown };
+export type { Attachment, CustomTool, CustomToolsMap };
 
 type Awaitable<T> = T | Promise<T>;
 
@@ -30,9 +34,105 @@ export type GenerationResult<O> =
     : O extends { fmt: 'json' } ? unknown
     : string;
 
-export type AskOptions = GenerateOptions;
+export type AskOptions = Omit<GenerateOptions, 'maxSteps' | 'tools' | 'builtinTools'>;
 export type AgentOptions = Omit<GenerateOptions, 'seed' | 'temperature' | 'topP' | 'repairs'>;
 export type CodegenOptions = Pick<GenerateOptions, 'model' | 'reasoning' | 'hide' | 'tokens'>;
+
+export interface AttachOptions {
+    mediaType?: string;
+    kind?: 'image' | 'file';
+    name?: string;
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.pdf': 'application/pdf',
+    '.txt': 'text/plain',
+    '.md': 'text/markdown',
+    '.csv': 'text/csv',
+    '.json': 'application/json',
+    '.html': 'text/html',
+    '.xml': 'application/xml',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+};
+
+function inferMediaType(target: string): string | undefined {
+    const clean = target.split(/[?#]/, 1)[0];
+    return MIME_BY_EXT[path.extname(clean).toLowerCase()];
+}
+
+/**
+ * Defines a typed custom tool for `agent(..., { tools: [...] })`.
+ *
+ *     const lookup = defineTool({
+ *         name: 'lookupOrder',
+ *         description: 'Look up an order by id',
+ *         input: Struct('LookupInput', { id: Str }),
+ *         execute: ({ id }) => orders[id] ?? null,
+ *     });
+ */
+export function defineTool<I, O = unknown>(spec: CustomTool<I, O>): CustomTool<I, O> {
+    if (!spec || typeof spec !== 'object') throw runtimeError('defineTool() requires a tool specification object');
+    if (typeof spec.name !== 'string' || !/^[A-Za-z_][\w.-]*$/.test(spec.name)) {
+        throw runtimeError(`defineTool(): invalid tool name '${String(spec.name)}'`);
+    }
+    if (typeof spec.description !== 'string' || !spec.description.trim()) {
+        throw runtimeError(`defineTool('${spec.name}'): description must be a non-empty string`);
+    }
+    if (!isType(spec.input) && (typeof spec.input !== 'object' || spec.input === null || Array.isArray(spec.input))) {
+        throw runtimeError(`defineTool('${spec.name}'): input must be a Type or JSON Schema object`);
+    }
+    if (typeof spec.execute !== 'function') {
+        throw runtimeError(`defineTool('${spec.name}'): execute must be a function`);
+    }
+    return spec;
+}
+
+/**
+ * Creates a multimodal `Attachment` from a local file path, `http(s):` URL, `data:` URL or raw bytes.
+ * Local paths and URLs honor active `restrict` rules when called inside a workflow.
+ */
+export function attach(source: string | Uint8Array, options: AttachOptions = {}): Attachment {
+    if (source instanceof Uint8Array) {
+        const mediaType = options.mediaType?.trim();
+        if (!mediaType) throw runtimeError('attach(bytes, { mediaType }) requires mediaType');
+        const kind = options.kind ?? (mediaType.startsWith('image/') ? 'image' : 'file');
+        return { kind, mediaType, data: source, ...(options.name ? { name: options.name } : {}) };
+    }
+    if (typeof source !== 'string' || !source.trim()) {
+        throw runtimeError('attach() requires a file path, URL, data URL, or Uint8Array');
+    }
+    const context = activeContext();
+    if (/^https?:\/\//i.test(source)) {
+        context?.restrictions.checkUrl(source);
+        const mediaType = options.mediaType?.trim() || inferMediaType(source) || (options.kind === 'image' ? 'image/png' : 'application/octet-stream');
+        const kind = options.kind ?? (mediaType.startsWith('image/') ? 'image' : 'file');
+        return { kind, mediaType, data: source, ...(options.name ? { name: options.name } : {}) };
+    }
+    const dataUrl = /^data:([^;,]+);base64,/i.exec(source);
+    if (dataUrl) {
+        const mediaType = options.mediaType?.trim() || dataUrl[1];
+        const kind = options.kind ?? (mediaType.startsWith('image/') ? 'image' : 'file');
+        return { kind, mediaType, data: source, ...(options.name ? { name: options.name } : {}) };
+    }
+    const resolved = context
+        ? context.restrictions.checkPath(source, 'read')
+        : path.resolve(process.cwd(), source);
+    let data: Buffer;
+    try {
+        data = fs.readFileSync(resolved);
+    } catch (error) {
+        throw new Failure('tool_error', `attach '${source}': ${(error as Error).message}`);
+    }
+    const mediaType = options.mediaType?.trim() || inferMediaType(resolved) || 'application/octet-stream';
+    const kind = options.kind ?? (mediaType.startsWith('image/') ? 'image' : 'file');
+    return { kind, mediaType, data, name: options.name ?? path.basename(resolved) };
+}
 
 /** `fs` when given a string or list; otherwise one entry per kind. */
 export type RestrictSpec = string | readonly string[] | Partial<Record<RestrictKind, string | readonly string[]>>;
@@ -235,6 +335,7 @@ export const env: Readonly<Record<string, string | undefined>> = new Proxy({} as
 export function library(): Record<string, unknown> {
     return {
         ask, agent, human, decision, enforce, forbid, restrict, success, fail, assert, log, codegen,
+        defineTool, attach,
         readFile, writeFile, webFetch, webSearch, shell, args, env, validate, markdown: markdownLibrary, judge, Failure,
         t, Str, Int, Float, Bool, Char, Nil, Any, Dict, Fn, List, Union, Nullable, Enum, Struct, Typedef, JsonSchema,
     };

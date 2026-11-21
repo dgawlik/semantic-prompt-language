@@ -71,5 +71,28 @@
       "*//"
     ],
     "description": "Prose in Markdown, rendered by `spl doc`; top level only"
+  },
+  "Custom tool": {
+    "prefix": "tool",
+    "body": [
+      "const ${1:lookup} = defineTool({",
+      "\tname: '${1:lookup}',",
+      "\tdescription: '${2:Describe what the tool does}',",
+      "\tinput: Struct('${3:LookupInput}', {",
+      "\t\t${4:query}: Str.describe('${5:Input parameter}'),",
+      "\t}),",
+      "\texecute: ({ ${4:query} }) => {",
+      "\t\t$0",
+      "\t},",
+      "});"
+    ],
+    "description": "Define a typed custom tool for agent(..., { tools })"
+  },
+  "Attachment": {
+    "prefix": "attach",
+    "body": [
+      "attach('${1:./file.pdf}')"
+    ],
+    "description": "Create a multimodal attachment (image, PDF or file) for ask() or agent()"
   }
 }

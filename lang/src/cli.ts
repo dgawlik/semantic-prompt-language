@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createInterface, type Interface } from 'node:readline';
 import { Writable } from 'node:stream';
 import { AiBackend } from './ai.js';
-import { AuthError, login, logout, parseProvider, type Provider } from './auth.js';
+import { AuthError, login, logout, parseProvider, parseProviderId, type Provider, type ProviderId } from './auth.js';
 import { Failure, SplSyntaxError } from './errors.js';
 import { LlmError, type LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
@@ -52,7 +52,10 @@ Options for run:
                           and each top-level statement; n runs the next step, v shows the top-level
                           variables, c continues to the end, e exits immediately. Needs a terminal.
   --model <id>            model override (takes precedence over file defaults and block settings)
-  --provider <name>       openai | anthropic | google; model IDs may use provider/model
+  --provider <name>       openai | anthropic | google | openai-compatible; model IDs may use provider/model
+  --base-url <url>        custom base URL for the selected provider (or openai-compatible server)
+  --retries <N>           retry transient 429/5xx/network errors up to N times with backoff (default: 0)
+  --max-steps <N>         maximum model turns per agent call
   --arg <value>           script argument exposed in args (repeatable; also --arg=value)
   --human <answer>        answer a human question without prompting (repeatable, in question order)
                           Remaining questions are asked in the terminal view, or read one line
@@ -217,6 +220,9 @@ async function main(): Promise<number> {
             silent: { type: 'boolean' },
             model: { type: 'string' },
             provider: { type: 'string' },
+            'base-url': { type: 'string' },
+            retries: { type: 'string' },
+            'max-steps': { type: 'string' },
             arg: { type: 'string', multiple: true },
             human: { type: 'string', multiple: true },
             mcp: { type: 'string' },
@@ -250,18 +256,28 @@ async function main(): Promise<number> {
         process.stdout.write(version() + '\n');
         return 0;
     }
-    let provider: Provider | undefined;
-    try { provider = values.provider === undefined ? undefined : parseProvider(values.provider); }
+    let provider: ProviderId | undefined;
+    try { provider = values.provider === undefined ? undefined : parseProviderId(values.provider); }
     catch (error) { return usageError((error as Error).message); }
+    const baseUrl = values['base-url'];
+    if (baseUrl !== undefined && !baseUrl.trim()) usageError('--base-url requires a non-empty URL');
+    const maxRetries = values.retries === undefined ? 0 : Number(values.retries);
+    if (!Number.isInteger(maxRetries) || maxRetries < 0) usageError('--retries must be a non-negative integer');
+    const maxSteps = values['max-steps'] === undefined ? undefined : Number(values['max-steps']);
+    if (maxSteps !== undefined && (!Number.isInteger(maxSteps) || maxSteps < 1)) usageError('--max-steps must be a positive integer');
     const [command, file] = positionals;
     if (command === 'login' || command === 'logout') {
         if (positionals.length > 2 || (file !== undefined && provider !== undefined)) {
             usageError(`use '${command} [provider]' or '${command} --provider <name>'`);
         }
-        try { provider ??= file === undefined ? undefined : parseProvider(file); }
+        let authProvider: Provider | undefined;
+        try {
+            const raw = provider ?? file;
+            authProvider = raw === undefined ? undefined : parseProvider(raw);
+        }
         catch (error) { return usageError((error as Error).message); }
-        if (command === 'login' && !provider) usageError('login requires a provider: openai, anthropic, or google');
-        return command === 'login' ? loginCommand(provider!) : logoutCommand(provider);
+        if (command === 'login' && !authProvider) usageError('login requires a provider: openai, anthropic, or google');
+        return command === 'login' ? loginCommand(authProvider!) : logoutCommand(authProvider);
     }
     if (command === 'eval') {
         const cwd = path.resolve(values.cwd ?? process.cwd());
@@ -303,11 +319,12 @@ async function main(): Promise<number> {
                 concurrency,
                 model: values.model,
                 judgeModel: values['judge-model'],
+                maxSteps,
                 trace: values.trace,
                 runtimeFingerprint,
                 traceConfig: { model: values.model ?? null, judgeModel: values['judge-model'] ?? null, provider: values.provider ?? null, mcp: mcpServers ?? null },
                 logger,
-                backendFactory: log => new AiBackend({ logger: log, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider }),
+                backendFactory: log => new AiBackend({ logger: log, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider, baseUrl, maxRetries, maxSteps }),
             });
             if (values.json) {
                 process.stdout.write(JSON.stringify(suite, null, 2) + '\n');
@@ -414,7 +431,7 @@ async function main(): Promise<number> {
             title: shown(path.resolve(file)), source, traceFile: shown(traceTarget.jsonl),
         }), 'utf8');
     };
-    const backend: LlmBackend = new AiBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider });
+    const backend: LlmBackend = new AiBackend({ logger, cwd, timeoutMs: timeoutSec * 1000, mcpServers, provider, baseUrl, maxRetries, maxSteps });
     let result: RunResult | undefined;
     let interrupted = false;
     let input: Interface | undefined;
@@ -481,7 +498,7 @@ async function main(): Promise<number> {
         try {
             result = await run(source, {
                 backend, logger, trace, file: path.resolve(file), cwd,
-                model: values.model, args: values.arg, human,
+                model: values.model, maxSteps, args: values.arg, human,
                 beforeStep: values.debug ? async step => { await presentation!.pause(step); } : undefined,
             });
         } finally {

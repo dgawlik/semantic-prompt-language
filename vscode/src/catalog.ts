@@ -5,8 +5,8 @@ export interface Help {
 
 /** The library every `.spl` file has in scope. Names must match `library()` in lang/src/library.ts. */
 export const library: Record<string, Help> = {
-    ask: { signature: 'ask(prompt, options?)', description: 'Ask the model for a value; no tools. Returns trimmed text, or the parsed value with `fmt` or `schema`. Options: len, fmt, schema, repairs, reasoning, hide, model, tokens, seed, temperature, topP. Also usable as a template tag: ask`Summarize ${notes}`.' },
-    agent: { signature: 'agent(prompt, options?)', description: 'Let the model act with the runtime tools (readFile, writeFile, webFetch, webSearch, shell) and configured MCP tools, within active restrictions. Never repaired, so actions are not repeated.' },
+    ask: { signature: 'ask(prompt, options?)', description: 'Ask the model for a value; no tools. Returns trimmed text, or the parsed value with `fmt` or `schema`. Options: len, fmt, schema, repairs, reasoning, hide, model, tokens, attachments, seed, temperature, topP. Also usable as a template tag: ask`Summarize ${notes}`.' },
+    agent: { signature: 'agent(prompt, options?)', description: 'Let the model act with built-in tools (readFile, writeFile, webFetch, webSearch, shell), custom `tools`, and configured MCP tools, within active restrictions. Options: tools, builtinTools, maxSteps, attachments, schema, fmt, len, reasoning, hide, model, tokens. Never repaired, so actions are not repeated.' },
     human: { signature: 'human(question)', description: 'Ask a person and resolve to their answer. The CLI reads stdin or repeatable --human answers; traces replay recorded answers.' },
     decision: { signature: 'decision({ question, evidence?, cutoff? | labels? })', description: 'Answer a question about the evidence with a boolean: true when P(yes) > cutoff (0.5 by default), or the true/false meaning of the chosen label, as in labels: { red: true, orange: false }. OpenAI and Google use their decision endpoints with fixed models (gpt-6-luna, gemini-decision-1); Anthropic simulates one.' },
     enforce: { signature: 'enforce(text, () => ...)', description: 'Add positive prompt guidance to every model call made inside the callback. Guidance shapes prompts; it does not validate answers.' },
@@ -17,6 +17,8 @@ export const library: Record<string, Help> = {
     assert: { signature: 'assert(condition, message?)', description: 'Raise assertion_failed when the condition is falsy.' },
     log: { signature: 'log(...values)', description: 'Write values to the run log (stderr) at info level. log.error(...) and log.debug(...) select other levels.' },
     codegen: { signature: 'codegen(description, options?)', description: 'Generate a JavaScript function from a description and resolve to it. The code is cached beside the workflow and reused on later runs.' },
+    defineTool: { signature: 'defineTool({ name, description, input, execute })', description: 'Define a typed custom tool for agent(..., { tools }). Accepts a Type or JSON Schema for input.' },
+    attach: { signature: 'attach(pathOrUrlOrBytes, options?)', description: 'Create a multimodal attachment (image, PDF or file) for ask() or agent() attachments. Local paths and URLs honor active restrictions.' },
     readFile: { signature: 'readFile(path)', description: 'Read a UTF-8 file. An exact tool: it never calls a model and is subject to active restrictions.' },
     writeFile: { signature: 'writeFile(path, content)', description: 'Create or overwrite a UTF-8 file, creating parent folders. Subject to active restrictions.' },
     webFetch: { signature: 'webFetch(url)', description: 'Fetch an http(s) URL and resolve to the response text. Subject to active restrictions.' },

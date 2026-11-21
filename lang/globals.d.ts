@@ -28,6 +28,10 @@ declare global {
     const log: typeof spl.log;
     /** Generates a JavaScript function from a description. */
     const codegen: typeof spl.codegen;
+    /** Defines a typed custom tool for `agent(..., { tools })`. */
+    const defineTool: typeof spl.defineTool;
+    /** Creates a multimodal attachment (image, PDF or file) from a path, URL or bytes. */
+    const attach: typeof spl.attach;
     /** Reads a UTF-8 text file, subject to `restrict`. */
     const readFile: typeof spl.readFile;
     /** Creates or overwrites a UTF-8 text file, subject to `restrict`. */

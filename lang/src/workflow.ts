@@ -20,6 +20,12 @@ export interface RunOptions {
     cwd?: string;
     /** Overrides file defaults and per-call models. */
     model?: string;
+    /** Default step limit per agent call. */
+    maxSteps?: number;
+    /** Maximum cumulative tokens allowed across all model calls. */
+    maxTotalTokens?: number;
+    /** Maximum cumulative estimated USD cost allowed across all model calls. */
+    maxCostUsd?: number;
     /** Script arguments exposed as the read-only `args`; defaults to an empty list. */
     args?: readonly string[];
     trace?: Trace;
@@ -48,6 +54,7 @@ export async function run(source: string, options: RunOptions): Promise<RunResul
     const { imports, scan } = compile(source, { eval: /\.eval\.spl$/i.test(options.file ?? '') });
     const runtime = new Runtime({
         backend: options.backend, logger, cwd: options.cwd, model: options.model,
+        maxSteps: options.maxSteps, maxTotalTokens: options.maxTotalTokens, maxCostUsd: options.maxCostUsd,
         args: options.args, trace, human: options.human, beforeStep: options.beforeStep,
     });
     const file = path.resolve(runtime.cwd, options.file ?? 'workflow.spl');

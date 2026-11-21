@@ -442,6 +442,56 @@ test('definitions, references, rename and symbols connect code, @names and outpu
     assert.equal(hover(short.context, { line: 1, character: 7 })?.range?.start.character, 0, 'the key is explained as a key');
 });
 
+test('defineTool, attach, agent tool options and maxSteps validate, complete and hover', () => {
+    const names = labels('<|>');
+    assert.ok(names.includes('defineTool'), 'defineTool completes as a global');
+    assert.ok(names.includes('attach'), 'attach completes as a global');
+
+    assert.match(hoverText('const t = define<|>Tool({ name: "x", description: "d", input: Str, execute: () => 1 });'), /defineTool/);
+    assert.match(hoverText('const a = att<|>ach("./invoice.pdf");'), /attach/);
+
+    const toolCode = lines(
+        "const lookup = defineTool({",
+        "    name: 'lookup',",
+        "    description: 'Look up an item',",
+        "    input: Struct('LookupInput', { id: Str, limit: Int }),",
+        "    execute: ({ id, limit }) => id.toUpperCase() + limit.toFixed(0),",
+        "});",
+        "const img = attach('./photo.png');",
+        "await agent('Find it', { tools: [lookup], builtinTools: ['readFile'], maxSteps: 4, attachments: [img] });",
+        "await ask('Describe it', { attachments: [img] });",
+    );
+    assert.deepEqual(brief(diagnostics(open(toolCode).context)), [], 'valid defineTool, attach and agent options have no diagnostics');
+
+    const inferred = labels(lines(
+        "const lookup = defineTool({",
+        "    name: 'lookup',",
+        "    description: 'Look up',",
+        "    input: Struct('LookupInput', { id: Str }),",
+        "    execute: ({ id }) => id.<|>,",
+        "});",
+    ));
+    assert.ok(inferred.includes('toUpperCase'), 'defineTool infers input parameter types inside execute()');
+
+    const agentOpts = labels("await agent('Act', { <|> });");
+    for (const opt of ['tools', 'builtinTools', 'maxSteps', 'attachments']) {
+        assert.ok(agentOpts.includes(opt), `agent() completes option ${opt}`);
+    }
+    const builtins = labels("await agent('Act', { builtinTools: ['<|>'] });");
+    for (const tool of ['readFile', 'writeFile', 'webFetch', 'webSearch', 'shell']) {
+        assert.ok(builtins.includes(tool), `builtinTools completes ${tool}`);
+    }
+    const askOpts = labels("await ask('Hi', { <|> });");
+    assert.ok(askOpts.includes('attachments'), 'ask() completes attachments');
+    assert.ok(!askOpts.includes('maxSteps') && !askOpts.includes('tools') && !askOpts.includes('builtinTools'), 'ask() omits agent-only options');
+
+    assert.ok(diagnostics(open("await ask('Hi', { maxSteps: 2 });").context).length > 0, 'maxSteps on ask() is flagged as a type error');
+
+    const agentHeader = labels('---\nmode: agent\n<|>\n---');
+    assert.ok(agentHeader.includes('maxSteps'), 'agent block header completes maxSteps');
+    assert.match(hoverText('---\nmode: agent\nmax<|>Steps: 5\n\nGo\n---'), /maxSteps[\s\S]*Maximum model turns/);
+});
+
 test('eval files (*.eval.spl) type-check eval blocks and judge assertions', () => {
     const evalUri = pathToFileURL(path.join(base, 'suite.eval.spl')).href;
     const evalSource = lines(

@@ -49,6 +49,7 @@ interface AskOptions<T> extends BlockOptions {
 
 interface AgentOptions extends BlockOptions {
     restrict?: Partial<Record<RestrictKind, string | readonly string[]>>;
+    maxSteps?: number;
 }
 
 /** An invalid save may be corrected this many times per output before the block fails. */
@@ -241,7 +242,7 @@ class AgentBlock<O> extends Block<O> {
     protected async run(local: Context): Promise<O> {
         const { runtime } = local;
         const { trace } = runtime;
-        const { text, line, model, reasoning, hide, tokens } = this.options;
+        const { text, line, model, reasoning, hide, tokens, maxSteps } = this.options as AgentOptions;
         const saved = new Map<string, unknown>();
         const rejected = new Map<string, number>();
         const history: unknown[] = [];
@@ -313,6 +314,7 @@ class AgentBlock<O> extends Block<O> {
                 reasoningEffort: reasoning ?? local.defaults.reasoning,
                 showReasoning: !(hide ?? local.defaults.hide ?? false),
                 ...(tokens ?? local.defaults.tokens ? { tokens: tokens ?? local.defaults.tokens } : {}),
+                ...(maxSteps ?? local.defaults.maxSteps ?? runtime.maxSteps ? { maxSteps: maxSteps ?? local.defaults.maxSteps ?? runtime.maxSteps } : {}),
                 restrictions: local.restrictions, tools: new ToolHost(local.restrictions, runtime.cwd),
                 invokeAction: async action => {
                     try {

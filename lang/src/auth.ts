@@ -2,9 +2,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { inferProvider } from './models.js';
 
 export const PROVIDERS = ['openai', 'anthropic', 'google'] as const;
 export type Provider = typeof PROVIDERS[number];
+export type ProviderId = Provider | 'openai-compatible';
 
 export const PROVIDER_ENV: Record<Provider, readonly string[]> = {
     openai: ['OPENAI_API_KEY'],
@@ -23,6 +25,11 @@ export class AuthError extends Error {}
 export function parseProvider(value: string): Provider {
     if (value === 'openai' || value === 'anthropic' || value === 'google') return value;
     throw new AuthError(`unknown provider '${value}'; expected ${PROVIDERS.join(', ')}`);
+}
+
+export function parseProviderId(value: string): ProviderId {
+    if (value === 'openai-compatible') return value;
+    return parseProvider(value);
 }
 
 export function credentialsPath(): string {
@@ -95,25 +102,35 @@ function environmentKey(provider: Provider): { key: string; source: string } | u
     return undefined;
 }
 
-export function resolveProvider(model?: string, explicit?: Provider): { provider: Provider; model: string; apiKey: string } {
+export interface ResolveProviderOptions {
+    apiKey?: string;
+    baseUrl?: string;
+    baseUrls?: Partial<Record<ProviderId, string>>;
+}
+
+export function resolveProvider(
+    model?: string,
+    explicit?: ProviderId,
+    options?: ResolveProviderOptions,
+): { provider: ProviderId; model: string; apiKey: string; baseUrl?: string } {
     const credentials = readCredentials();
-    let modelProvider: Provider | undefined;
+    let modelProvider: ProviderId | undefined;
     if (model !== undefined) {
         if (!model.trim()) throw new AuthError('model must not be empty');
         const slash = model.indexOf('/');
         if (slash !== -1) {
-            modelProvider = parseProvider(model.slice(0, slash));
+            modelProvider = parseProviderId(model.slice(0, slash));
             model = model.slice(slash + 1);
             if (!model.trim()) throw new AuthError('model must not be empty');
-        } else if (model.startsWith('claude-')) modelProvider = 'anthropic';
-        else if (model.startsWith('gemini-')) modelProvider = 'google';
-        else if (/^(?:gpt-|chatgpt-|o[134](?:-|$))/.test(model)) modelProvider = 'openai';
+        } else {
+            modelProvider = inferProvider(model);
+        }
     }
     if (explicit && modelProvider && explicit !== modelProvider) {
         throw new AuthError(`model belongs to ${modelProvider}, not the selected provider ${explicit}`);
     }
-    let provider = explicit ?? modelProvider
-        ?? (process.env.SPL_PROVIDER ? parseProvider(process.env.SPL_PROVIDER) : undefined)
+    let provider: ProviderId | undefined = explicit ?? modelProvider
+        ?? (process.env.SPL_PROVIDER ? parseProviderId(process.env.SPL_PROVIDER) : undefined)
         ?? credentials.provider;
     if (!provider) {
         const configured = PROVIDERS.filter(name => environmentKey(name) || credentials.keys[name]);
@@ -121,9 +138,17 @@ export function resolveProvider(model?: string, explicit?: Provider): { provider
         provider = configured[0];
     }
     if (!provider) throw new AuthError('no provider configured; set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_GENERATIVE_AI_API_KEY, or run spl login <provider>');
-    const apiKey = environmentKey(provider)?.key ?? credentials.keys[provider];
+    const explicitBaseUrl = options?.baseUrl ?? options?.baseUrls?.[provider];
+    if (provider === 'openai-compatible') {
+        const baseUrl = explicitBaseUrl ?? process.env.SPL_OPENAI_COMPATIBLE_BASE_URL?.trim();
+        if (!baseUrl) throw new AuthError('openai-compatible provider requires baseUrl (or SPL_OPENAI_COMPATIBLE_BASE_URL)');
+        if (!model) throw new AuthError('openai-compatible provider requires an explicit model name');
+        const apiKey = options?.apiKey ?? process.env.SPL_OPENAI_COMPATIBLE_API_KEY?.trim() ?? 'no-key';
+        return { provider, model, apiKey, baseUrl };
+    }
+    const apiKey = options?.apiKey ?? environmentKey(provider)?.key ?? credentials.keys[provider];
     if (!apiKey) throw new AuthError(`no API key for ${provider}; set ${PROVIDER_ENV[provider][0]} or run spl login ${provider}`);
-    return { provider, model: model ?? DEFAULT_MODELS[provider], apiKey };
+    return { provider, model: model ?? DEFAULT_MODELS[provider], apiKey, ...(explicitBaseUrl ? { baseUrl: explicitBaseUrl } : {}) };
 }
 
 export interface AuthStatus {

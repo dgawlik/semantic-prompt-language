@@ -1,10 +1,11 @@
 // The library: everything a `.spl` file can use without importing it.
 export {
     ask, agent, human, decision, enforce, forbid, restrict, success, fail, assert, log, codegen,
+    defineTool, attach,
     readFile, writeFile, webFetch, webSearch, shell, args, env, markdown, configure, validate, judge,
     t, Str, Int, Float, Bool, Char, Nil, Any, Dict, Fn, List, Union, Nullable, Enum, Struct, Typedef, JsonSchema,
-    type AskOptions, type AgentOptions, type CodegenOptions, type ConfigureOptions, type DecisionOptions,
-    type GenerationResult, type JudgeResult, type RestrictSpec,
+    type AskOptions, type AgentOptions, type AttachOptions, type CodegenOptions, type ConfigureOptions, type DecisionOptions,
+    type GenerationResult, type JudgeResult, type RestrictSpec, type Attachment, type CustomTool, type CustomToolsMap,
 } from './library.js';
 export { Type, StructType, isType, type Infer, type InferShape, type Shape, type Annotations, type TypeKind } from './types.js';
 export { Failure, SuccessSignal, SplSyntaxError, type FailurePayload, type StatusCode, type SyntaxProblem } from './errors.js';
@@ -23,8 +24,9 @@ export { Runtime, type RuntimeOptions, type GenerateOptions, type HumanHandler, 
 export { Logger, type LogLevel, type LoggerOptions } from './logger.js';
 export type { LogEvent, LogEventSink, BodySegment, ModelInteraction, ModelStreamEvent, ModelStreamSink, StateChange, BindingDelta, BindingReference, ScopeReference, ObservedValue, ToolUse } from './log-events.js';
 export { AiBackend, type AiBackendOptions } from './ai.js';
+export { resolveModelCapabilities, registerModelCapabilities, estimateCostUsd, inferProvider, type ModelCapabilities, type ModelCapabilityRule, type ModelPricing } from './models.js';
 export { Trace, TraceError, type TraceContext } from './trace.js';
 export { traceHtml, tracePaths, type TraceHtmlOptions, type TracePaths } from './trace-html.js';
 export { loadMcpConfig, type McpServers } from './mcp.js';
-export { login, logout, authStatus, AuthError, type Provider } from './auth.js';
-export type { DecisionRequest, DecisionResponse, LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, ReasoningLevel, RuntimeAction, RuntimeTool } from './llm.js';
+export { login, logout, authStatus, AuthError, parseProviderId, type Provider, type ProviderId } from './auth.js';
+export type { DecisionRequest, DecisionResponse, LlmBackend, LlmRequest, LlmResponse, LlmStreamUpdate, Randomness, ReasoningLevel, RuntimeAction, RuntimeTool, TokenUsage } from './llm.js';

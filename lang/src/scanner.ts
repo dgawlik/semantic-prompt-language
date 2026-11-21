@@ -37,6 +37,7 @@ export const HEADER_KEYS: readonly HeaderKey[] = [
     { name: 'forbid', applies: 'all', fileDefault: true, description: 'Guidance on what the model must avoid: a string or a list of strings.' },
     { name: 'hide', applies: 'all', fileDefault: true, values: ['true', 'false'], description: 'Hide reasoning in logs.' },
     { name: 'tokens', applies: 'all', fileDefault: true, description: 'Maximum generated tokens per model turn.' },
+    { name: 'maxSteps', applies: 'agent', fileDefault: true, description: 'Maximum model turns per agent block.' },
     { name: 'restrict', applies: 'agent', description: 'Limits for this block: `{ fs, exec, net, mcp }`.' },
     { name: 'outputVar', applies: 'ask', description: 'Name of the output variable; `=name` assigns an existing `let`.' },
     { name: 'outputType', applies: 'ask', description: 'Type expression the answer is coerced to; `Str` by default.' },
@@ -215,6 +216,7 @@ function invalid(key: string, value: unknown): string | undefined {
         case 'forbid': return strings(value) ? undefined : 'must be a string or a list of strings';
         case 'hide': return typeof value === 'boolean' ? undefined : 'must be true or false';
         case 'tokens': return Number.isSafeInteger(value) && (value as number) > 0 ? undefined : 'must be a positive integer';
+        case 'maxSteps': return Number.isSafeInteger(value) && (value as number) > 0 ? undefined : 'must be a positive integer';
         case 'restrict': {
             if (strings(value)) return undefined;
             const entries = typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.entries(value) : [];

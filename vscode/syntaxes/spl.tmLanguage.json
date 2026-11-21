@@ -54,7 +54,7 @@
     },
     "header": {
       "name": "meta.header.spl",
-      "begin": "^(\\s*)(mode|model|reasoning|enforce|forbid|hide|tokens|restrict|outputVar|repairs|seed|temperature|topP)\\s*(:)(?=\\s|$)",
+      "begin": "^(\\s*)(mode|model|reasoning|enforce|forbid|hide|tokens|maxSteps|restrict|outputVar|repairs|seed|temperature|topP)\\s*(:)(?=\\s|$)",
       "beginCaptures": {
         "2": { "name": "entity.name.tag.header.spl" },
         "3": { "name": "punctuation.separator.key-value.spl" }

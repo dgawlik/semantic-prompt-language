@@ -1,16 +1,23 @@
 import { createInterface } from 'node:readline';
-import type { Provider } from './auth.js';
+import type { ProviderId } from './auth.js';
 import { Failure } from './errors.js';
 import type { LlmBackend } from './llm.js';
 import { Logger, type LogLevel } from './logger.js';
 import type { McpServers } from './mcp.js';
+import type { ModelCapabilityRule } from './models.js';
 import { Runtime, ambientFactory, setAmbient, type Context, type HumanHandler } from './runtime.js';
 import type { Trace } from './trace.js';
 
 export interface ConfigureOptions {
     /** Default model for calls that do not name one. */
     model?: string;
-    provider?: Provider;
+    provider?: ProviderId;
+    /** Explicit API key override. */
+    apiKey?: string;
+    /** Custom base URL for the selected provider (or `openai-compatible` server). */
+    baseUrl?: string;
+    /** Per-provider custom base URL overrides. */
+    baseUrls?: Partial<Record<ProviderId, string>>;
     cwd?: string;
     args?: readonly string[];
     /** `silent`, `error`, `info` (default) or `debug`. */
@@ -20,6 +27,20 @@ export interface ConfigureOptions {
     backend?: LlmBackend;
     timeoutMs?: number;
     mcpServers?: McpServers;
+    /** Pool MCP client connections across calls until `close()`. Default: `true`. */
+    poolMcp?: boolean;
+    /** Retry transient 429/5xx/network errors before turn output/tool execution. Default: `0`. */
+    maxRetries?: number;
+    /** Base delay in ms for exponential backoff retries. Default: `250`. */
+    retryDelayMs?: number;
+    /** Default maximum model turns per agent call. */
+    maxSteps?: number;
+    /** Maximum cumulative tokens across all model calls in this runtime. */
+    maxTotalTokens?: number;
+    /** Maximum cumulative estimated USD cost across all model calls in this runtime. */
+    maxCostUsd?: number;
+    /** Custom model capability/pricing overrides. */
+    modelCapabilities?: readonly ModelCapabilityRule[];
     /** An open trace: effects are recorded and replayed. */
     trace?: Trace;
     /** Answers `human()` and agent questions. Defaults to reading a line from stdin. */
@@ -49,7 +70,16 @@ export function createRuntime(options: ConfigureOptions): Runtime {
             const { AiBackend } = await import('./ai.js');
             inner = new AiBackend({
                 logger, cwd, timeoutMs: options.timeoutMs ?? 300_000,
-                provider: options.provider, mcpServers: options.mcpServers,
+                provider: options.provider,
+                apiKey: options.apiKey,
+                baseUrl: options.baseUrl,
+                baseUrls: options.baseUrls,
+                mcpServers: options.mcpServers,
+                poolMcp: options.poolMcp,
+                maxRetries: options.maxRetries,
+                retryDelayMs: options.retryDelayMs,
+                maxSteps: options.maxSteps,
+                modelCapabilities: options.modelCapabilities,
             });
         }
         return inner;
@@ -67,6 +97,9 @@ export function createRuntime(options: ConfigureOptions): Runtime {
     };
     return new Runtime({
         backend, logger, cwd, defaultModel: options.model, args: options.args,
+        maxSteps: options.maxSteps,
+        maxTotalTokens: options.maxTotalTokens,
+        maxCostUsd: options.maxCostUsd,
         trace: options.trace, human: options.human ?? promptHuman,
     });
 }

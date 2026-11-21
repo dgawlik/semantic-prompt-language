@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { compile } from './compile.js';
 import { Failure, SplSyntaxError } from './errors.js';
 import type { EvalRegistration, EvalScope, JudgeResult } from './judge.js';
-import type { LlmBackend } from './llm.js';
+import { addTokenUsage, type LlmBackend, type TokenUsage } from './llm.js';
 import { importWorkflow } from './loader.js';
 import { Logger } from './logger.js';
 import { Runtime } from './runtime.js';
@@ -23,6 +23,8 @@ export interface EvalAttemptResult {
     pass: boolean;
     assertions: JudgeResult[];
     error?: string;
+    usage?: TokenUsage;
+    costUsd?: number;
     durationMs: number;
 }
 
@@ -31,6 +33,8 @@ export interface EvalCaseResult {
     name: string;
     pass: boolean;
     runs: EvalAttemptResult[];
+    usage?: TokenUsage;
+    costUsd?: number;
     durationMs: number;
 }
 
@@ -40,6 +44,8 @@ export interface EvalSuiteResult {
     passed: number;
     failed: number;
     results: EvalCaseResult[];
+    usage?: TokenUsage;
+    costUsd?: number;
     durationMs: number;
 }
 
@@ -51,6 +57,7 @@ export interface EvalRunOptions {
     concurrency?: number;
     model?: string;
     judgeModel?: string;
+    maxSteps?: number;
     trace?: string;
     runtimeFingerprint?: string;
     traceConfig?: unknown;
@@ -141,19 +148,24 @@ export async function runEvals(options: EvalRunOptions): Promise<EvalSuiteResult
             throw error;
         }
         const collector: EvalRegistration[] = [];
+        const discoveryBackend = options.backendFactory(new Logger('silent'));
         const discoveryRuntime = new Runtime({
-            backend: options.backendFactory(new Logger('silent')),
+            backend: discoveryBackend,
             logger: new Logger('silent'),
             cwd: options.cwd,
             model: options.model,
             judgeModel: options.judgeModel,
         });
         const url = `${pathToFileURL(file).href}?eval=${++evalLoads}`;
-        const mod = await importWorkflow(url, { source });
-        await discoveryRuntime.run(
-            () => (mod.default as (args: readonly string[]) => Promise<unknown>)([]),
-            { ...discoveryRuntime.root, evalCollector: collector },
-        );
+        try {
+            const mod = await importWorkflow(url, { source });
+            await discoveryRuntime.run(
+                () => (mod.default as (args: readonly string[]) => Promise<unknown>)([]),
+                { ...discoveryRuntime.root, evalCollector: collector },
+            );
+        } finally {
+            try { await discoveryBackend.close(); } catch { /* best-effort close */ }
+        }
         for (const evalCase of collector) {
             if (!options.filter || matchesFilter(evalCase.name, options.filter)) {
                 cases.push({ file, source, evalCase });
@@ -194,6 +206,7 @@ export async function runEvals(options: EvalRunOptions): Promise<EvalSuiteResult
                 cwd: options.cwd,
                 model: options.model,
                 judgeModel: options.judgeModel,
+                maxSteps: options.maxSteps,
                 trace,
             });
             const evalScope: EvalScope = {
@@ -235,11 +248,14 @@ export async function runEvals(options: EvalRunOptions): Promise<EvalSuiteResult
                 }
             }
             const pass = errorMessage === undefined && evalScope.results.every(r => r.pass);
+            const hasUsage = runtime.usage.totalTokens > 0;
             attemptResults[task.caseIndex][task.runIndex] = {
                 run: task.runIndex + 1,
                 pass,
                 assertions: evalScope.results,
                 ...(errorMessage !== undefined ? { error: errorMessage } : {}),
+                ...(hasUsage ? { usage: { ...runtime.usage } } : {}),
+                ...(runtime.estimatedCostUsd > 0 ? { costUsd: runtime.estimatedCostUsd } : {}),
                 durationMs: Date.now() - attemptStart,
             };
         }
@@ -248,15 +264,27 @@ export async function runEvals(options: EvalRunOptions): Promise<EvalSuiteResult
     const workers = Array.from({ length: Math.min(concurrency, Math.max(1, queue.length)) }, () => worker());
     await Promise.all(workers);
 
+    let suiteUsage: TokenUsage | undefined;
+    let suiteCostUsd = 0;
     const results: EvalCaseResult[] = cases.map((item, idx) => {
         const caseRuns = attemptResults[idx];
         const pass = caseRuns.every(r => r.pass);
         const durationMs = caseRuns.reduce((sum, r) => sum + r.durationMs, 0);
+        let caseUsage: TokenUsage | undefined;
+        let caseCostUsd = 0;
+        for (const r of caseRuns) {
+            if (r.usage) caseUsage = addTokenUsage(caseUsage, r.usage);
+            if (r.costUsd !== undefined) caseCostUsd += r.costUsd;
+        }
+        if (caseUsage) suiteUsage = addTokenUsage(suiteUsage, caseUsage);
+        suiteCostUsd += caseCostUsd;
         return {
             file: item.file,
             name: item.evalCase.name,
             pass,
             runs: caseRuns,
+            ...(caseUsage ? { usage: caseUsage } : {}),
+            ...(caseCostUsd > 0 ? { costUsd: caseCostUsd } : {}),
             durationMs,
         };
     });
@@ -269,6 +297,8 @@ export async function runEvals(options: EvalRunOptions): Promise<EvalSuiteResult
         passed,
         failed,
         results,
+        ...(suiteUsage ? { usage: suiteUsage } : {}),
+        ...(suiteCostUsd > 0 ? { costUsd: suiteCostUsd } : {}),
         durationMs: Date.now() - suiteStart,
     };
 }

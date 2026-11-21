@@ -302,7 +302,7 @@ it('close cancels an active model turn and prevents future calls', async () => {
     await expect(backend.call(request())).rejects.toThrow('closed');
 });
 
-it.each(['stdio', 'http', 'sse'] as const)('connects configured %s MCP tools, filters names, traces real results and closes clients', async type => {
+it.each(['stdio', 'http', 'sse'] as const)('connects configured %s MCP tools, filters names, traces real results and pools clients until close', async type => {
     const mcp = client();
     sdk.mcp.mockResolvedValue(mcp);
     const config = type === 'stdio'
@@ -314,6 +314,8 @@ it.each(['stdio', 'http', 'sse'] as const)('connects configured %s MCP tools, fi
     expect(requests[0].tools?.map(tool => tool.name)).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp0Search']);
     expect(mcp.callTool).toHaveBeenCalledWith(expect.objectContaining({ name: 'search', arguments: { query: 'SPL' }, options: expect.objectContaining({ timeout: 500 }) }));
     expect(JSON.parse(result.toolResults![0])).toMatchObject({ server: 'docs', tool: 'search', success: true, result: { content: [{ text: 'Verified documentation' }] } });
+    expect(mcp.close).not.toHaveBeenCalled();
+    await backend.close();
     expect(mcp.close).toHaveBeenCalledOnce();
     if (type !== 'stdio') expect(sdk.mcp).toHaveBeenCalledWith(expect.objectContaining({ transport: { type, url: config.url, headers: config.headers } }));
 });
@@ -334,11 +336,11 @@ it('names MCP tools mcp<Index><Tool>, numbering the servers that start and keepi
     expect(docs.callTool).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: 'search-docs' }));
     expect(issues.callTool).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ name: 'search' }));
     expect(result.toolResults!.map(item => JSON.parse(item))).toMatchObject([{ server: 'docs', tool: 'search-docs' }, { server: 'issues', tool: 'search' }]);
-    // A server the restrictions exclude takes no index.
-    sdk.mcp.mockResolvedValueOnce(client([tool('search')]));
+    // A server the restrictions exclude takes no index, and the allowed server reuses its pooled client.
     steps = [[...text('Done'), finish()]];
     await backend.call(request({ kind: 'agent', restrictions: new Restrictions(cwd).with(makeRestriction('mcp', 'issues', cwd)) }));
     expect(requests.at(-1)!.tools.map(tool => tool.name)).toEqual([...Object.keys(TOOL_SPECS), 'mcp0Search']);
+    expect(sdk.mcp).toHaveBeenCalledTimes(2);
 });
 
 it('does not start excluded MCP servers and offers only the tools the restrictions allow', async () => {
@@ -353,6 +355,7 @@ it('does not start excluded MCP servers and offers only the tools the restrictio
     expect(requests[0].tools.map(tool => tool.name)).toEqual([...AGENT_TOOLS.map(tool => tool.name), 'mcp0Write']);
     expect(sdk.mcp).toHaveBeenCalledOnce();
     expect(mcp.callTool).not.toHaveBeenCalled();
+    await backend.close();
     expect(mcp.close).toHaveBeenCalledOnce();
 });
 
@@ -365,7 +368,38 @@ it('stops on an unsuccessful MCP result before any subsequent runtime action', a
     const invokeAction = vi.fn(async () => null);
     await expect(command({ invokeAction })).rejects.toMatchObject({ statusCode: 'tool_error', reason: expect.stringContaining('server failed') });
     expect(invokeAction).not.toHaveBeenCalled();
+    await backend.close();
     expect(mcp.close).toHaveBeenCalledOnce();
+});
+
+it('evicts a pooled MCP client after a transport error and reconnects on the next call', async () => {
+    const first = client();
+    const second = client();
+    first.callTool.mockRejectedValueOnce(new Error('broken pipe'));
+    sdk.mcp.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('silent'), mcpServers: { docs: { command: 'node' } } });
+    steps = [[call('mcp0Search', { query: 'SPL' }), finish('tool-calls')], [...text('Recovered'), finish()]];
+    expect((await backend.call(request({ kind: 'agent' }))).text).toBe('Recovered');
+    expect(first.close).toHaveBeenCalledOnce();
+    steps = [[call('mcp0Search', { query: 'SPL' }), finish('tool-calls')], [...text('Second ok'), finish()]];
+    expect((await backend.call(request({ kind: 'agent' }))).text).toBe('Second ok');
+    expect(sdk.mcp).toHaveBeenCalledTimes(2);
+    expect(second.callTool).toHaveBeenCalledOnce();
+    await backend.close();
+    expect(second.close).toHaveBeenCalledOnce();
+});
+
+it('supports disabling MCP pooling with poolMcp: false', async () => {
+    const first = client();
+    const second = client();
+    sdk.mcp.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    backend = new AiBackend({ cwd, timeoutMs: 2000, logger: new Logger('silent'), mcpServers: { docs: { command: 'node' } }, poolMcp: false });
+    steps = [[...text('One'), finish()], [...text('Two'), finish()]];
+    await backend.call(request({ kind: 'agent' }));
+    expect(first.close).toHaveBeenCalledOnce();
+    await backend.call(request({ kind: 'agent' }));
+    expect(second.close).toHaveBeenCalledOnce();
+    expect(sdk.mcp).toHaveBeenCalledTimes(2);
 });
 
 it('logs agent built-in and MCP tool calls once each and retains all inputs and outputs for traces', async () => {

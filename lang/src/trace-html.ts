@@ -84,6 +84,8 @@ type TimelineNode =
         responseText?: string;
         reasoning?: string;
         effective?: Record<string, unknown>;
+        usage?: { inputTokens: number; outputTokens: number; totalTokens: number; cachedTokens?: number; reasoningTokens?: number };
+        costUsd?: number;
     }
     | {
         kind: 'agent-block';
@@ -103,6 +105,8 @@ type TimelineNode =
         responseText?: string;
         reasoning?: string;
         effective?: Record<string, unknown>;
+        usage?: { inputTokens: number; outputTokens: number; totalTokens: number; cachedTokens?: number; reasoningTokens?: number };
+        costUsd?: number;
     }
     | {
         kind: 'tool';
@@ -602,6 +606,8 @@ function parseTraceJournal(jsonl: string, blocksByLine: ReadonlyMap<number, SplB
             let responseText: string | undefined;
             let reasoning: string | undefined;
             let effective: Record<string, unknown> | undefined;
+            let usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedTokens?: number; reasoningTokens?: number } | undefined;
+            let costUsd: number | undefined;
             const mcpTools: ParsedToolCall[] = [];
             if (finalOutcome.status === 'resolved' && isRecord(finalOutcome.value)) {
                 if (!isRecord(finalOutcome.value.action) && typeof finalOutcome.value.text === 'string') {
@@ -611,6 +617,10 @@ function parseTraceJournal(jsonl: string, blocksByLine: ReadonlyMap<number, SplB
                 if (isRecord(finalOutcome.value.effective) && Object.keys(finalOutcome.value.effective).length > 0) {
                     effective = finalOutcome.value.effective;
                 }
+                if (isRecord(finalOutcome.value.usage) && typeof finalOutcome.value.usage.totalTokens === 'number') {
+                    usage = finalOutcome.value.usage as typeof usage;
+                }
+                if (typeof finalOutcome.value.costUsd === 'number') costUsd = finalOutcome.value.costUsd;
                 if (Array.isArray(finalOutcome.value.toolResults)) {
                     for (const raw of finalOutcome.value.toolResults) {
                         if (typeof raw === 'string') mcpTools.push(parseLoopToolEntry(raw));
@@ -630,6 +640,8 @@ function parseTraceJournal(jsonl: string, blocksByLine: ReadonlyMap<number, SplB
                 savedOutputs: [...savedMap.entries()].map(([name, value]) => ({ name, value })),
                 steps, mcpTools,
                 outcome: finalOutcome, responseText, reasoning, effective,
+                ...(usage ? { usage } : {}),
+                ...(costUsd !== undefined ? { costUsd } : {}),
             };
         }
 
@@ -641,12 +653,18 @@ function parseTraceJournal(jsonl: string, blocksByLine: ReadonlyMap<number, SplB
             let responseText: string | undefined;
             let reasoning: string | undefined;
             let effective: Record<string, unknown> | undefined;
+            let usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedTokens?: number; reasoningTokens?: number } | undefined;
+            let costUsd: number | undefined;
             if (pair.outcome.status === 'resolved' && isRecord(pair.outcome.value)) {
                 if (typeof pair.outcome.value.text === 'string') responseText = pair.outcome.value.text;
                 if (typeof pair.outcome.value.reasoning === 'string') reasoning = pair.outcome.value.reasoning;
                 if (isRecord(pair.outcome.value.effective) && Object.keys(pair.outcome.value.effective).length > 0) {
                     effective = pair.outcome.value.effective;
                 }
+                if (isRecord(pair.outcome.value.usage) && typeof pair.outcome.value.usage.totalTokens === 'number') {
+                    usage = pair.outcome.value.usage as typeof usage;
+                }
+                if (typeof pair.outcome.value.costUsd === 'number') costUsd = pair.outcome.value.costUsd;
                 if (Array.isArray(pair.outcome.value.toolResults)) {
                     for (const raw of pair.outcome.value.toolResults) {
                         if (typeof raw === 'string') tools.push(parseLoopToolEntry(raw));
@@ -664,6 +682,8 @@ function parseTraceJournal(jsonl: string, blocksByLine: ReadonlyMap<number, SplB
                 restrictions: Array.isArray(req.restrictions) ? req.restrictions : [],
                 ...dissected,
                 tools, outcome: pair.outcome, responseText, reasoning, effective,
+                ...(usage ? { usage } : {}),
+                ...(costUsd !== undefined ? { costUsd } : {}),
             };
         }
 
@@ -769,6 +789,16 @@ function renderStatusPill(status: 'success' | 'error' | 'pending', text?: string
     return `<span class="status-pill status-${status}">${escapeHtml(label)}</span>`;
 }
 
+function renderUsageMeta(
+    usage?: { inputTokens: number; outputTokens: number; totalTokens: number; cachedTokens?: number; reasoningTokens?: number },
+    costUsd?: number,
+): string {
+    const chips: string[] = [];
+    if (usage) chips.push(`usage: ${usage.inputTokens}+${usage.outputTokens}=${usage.totalTokens} tok`);
+    if (costUsd !== undefined) chips.push(`~$${costUsd.toFixed(4)}`);
+    return chips.map(chip => `<span class="meta-chip">${escapeHtml(chip)}</span>`).join('');
+}
+
 function renderEffectiveMeta(effective?: Record<string, unknown>): string {
     if (!effective) return '';
     const chips: string[] = [];
@@ -864,6 +894,7 @@ function renderTimelineNode(node: TimelineNode, index: number, nested = false): 
     ${node.model ? `<span class="meta-chip">${escapeHtml(node.model)}</span>` : ''}
     ${node.reasoningEffort ? `<span class="meta-chip">reasoning: ${escapeHtml(node.reasoningEffort)}</span>` : ''}
     ${renderEffectiveMeta(node.effective)}
+    ${renderUsageMeta(node.usage, node.costUsd)}
     ${node.tools.length ? `<span class="meta-chip">${plural(node.tools.length, 'tool call')}</span>` : ''}
     <span class="header-spacer"></span>
     ${renderStatusPill(status)}
@@ -899,6 +930,7 @@ function renderTimelineNode(node: TimelineNode, index: number, nested = false): 
     <span class="kind-badge kind-agent">Agent block</span>
     ${node.line ? `<a class="line-link" href="#L${node.line}">line ${node.line}</a>` : ''}
     ${renderEffectiveMeta(node.effective)}
+    ${renderUsageMeta(node.usage, node.costUsd)}
     <span class="meta-chip">${plural(totalTools, 'tool call')}</span>
     <span class="header-spacer"></span>
     ${renderStatusPill(status)}
