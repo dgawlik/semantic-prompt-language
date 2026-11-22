@@ -14,7 +14,7 @@ function resolveServerPath(context) {
     return configured;
   }
 
-  // 1. Check relative to real extension path (works even when symlinked/junctioned into ~/.vscode/extensions)
+  // 1. Check relative to real extension path (works when dev-linked into ~/.vscode/extensions)
   const realExtPath = fs.existsSync(context.extensionPath)
     ? fs.realpathSync(context.extensionPath)
     : context.extensionPath;
@@ -23,14 +23,20 @@ function resolveServerPath(context) {
     return repoLocal;
   }
 
-  // 2. Check inside currently open workspace folders
+  // 2. Check bundled server packaged inside the .vsix
+  const bundled = path.join(realExtPath, "server", "dist", "lsp.js");
+  if (fs.existsSync(bundled)) {
+    return bundled;
+  }
+
+  // 3. Check inside currently open workspace folders
   const folders = vscode.workspace.workspaceFolders || [];
   for (const folder of folders) {
     const candidate = path.join(folder.uri.fsPath, "dist", "lsp.js");
     if (fs.existsSync(candidate)) return candidate;
   }
 
-  return repoLocal;
+  return bundled;
 }
 
 function createAndStartClient(context, outputChannel, fileWatcher) {
@@ -40,7 +46,7 @@ function createAndStartClient(context, outputChannel, fileWatcher) {
 
   if (!fs.existsSync(serverModule)) {
     throw new Error(
-      `SPL Language Server not found at '${serverModule}'. Run 'npm run build' in the SPL repo first.`
+      `SPL Language Server not found at '${serverModule}'. Run 'npm run build' in the SPL repo, reinstall the .vsix, or configure 'splx.serverPath'.`
     );
   }
 

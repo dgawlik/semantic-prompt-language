@@ -2,3 +2,5 @@
 **/dist
 **/.astro
 **/*.jsonl
+editors/vscode/server
+**/*.vsix

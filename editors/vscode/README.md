@@ -28,3 +28,19 @@ To uninstall:
 ```bash
 npm run vscode:uninstall
 ```
+
+## Packaging a `.vsix`
+
+Build a self-contained `.vsix` (bundling the compiled SPL Language Server and `stdlib/*.splx`):
+
+```bash
+npm run vscode:package
+```
+
+This outputs `editors/vscode/splx-vscode-0.1.0.vsix` (use `-- --out path/to/out.vsix` to customize the destination, or `npm run vscode:package:install` to package and install it directly into VS Code).
+
+Install a packaged `.vsix` manually with:
+
+```bash
+code --install-extension editors/vscode/splx-vscode-0.1.0.vsix
+```

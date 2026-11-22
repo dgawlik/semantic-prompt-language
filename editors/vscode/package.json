@@ -1,8 +1,8 @@
 {
-  "name": "splx-vscode",
+  "name": "spl-lang-vscode",
   "displayName": "Semantic Prompt Language (SPL / .splx)",
   "description": "Language Server, syntax highlighting, type-aware property completion, and live JSON Schema hover for SPL (.splx)",
-  "version": "0.1.0",
+  "version": "4.0.0",
   "publisher": "spl-lang",
   "engines": {
     "vscode": "^1.85.0"
@@ -18,7 +18,8 @@
   "scripts": {
     "install-ext": "node ../../scripts/install-vscode.mjs",
     "uninstall-ext": "node ../../scripts/install-vscode.mjs --uninstall",
-    "package": "npx @vscode/vsce package"
+    "package": "node ../../scripts/package-vscode.mjs",
+    "package:install": "node ../../scripts/package-vscode.mjs --install"
   },
   "contributes": {
     "languages": [
@@ -66,5 +67,8 @@
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.0.0"
   }
 }
