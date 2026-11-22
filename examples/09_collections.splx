@@ -1,0 +1,85 @@
+// ============================================================================
+// 09_collections.splx — Pure SPL Collections: HashMap, AVL TreeSet & List
+// ============================================================================
+// Run: node dist/cli.js run examples/09_collections.splx
+
+import col from "std/collections"
+
+print("=== 09_collections ===")
+
+// --- 1. HashMap<K, V> (Immutable Key-Value Map + Extension Methods) ---
+let scores0 = col.map_new()
+let scores1 = scores0
+    .put("alice", 90)
+    .put("bob", 75)
+    .put("carol", 95)
+
+let boosted = scores1
+    .map_values { v -> v + 5 }
+    .filter { _, v -> v >= 90 }
+    .merge(col.map_from_entries([("dave", 88)]))
+
+print("HashMap len=" + to_str(scores1.len()) + ", alice=" + to_str(scores1.get("alice") ?? 0))
+print("HashMap boosted keys=" + to_str(boosted.keys()) + ", dave=" + to_str(boosted.get_or("dave", -1)))
+print("HashMap total=" + to_str(boosted.fold(0, { acc, _, v -> acc + v })))
+
+// --- 2. TreeSet<T> (Pure-SPL Self-Balancing AVL Tree Set) ---
+// Inserting out of order automatically balances and yields sorted output!
+let set_a = col.set_from_array([50, 20, 70, 10, 30, 60, 80, 30, 20])
+let set_b = col.set_from_array([30, 40, 50, 90])
+
+let set_after_remove = set_a.remove(50).remove(10)
+let set_union = set_a.union(set_b)
+let set_inter = set_a.intersection(set_b)
+let set_diff = set_a.difference(set_b)
+
+print("TreeSet sorted:       " + to_str(set_a.to_array()))
+print("TreeSet min/max/len:  " + to_str(set_a.min() ?? -1) + " / " + to_str(set_a.max() ?? -1) + " / " + to_str(set_a.len()))
+print("TreeSet after remove: " + to_str(set_after_remove.to_array()))
+print("TreeSet union:        " + to_str(set_union.to_array()))
+print("TreeSet intersection: " + to_str(set_inter.to_array()))
+print("TreeSet difference:   " + to_str(set_diff.to_array()))
+print("TreeSet subset:       " + to_str(set_inter.is_subset_of(set_a)))
+
+// --- 3. List<T> (Immutable Sequence List + Functional Combinators) ---
+let nums = col.list_from_array([1, 2, 3, 4, 5])
+let transformed = nums
+    .prepend(0)
+    .push(6)
+    .filter { n -> n % 2 == 0 }
+    .map { n -> n * 10 }
+    .reverse()
+
+let labels = col.list_from_array(["a", "b", "c"])
+let pairs = nums.take(3).zip(labels)
+let expanded = nums.take(2).flat_map { n -> col.list_from_array([n, n * 100]) }
+
+print("List transformed: " + to_str(transformed.to_array()))
+print("List first/last:  " + to_str(transformed.first() ?? -1) + " / " + to_str(transformed.last() ?? -1))
+print("List pairs:       " + to_str(pairs.to_array()))
+print("List expanded:    " + to_str(expanded.to_array()))
+print("List any/all:     " + to_str(nums.any { n -> n > 4 }) + " / " + to_str(nums.all { n -> n > 0 }))
+
+// --- 4. Lazy Iterators (`Iter<T>`) & `for ... in ...` Loops ---
+// Works uniformly over Array, Dict, List, TreeSet, HashMap, Iter<T>, and custom `.iter()` types!
+let mut map_entries: Array<Str> = []
+for (name, score) in boosted {
+    map_entries = map_entries.push(name + "=" + to_str(score))
+}
+print("for-in HashMap:   " + map_entries.join(", "))
+
+// Lazy O(log n)-space AVL TreeSet iterator: visits only the first 3 smallest elements!
+let top3 = set_a.iter().filter({ x -> x >= 20 }).take(3).collect()
+print("TreeSet lazy top3:" + to_str(top3))
+
+let mut list_sum = 0
+for (idx, val) in nums.iter().enumerate() {
+    list_sum = list_sum + idx * val
+}
+print("for-in List enum: " + to_str(list_sum))
+
+let mut arr_doubled: Array<Int> = []
+for x in [10, 20, 30] {
+    arr_doubled = arr_doubled.push(x * 2)
+}
+print("for-in Array:     " + to_str(arr_doubled))

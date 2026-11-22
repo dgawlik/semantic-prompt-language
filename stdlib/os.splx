@@ -1,0 +1,22 @@
+/// Server-only OS environment & stdio utilities (`std/os`).
+
+/// Reads environment variable `key`, returning `Some(value)` or `None` if unset.
+pub extern fn env(key: Str) -> Str? = "ffi_server:osEnv"
+
+/// Returns command-line arguments passed to the SPL program.
+pub extern fn args() -> Array<Str> = "ffi_server:osArgs"
+
+/// Returns the current working directory path.
+pub extern fn cwd() -> Str = "ffi_server:osCwd"
+
+/// Returns the host OS platform string (e.g. `"win32"`, `"linux"`, `"darwin"`).
+pub extern fn platform() -> Str = "ffi_server:osPlatform"
+
+/// Terminates the process immediately with exit status `code`.
+pub extern fn exit(code: Int) -> Unit = "ffi_server:osExit"
+
+/// Prints `val` followed by a newline to stdout.
+pub extern fn print_line<T>(val: T) -> Unit = "ffi_server:osPrint"
+
+/// Writes `val` to stdout without a trailing newline (ideal for streaming deltas).
+pub extern fn write<T>(val: T) -> Unit = "ffi_server:osWrite"

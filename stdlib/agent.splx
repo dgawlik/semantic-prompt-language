@@ -1,0 +1,42 @@
+// Pure SPL Agent client built on http.fetch + Prompt + Json
+import http from "std/http"
+
+pub type AgentTrace = struct {
+    model: Str
+    tokens: Int
+    prompt_text: Str
+    status: Int
+}
+
+pub fn call_endpoint(
+    endpoint: Str,
+    model: Str = "gpt-6-luna",
+    tokens: Int = 1024,
+    schema: Json? = None,
+    prompt: Prompt
+) -> Result<(Str, AgentTrace), Str> {
+    let body = json_stringify({
+        model: model,
+        max_tokens: tokens,
+        prompt: prompt.render(),
+        schema: schema
+    })
+    let hdrs = dict_empty().set("content-type", "application/json")
+    let res = http.fetch({
+        method: "POST",
+        url: endpoint,
+        headers: hdrs,
+        body: Some(body)
+    })?
+    let trace = {
+        model: model,
+        tokens: tokens,
+        prompt_text: prompt.render(),
+        status: res.status
+    }
+    if res.ok {
+        Ok((res.body, trace))
+    } else {
+        Err("Agent HTTP error " + to_str(res.status) + ": " + res.body)
+    }
+}

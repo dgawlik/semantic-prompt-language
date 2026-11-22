@@ -1,0 +1,380 @@
+/// Standard Library Agent Execution Traces (`std/traces`).
+///
+/// Defines the ordered, alternated `TraceEvent` enum recording every step of an
+/// agentic execution in exact chronological order, plus `ExecutionTrace` and
+/// JSONL (`to_jsonl`, `from_jsonl`, `save_jsonl`, `load_jsonl`) persistence.
+
+import fs from "std/fs"
+
+// ============================================================================
+// Ordered Trace Event ADT & ExecutionTrace
+// ============================================================================
+
+/// Chronological event recorded during an agentic run.
+/// Alternates in the exact order events occurred (prompt, thinking, assistant text,
+/// tool calls, approval decisions, tool results, warnings, and turn completions).
+pub enum TraceEvent {
+    /// Initial user prompt sent to start the run: `(content)`
+    UserPrompt(Str)
+    /// Model reasoning/thinking block emitted on `turn`: `(turn, text)`
+    ThinkingStep(Int, Str)
+    /// Model text block emitted on `turn`: `(turn, text)`
+    AssistantText(Int, Str)
+    /// Tool call requested by the model: `(turn, call_id, tool_name, arguments)`
+    ToolCallStep(Int, Str, Str, Json)
+    /// Approval/modification decision hook outcome: `(turn, call_id, tool_name, decision, effective_arguments)`
+    ToolDecisionStep(Int, Str, Str, Str, Json)
+    /// Tool execution output returned to the model: `(turn, call_id, tool_name, output, succeeded)`
+    ToolResultStep(Int, Str, Str, Str, Bool)
+    /// Turn completion metrics: `(turn, input_tokens, output_tokens, total_tokens, duration_ms, finish_reason)`
+    TurnCompleted(Int, Int, Int, Int, Int, Str)
+    /// Provider or capability translation warning emitted on `turn`: `(turn, message)`
+    WarningStep(Int, Str)
+}
+
+/// Full execution trace returned alongside the final typed output from `llm.agent<T>`
+/// and `llm.agent_replay<T>`. `events` is the exact chronological list of `TraceEvent`s.
+pub type ExecutionTrace = struct {
+    provider: Str
+    model: Str
+    turns: Int
+    events: Array<TraceEvent>
+    total_input_tokens: Int
+    total_output_tokens: Int
+    total_duration_ms: Int
+    finish_reason: Str
+    warnings: Array<Str>
+}
+
+// ============================================================================
+// Private JSONL Wire Record Types (for `decode<...>`)
+// ============================================================================
+
+type JsonlEnvelope = struct {
+    kind: Str
+    ..extra: Dict<Str, Json>
+}
+
+type MetaRecord = struct {
+    kind: Str
+    version: Int?
+    provider: Str
+    model: Str
+    turns: Int
+    total_input_tokens: Int
+    total_output_tokens: Int
+    total_duration_ms: Int
+    finish_reason: Str
+    warnings: Array<Str>
+}
+
+type UserPromptRecord = struct {
+    kind: Str
+    content: Str
+}
+
+type TextTurnRecord = struct {
+    kind: Str
+    turn: Int
+    text: Str
+}
+
+type ToolCallRecord = struct {
+    kind: Str
+    turn: Int
+    id: Str
+    name: Str
+    arguments: Json
+}
+
+type ToolDecisionRecord = struct {
+    kind: Str
+    turn: Int
+    id: Str
+    name: Str
+    decision: Str
+    arguments: Json
+}
+
+type ToolResultRecord = struct {
+    kind: Str
+    turn: Int
+    id: Str
+    name: Str
+    output: Str
+    succeeded: Bool
+}
+
+type TurnCompletedRecord = struct {
+    kind: Str
+    turn: Int
+    input_tokens: Int
+    output_tokens: Int
+    total_tokens: Int
+    duration_ms: Int
+    finish_reason: Str
+}
+
+type WarningRecord = struct {
+    kind: Str
+    turn: Int
+    message: Str
+}
+
+// ============================================================================
+// Serialization & Deserialization (JSONL)
+// ============================================================================
+
+/// Returns the short event kind name for logging/filtering.
+pub fn TraceEvent.kind_name(self) -> Str {
+    match self {
+        UserPrompt(_) => "user_prompt"
+        ThinkingStep(_, _) => "thinking"
+        AssistantText(_, _) => "assistant_text"
+        ToolCallStep(_, _, _, _) => "tool_call"
+        ToolDecisionStep(_, _, _, _, _) => "tool_decision"
+        ToolResultStep(_, _, _, _, _) => "tool_result"
+        TurnCompleted(_, _, _, _, _, _) => "turn_completed"
+        WarningStep(_, _) => "warning"
+    }
+}
+
+/// Serializes a single `TraceEvent` to one compact JSON line.
+pub fn event_to_json(ev: TraceEvent) -> Str {
+    match ev {
+        UserPrompt(content) => json_stringify({ kind: "user_prompt", content: content })
+        ThinkingStep(turn, text) => json_stringify({ kind: "thinking", turn: turn, text: text })
+        AssistantText(turn, text) => json_stringify({ kind: "assistant_text", turn: turn, text: text })
+        ToolCallStep(turn, id, name, arguments) => json_stringify({
+            kind: "tool_call",
+            turn: turn,
+            id: id,
+            name: name,
+            arguments: arguments
+        })
+        ToolDecisionStep(turn, id, name, decision, arguments) => json_stringify({
+            kind: "tool_decision",
+            turn: turn,
+            id: id,
+            name: name,
+            decision: decision,
+            arguments: arguments
+        })
+        ToolResultStep(turn, id, name, output, succeeded) => json_stringify({
+            kind: "tool_result",
+            turn: turn,
+            id: id,
+            name: name,
+            output: output,
+            succeeded: succeeded
+        })
+        TurnCompleted(turn, inp, out, total, dur, finish) => json_stringify({
+            kind: "turn_completed",
+            turn: turn,
+            input_tokens: inp,
+            output_tokens: out,
+            total_tokens: total,
+            duration_ms: dur,
+            finish_reason: finish
+        })
+        WarningStep(turn, msg) => json_stringify({ kind: "warning", turn: turn, message: msg })
+    }
+}
+
+/// Parses one JSONL event line into a strongly-typed `TraceEvent`.
+pub fn event_from_json(line: Str) -> Result<TraceEvent, Str> {
+    let parsed = json_parse(line)?
+    let env = match decode<JsonlEnvelope>(parsed) {
+        Ok(e) => e
+        Err(err) => return Err("Invalid trace JSONL record: " + err.path + ": " + err.message)
+    }
+
+    match env.kind {
+        "user_prompt" => {
+            match decode<UserPromptRecord>(parsed) {
+                Ok(r) => Ok(UserPrompt(r.content))
+                Err(e) => Err("user_prompt: " + e.path + ": " + e.message)
+            }
+        }
+        "thinking" => {
+            match decode<TextTurnRecord>(parsed) {
+                Ok(r) => Ok(ThinkingStep(r.turn, r.text))
+                Err(e) => Err("thinking: " + e.path + ": " + e.message)
+            }
+        }
+        "assistant_text" => {
+            match decode<TextTurnRecord>(parsed) {
+                Ok(r) => Ok(AssistantText(r.turn, r.text))
+                Err(e) => Err("assistant_text: " + e.path + ": " + e.message)
+            }
+        }
+        "tool_call" => {
+            match decode<ToolCallRecord>(parsed) {
+                Ok(r) => Ok(ToolCallStep(r.turn, r.id, r.name, r.arguments))
+                Err(e) => Err("tool_call: " + e.path + ": " + e.message)
+            }
+        }
+        "tool_decision" => {
+            match decode<ToolDecisionRecord>(parsed) {
+                Ok(r) => Ok(ToolDecisionStep(r.turn, r.id, r.name, r.decision, r.arguments))
+                Err(e) => Err("tool_decision: " + e.path + ": " + e.message)
+            }
+        }
+        "tool_result" => {
+            match decode<ToolResultRecord>(parsed) {
+                Ok(r) => Ok(ToolResultStep(r.turn, r.id, r.name, r.output, r.succeeded))
+                Err(e) => Err("tool_result: " + e.path + ": " + e.message)
+            }
+        }
+        "turn_completed" => {
+            match decode<TurnCompletedRecord>(parsed) {
+                Ok(r) => Ok(TurnCompleted(r.turn, r.input_tokens, r.output_tokens, r.total_tokens, r.duration_ms, r.finish_reason))
+                Err(e) => Err("turn_completed: " + e.path + ": " + e.message)
+            }
+        }
+        "warning" => {
+            match decode<WarningRecord>(parsed) {
+                Ok(r) => Ok(WarningStep(r.turn, r.message))
+                Err(e) => Err("warning: " + e.path + ": " + e.message)
+            }
+        }
+        other => Err("Unknown trace event kind: " + other)
+    }
+}
+
+/// Encodes an `ExecutionTrace` as newline-delimited JSONL (line 1 = `"meta"` header,
+/// followed by one JSON line per `TraceEvent` in exact chronological order).
+pub fn to_jsonl(trace: ExecutionTrace) -> Str {
+    let header = json_stringify({
+        kind: "meta",
+        version: 1,
+        provider: trace.provider,
+        model: trace.model,
+        turns: trace.turns,
+        total_input_tokens: trace.total_input_tokens,
+        total_output_tokens: trace.total_output_tokens,
+        total_duration_ms: trace.total_duration_ms,
+        finish_reason: trace.finish_reason,
+        warnings: trace.warnings
+    })
+    let mut lines: Array<Str> = [header]
+    let mut i = 0
+    while i < trace.events.len() {
+        match trace.events.get(i) {
+            Some(ev) => {
+                lines = lines.push(event_to_json(ev))
+            }
+            None => ()
+        }
+        i = i + 1
+    }
+    lines.join("\n") + "\n"
+}
+
+/// Decodes JSONL text back into an `ExecutionTrace`.
+pub fn from_jsonl(jsonl: Str) -> Result<ExecutionTrace, Str> {
+    let raw_lines = jsonl.split("\n")
+    let mut provider = ""
+    let mut model = ""
+    let mut turns = 0
+    let mut total_in = 0
+    let mut total_out = 0
+    let mut total_dur = 0
+    let mut finish_reason = "stop"
+    let mut warnings: Array<Str> = []
+    let mut has_meta = false
+    let mut events: Array<TraceEvent> = []
+
+    let mut i = 0
+    while i < raw_lines.len() {
+        match raw_lines.get(i) {
+            Some(raw_line) => {
+                let line = raw_line.trim()
+                if line != "" {
+                    let parsed = json_parse(line)?
+                    let env = match decode<JsonlEnvelope>(parsed) {
+                        Ok(e) => e
+                        Err(err) => return Err("Line " + to_str(i + 1) + ": " + err.path + ": " + err.message)
+                    }
+                    if env.kind == "meta" {
+                        let m = match decode<MetaRecord>(parsed) {
+                            Ok(rec) => rec
+                            Err(err) => return Err("Meta line: " + err.path + ": " + err.message)
+                        }
+                        provider = m.provider
+                        model = m.model
+                        turns = m.turns
+                        total_in = m.total_input_tokens
+                        total_out = m.total_output_tokens
+                        total_dur = m.total_duration_ms
+                        finish_reason = m.finish_reason
+                        warnings = m.warnings
+                        has_meta = true
+                    } else {
+                        let ev = event_from_json(line)?
+                        events = events.push(ev)
+                        if !has_meta {
+                            match ev {
+                                TurnCompleted(t, inp, out, _, dur, fin) => {
+                                    if t > turns { turns = t }
+                                    total_in = total_in + inp
+                                    total_out = total_out + out
+                                    total_dur = total_dur + dur
+                                    finish_reason = fin
+                                }
+                                WarningStep(_, msg) => {
+                                    warnings = warnings.push(msg)
+                                }
+                                _ => ()
+                            }
+                        }
+                    }
+                }
+            }
+            None => ()
+        }
+        i = i + 1
+    }
+
+    Ok({
+        provider: provider,
+        model: model,
+        turns: turns,
+        events: events,
+        total_input_tokens: total_in,
+        total_output_tokens: total_out,
+        total_duration_ms: total_dur,
+        finish_reason: finish_reason,
+        warnings: warnings
+    })
+}
+
+/// Saves an `ExecutionTrace` to `path` in JSONL format (server runtime via `std/fs`).
+pub fn save_jsonl(path: Str, trace: ExecutionTrace) -> Result<Unit, Str> {
+    fs.write(path, to_jsonl(trace))
+}
+
+/// Loads an `ExecutionTrace` from a JSONL file at `path` (server runtime via `std/fs`).
+pub fn load_jsonl(path: Str) -> Result<ExecutionTrace, Str> {
+    let raw = fs.read(path)?
+    from_jsonl(raw)
+}
+
+// ============================================================================
+// Extension Methods on `ExecutionTrace`
+// ============================================================================
+
+/// Encodes this trace to JSONL text.
+pub fn ExecutionTrace.to_jsonl(self) -> Str {
+    to_jsonl(self)
+}
+
+/// Saves this trace to `path` in JSONL format.
+pub fn ExecutionTrace.save_jsonl(self, path: Str) -> Result<Unit, Str> {
+    save_jsonl(path, self)
+}
+
+/// Number of ordered events recorded in this trace.
+pub fn ExecutionTrace.step_count(self) -> Int {
+    self.events.len()
+}

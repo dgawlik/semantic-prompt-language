@@ -1,0 +1,600 @@
+/// Pure SPL Standard Library Collections:
+/// - `HashMap<K, V>` (immutable key-value map backed by `Dict<K, V>`)
+/// - `TreeSet<T>` (immutable ordered set implemented as a pure-SPL self-balancing AVL tree)
+/// - `List<T>` (immutable sequence list with functional combinators)
+///
+/// Zero `extern` FFI bindings — built 100% in pure SPL using types & extension methods.
+
+// ============================================================================
+// 1. HashMap<K, V>
+// ============================================================================
+
+/// Immutable key-value HashMap backed by SPL's `Dict<K, V>` primitive.
+pub type HashMap<K, V> = struct {
+    data: Dict<K, V>
+}
+
+/// Creates an empty `HashMap<K, V>`.
+pub fn map_new<K, V>() -> HashMap<K, V> {
+    { data: dict_empty() }
+}
+
+/// Builds a `HashMap<K, V>` from an array of `(key, value)` tuples.
+pub fn map_from_entries<K, V>(entries: Array<(K, V)>) -> HashMap<K, V> {
+    let d = entries.fold(dict_empty(), { acc, pair ->
+        let (k, v) = pair
+        acc.set(k, v)
+    })
+    { data: d }
+}
+
+/// Inserts or updates `key -> value`, returning a new `HashMap`.
+pub fn HashMap<K, V>.put(self, key: K, value: V) -> HashMap<K, V> {
+    { data: self.data.set(key, value) }
+}
+
+/// Alias for `put`.
+pub fn HashMap<K, V>.set(self, key: K, value: V) -> HashMap<K, V> {
+    { data: self.data.set(key, value) }
+}
+
+/// Looks up `key`, returning `Some(value)` or `None`.
+pub fn HashMap<K, V>.get(self, key: K) -> V? {
+    self.data.get(key)
+}
+
+/// Looks up `key`, returning `fallback` if missing.
+pub fn HashMap<K, V>.get_or(self, key: K, fallback: V) -> V {
+    self.data.get(key) ?? fallback
+}
+
+/// Returns `true` if `key` exists in the map.
+pub fn HashMap<K, V>.has(self, key: K) -> Bool {
+    self.data.get(key).is_some()
+}
+
+/// Removes `key`, returning a new `HashMap`.
+pub fn HashMap<K, V>.remove(self, key: K) -> HashMap<K, V> {
+    { data: self.data.delete(key) }
+}
+
+/// Number of key-value entries in the map.
+pub fn HashMap<K, V>.len(self) -> Int {
+    self.data.len()
+}
+
+/// Returns `true` if the map has zero entries.
+pub fn HashMap<K, V>.is_empty(self) -> Bool {
+    self.data.len() == 0
+}
+
+/// Returns all `(key, value)` pairs as an array.
+pub fn HashMap<K, V>.entries(self) -> Array<(K, V)> {
+    self.data.entries()
+}
+
+/// Returns all keys as an array.
+pub fn HashMap<K, V>.keys(self) -> Array<K> {
+    self.data.entries().map { pair ->
+        let (k, _) = pair
+        k
+    }
+}
+
+/// Returns all values as an array.
+pub fn HashMap<K, V>.values(self) -> Array<V> {
+    self.data.entries().map { pair ->
+        let (_, v) = pair
+        v
+    }
+}
+
+/// Transforms every value in the map using `f`, preserving keys.
+pub fn HashMap<K, V>.map_values<U>(self, f: fn(V) -> U) -> HashMap<K, U> {
+    let next = self.data.entries().fold(dict_empty(), { acc, pair ->
+        let (k, v) = pair
+        acc.set(k, f(v))
+    })
+    { data: next }
+}
+
+/// Keeps only entries where `pred(key, value)` is `true`.
+pub fn HashMap<K, V>.filter(self, pred: fn(K, V) -> Bool) -> HashMap<K, V> {
+    let next = self.data.entries().fold(dict_empty(), { acc, pair ->
+        let (k, v) = pair
+        if pred(k, v) { acc.set(k, v) } else { acc }
+    })
+    { data: next }
+}
+
+/// Merges `other` into `self` (`other` entries overwrite matching keys in `self`).
+pub fn HashMap<K, V>.merge(self, other: HashMap<K, V>) -> HashMap<K, V> {
+    let next = other.data.entries().fold(self.data, { acc, pair ->
+        let (k, v) = pair
+        acc.set(k, v)
+    })
+    { data: next }
+}
+
+/// Folds over all `(key, value)` entries in the map.
+pub fn HashMap<K, V>.fold<Acc>(self, init: Acc, f: fn(Acc, K, V) -> Acc) -> Acc {
+    self.data.entries().fold(init, { acc, pair ->
+        let (k, v) = pair
+        f(acc, k, v)
+    })
+}
+
+/// Returns a lazy iterator over `(key, value)` pairs in the map.
+pub fn HashMap<K, V>.iter(self) -> Iter<(K, V)> {
+    self.data.iter()
+}
+
+/// Returns a lazy iterator over keys in the map.
+pub fn HashMap<K, V>.keys_iter(self) -> Iter<K> {
+    self.data.keys_iter()
+}
+
+/// Returns a lazy iterator over values in the map.
+pub fn HashMap<K, V>.values_iter(self) -> Iter<V> {
+    self.data.values_iter()
+}
+
+/// Builds a `HashMap<K, V>` by consuming an iterator of `(key, value)` pairs.
+pub fn map_from_iter<K, V>(it: Iter<(K, V)>) -> HashMap<K, V> {
+    let mut d = dict_empty()
+    for (k, v) in it {
+        d = d.set(k, v)
+    }
+    { data: d }
+}
+
+// ============================================================================
+// 2. TreeSet<T> (Pure-SPL Self-Balancing AVL Binary Search Tree)
+// ============================================================================
+
+/// Internal AVL binary search tree node.
+pub enum TreeNode<T> {
+    Leaf
+    Node(TreeNode<T>, T, TreeNode<T>, Int)
+}
+
+/// Immutable ordered Set backed by a self-balancing AVL tree (O(log n) add/remove/contains).
+pub type TreeSet<T> = struct {
+    root: TreeNode<T>
+    size: Int
+}
+
+fn max_int(a: Int, b: Int) -> Int {
+    if a >= b { a } else { b }
+}
+
+fn node_height<T>(node: TreeNode<T>) -> Int {
+    match node {
+        Leaf => 0
+        Node(_, _, _, h) => h
+    }
+}
+
+fn make_node<T>(left: TreeNode<T>, val: T, right: TreeNode<T>) -> TreeNode<T> {
+    let h = 1 + max_int(node_height(left), node_height(right))
+    Node(left, val, right, h)
+}
+
+fn balance_factor<T>(node: TreeNode<T>) -> Int {
+    match node {
+        Leaf => 0
+        Node(l, _, r, _) => node_height(l) - node_height(r)
+    }
+}
+
+fn rotate_right<T>(node: TreeNode<T>) -> TreeNode<T> {
+    match node {
+        Node(Node(ll, lv, lr, _), v, r, _) => make_node(ll, lv, make_node(lr, v, r))
+        _ => node
+    }
+}
+
+fn rotate_left<T>(node: TreeNode<T>) -> TreeNode<T> {
+    match node {
+        Node(l, v, Node(rl, rv, rr, _), _) => make_node(make_node(l, v, rl), rv, rr)
+        _ => node
+    }
+}
+
+fn rebalance<T>(left: TreeNode<T>, val: T, right: TreeNode<T>) -> TreeNode<T> {
+    let n = make_node(left, val, right)
+    let bf = balance_factor(n)
+    if bf > 1 {
+        if balance_factor(left) < 0 {
+            rotate_right(make_node(rotate_left(left), val, right))
+        } else {
+            rotate_right(n)
+        }
+    } else if bf < -1 {
+        if balance_factor(right) > 0 {
+            rotate_left(make_node(left, val, rotate_right(right)))
+        } else {
+            rotate_left(n)
+        }
+    } else {
+        n
+    }
+}
+
+fn avl_contains<T>(node: TreeNode<T>, target: T) -> Bool {
+    match node {
+        Leaf => false
+        Node(l, v, r, _) => {
+            if target == v {
+                true
+            } else if target < v {
+                avl_contains(l, target)
+            } else {
+                avl_contains(r, target)
+            }
+        }
+    }
+}
+
+fn avl_insert<T>(node: TreeNode<T>, value: T) -> (TreeNode<T>, Bool) {
+    match node {
+        Leaf => (Node(Leaf, value, Leaf, 1), true)
+        Node(l, v, r, _) => {
+            if value == v {
+                (node, false)
+            } else if value < v {
+                let (next_l, inserted) = avl_insert(l, value)
+                (rebalance(next_l, v, r), inserted)
+            } else {
+                let (next_r, inserted) = avl_insert(r, value)
+                (rebalance(l, v, next_r), inserted)
+            }
+        }
+    }
+}
+
+fn avl_min<T>(node: TreeNode<T>) -> T? {
+    match node {
+        Leaf => None
+        Node(Leaf, v, _, _) => Some(v)
+        Node(l, _, _, _) => avl_min(l)
+    }
+}
+
+fn avl_max<T>(node: TreeNode<T>) -> T? {
+    match node {
+        Leaf => None
+        Node(_, v, Leaf, _) => Some(v)
+        Node(_, _, r, _) => avl_max(r)
+    }
+}
+
+fn avl_remove_min<T>(node: TreeNode<T>) -> (TreeNode<T>, T?) {
+    match node {
+        Leaf => (Leaf, None)
+        Node(Leaf, v, r, _) => (r, Some(v))
+        Node(l, v, r, _) => {
+            let (next_l, min_val) = avl_remove_min(l)
+            (rebalance(next_l, v, r), min_val)
+        }
+    }
+}
+
+fn avl_remove<T>(node: TreeNode<T>, target: T) -> (TreeNode<T>, Bool) {
+    match node {
+        Leaf => (Leaf, false)
+        Node(l, v, r, _) => {
+            if target < v {
+                let (next_l, removed) = avl_remove(l, target)
+                (rebalance(next_l, v, r), removed)
+            } else if target > v {
+                let (next_r, removed) = avl_remove(r, target)
+                (rebalance(l, v, next_r), removed)
+            } else {
+                match (l, r) {
+                    (Leaf, Leaf) => (Leaf, true)
+                    (Leaf, _) => (r, true)
+                    (_, Leaf) => (l, true)
+                    (_, _) => {
+                        let (next_r, succ) = avl_remove_min(r)
+                        match succ {
+                            Some(sv) => (rebalance(l, sv, next_r), true)
+                            None => (l, true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn avl_inorder<T>(node: TreeNode<T>) -> Array<T> {
+    match node {
+        Leaf => []
+        Node(l, v, r, _) => avl_inorder(l).push(v).concat(avl_inorder(r))
+    }
+}
+
+/// Creates an empty `TreeSet<T>`.
+pub fn set_new<T>() -> TreeSet<T> {
+    { root: Leaf, size: 0 }
+}
+
+/// Builds a `TreeSet<T>` from an array (deduplicated and sorted).
+pub fn set_from_array<T>(items: Array<T>) -> TreeSet<T> {
+    items.fold(set_new(), { acc, item -> acc.add(item) })
+}
+
+/// Inserts `value` into the set (O(log n)), returning a new `TreeSet`.
+pub fn TreeSet<T>.add(self, value: T) -> TreeSet<T> {
+    let (next_root, inserted) = avl_insert(self.root, value)
+    let next_size = if inserted { self.size + 1 } else { self.size }
+    { root: next_root, size: next_size }
+}
+
+/// Removes `value` from the set (O(log n)), returning a new `TreeSet`.
+pub fn TreeSet<T>.remove(self, value: T) -> TreeSet<T> {
+    let (next_root, removed) = avl_remove(self.root, value)
+    let next_size = if removed { self.size - 1 } else { self.size }
+    { root: next_root, size: next_size }
+}
+
+/// Returns `true` if `value` is present in the set (O(log n)).
+pub fn TreeSet<T>.contains(self, value: T) -> Bool {
+    avl_contains(self.root, value)
+}
+
+/// Number of unique elements in the set.
+pub fn TreeSet<T>.len(self) -> Int {
+    self.size
+}
+
+/// Returns `true` if the set is empty.
+pub fn TreeSet<T>.is_empty(self) -> Bool {
+    self.size == 0
+}
+
+/// Returns the smallest element in the set, or `None` if empty.
+pub fn TreeSet<T>.min(self) -> T? {
+    avl_min(self.root)
+}
+
+/// Returns the largest element in the set, or `None` if empty.
+pub fn TreeSet<T>.max(self) -> T? {
+    avl_max(self.root)
+}
+
+/// Returns all elements in ascending sorted order.
+pub fn TreeSet<T>.to_array(self) -> Array<T> {
+    avl_inorder(self.root)
+}
+
+/// Returns a new `TreeSet` containing elements present in either `self` or `other`.
+pub fn TreeSet<T>.union(self, other: TreeSet<T>) -> TreeSet<T> {
+    other.to_array().fold(self, { acc, v -> acc.add(v) })
+}
+
+/// Returns a new `TreeSet` containing only elements present in both `self` and `other`.
+pub fn TreeSet<T>.intersection(self, other: TreeSet<T>) -> TreeSet<T> {
+    self.to_array().fold(set_new(), { acc, v ->
+        if other.contains(v) { acc.add(v) } else { acc }
+    })
+}
+
+/// Returns a new `TreeSet` containing elements in `self` that are NOT in `other`.
+pub fn TreeSet<T>.difference(self, other: TreeSet<T>) -> TreeSet<T> {
+    self.to_array().fold(set_new(), { acc, v ->
+        if other.contains(v) { acc } else { acc.add(v) }
+    })
+}
+
+/// Returns `true` if every element of `self` is contained in `other`.
+pub fn TreeSet<T>.is_subset_of(self, other: TreeSet<T>) -> Bool {
+    self.to_array().fold(true, { acc, v -> acc && other.contains(v) })
+}
+
+/// Keeps only elements satisfying `pred`.
+pub fn TreeSet<T>.filter(self, pred: fn(T) -> Bool) -> TreeSet<T> {
+    self.to_array().fold(set_new(), { acc, v ->
+        if pred(v) { acc.add(v) } else { acc }
+    })
+}
+
+/// Folds over the set elements in sorted ascending order.
+pub fn TreeSet<T>.fold<Acc>(self, init: Acc, f: fn(Acc, T) -> Acc) -> Acc {
+    self.to_array().fold(init, f)
+}
+
+/// Returns a lazy O(log n)-space in-order iterator yielding set elements in ascending order.
+pub fn TreeSet<T>.iter(self) -> Iter<T> {
+    let mut stack: Array<TreeNode<T>> = []
+    let mut cur = self.root
+    iter_from_fn({ ->
+        while true {
+            match cur {
+                Node(l, _, _, _) => {
+                    stack = stack.push(cur)
+                    cur = l
+                }
+                Leaf => {
+                    let n = stack.len()
+                    if n == 0 {
+                        return None
+                    }
+                    match stack.get(n - 1) {
+                        Some(Node(_, v, r, _)) => {
+                            stack = stack.slice(0, n - 1)
+                            cur = r
+                            return Some(v)
+                        }
+                        _ => return None
+                    }
+                }
+            }
+        }
+        None
+    })
+}
+
+/// Builds a `TreeSet<T>` by consuming an iterator.
+pub fn set_from_iter<T>(it: Iter<T>) -> TreeSet<T> {
+    let mut s = set_new()
+    for item in it {
+        s = s.add(item)
+    }
+    s
+}
+
+// ============================================================================
+// 3. List<T>
+// ============================================================================
+
+/// Immutable ordered List backed by SPL's `Array<T>` primitive.
+pub type List<T> = struct {
+    items: Array<T>
+}
+
+/// Creates an empty `List<T>`.
+pub fn list_new<T>() -> List<T> {
+    { items: [] }
+}
+
+/// Wraps an `Array<T>` into a `List<T>`.
+pub fn list_from_array<T>(items: Array<T>) -> List<T> {
+    { items: items }
+}
+
+/// Number of elements in the list.
+pub fn List<T>.len(self) -> Int {
+    self.items.len()
+}
+
+/// Returns `true` if the list has zero elements.
+pub fn List<T>.is_empty(self) -> Bool {
+    self.items.len() == 0
+}
+
+/// Safe index lookup returning `Some(item)` or `None`.
+pub fn List<T>.get(self, index: Int) -> T? {
+    self.items.get(index)
+}
+
+/// Returns the first element, or `None` if empty.
+pub fn List<T>.first(self) -> T? {
+    self.items.get(0)
+}
+
+/// Returns the last element, or `None` if empty.
+pub fn List<T>.last(self) -> T? {
+    let n = self.items.len()
+    if n == 0 { None } else { self.items.get(n - 1) }
+}
+
+/// Appends `item` to the end, returning a new `List`.
+pub fn List<T>.push(self, item: T) -> List<T> {
+    { items: self.items.concat([item]) }
+}
+
+/// Prepends `item` to the front, returning a new `List`.
+pub fn List<T>.prepend(self, item: T) -> List<T> {
+    { items: [item].concat(self.items) }
+}
+
+/// Concatenates `other` after `self`.
+pub fn List<T>.concat(self, other: List<T>) -> List<T> {
+    { items: self.items.concat(other.items) }
+}
+
+/// Returns a sub-list from `start` (inclusive) to `end` (exclusive).
+pub fn List<T>.slice(self, start: Int, end: Int) -> List<T> {
+    { items: self.items.slice(start, end) }
+}
+
+/// Takes the first `n` elements.
+pub fn List<T>.take(self, n: Int) -> List<T> {
+    { items: self.items.slice(0, n) }
+}
+
+/// Drops the first `n` elements.
+pub fn List<T>.drop(self, n: Int) -> List<T> {
+    { items: self.items.slice(n, self.items.len()) }
+}
+
+/// Returns a new `List` with elements in reversed order.
+pub fn List<T>.reverse(self) -> List<T> {
+    let n = self.items.len()
+    let rev = array_from_fn(n, { i ->
+        match self.items.get(n - 1 - i) {
+            Some(v) => v
+            None => panic("List.reverse out of bounds")
+        }
+    })
+    { items: rev }
+}
+
+/// Returns `true` if `target` is structurally equal to any element in the list.
+pub fn List<T>.contains(self, target: T) -> Bool {
+    self.items.find({ x -> x == target }).is_some()
+}
+
+/// Maps every element with `f`, returning a new `List<U>`.
+pub fn List<T>.map<U>(self, f: fn(T) -> U) -> List<U> {
+    { items: self.items.map(f) }
+}
+
+/// Keeps only elements satisfying `pred`.
+pub fn List<T>.filter(self, pred: fn(T) -> Bool) -> List<T> {
+    { items: self.items.filter(pred) }
+}
+
+/// Left fold over all elements.
+pub fn List<T>.fold<Acc>(self, init: Acc, f: fn(Acc, T) -> Acc) -> Acc {
+    self.items.fold(init, f)
+}
+
+/// Maps each element to a `List<U>` and flattens the results.
+pub fn List<T>.flat_map<U>(self, f: fn(T) -> List<U>) -> List<U> {
+    { items: self.items.flat_map({ x -> f(x).items }) }
+}
+
+/// Returns the first element satisfying `pred`, or `None`.
+pub fn List<T>.find(self, pred: fn(T) -> Bool) -> T? {
+    self.items.find(pred)
+}
+
+/// Returns `true` if any element satisfies `pred`.
+pub fn List<T>.any(self, pred: fn(T) -> Bool) -> Bool {
+    self.items.find(pred).is_some()
+}
+
+/// Returns `true` if every element satisfies `pred`.
+pub fn List<T>.all(self, pred: fn(T) -> Bool) -> Bool {
+    self.items.fold(true, { acc, x -> acc && pred(x) })
+}
+
+/// Pairs elements from `self` and `other` up to the shorter list's length.
+pub fn List<T>.zip<U>(self, other: List<U>) -> List<(T, U)> {
+    let n = if self.items.len() < other.items.len() { self.items.len() } else { other.items.len() }
+    let zipped = array_from_fn(n, { i ->
+        match (self.items.get(i), other.items.get(i)) {
+            (Some(a), Some(b)) => (a, b)
+            _ => panic("List.zip out of bounds")
+        }
+    })
+    { items: zipped }
+}
+
+/// Extracts the underlying `Array<T>`.
+pub fn List<T>.to_array(self) -> Array<T> {
+    self.items
+}
+
+/// Returns a lazy iterator over the elements of this list.
+pub fn List<T>.iter(self) -> Iter<T> {
+    self.items.iter()
+}
+
+/// Builds a `List<T>` by consuming an iterator.
+pub fn list_from_iter<T>(it: Iter<T>) -> List<T> {
+    { items: it.collect() }
+}

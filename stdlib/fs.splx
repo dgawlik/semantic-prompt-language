@@ -1,0 +1,47 @@
+/// Server-only filesystem module backed by private JS FFI (`std/fs`).
+
+/// File metadata returned by `fs.stat(path)`.
+pub type FileStat = struct {
+    is_file: Bool
+    is_dir: Bool
+    size: Int
+    mtime_ms: Int
+}
+
+/// Reads the full UTF-8 contents of the file at `path`.
+pub extern async fn read(path: Str) -> Result<Str, Str> = "ffi_server:fsRead"
+
+/// Writes UTF-8 text `data` to `path` (creating or overwriting the file).
+pub extern async fn write(path: Str, data: Str) -> Result<Unit, Str> = "ffi_server:fsWrite"
+
+/// Returns file or directory metadata (`is_file`, `is_dir`, `size`, `mtime_ms`) for `path`.
+pub extern async fn stat(path: Str) -> Result<FileStat, Str> = "ffi_server:fsStat"
+
+/// Lists entry names inside the directory `dir`.
+pub extern async fn list_dir(dir: Str) -> Result<Array<Str>, Str> = "ffi_server:fsListDir"
+
+/// Creates directory `dir` recursively (equivalent to `mkdir -p`).
+pub extern async fn mkdir(dir: Str) -> Result<Unit, Str> = "ffi_server:fsMkdir"
+
+/// Removes the file or directory at `path`.
+pub extern async fn remove(path: Str) -> Result<Unit, Str> = "ffi_server:fsRemove"
+
+/// Joins two path segments `a` and `b` with a `/` separator.
+pub fn join_path(a: Str, b: Str) -> Str {
+    if a.ends_with("/") || a.ends_with("\\") {
+        a + b
+    } else {
+        a + "/" + b
+    }
+}
+
+/// Returns the file extension (without leading dot) of path `p`, or `None` if absent.
+pub fn ext_name(p: Str) -> Str? {
+    let parts = p.split(".")
+    let n = parts.len()
+    if n <= 1 {
+        None
+    } else {
+        parts.get(n - 1)
+    }
+}

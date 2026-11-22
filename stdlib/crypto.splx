@@ -1,0 +1,20 @@
+/// Universal cryptographically secure randomness utilities (`std/crypto`).
+
+/// Generates `n` cryptographically secure random bytes (`0..255`).
+pub extern fn random_bytes(n: Int) -> Array<Int> = "ffi_universal:cryptoRandomBytes"
+
+fn nibble_to_hex(n: Int) -> Str {
+    let digits = "0123456789abcdef"
+    digits.slice(n, n + 1)
+}
+
+/// Generates a lowercase hexadecimal string containing `num_bytes` random bytes (`2 * num_bytes` chars).
+pub fn random_hex(num_bytes: Int) -> Str {
+    let bytes = random_bytes(num_bytes)
+    let parts = bytes.map { b ->
+        let hi = (b >> 4) & 15
+        let lo = b & 15
+        nibble_to_hex(hi) + nibble_to_hex(lo)
+    }
+    parts.join("")
+}

@@ -1,0 +1,152 @@
+/// Dynamic typed code generation (JS sandbox, LLM-synthesized JS, & runtime SPL compiler).
+
+import llm from "std/llm"
+
+type ReifiedTypeMeta = struct {
+    name: Str
+    spl_type: Str
+    schema_json: Str
+}
+
+'' Generated synchronous JavaScript function body for `codegen.js_fn`.
+type GeneratedJsCode = struct {
+    body: Str '' Pure synchronous JavaScript function body receiving parameter `input` and ending with a `return ...;` statement matching the output schema. Do NOT wrap in `function(...) { ... }` or markdown code fences.
+}
+
+extern reified fn reified_type_meta<T>() -> ReifiedTypeMeta = "ffi_codegen:reifiedTypeMeta"
+
+/// Compiles a synchronous JS function body receiving `input: In` into a strongly-typed
+/// SPL function `fn(In) -> Result<Out, Str>`.
+/// Accepts either a string `body` or a brace-balanced `@{ ... }` block:
+///   `codegen.js_fn<In, Out> @{ return input.a + input.b; }?`
+/// - On Node/Bun/Deno, executes inside an isolated `node:vm` sandbox with `timeout_ms`.
+/// - Return values are validated at runtime against `Out`'s compile-time codec.
+pub extern reified fn js_fn<In, Out>(
+    body: Str = "",
+    timeout_ms: Int = 5000,
+    code: Prompt = @{ }
+) -> Result<fn(In) -> Result<Out, Str>, Str> = "ffi_codegen:compileJsFn"
+
+/// Compiles an async JS function body (`await` allowed) receiving `input: In` into an
+/// async SPL function (`fn(In) -> Result<Out, Str>`), participating seamlessly in colorless async.
+/// Accepts either a string `body` or a trailing `@{ ... }` block.
+pub extern reified fn js_async_fn<In, Out>(
+    body: Str = "",
+    code: Prompt = @{ }
+) -> Result<async fn(In) -> Result<Out, Str>, Str> = "ffi_codegen:compileJsAsyncFn"
+
+/// Evaluates a single JS expression in the sandbox and validates the result as `Out`.
+/// Accepts either a string `expr` or a trailing `@{ ... }` block.
+pub extern reified fn js_eval<Out>(
+    expr: Str = "",
+    timeout_ms: Int = 5000,
+    code: Prompt = @{ }
+) -> Result<Out, Str> = "ffi_codegen:evalJsExpr"
+
+/// Dynamically parses, type-checks (against `fn(In) -> Out`), and compiles SPL (`.splx`)
+/// source code at runtime into a strongly-typed SPL function `fn(In) -> Result<Out, Str>`.
+/// Accepts either a string `source` or a trailing `@{ ... }` block.
+pub extern async reified fn spl_fn<In, Out>(
+    source: Str = "",
+    entry: Str = "run",
+    code: Prompt = @{ }
+) -> Result<fn(In) -> Result<Out, Str>, Str> = "ffi_codegen:compileSplFn"
+
+fn strip_code_fences(raw: Str) -> Str {
+    let s = raw.trim()
+    if s.starts_with("```") {
+        let lines = s.split("\n")
+        let n = lines.len()
+        if n >= 2 {
+            let last = lines.get(n - 1) ?? ""
+            let end_idx = if last.trim() == "```" { n - 1 } else { n }
+            return lines.slice(1, end_idx).join("\n").trim()
+        }
+    }
+    s
+}
+
+/// Uses an LLM to synthesize a synchronous JavaScript function body from a natural-language
+/// `description` (and/or trailing `@{ ... }` prompt block) plus the compile-time JSON Schemas
+/// and `''` LLM hints of `In` and `Out`, then compiles it via `js_fn<In, Out>` in the isolated
+/// VM sandbox with runtime `Out` decoding.
+///
+/// Automatically retries up to `max_retries` times if the generated JS has a syntax error.
+pub reified fn llm_fn<In, Out>(
+    provider: Str,
+    api_key: Str,
+    model: Str,
+    description: Str = "",
+    base_url: Str? = None,
+    max_tokens: Int? = None,
+    thinking: llm.Thinking? = None,
+    thinking_effort: Str? = None,
+    temperature: Float? = None,
+    timeout_ms: Int = 5000,
+    max_retries: Int = 2,
+    prompt: Prompt = @{ }
+) -> Result<fn(In) -> Result<Out, Str>, Str> {
+    let prompt_part = prompt.render().trim()
+    let desc_part = description.trim()
+    let effective_desc = if desc_part != "" && prompt_part != "" {
+        desc_part + "\n" + prompt_part
+    } else if desc_part != "" {
+        desc_part
+    } else {
+        prompt_part
+    }
+
+    if effective_desc == "" {
+        return Err("codegen.llm_fn requires a non-empty description or trailing @{ ... } prompt")
+    }
+
+    let in_meta = reified_type_meta<In>()
+    let out_meta = reified_type_meta<Out>()
+    let sys_prompt = "You are a JavaScript code generator for a sandboxed runtime. Return ONLY valid synchronous JavaScript function body statements in the `body` field. The function receives a single parameter named `input` and must end with a `return ...;` value matching the Output JSON Schema. Available globals: Math, JSON, Array, Object, Number, String, Boolean, RegExp, Map, Set, Date, Error. Do NOT use import, require, fetch, process, or filesystem APIs. Do NOT wrap the body in a `function(...) { ... }` declaration or markdown fences."
+
+    let mut attempt = 0
+    let mut last_error = ""
+    let max_attempts = if max_retries < 0 { 1 } else { max_retries + 1 }
+
+    while attempt < max_attempts {
+        attempt = attempt + 1
+        let retry_note = if last_error != "" {
+            "\nPrevious attempt failed JS compilation with error: " + last_error + "\nFix the syntax error and return a valid JS function body."
+        } else {
+            ""
+        }
+
+        let gen = llm.ask<GeneratedJsCode>(
+            provider: provider,
+            api_key: api_key,
+            model: model,
+            system: Some(sys_prompt),
+            base_url: base_url,
+            max_tokens: max_tokens,
+            thinking: thinking,
+            thinking_effort: thinking_effort,
+            temperature: temperature
+        ) @{
+            Generate the JavaScript function body for this specification:
+            ${effective_desc}
+
+            Input parameter `input` SPL type: ${in_meta.spl_type}
+            Input JSON Schema:
+            ${in_meta.schema_json}
+
+            Required return value SPL type: ${out_meta.spl_type}
+            Output JSON Schema:
+            ${out_meta.schema_json}${retry_note}
+        }?
+
+        let clean_body = strip_code_fences(gen.body)
+        match js_fn<In, Out>(clean_body, timeout_ms: timeout_ms) {
+            Ok(compiled) => return Ok(compiled)
+            Err(err_msg) => {
+                last_error = err_msg
+            }
+        }
+    }
+
+    Err("codegen.llm_fn failed after " + to_str(max_attempts) + " attempt(s): " + last_error)
+}

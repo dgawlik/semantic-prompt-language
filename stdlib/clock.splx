@@ -1,0 +1,7 @@
+/// Universal clock & timer utilities (`std/clock`).
+
+/// Returns the current Unix epoch timestamp in milliseconds.
+pub extern fn now_ms() -> Int = "ffi_universal:clockNowMs"
+
+/// Suspends the current execution for `ms` milliseconds (colorless async).
+pub extern async fn sleep(ms: Int) -> Unit = "ffi_universal:clockSleep"

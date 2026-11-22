@@ -1,0 +1,129 @@
+// ============================================================================
+// 12_files_and_shell.splx — Working with Files (`std/fs`) & Shell (`std/proc`)
+// ============================================================================
+// Run: node dist/cli.js run examples/12_files_and_shell.splx
+
+import fs from "std/fs"
+import proc from "std/proc"
+import os from "std/os"
+import crypto from "std/crypto"
+
+// --- 1. Typed JSON File Helpers (`std/fs` + `reified fn`) ---
+
+type ProjectConfig = struct {
+    name: Str
+    version: Str
+    tags: Array<Str>
+}
+
+/// Serializes any SPL value as JSON and writes it to `path`.
+fn write_json<T>(path: Str, value: T) -> Result<Unit, Str> {
+    fs.write(path, json_stringify(value))
+}
+
+/// Reads a JSON file and validates it against the static type `T`.
+reified fn read_json<T>(path: Str) -> Result<T, Str> {
+    let raw = fs.read(path)?
+    let parsed = json_parse(raw)?
+    match decode<T>(parsed) {
+        Ok(val) => Ok(val)
+        Err(e) => Err("Invalid JSON in " + path + " at " + e.path + ": " + e.message)
+    }
+}
+
+// --- 2. Recursive Directory Walker (Pure SPL on `std/fs`) ---
+
+/// Recursively collects all file paths under `dir`.
+fn walk_files(dir: Str) -> Result<Array<Str>, Str> {
+    let entries = fs.list_dir(dir)?
+    let out: Array<Str> = []
+    for name in entries {
+        let full = fs.join_path(dir, name)
+        let info = fs.stat(full)?
+        if info.is_dir {
+            let nested = walk_files(full)?
+            for f in nested {
+                out.push(f)
+            }
+        } else if info.is_file {
+            out.push(full)
+        }
+    }
+    Ok(out)
+}
+
+// --- 3. Main Demo (with guaranteed temp-dir cleanup) ---
+
+fn run_demo(work_dir: Str) -> Result<Unit, Str> {
+    print("=== 12_files_and_shell ===")
+    print("platform=" + os.platform() + ", cwd=" + os.cwd())
+
+    // A. Create nested directories & write text files
+    let src_dir = fs.join_path(work_dir, "src")
+    let docs_dir = fs.join_path(work_dir, "docs")
+    fs.mkdir(src_dir)?
+    fs.mkdir(docs_dir)?
+
+    let main_file = fs.join_path(src_dir, "main.splx")
+    let readme_file = fs.join_path(docs_dir, "notes.md")
+    let config_file = fs.join_path(work_dir, "config.json")
+
+    fs.write(main_file, "// hello\nlet x = 42\nprint(x)\n")?
+    fs.write(readme_file, "# Workspace Notes\nCreated by SPL.\n")?
+
+    // B. Typed JSON round-trip (`write_json` + `read_json<ProjectConfig>`)
+    let cfg: ProjectConfig = { name: "spl-demo", version: "1.0.0", tags: ["files", "shell"] }
+    write_json(config_file, cfg)?
+    let loaded = read_json<ProjectConfig>(config_file)?
+    print("config loaded:   name=" + loaded.name + ", version=" + loaded.version + ", tags=" + to_str(loaded.tags))
+
+    // C. Metadata (`fs.stat`) & path helpers (`fs.ext_name`)
+    let st = fs.stat(main_file)?
+    let ext = fs.ext_name(main_file) ?? ""
+    print("main.splx stat:  is_file=" + to_str(st.is_file) + ", size=" + to_str(st.size) + ", ext=." + ext)
+
+    // D. Recursive directory walk & filtering
+    let all_files = walk_files(work_dir)?
+    let splx_files = all_files.filter { p -> (fs.ext_name(p) ?? "") == "splx" }
+    print("walked files:    total=" + to_str(all_files.len()) + ", splx=" + to_str(splx_files.len()))
+
+    // Count total lines across all walked files
+    let mut total_lines = 0
+    for f in all_files {
+        let body = fs.read(f)?
+        total_lines = total_lines + body.trim().split("\n").len()
+    }
+    print("total lines:     " + to_str(total_lines))
+
+    // E. Shell command via `proc.shell` (cross-platform: `cmd /c` on Windows, `sh -c` on Unix)
+    let sh = proc.shell("echo hello from shell")?
+    print("proc.shell:      code=" + to_str(sh.code) + ", stdout=" + sh.stdout.trim())
+
+    // F. Direct process invocation via `proc.exec` (safe argv array, custom `cwd`, and `timeout_ms`)
+    let res = proc.exec(
+        "node",
+        ["-e", "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('config.json','utf8')); console.log(c.name + '@' + c.version);"],
+        { cwd: Some(work_dir), timeout_ms: Some(5000) }
+    )?
+    print("proc.exec (cwd): code=" + to_str(res.code) + ", stdout=" + res.stdout.trim())
+
+    // G. Capturing non-zero exit codes & stderr without crashing
+    let failed = proc.exec(
+        "node",
+        ["-e", "console.error('simulated warning'); process.exit(2);"],
+        { cwd: None, timeout_ms: Some(5000) }
+    )?
+    print("non-zero exit:   code=" + to_str(failed.code) + ", stderr=" + failed.stderr.trim())
+
+    Ok(())
+}
+
+let work_dir = fs.join_path(os.cwd(), ".spl-files-shell-tmp-" + crypto.random_hex(4))
+let demo_res = run_demo(work_dir)
+// Always clean up temporary directory even if a step returned `Err`
+let _ = fs.remove(work_dir)
+
+match demo_res {
+    Ok(_) => print("cleanup:         done")
+    Err(e) => panic("12_files_and_shell failed: " + e)
+}

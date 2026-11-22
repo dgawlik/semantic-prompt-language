@@ -1,0 +1,107 @@
+// ============================================================================
+// 02_functions_and_tco.splx — Closures, Lambdas, Tuples, Named Params, Extensions & TCO
+// ============================================================================
+// Run: node dist/cli.js run examples/02_functions_and_tco.splx
+
+// --- 1. Named Parameters & Default Values ---
+fn format_log(
+    message: Str,
+    level: Str = "INFO",
+    prefix: Str = "[SPL]"
+) -> Str {
+    "${prefix} [${level}] ${message}"
+}
+
+// --- 2. Higher-Order Functions & Closures ---
+fn make_adder(base: Int) -> fn(Int) -> Int {
+    { x -> base + x }                // Closure captures `base`
+}
+
+// --- 3. Extractable Tuples `(a, b)` vs Arrays `[a, b]` ---
+fn stats(nums: Array<Int>) -> (Int, Int, Int) {
+    let count = nums.len()
+    let total = nums.fold(0, { acc, n -> acc + n })
+    let avg = if count == 0 { 0 } else { total / count }
+    (count, total, avg)
+}
+
+// --- 4. Self-Tail-Call Optimization (TCO) ---
+// Direct self-tail recursion compiles to a JS `while (true)` loop,
+// avoiding V8 call-stack overflow even at 100,000+ iterations.
+fn sum_to(n: Int, acc: Int) -> Int {
+    if n <= 0 {
+        acc
+    } else {
+        sum_to(n - 1, acc + n)
+    }
+}
+
+// --- 5. Type Extension Methods ---
+// Attach methods to primitives, named structs, or generic types without OOP classes.
+
+/// Clamps an `Int` into the inclusive range `[lo, hi]`.
+fn Int.clamp(self, lo: Int, hi: Int) -> Int {
+    if self < lo { lo } else if self > hi { hi } else { self }
+}
+
+type Counter = struct {
+    label: Str
+    value: Int
+}
+
+fn Counter.inc(self, by: Int = 1) -> Counter {
+    { ...self, value: self.value + by }
+}
+
+fn Counter.summary(self) -> Str {
+    "${self.label}=${to_str(self.value)}"
+}
+
+type Box<T> = struct {
+    item: T
+}
+
+fn Box<T>.map<U>(self, f: fn(T) -> U) -> Box<U> {
+    { item: f(self.item) }
+}
+
+print("=== 02_functions_and_tco ===")
+
+// Calling with named arguments in any order + defaults
+print(format_log("boot complete"))
+print(format_log(level: "WARN", message: "high latency"))
+print(format_log(prefix: "[AGENT]", message: "ready", level: "DEBUG"))
+
+// First-class function variable + closure
+let add_ten = make_adder(10)
+print("add_ten(32) = " + to_str(add_ten(32)))
+
+// Kotlin-style trailing lambdas & immutable Array combinators
+let nums = array_from_fn(6, { i -> i + 1 }) // [1, 2, 3, 4, 5, 6]
+let evens = nums.filter { n -> n % 2 == 0 }
+let doubled = evens.map { n -> n * 2 }
+let expanded = doubled.flat_map { n -> [n, n + 1] }
+let first_big = expanded.find { n -> n > 8 } ?? -1
+let combined = [0].concat(doubled).push(99).slice(0, 4)
+
+let (count, total, avg) = stats(nums)
+print("stats: count=" + to_str(count) + ", total=" + to_str(total) + ", avg=" + to_str(avg))
+print("doubled=" + to_str(doubled) + ", first_big=" + to_str(first_big) + ", combined=" + to_str(combined))
+
+// Immutable copy-on-write Dict<K, V>
+let d0: Dict<Str, Int> = dict_empty()
+let d1 = d0.set("alpha", 1).set("beta", 2)
+let d2 = d1.delete("alpha")
+print("d1.len=" + to_str(d1.len()) + ", d2.len=" + to_str(d2.len()) + ", beta=" + to_str(d2["beta"] ?? 0))
+
+// TCO stress test (100,000 recursive steps without stack overflow)
+print("sum_to(100_000) = " + to_str(sum_to(100_000, 0)))
+
+// Type extension methods on primitives, structs, and generic types
+print("clamp(150, 0, 100) = " + to_str(150.clamp(0, 100)))
+let c0: Counter = { label: "hits", value: 0 }
+let c1 = c0.inc(3).inc(2)
+print("counter: " + c1.summary())
+let b: Box<Int> = { item: 21 }
+let b2 = b.map { n -> "value=" + to_str(n * 2) }
+print("box.map: " + b2.item)

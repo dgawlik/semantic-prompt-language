@@ -1,13 +1,4 @@
-node_modules/
-dist/
-out/
-build/
-coverage/
-*.log
-.env*
-.DS_Store
-Thumbs.db
-*.tmp
-*.swp
-.vscode/
-.idea/
+**/node_modules
+**/dist
+**/.astro
+**/*.jsonl

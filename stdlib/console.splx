@@ -1,0 +1,10 @@
+/// Universal console logging utilities (`std/console`).
+
+/// Logs `val` to standard output / console.
+pub extern fn log<T>(val: T) -> Unit = "ffi_universal:consoleLog"
+
+/// Logs `val` as a warning to console.
+pub extern fn warn<T>(val: T) -> Unit = "ffi_universal:consoleWarn"
+
+/// Logs `val` as an error to console.
+pub extern fn error<T>(val: T) -> Unit = "ffi_universal:consoleError"

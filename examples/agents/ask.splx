@@ -1,0 +1,23 @@
+
+import llm from "std/llm"
+import os from "std/os"
+
+
+type Person =  {
+    firstName: String '' Ada
+    lastName: String '' Lovelace
+    age: Int 
+    profession: String
+}
+
+let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
+
+let ada = llm.ask<Person>(provider: "openai-responses",
+                    model: "gpt-6-luna", 
+                    api_key: api_key) @{ 
+
+    Generate person
+}?
+print("Person[${ada.firstName} ${ada.lastName}" + 
+        ", age ${ada.age}, profession ${ada.profession}]")
+                          

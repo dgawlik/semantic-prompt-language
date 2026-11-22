@@ -1,0 +1,55 @@
+import llm from "std/llm"
+import os from "std/os"
+import fs from "std/fs"
+
+
+type FilePath = String '' Path to a file
+type FileContent = String '' Content of a file
+type DirectoryPath = String '' Path to a directory
+type DirectoryContent = Array<String> '' Content of a directory
+
+
+let read_file = llm.tool<FilePath, FileContent>(
+        name: "read_file",
+        description: "Reads the content of a file given its path"
+    ) { args ->
+    
+        let content = fs.read(args) ?? panic("Failed to read file")
+        Ok(content)
+}
+
+let list_files = llm.tool<DirectoryPath, DirectoryContent>(
+        name: "list_files",
+        description: "Lists the content of a directory given its path"
+    ) { args ->
+    
+        let content = fs.list_dir(args) ?? panic("Failed to list directory")
+        Ok(content)
+}
+
+let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
+
+let (result, trace) = llm.agent(
+    provider: "openai-responses", 
+    api_key: api_key,
+    thinking: Some(llm.ThinkLow),
+    model: "gpt-6-luna",
+    tools: [read_file.any(), list_files.any()],
+    on_delta: Some({ delta -> 
+        match delta {
+            llm.TextDelta(text) => print_inline(text)
+            llm.ThinkingDelta(text) => print_inline(text)
+            llm.SummaryDelta(text) => print_inline(text)
+            llm.ToolCallDelta(tool_name, _, args) => {
+                print_inline("Tool call: " + tool_name)
+            }
+            _ => ()
+        }
+    })
+) @{ 
+    Analyze contents of ./src for known vulnerabilites. 
+    Summarize the findings
+}?
+
+print("\n\n--------------\nResult:\n")
+print(result)

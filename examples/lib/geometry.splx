@@ -1,0 +1,61 @@
+// Helper module demonstrating `pub` exports, traits, nominal newtypes, and extension methods
+
+/// A 2D point in Cartesian space.
+'' 2D coordinate with x and y floats.
+pub type Point = struct {
+    /// Horizontal coordinate
+    x: Float '' X axis value
+    /// Vertical coordinate
+    y: Float '' Y axis value
+}
+
+// Nominal single-variant enum (`newtype`) for distinct trait behavior
+// even when two types share the same underlying representation.
+pub enum Meters {
+    Meters(Float)
+}
+
+pub enum Feet {
+    Feet(Float)
+}
+
+// Custom trait (protocol)
+pub trait Describable {
+    fn describe(self) -> Str
+}
+
+impl Describable for Point {
+    fn describe(self) -> Str {
+        "Point(" + to_str(self.x) + ", " + to_str(self.y) + ")"
+    }
+}
+
+impl Show for Meters {
+    fn show(self) -> Str {
+        match self {
+            Meters(v) => to_str(v) + "m"
+        }
+    }
+}
+
+impl Show for Feet {
+    fn show(self) -> Str {
+        match self {
+            Feet(v) => to_str(v) + "ft"
+        }
+    }
+}
+
+// Exported extension method working on `Point` or ANY record with `{ x: Float, y: Float, .. }`
+pub fn { x: Float, y: Float, .. }.distance_from_origin(self) -> Float {
+    sqrt(self.x * self.x + self.y * self.y)
+}
+
+// Module-private helper (not exported)
+fn square(n: Float) -> Float {
+    n * n
+}
+
+pub fn distance(a: Point, b: Point) -> Float {
+    sqrt(square(a.x - b.x) + square(a.y - b.y))
+}
