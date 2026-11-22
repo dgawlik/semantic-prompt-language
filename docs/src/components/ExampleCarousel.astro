@@ -299,10 +299,16 @@ const total = slides.length;
             <h3 class="spl-slide-title">{slide.title}</h3>
             <p class="spl-slide-summary">{slide.summary}</p>
           </div>
-          <a class="spl-slide-link" href={slide.docHref}>
-            <span>{slide.docLabel}</span>
-            <span aria-hidden="true">-&gt;</span>
-          </a>
+          <div class="spl-slide-actions">
+            <a class="spl-slide-link spl-slide-link-pg" href={`/playground/?example=${slide.id}`}>
+              <span>Playground</span>
+              <span aria-hidden="true">&gt;</span>
+            </a>
+            <a class="spl-slide-link" href={slide.docHref}>
+              <span>{slide.docLabel}</span>
+              <span aria-hidden="true">-&gt;</span>
+            </a>
+          </div>
         </div>
         <div class="spl-slide-code">
           <Code code={slide.code} lang="splx" title={slide.file} />
@@ -722,6 +728,13 @@ const total = slides.length;
     text-wrap: pretty;
   }
 
+  .spl-slide-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
   .spl-slide-link {
     display: inline-flex;
     align-items: center;
@@ -737,6 +750,18 @@ const total = slides.length;
     letter-spacing: 0.04em;
     text-decoration: none;
     white-space: nowrap;
+  }
+
+  .spl-slide-link-pg {
+    background: var(--sl-color-accent);
+    border-color: var(--sl-color-accent);
+    color: #ffffff;
+  }
+
+  .spl-slide-link-pg:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #ffffff;
   }
 
   .spl-slide-link:hover {

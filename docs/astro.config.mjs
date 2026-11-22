@@ -2,6 +2,13 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
 export default defineConfig({
+  vite: {
+    server: {
+      fs: {
+        allow: [".."],
+      },
+    },
+  },
   integrations: [
     starlight({
       title: "SPL",
@@ -58,6 +65,7 @@ export default defineConfig({
         {
           label: "Tooling & Examples",
           items: [
+            { label: "Interactive Playground", slug: "playground" },
             { label: "CLI & LSP / VS Code", slug: "tooling/cli-and-lsp" },
             { label: "Runnable Examples", slug: "tooling/examples" },
           ],
