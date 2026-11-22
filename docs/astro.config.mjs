@@ -1,15 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const splxGrammar = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, "../editors/vscode/syntaxes/splx.tmLanguage.json"), "utf8")
-);
-splxGrammar.name = "splx";
-splxGrammar.aliases = ["spl"];
 
 export default defineConfig({
   integrations: [
@@ -18,12 +8,24 @@ export default defineConfig({
       description:
         "Semantic Prompt Language (.splx) — Strongly-typed, agent-first functional language compiled to ES Module JavaScript.",
       favicon: "/favicon.svg",
-      customCss: ["./src/styles/custom.css"],
-      expressiveCode: {
-        shiki: {
-          langs: [splxGrammar],
+      head: [
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
         },
-      },
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: true },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400..800;1,400..700&family=Share+Tech+Mono&display=swap",
+          },
+        },
+      ],
+      customCss: ["./src/styles/custom.css"],
       sidebar: [
         {
           label: "Getting Started",

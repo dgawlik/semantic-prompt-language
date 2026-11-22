@@ -15,35 +15,13 @@ hero:
 ---
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
+import ExampleCarousel from "../../components/ExampleCarousel.astro";
 
 ## A Taste of SPL (`.splx`)
 
-```splx
-import llm from "std/llm"
-import os from "std/os"
+Click through live examples — structured LLM extraction, streaming tool agents, row polymorphism, ADTs, sandboxed codegen, and reified generics:
 
-/// Developer doc-comment (shown in IDE hover, omitted from LLM schemas).
-'' Historical figure profile returned by the model.
-type Person = struct {
-    firstName: Str  '' Given name, e.g. Ada
-    lastName: Str   '' Family name, e.g. Lovelace
-    age: Int        '' Age in years
-    profession: Str '' Primary occupation
-}
-
-let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
-
-// Automatically sends `type_schema<Person>()` and validates the JSON response!
-let ada = llm.ask<Person>(
-    provider: "openai_responses",
-    model: "gpt-6-luna",
-    api_key: api_key
-) @{
-    Generate a profile for Ada Lovelace.
-}?
-
-print("${ada.firstName} ${ada.lastName} (${ada.age}) — ${ada.profession}")
-```
+<ExampleCarousel />
 
 ## Why SPL?
 

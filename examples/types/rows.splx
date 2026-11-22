@@ -1,0 +1,42 @@
+
+
+type Human = {
+    height: Int
+    weight: Int
+}
+
+type Employee = {
+    ..Human
+    id: Int
+    name: String
+}
+
+type Fish = {
+    height: Int
+    weight: Int
+}
+
+type LivingThing = {
+    height: Int
+    weight: Int
+    ..
+}
+
+fn feed(mut thing: LivingThing) {
+    thing.weight = thing.weight + 1
+}
+
+let fish = Fish {
+    height: 10,
+    weight: 5
+}
+feed(fish)
+
+let human = Human {
+    height: 180,
+    weight: 75
+}
+feed(human)
+
+print(human)
+print(fish)
