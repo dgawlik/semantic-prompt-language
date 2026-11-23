@@ -151,3 +151,18 @@ print(sieve(1000))
 ```
 
 `Prompt.llm_fn<In, Out>` returns `Result<fn(In) -> Result<Out, Str>, Str>` — unwrap the outer `Result` with `?` to get a typed callable `fn(In) -> Result<Out, Str>`. See [Dynamic Codegen (`std/codegen`)](/stdlib/codegen/) or run it live in the [Playground](/playground/?example=live-llm-fn).
+
+## 7. Interactive Step Debugging (`spl debug`)
+
+Step through any SPL program's LLM calls (`Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `llm.ask_raw`, `llm.decide`) in a split-pane terminal debugger with scrollable pretty-printed results, live request/response JSON editing, mock response injection, and `.jsonl` trace export:
+
+```bash
+# Interactive step-through debugger (scroll results with ↑/↓, PgDn, or mouse wheel)
+node dist/cli.js debug examples/agents/agent.splx
+
+# Only pause after responses, or run non-interactively and save a trace
+node dist/cli.js debug examples/agents/agent.splx --after-only
+node dist/cli.js debug examples/agents/agent.splx --no-pause --save debug.jsonl
+```
+
+See [CLI & LSP / VS Code](/tooling/cli-and-lsp/#interactive-llm-step-debugger-spl-debug) for all debugger shortcuts and flags.

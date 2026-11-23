@@ -153,18 +153,18 @@ Reload VS Code (`Developer: Reload Window`) after installing.
   npm run docs:build  # Build static documentation site into docs/dist/
   ```
 - **Language Specification**: see [SPEC.md](./SPEC.md)
-- **Runnable Examples**: see [examples/README.md](./examples/README.md) (`examples/01_basics.splx` through `examples/12_files_and_shell.splx`)
+- **Runnable Examples**: see [examples/README.md](./examples/README.md) (`examples/01_basics.splx` through `examples/13_typeof_and_newtype.splx`)
 
 ---
 
 ## Project Layout
 
 ```text
-src/            TypeScript compiler (lexer, Pratt parser, HM + row typechecker, schema/codec gen, JS codegen, CLI, LSP)
+src/            TypeScript compiler (lexer, Pratt parser, HM + row typechecker, schema/codec gen, JS codegen, CLI, debugger, trace editor, LSP)
 runtime/        Zero-dependency ESM runtime & private stdlib FFI kernels
 stdlib/         SPL standard library modules (.splx)
-examples/       12 runnable, test-verified language & stdlib examples
-tests/          Compiler, runtime, LLM/traces/codegen, and LSP test suites
+examples/       13 runnable, test-verified language & stdlib examples
+tests/          Compiler, runtime, LLM/traces/codegen, debugger, and LSP test suites
 editors/vscode/ VS Code extension & TextMate grammar (splx.tmLanguage.json)
 docs/           Astro + Starlight documentation website
 ```

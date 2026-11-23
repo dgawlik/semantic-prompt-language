@@ -20,12 +20,37 @@ Run the SPL CLI via `node dist/cli.js <command>` or `npm run spl -- <command>`:
 
 ## Interactive LLM Step Debugger (`spl debug`)
 
-`spl debug <file.splx>` compiles and runs your SPL program while intercepting every `std/llm` call (`Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `llm.ask_raw`, `llm.decide`) inside a split-pane terminal UI built on the `spl trace` inspector:
+`spl debug <file.splx>` compiles and runs your SPL program while intercepting every `std/llm` call (`Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `llm.ask_raw`, `llm.decide`) inside a split-pane terminal UI built on the `spl trace` inspector. API keys are automatically redacted (`[redacted]`) from the UI and saved traces.
 
-- **Step & Breakpoints**: Press `n`, `Space`, or `Enter` to send a paused request or advance after a response, `c` to continue all remaining calls, or `b` to cycle breakpoints (`BEFORE+AFTER`, `AFTER-ONLY`, `BEFORE-ONLY`, `NONE`).
-- **Pretty Printing**: Press `v` (or `1`–`4`) to switch between **Pretty** (expanded embedded JSON and syntax-highlighted JS/SPL code blocks), **JSON**, **JS**, and **SPL** views, and `p` to toggle embedded expansion.
-- **Live Request/Response Editing & Mocking**: Press `e` to edit the active request or response JSON in-place before continuing, `m` when paused before a call to inject a mock response without hitting the network, or `x` to abort a single call.
-- **Trace Export & Non-Interactive Mode**: Press `s` / `W` (or pass `--save out.jsonl`) to save the session for `spl trace`, or pass `--no-pause` to run end-to-end and pretty-print every LLM call and result to stdout.
+```bash
+# Pause before & after every LLM call
+node dist/cli.js debug examples/agents/agent.splx
+
+# Auto-send requests and only pause after each response
+node dist/cli.js debug examples/agents/agent.splx --after-only
+
+# Run non-interactively, pretty-print every call/result, and save a JSONL trace
+node dist/cli.js debug examples/agents/agent.splx --no-pause --format pretty --save debug.jsonl
+```
+
+### Debugger Controls
+
+| Keys / Input | Action |
+|---|---|
+| `n` / `Space` / `Enter` | Step forward (send paused request or advance after response) |
+| `↑`/`↓`, `j`/`k`, `PgUp`/`PgDn`, `g`/`G` | Scroll the pretty-printed result in the Inspector (default focus), or navigate the Event List when focused |
+| **Mouse Wheel** / **Click** | Scroll whichever pane the cursor is over; click to focus a pane or select a trace entry |
+| `←`/`→`, `h`/`l`, `Tab` | Switch focus between Event List (`←`) and Inspector (`→`) |
+| `Ctrl+D`/`Ctrl+U`, `]`/`[`, `Shift+↑`/`↓` | Always scroll the Inspector down/up regardless of which pane is focused |
+| `v` / `1`–`4` | Switch inspector format: `1` **Pretty** (expanded JSON + highlighted embedded JS/SPL code), `2` **JSON**, `3` **JS**, `4` **SPL** |
+| `p` | Toggle embedded JSON & code block pretty-printing |
+| `e` | Edit the selected entry JSON in-place (live-modifies the active paused request or response before continuing) |
+| `m` | Inject a mock LLM response when paused before a call (skips the network request) |
+| `x` | Abort the currently paused LLM call with an error |
+| `c` / `b` | Continue all remaining calls (`c`), or cycle breakpoints (`b`: `BEFORE+AFTER`, `AFTER-ONLY`, `BEFORE-ONLY`, `NONE`) |
+| `/` / `s` / `W` | Filter trace entries (`/`), save `.jsonl` (`s` / `W`, openable in `spl trace`), `?` help, `q` quit |
+
+When a result overflows the terminal height, the Inspector pane displays a right-edge scrollbar (`█`) and a live line-range indicator (`Ln 1-28/64`) in its header.
 
 ## Language Server (`spl lsp`) Features
 
