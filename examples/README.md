@@ -16,6 +16,7 @@ Runnable, documented examples covering 100% of the features specified in [SPEC.m
 | [`10_llm_and_agent.splx`](./10_llm_and_agent.splx) | Unified LLM provider facade (`std/llm`): `Prompt.ask<T>` (single turn), `Prompt.agent<T>` (multi-turn loop with tools, `Decision` hooks, streaming `on_delta`, attachments, thinking effort & `ExecutionTrace`), `Prompt.llm_fn<In, Out>` |
 | [`11_reified_types.splx`](./11_reified_types.splx) | Reifiable types (`reified fn<T>`): generic `type_schema<T>()` and `decode<T>(json)`, compound reified types (`Array<T>`, `Envelope<T>`), forwarding reified `T` across functions and into `std/codegen`, and schema-guided validation errors |
 | [`12_files_and_shell.splx`](./12_files_and_shell.splx) | Working with files & shell (`std/fs`, `std/proc`, `std/os`): nested `mkdir`/`write`/`read`/`stat`/`list_dir`/`remove`, typed JSON file persistence (`read_json<T>`), recursive directory walking, `proc.shell`, `proc.exec` with `cwd` & `timeout_ms`, and capturing non-zero exit codes & `stderr` |
+| [`13_typeof_and_newtype.splx`](./13_typeof_and_newtype.splx) | Nominal `newtype` declarations (constructors, `.value`, `as`, pattern matching, transparent struct fields, distinct traits/extensions), type-level & runtime `typeof` (`TypeInfo`), and universal auto-reification across all generic functions |
 
 ## Running Examples
 

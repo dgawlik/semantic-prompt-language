@@ -113,7 +113,7 @@ const SK = {
 } as const;
 
 const KEYWORDS = [
-  "let", "mut", "fn", "type", "struct", "enum", "trait", "impl",
+  "let", "mut", "fn", "reified", "type", "newtype", "typeof", "struct", "enum", "trait", "impl",
   "for", "in", "match", "if", "else", "while", "return", "pub", "import",
   "from", "as", "true", "false",
 ];
@@ -121,6 +121,7 @@ const KEYWORDS = [
 const PRIMITIVE_TYPES = [
   "Int", "Float", "Str", "Bool", "Char", "Byte", "Bytes", "Json",
   "Prompt", "Array", "Iter", "Dict", "Option", "Result", "Unit",
+  "TypeInfo", "TypeFieldInfo", "TypeVariantInfo",
 ];
 
 const STD_MODULES = [
@@ -147,6 +148,10 @@ const BUILTIN_DOCS: Record<string, { sig: string; doc: string }> = {
   decode: {
     sig: "intrinsic decode<T>(json: Json) -> Result<T, DecodeError>",
     doc: "Compile-time generated runtime validator and decoder converting parsed `Json` into `Result<T, DecodeError>`.",
+  },
+  typeof: {
+    sig: "keyword typeof(expr) / typeof<T>() -> TypeInfo | type typeof expr",
+    doc: "In expression position, returns a reified runtime `TypeInfo` descriptor for `expr` or type `T` (works across all generic functions). In type position (`type T = typeof expr`), resolves to the static type of `expr`.",
   },
   // Core ADTs
   Some: { sig: "enum Option.Some<T>(value: T) -> T?", doc: "Wraps a present value inside `Option<T>` (`T?`)." },
@@ -208,6 +213,9 @@ const PRIMITIVE_TYPE_DOCS: Record<string, string> = {
   Option: "`Option<T>` (`T?`) — `Some(value)` or `None`, with `?.` and `??` operators.",
   Result: "`Result<T, E>` — `Ok(value)` or `Err(error)`, with postfix `?` error propagation.",
   Unit: "Unit type `()` indicating no meaningful return value.",
+  TypeInfo: "First-class reified runtime type descriptor returned by `typeof(expr)` / `typeof<T>()` with `.name`, `.kind`, `.spl_type`, `.schema`, `.doc`, `.hint`, `.underlying`, `.type_args`, `.fields`, `.variants`, `.params`, and `.return_type`.",
+  TypeFieldInfo: "Field metadata entry inside `TypeInfo.fields` (`name`, `type_name`, `optional`, `doc`, `hint`).",
+  TypeVariantInfo: "Enum variant metadata entry inside `TypeInfo.variants` (`name`, `fields`, `doc`, `hint`).",
 };
 
 // ==================== Language Service ====================
@@ -738,6 +746,15 @@ export class SplLanguageServiceCore {
         documentation: td.doc ? { kind: "markdown", value: td.doc } : undefined,
       });
     }
+    for (const [name, nt] of ns.newtypes ?? []) {
+      if (prefix && !name.startsWith(prefix)) continue;
+      items.push({
+        label: name,
+        kind: CK.Struct,
+        detail: `newtype ${name}`,
+        documentation: nt.doc ? { kind: "markdown", value: nt.doc } : undefined,
+      });
+    }
     return items;
   }
 
@@ -754,6 +771,50 @@ export class SplLanguageServiceCore {
     const p = prune(t);
 
     // 1. Record / Struct fields (including row-polymorphic preserved fields!)
+    if (p.kind === "TNewtype") {
+      const u = prune(p.underlying);
+      let hasValueField = false;
+      if (u.kind === "TRecord") {
+        const flat = flattenRecord(u);
+        for (const [fieldName, fieldType] of flat.fields) {
+          if (fieldName === "value") hasValueField = true;
+          const fDoc = flat.meta?.fieldDocs.get(fieldName);
+          const fHint = flat.meta?.fieldHints.get(fieldName);
+          const md = formatDocAndHint(fDoc, fHint);
+          add({
+            label: fieldName,
+            kind: CK.Field,
+            detail: formatType(fieldType),
+            documentation: md ? { kind: "markdown", value: md } : undefined,
+            sortText: `0_${fieldName}`,
+          });
+        }
+        if (flat.tail.kind === "ROpenDict") {
+          const extraName = flat.tail.extraName ?? "extra";
+          const valFmt = formatType(flat.tail.valueType);
+          add({
+            label: extraName,
+            kind: CK.Field,
+            detail: `Dict<Str, ${valFmt}>`,
+            documentation: { kind: "markdown", value: `Dynamic extra properties (\`Dict<Str, ${valFmt}>\`).` },
+            sortText: `0_${extraName}`,
+          });
+        }
+      }
+      if (!hasValueField) {
+        add({
+          label: "value",
+          kind: CK.Property,
+          detail: formatType(p.underlying),
+          documentation: {
+            kind: "markdown",
+            value: `Unwraps newtype \`${p.name}\` to its underlying \`${formatType(p.underlying)}\` value.`,
+          },
+          sortText: "0_value",
+        });
+      }
+    }
+
     if (p.kind === "TRecord") {
       const flat = flattenRecord(p);
       for (const [fieldName, fieldType] of flat.fields) {
@@ -945,6 +1006,7 @@ export class SplLanguageServiceCore {
           fn: CK.Function,
           extern: CK.Function,
           type: CK.Struct,
+          newtype: CK.Struct,
           enum: CK.Enum,
           variant: CK.EnumMember,
           trait: CK.Interface,
@@ -1161,6 +1223,14 @@ export class SplLanguageServiceCore {
       if (md) parts.push("", md);
       return { contents: { kind: "markdown", value: parts.join("\n") }, range };
     }
+    const nt = mod.newtypes?.get(member);
+    if (nt) {
+      const tp = nt.typeParams.length > 0 ? `<${nt.typeParams.join(", ")}>` : "";
+      const parts = ["```splx", `newtype ${member}${tp}`, "```"];
+      const md = formatDocAndHint(nt.doc, nt.llmHint);
+      if (md) parts.push("", md);
+      return { contents: { kind: "markdown", value: parts.join("\n") }, range };
+    }
     const ed = mod.enums.get(member);
     if (ed) {
       const tp = ed.typeParams.length > 0 ? `<${ed.typeParams.join(", ")}>` : "";
@@ -1329,7 +1399,10 @@ export class SplLanguageServiceCore {
     const nsMember = extractNamespaceMemberAt(lineText, pos.character);
     if (nsMember) {
       const mod = active.namespaces.get(nsMember.ns);
-      const targetSpan = mod?.valueSpans.get(nsMember.member) ?? mod?.types.get(nsMember.member)?.span;
+      const targetSpan =
+        mod?.valueSpans.get(nsMember.member) ??
+        mod?.types.get(nsMember.member)?.span ??
+        mod?.newtypes?.get(nsMember.member)?.span;
       if (targetSpan) return this.spanToLocation(targetSpan);
     }
 
@@ -1378,6 +1451,30 @@ export class SplLanguageServiceCore {
           out.push({
             name: item.name,
             detail: item.doc?.split("\n")[0],
+            kind: SK.Struct,
+            range,
+            selectionRange: range,
+            children,
+          });
+          break;
+        }
+        case "NewtypeDecl": {
+          const children: LspDocumentSymbol[] = [];
+          if (item.body.kind === "RecordTypeExpr") {
+            for (const f of item.body.fields) {
+              const r = spanToRange(f.span, text);
+              children.push({
+                name: f.name,
+                detail: f.doc,
+                kind: SK.Field,
+                range: r,
+                selectionRange: r,
+              });
+            }
+          }
+          out.push({
+            name: item.name,
+            detail: item.doc?.split("\n")[0] ?? "newtype",
             kind: SK.Struct,
             range,
             selectionRange: range,
@@ -1800,11 +1897,13 @@ function makeEmptyCheckedProgram(file: string): CheckedProgram {
     program: { file, isStdlib: false, items: [] },
     exports: {
       file: "", values: new Map(), valueSpans: new Map(), valueDocs: new Map(), valueDefaults: new Map(),
-      asyncValues: new Set(), reifiedValues: new Set(), types: new Map(), enums: new Map(),
+      asyncValues: new Set(), reifiedValues: new Set(), types: new Map(), newtypes: new Map(), enums: new Map(),
       traits: new Map(), extensions: [], traitImpls: [],
     },
     exprTypes: new Map(), callResolutions: new Map(), forResolutions: new Map(), castResolutions: new Map(),
-    schemaLiterals: new Map(), decodeCodecs: new Map(), reifiedExprTypes: new Map(), asyncFns: new Set(), asyncCalls: new Set(),
+    schemaLiterals: new Map(), decodeCodecs: new Map(), reifiedExprTypes: new Map(),
+    newtypePatterns: new Set(), newtypeValueAccess: new Set(), reifiedIdentRefs: new Map(),
+    asyncFns: new Set(), asyncCalls: new Set(),
     extensionJsSymbols: new Map(), traitImplJsSymbols: new Map(), fnReifiedParams: new Map(),
     namedParamDefaults: new Map(), importBindings: new Map(), namespaceImports: new Map(),
     symbols: [], identDefs: new Map(), namespaces: new Map(), extensions: [], traitImpls: [],

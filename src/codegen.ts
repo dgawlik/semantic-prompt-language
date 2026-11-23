@@ -1,9 +1,9 @@
 import type {
-  TopItem, FnDecl, ExternFnDecl, EnumDecl, ImplDecl, Stmt, Expr, BlockExpr, Pattern,
+  TopItem, FnDecl, ExternFnDecl, EnumDecl, NewtypeDecl, ImplDecl, Stmt, Expr, BlockExpr, Pattern,
 } from "./ast.js";
 import type { CheckedProgram } from "./typechecker.js";
 import { prune, flattenRecord, formatType, TStr, type Type } from "./types.js";
-import { generateJsonSchema, generateDecodeCodec } from "./schema.js";
+import { generateJsonSchema, generateDecodeCodec, generateTypeDescriptor } from "./schema.js";
 
 export interface CodegenOptions {
   runtimeDirUrl: string; // e.g. file:///.../runtime or relative path
@@ -103,6 +103,8 @@ class JsCodegen {
         for (const s of item.specifiers) declaredTop.add(s.alias ?? s.name);
       } else if (item.kind === "EnumDecl") {
         for (const v of item.variants) declaredTop.add(v.name);
+      } else if (item.kind === "NewtypeDecl") {
+        declaredTop.add(item.name);
       }
     }
 
@@ -180,6 +182,9 @@ class JsCodegen {
       case "EnumDecl":
         return this.emitEnumDecl(item);
 
+      case "NewtypeDecl":
+        return this.emitNewtypeDecl(item);
+
       case "ExternFnDecl":
         return this.emitExternFnDecl(item);
 
@@ -219,6 +224,11 @@ class JsCodegen {
     return out.join("\n");
   }
 
+  private emitNewtypeDecl(decl: NewtypeDecl): string {
+    const exp = decl.pub ? "export " : "";
+    return `${exp}function ${decl.name}(v) { return v; }`;
+  }
+
   private emitExternFnDecl(decl: ExternFnDecl): string {
     const exp = decl.pub ? "export " : "";
     const src = decl.jsModule === "core" ? `__spl.${decl.jsName}` : `__ffi_${decl.jsModule}.${decl.jsName}`;
@@ -247,7 +257,8 @@ class JsCodegen {
     const prevReifiedMap = this.currentReifiedParamMap;
     this.currentReifiedParamMap = new Map(prevReifiedMap);
     const reifiedTvs = this.checked.fnReifiedParams.get(fn);
-    if (fn.reified && reifiedTvs) {
+    const hasReified = Boolean(fn.reified || (reifiedTvs && reifiedTvs.length > 0));
+    if (hasReified && reifiedTvs) {
       for (let i = 0; i < reifiedTvs.length; i++) {
         const p = prune(reifiedTvs[i]);
         if (p.kind === "TVar") {
@@ -264,12 +275,12 @@ class JsCodegen {
       paramJsNames.push(pJs);
       return defCode !== undefined ? `${pJs} = ${defCode}` : pJs;
     });
-    if (fn.reified) {
+    if (hasReified) {
       params.unshift("__spl_reified");
     }
 
     const hasTry = this.blockContainsTry(fn.body);
-    const canTco = !fn.receiverType && !fn.reified && this.hasSelfTailCall(fn.body, fn.name);
+    const canTco = !fn.receiverType && !hasReified && this.hasSelfTailCall(fn.body, fn.name);
 
     let bodyCode: string;
     if (canTco) {
@@ -432,6 +443,8 @@ class JsCodegen {
         return this.emitFnDecl(stmt, false);
       case "EnumDecl":
         return this.emitEnumDecl(stmt);
+      case "NewtypeDecl":
+        return this.emitNewtypeDecl(stmt);
       case "TypeDecl":
         return "";
       case "ExprStmt":
@@ -493,8 +506,14 @@ class JsCodegen {
         return `__spl.prompt([${parts.join(", ")}], [${values.join(", ")}])`;
       }
 
-      case "IdentExpr":
-        return this.resolveVar(expr.name);
+      case "IdentExpr": {
+        const resolved = this.resolveVar(expr.name);
+        const refReified = this.checked.reifiedIdentRefs.get(expr);
+        if (refReified && refReified.length > 0) {
+          return `((...__spl_a) => ${resolved}(${this.emitReifiedArray(refReified)}, ...__spl_a))`;
+        }
+        return resolved;
+      }
 
       case "TupleExpr":
         return `[${expr.elements.map((e) => this.emitExpr(e)).join(", ")}]`;
@@ -584,9 +603,15 @@ class JsCodegen {
       }
 
       case "MemberExpr":
+        if (this.checked.newtypeValueAccess.has(expr)) {
+          return this.emitExpr(expr.object);
+        }
         return `${this.emitExpr(expr.object)}.${expr.property}`;
 
       case "OptionalMemberExpr":
+        if (this.checked.newtypeValueAccess.has(expr)) {
+          return `__spl.optMap(${this.emitExpr(expr.object)}, (__o) => __o)`;
+        }
         return `__spl.optMap(${this.emitExpr(expr.object)}, (__o) => __o.${expr.property})`;
 
       case "NullCoalesceExpr":
@@ -654,6 +679,11 @@ class JsCodegen {
             ? this.emitCodecExpr(resolved)
             : JSON.stringify(this.checked.decodeCodecs.get(expr) ?? { k: "Json" });
         return `__spl.decode(${codecCode}, ${this.emitExpr(expr.arg)})`;
+      }
+
+      case "TypeofExpr": {
+        const resolved = this.checked.reifiedExprTypes.get(expr) ?? TStr;
+        return `__spl.toTypeInfo(${this.emitReifiedDescriptor(resolved)})`;
       }
 
       case "CallExpr":
@@ -742,6 +772,16 @@ class JsCodegen {
       }
       case "TEnum":
         return t.typeArgs.some((ta) => this.typeContainsReifiedParam(ta, seen));
+      case "TNewtype":
+        return (
+          t.typeArgs.some((ta) => this.typeContainsReifiedParam(ta, seen)) ||
+          this.typeContainsReifiedParam(t.underlying, seen)
+        );
+      case "TFn":
+        return (
+          t.params.some((pt) => this.typeContainsReifiedParam(pt, seen)) ||
+          this.typeContainsReifiedParam(t.ret, seen)
+        );
       default:
         return false;
     }
@@ -807,6 +847,8 @@ class JsCodegen {
         }
         return `({ ${extraProps.join(", ")} })`;
       }
+      case "TNewtype":
+        return `(${this.emitReifiedDescriptor(t)}).schema`;
       default:
         return JSON.stringify(generateJsonSchema(t));
     }
@@ -848,40 +890,91 @@ class JsCodegen {
         }
         return `({ k: "Record", fields: { ${fieldPairs.join(", ")} }, open: ${flat.tail.kind !== "RClosed" ? "true" : "false"} })`;
       }
+      case "TNewtype":
+        return `(${this.emitReifiedDescriptor(t)}).codec`;
       default:
         return JSON.stringify(generateDecodeCodec(t));
     }
   }
 
-  private emitReifiedArray(typeVars: Type[]): string {
-    const items = typeVars.map((tv) => {
-      const p = prune(tv);
-      if (p.kind === "TVar") {
-        const paramIdx = this.currentReifiedParamMap.get(p.id);
-        if (paramIdx !== undefined) {
-          return `__spl_reified[${paramIdx}]`;
+  private emitReifiedDescriptor(type: Type): string {
+    const p = prune(type);
+    if (p.kind === "TVar") {
+      const paramIdx = this.currentReifiedParamMap.get(p.id);
+      if (paramIdx !== undefined) {
+        return `__spl_reified[${paramIdx}]`;
+      }
+      return JSON.stringify(generateTypeDescriptor(TStr));
+    }
+    if (!this.typeContainsReifiedParam(p)) {
+      return JSON.stringify(generateTypeDescriptor(p));
+    }
+    switch (p.kind) {
+      case "TArray":
+        return `__spl.reifyArray(${this.emitReifiedDescriptor(p.element)})`;
+      case "TIter":
+        return `__spl.reifyIter(${this.emitReifiedDescriptor(p.element)})`;
+      case "TDict":
+        return `__spl.reifyDict(${this.emitReifiedDescriptor(p.key)}, ${this.emitReifiedDescriptor(p.value)})`;
+      case "TTuple":
+        return `__spl.reifyTuple([${p.elements.map((el) => this.emitReifiedDescriptor(el)).join(", ")}])`;
+      case "TFn":
+        return `__spl.reifyFn([${p.params.map((pt) => this.emitReifiedDescriptor(pt)).join(", ")}], ${this.emitReifiedDescriptor(p.ret)})`;
+      case "TNewtype": {
+        const tArgs = p.typeArgs.map((ta) => this.emitReifiedDescriptor(ta)).join(", ");
+        const docCode = p.doc !== undefined ? `__spl.Some(${JSON.stringify(p.doc)})` : `__spl.None`;
+        const hintCode = p.llmHint !== undefined ? `__spl.Some(${JSON.stringify(p.llmHint)})` : `__spl.None`;
+        return `__spl.reifyNewtype(${JSON.stringify(p.name)}, [${tArgs}], ${this.emitReifiedDescriptor(p.underlying)}, ${docCode}, ${hintCode})`;
+      }
+      case "TEnum": {
+        if (p.name === "Option" && p.typeArgs.length === 1) {
+          return `__spl.reifyOption(${this.emitReifiedDescriptor(p.typeArgs[0])})`;
         }
-        // Unconstrained reified type variable defaults to Str
-        const fallback = {
-          name: "Str",
-          splType: "Str",
-          schema: generateJsonSchema(TStr),
-          codec: generateDecodeCodec(TStr),
-        };
-        return JSON.stringify(fallback);
+        const tArgs = p.typeArgs.map((ta) => this.emitReifiedDescriptor(ta)).join(", ");
+        const vSpecs = Array.from(p.variants.entries()).map(([vn, vi]) => {
+          const fs = vi.fields.map((f) => this.emitReifiedDescriptor(f)).join(", ");
+          const vd = vi.doc !== undefined ? `__spl.Some(${JSON.stringify(vi.doc)})` : `__spl.None`;
+          const vh = vi.llmHint !== undefined ? `__spl.Some(${JSON.stringify(vi.llmHint)})` : `__spl.None`;
+          return `{ name: ${JSON.stringify(vn)}, fields: [${fs}], doc: ${vd}, hint: ${vh} }`;
+        });
+        const docCode = p.doc !== undefined ? `__spl.Some(${JSON.stringify(p.doc)})` : `__spl.None`;
+        const hintCode = p.llmHint !== undefined ? `__spl.Some(${JSON.stringify(p.llmHint)})` : `__spl.None`;
+        return `__spl.reifyEnum(${JSON.stringify(p.name)}, [${tArgs}], [${vSpecs.join(", ")}], ${docCode}, ${hintCode})`;
       }
-      if (this.typeContainsReifiedParam(p)) {
-        const label = p.kind === "TRecord" && p.meta?.typeName ? p.meta.typeName : formatType(p);
-        return `({ name: ${JSON.stringify(label)}, splType: ${JSON.stringify(formatType(p))}, schema: ${this.emitSchemaExpr(p)}, codec: ${this.emitCodecExpr(p)} })`;
+      case "TRecord": {
+        const flat = flattenRecord(p);
+        const fSpecs: string[] = [];
+        for (const [fName, fType] of flat.fields) {
+          const pf = prune(fType);
+          const isOpt = pf.kind === "TEnum" && pf.name === "Option" && pf.typeArgs.length === 1;
+          const descCode = this.emitReifiedDescriptor(pf);
+          const innerCode = isOpt ? this.emitReifiedDescriptor(pf.typeArgs[0]) : "null";
+          const fd = flat.meta?.fieldDocs.get(fName);
+          const fh = flat.meta?.fieldHints.get(fName);
+          const fdCode = fd !== undefined ? `__spl.Some(${JSON.stringify(fd)})` : `__spl.None`;
+          const fhCode = fh !== undefined ? `__spl.Some(${JSON.stringify(fh)})` : `__spl.None`;
+          fSpecs.push(
+            `{ name: ${JSON.stringify(fName)}, desc: ${descCode}, optional: ${isOpt ? "true" : "false"}, innerDesc: ${innerCode}, doc: ${fdCode}, hint: ${fhCode} }`
+          );
+        }
+        const tnCode = flat.meta?.typeName ? JSON.stringify(flat.meta.typeName) : "null";
+        const docCode = flat.meta?.doc !== undefined ? `__spl.Some(${JSON.stringify(flat.meta.doc)})` : `__spl.None`;
+        const hintCode = flat.meta?.llmHint !== undefined ? `__spl.Some(${JSON.stringify(flat.meta.llmHint)})` : `__spl.None`;
+        const tailKind =
+          flat.tail.kind === "RClosed" ? '"closed"' : flat.tail.kind === "ROpenDict" ? '"openDict"' : '"open"';
+        const tailVal =
+          flat.tail.kind === "ROpenDict" ? this.emitReifiedDescriptor(flat.tail.valueType) : "null";
+        const extraName =
+          flat.tail.kind === "ROpenDict" && flat.tail.extraName ? JSON.stringify(flat.tail.extraName) : "null";
+        return `__spl.reifyRecord(${tnCode}, ${docCode}, ${hintCode}, [${fSpecs.join(", ")}], ${tailKind}, ${tailVal}, ${extraName})`;
       }
-      const info = {
-        name: p.kind === "TRecord" && p.meta?.typeName ? p.meta.typeName : formatType(p),
-        splType: formatType(p),
-        schema: generateJsonSchema(p),
-        codec: generateDecodeCodec(p),
-      };
-      return JSON.stringify(info);
-    });
+      default:
+        return JSON.stringify(generateTypeDescriptor(p));
+    }
+  }
+
+  private emitReifiedArray(typeVars: Type[]): string {
+    const items = typeVars.map((tv) => this.emitReifiedDescriptor(tv));
     return `[${items.join(", ")}]`;
   }
 
@@ -964,6 +1057,9 @@ class JsCodegen {
       }
 
       case "EnumPattern": {
+        if (this.checked.newtypePatterns.has(pat)) {
+          return this.emitPatternMatch(pat.fields[0], target, mutable);
+        }
         const conds = [`(${target} != null && ${target}.$tag === ${JSON.stringify(pat.variant)})`];
         const bindings: string[] = [];
         for (let i = 0; i < pat.fields.length; i++) {

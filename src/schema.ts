@@ -1,7 +1,44 @@
-import { flattenRecord, prune, type Type } from "./types.js";
+import { flattenRecord, formatType, prune, type Type } from "./types.js";
 
 export type JsonSchema = Record<string, unknown>;
 export type DecodeCodec = Record<string, unknown>;
+
+export interface ReifiedFieldMeta {
+  name: string;
+  type_name: string;
+  optional: boolean;
+  doc: { $tag: "Some"; _0: string } | { $tag: "None" };
+  hint: { $tag: "Some"; _0: string } | { $tag: "None" };
+}
+
+export interface ReifiedVariantMeta {
+  name: string;
+  fields: string[];
+  doc: { $tag: "Some"; _0: string } | { $tag: "None" };
+  hint: { $tag: "Some"; _0: string } | { $tag: "None" };
+}
+
+export interface FullReifiedDescriptor {
+  name: string;
+  kind: string;
+  splType: string;
+  spl_type: string;
+  schema: JsonSchema;
+  codec: DecodeCodec;
+  doc: { $tag: "Some"; _0: string } | { $tag: "None" };
+  hint: { $tag: "Some"; _0: string } | { $tag: "None" };
+  underlying: { $tag: "Some"; _0: string } | { $tag: "None" };
+  type_args: string[];
+  fields: ReifiedFieldMeta[];
+  variants: ReifiedVariantMeta[];
+  params: string[];
+  return_type: { $tag: "Some"; _0: string } | { $tag: "None" };
+}
+
+const OPT_NONE: { $tag: "None" } = { $tag: "None" };
+function optStr(s?: string): { $tag: "Some"; _0: string } | { $tag: "None" } {
+  return s !== undefined ? { $tag: "Some", _0: s } : OPT_NONE;
+}
 
 /** Generate a JSON Schema (Draft 2020-12 compatible) from a static SPL type */
 export function generateJsonSchema(type: Type): JsonSchema {
@@ -148,6 +185,13 @@ export function generateJsonSchema(type: Type): JsonSchema {
       return schema;
     }
 
+    case "TNewtype": {
+      const inner = { ...generateJsonSchema(t.underlying) };
+      inner.title = t.name;
+      if (t.llmHint) inner.description = t.llmHint;
+      return inner;
+    }
+
     case "TFn":
       return { description: "function" };
   }
@@ -205,7 +249,133 @@ export function generateDecodeCodec(type: Type): DecodeCodec {
       }
       return { k: "Enum", name: t.name, variants };
     }
+    case "TNewtype":
+      return generateDecodeCodec(t.underlying);
     case "TFn":
       return { k: "Json" };
+  }
+}
+
+/** Generate a full compile-time reified type descriptor (TypeInfo + schema + codec) for any SPL type */
+export function generateTypeDescriptor(type: Type): FullReifiedDescriptor {
+  const t = prune(type);
+  const splType = formatType(t);
+  const schema = generateJsonSchema(t);
+  const codec = generateDecodeCodec(t);
+
+  const base: FullReifiedDescriptor = {
+    name: splType,
+    kind: "primitive",
+    splType,
+    spl_type: splType,
+    schema,
+    codec,
+    doc: OPT_NONE,
+    hint: OPT_NONE,
+    underlying: OPT_NONE,
+    type_args: [],
+    fields: [],
+    variants: [],
+    params: [],
+    return_type: OPT_NONE,
+  };
+
+  switch (t.kind) {
+    case "TPrim":
+      base.name = t.name;
+      base.kind = "primitive";
+      return base;
+
+    case "TVar":
+      base.kind = "var";
+      return base;
+
+    case "TArray":
+      base.kind = "array";
+      base.type_args = [formatType(t.element)];
+      return base;
+
+    case "TIter":
+      base.kind = "iter";
+      base.type_args = [formatType(t.element)];
+      return base;
+
+    case "TDict":
+      base.kind = "dict";
+      base.type_args = [formatType(t.key), formatType(t.value)];
+      return base;
+
+    case "TTuple":
+      base.kind = "tuple";
+      base.type_args = t.elements.map(formatType);
+      return base;
+
+    case "TFn":
+      base.kind = "fn";
+      base.params = t.params.map(formatType);
+      base.return_type = optStr(formatType(t.ret));
+      return base;
+
+    case "TRecord": {
+      const flat = flattenRecord(t);
+      base.kind = "record";
+      base.name = flat.meta?.typeName ?? splType;
+      base.doc = optStr(flat.meta?.doc);
+      base.hint = optStr(flat.meta?.llmHint);
+      for (const [fName, fType] of flat.fields) {
+        const pf = prune(fType);
+        const isOpt = pf.kind === "TEnum" && pf.name === "Option" && pf.typeArgs.length === 1;
+        base.fields.push({
+          name: fName,
+          type_name: formatType(pf),
+          optional: isOpt,
+          doc: optStr(flat.meta?.fieldDocs.get(fName)),
+          hint: optStr(flat.meta?.fieldHints.get(fName)),
+        });
+      }
+      return base;
+    }
+
+    case "TEnum": {
+      base.kind = t.name === "Option" ? "option" : t.name === "Result" ? "result" : "enum";
+      base.name = t.typeArgs.length > 0 ? splType : t.name;
+      base.doc = optStr(t.doc);
+      base.hint = optStr(t.llmHint);
+      base.type_args = t.typeArgs.map(formatType);
+      for (const [vName, vInfo] of t.variants) {
+        base.variants.push({
+          name: vName,
+          fields: vInfo.fields.map(formatType),
+          doc: optStr(vInfo.doc),
+          hint: optStr(vInfo.llmHint),
+        });
+      }
+      return base;
+    }
+
+    case "TNewtype": {
+      base.kind = "newtype";
+      base.name = t.typeArgs.length > 0 ? splType : t.name;
+      base.doc = optStr(t.doc);
+      base.hint = optStr(t.llmHint);
+      base.underlying = optStr(formatType(t.underlying));
+      base.type_args = t.typeArgs.map(formatType);
+      const u = prune(t.underlying);
+      if (u.kind === "TRecord") {
+        const flat = flattenRecord(u);
+        for (const [fName, fType] of flat.fields) {
+          const pf = prune(fType);
+          const isOpt = pf.kind === "TEnum" && pf.name === "Option" && pf.typeArgs.length === 1;
+          base.fields.push({
+            name: fName,
+            type_name: formatType(pf),
+            optional: isOpt,
+            doc: optStr(flat.meta?.fieldDocs.get(fName)),
+            hint: optStr(flat.meta?.fieldHints.get(fName)),
+          });
+        }
+      }
+      return base;
+    }
   }
 }

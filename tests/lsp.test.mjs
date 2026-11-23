@@ -725,6 +725,74 @@ test("LSP: initialize, diagnostics, row-polymorphic property completion, hover J
     assert.ok(promptSigHelp && promptSigHelp.signatures.length === 1, "Expected signatureHelp for Prompt.ask");
     assert.match(promptSigHelp.signatures[0].label, /reified async fn Prompt\.ask\(/);
     assert.match(promptSigHelp.signatures[0].parameters[promptSigHelp.activeParameter].label, /^temperature:/);
+
+    // 20. `typeof` & `newtype` completions (`typeof(uid).`, `uid.`, `pt.`)
+    const ntPath = path.join(tmpDir, "newtype_typeof.splx");
+    const ntUri = pathToFileURL(ntPath).href;
+    const makeNtSrc = (line6) => [
+      `newtype UserId = Int`,
+      `newtype Point = struct { x: Int, y: Int }`,
+      `fn UserId.is_root(self) -> Bool { self.value == 0 }`,
+      `fn demo() {`,
+      `    let uid = UserId(1)`,
+      `    let pt = Point { x: 1, y: 2 }`,
+      `    ${line6}`,
+      `}`,
+    ].join("\n");
+
+    const d20a = client.waitForNotification((m) => m.method === "textDocument/publishDiagnostics");
+    client.notify("textDocument/didOpen", {
+      textDocument: { uri: ntUri, languageId: "splx", version: 1, text: makeNtSrc("let _ = typeof(uid).") },
+    });
+    await d20a;
+
+    const cTypeof = await client.request("textDocument/completion", {
+      textDocument: { uri: ntUri },
+      position: { line: 6, character: 24 },
+    });
+    const typeofLabels = cTypeof.items.map((i) => i.label);
+    assert.ok(
+      typeofLabels.includes("name") &&
+        typeofLabels.includes("kind") &&
+        typeofLabels.includes("schema") &&
+        typeofLabels.includes("underlying") &&
+        typeofLabels.includes("fields"),
+      `Expected TypeInfo completions on typeof(uid)., got: ${typeofLabels}`
+    );
+
+    const d20b = client.waitForNotification((m) => m.method === "textDocument/publishDiagnostics");
+    client.notify("textDocument/didChange", {
+      textDocument: { uri: ntUri, version: 2 },
+      contentChanges: [{ text: makeNtSrc("let _ = uid.") }],
+    });
+    await d20b;
+
+    const cUid = await client.request("textDocument/completion", {
+      textDocument: { uri: ntUri },
+      position: { line: 6, character: 16 },
+    });
+    const uidLabels = cUid.items.map((i) => i.label);
+    assert.ok(
+      uidLabels.includes("value") && uidLabels.includes("is_root"),
+      `Expected .value and extension .is_root on newtype UserId, got: ${uidLabels}`
+    );
+
+    const d20c = client.waitForNotification((m) => m.method === "textDocument/publishDiagnostics");
+    client.notify("textDocument/didChange", {
+      textDocument: { uri: ntUri, version: 3 },
+      contentChanges: [{ text: makeNtSrc("let _ = pt.") }],
+    });
+    await d20c;
+
+    const cPt = await client.request("textDocument/completion", {
+      textDocument: { uri: ntUri },
+      position: { line: 6, character: 15 },
+    });
+    const ptLabels = cPt.items.map((i) => i.label);
+    assert.ok(
+      ptLabels.includes("x") && ptLabels.includes("y") && ptLabels.includes("value"),
+      `Expected transparent struct fields x, y and .value on newtype Point, got: ${ptLabels}`
+    );
   } finally {
     await client.close();
     fs.rmSync(tmpDir, { recursive: true, force: true });

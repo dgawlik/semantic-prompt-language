@@ -11,6 +11,7 @@ export interface Program {
 export type TopItem =
   | ImportDecl
   | TypeDecl
+  | NewtypeDecl
   | EnumDecl
   | TraitDecl
   | ImplDecl
@@ -39,6 +40,17 @@ export interface ImportSpecifier {
 
 export interface TypeDecl {
   kind: "TypeDecl";
+  pub: boolean;
+  name: string;
+  typeParams: TypeParam[];
+  doc?: string;
+  llmHint?: string;
+  body: TypeExpr;
+  span: Span;
+}
+
+export interface NewtypeDecl {
+  kind: "NewtypeDecl";
   pub: boolean;
   name: string;
   typeParams: TypeParam[];
@@ -146,7 +158,14 @@ export type TypeExpr =
   | OptionTypeExpr
   | TupleTypeExpr
   | FnTypeExpr
-  | RecordTypeExpr;
+  | RecordTypeExpr
+  | TypeofTypeExpr;
+
+export interface TypeofTypeExpr {
+  kind: "TypeofTypeExpr";
+  expr: Expr;
+  span: Span;
+}
 
 export interface NamedTypeExpr {
   kind: "NamedTypeExpr";
@@ -208,6 +227,7 @@ export type Stmt =
   | ForStmt
   | FnDecl
   | TypeDecl
+  | NewtypeDecl
   | EnumDecl
   | ExprStmt;
 
@@ -301,7 +321,8 @@ export type Expr =
   | MatchExpr
   | ReturnExpr
   | TypeSchemaExpr
-  | DecodeExpr;
+  | DecodeExpr
+  | TypeofExpr;
 
 export interface ReturnExpr {
   kind: "ReturnExpr";
@@ -519,6 +540,13 @@ export interface DecodeExpr {
   kind: "DecodeExpr";
   targetType: TypeExpr;
   arg: Expr;
+  span: Span;
+}
+
+export interface TypeofExpr {
+  kind: "TypeofExpr";
+  targetType?: TypeExpr; // `typeof<T>()`
+  arg?: Expr;            // `typeof(expr)` or `typeof expr`
   span: Span;
 }
 

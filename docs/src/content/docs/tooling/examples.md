@@ -23,3 +23,4 @@ node dist/cli.js run examples/<filename>.splx
 | `10_llm_and_agent.splx` | Unified `std/llm`: `Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `llm.tool<Args, Out>`, `StreamDelta` matching, `Decision` hooks, `std/traces` JSONL, `llm.agent_replay<T>`, and `llm.decide` |
 | `11_reified_types.splx` | User-defined `reified fn<T>`: generic `type_schema<T>()` & `decode<T>()`, compound types (`Array<T>`, `Envelope<Array<T>>`), and forwarding to `std/codegen` |
 | `12_files_and_shell.splx` | Practical `std/fs`, `std/proc`, and `std/os`: nested directories, typed JSON persistence, recursive directory walking, `proc.shell`, `proc.exec` with `cwd` & `timeout_ms`, and non-zero exit codes |
+| `13_typeof_and_newtype.splx` | Nominal `newtype` declarations, type-level & runtime `typeof` (`TypeInfo`), and universal automatic reification across all generic functions |

@@ -1,6 +1,6 @@
 {
   "name": "spl-lang",
-  "version": "4.1.1",
+  "version": "4.2.0",
   "description": "Semantic Prompt Language (SPL) — Agent-first strongly-typed functional language compiled to ESM JavaScript",
   "type": "module",
   "bin": {

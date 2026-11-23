@@ -1,6 +1,6 @@
 import { SplError, type Span } from "./errors.js";
 import type {
-  Program, TopItem, TypeDecl, EnumDecl, TraitDecl, ImplDecl,
+  Program, TopItem, TypeDecl, NewtypeDecl, EnumDecl, TraitDecl, ImplDecl,
   FnDecl, ExternFnDecl, TypeExpr, Stmt, ForStmt, Expr, AsExpr, Pattern, BlockExpr, CallArg,
 } from "./ast.js";
 import {
@@ -38,7 +38,7 @@ export interface TraitImplInfo {
 
 export interface SymbolInfo {
   name: string;
-  kind: "fn" | "extern" | "type" | "enum" | "variant" | "trait" | "var" | "param" | "extension";
+  kind: "fn" | "extern" | "type" | "newtype" | "enum" | "variant" | "trait" | "var" | "param" | "extension";
   type?: Type;
   doc?: string;
   llmHint?: string;
@@ -62,6 +62,7 @@ export interface ModuleExports {
   asyncValues: Set<string>;
   reifiedValues: Set<string>;
   types: Map<string, TypeDef>;
+  newtypes: Map<string, NewtypeDef>;
   enums: Map<string, EnumDef>;
   traits: Map<string, TraitDef>;
   extensions: ExtensionMethodInfo[];
@@ -70,6 +71,16 @@ export interface ModuleExports {
 
 export interface TypeDef {
   name: string;
+  typeParams: string[];
+  body: TypeExpr;
+  doc?: string;
+  llmHint?: string;
+  span?: Span;
+}
+
+export interface NewtypeDef {
+  name: string;
+  moduleFile: string;
   typeParams: string[];
   body: TypeExpr;
   doc?: string;
@@ -144,6 +155,9 @@ export interface CheckedProgram {
   schemaLiterals: Map<Expr, JsonSchema>;
   decodeCodecs: Map<Expr, DecodeCodec>;
   reifiedExprTypes: Map<Expr, Type>;
+  newtypePatterns: Set<Pattern>;
+  newtypeValueAccess: Set<Expr>;
+  reifiedIdentRefs: Map<Expr, Type[]>;
   asyncFns: Set<FnDecl | Expr>;
   asyncCalls: Set<Expr>;
   extensionJsSymbols: Map<FnDecl, string>;
@@ -161,6 +175,92 @@ export interface CheckedProgram {
 }
 
 export type ModuleResolver = (specifier: string, fromFile: string) => ModuleExports;
+
+// ==================== Built-in Reified TypeInfo Types ====================
+
+const TTypeFieldInfo: Type = {
+  kind: "TRecord",
+  fields: new Map<string, Type>([
+    ["name", TStr],
+    ["type_name", TStr],
+    ["optional", TBool],
+    ["doc", tOption(TStr)],
+    ["hint", tOption(TStr)],
+  ]),
+  tail: { kind: "RClosed" },
+  meta: {
+    typeName: "TypeFieldInfo",
+    doc: "Metadata for a single record/struct field returned inside `TypeInfo.fields`.",
+    fieldDocs: new Map([
+      ["name", "Field name."],
+      ["type_name", "Formatted SPL type of the field."],
+      ["optional", "Whether the field type is optional (`T?`)."],
+      ["doc", "Developer doc-comment (`///`) attached to the field, if any."],
+      ["hint", "LLM schema hint (`''`) attached to the field, if any."],
+    ]),
+    fieldHints: new Map(),
+  },
+};
+
+const TTypeVariantInfo: Type = {
+  kind: "TRecord",
+  fields: new Map<string, Type>([
+    ["name", TStr],
+    ["fields", tArray(TStr)],
+    ["doc", tOption(TStr)],
+    ["hint", tOption(TStr)],
+  ]),
+  tail: { kind: "RClosed" },
+  meta: {
+    typeName: "TypeVariantInfo",
+    doc: "Metadata for a single enum variant returned inside `TypeInfo.variants`.",
+    fieldDocs: new Map([
+      ["name", "Variant name."],
+      ["fields", "Formatted SPL types of the variant's payload fields."],
+      ["doc", "Developer doc-comment (`///`) attached to the variant, if any."],
+      ["hint", "LLM schema hint (`''`) attached to the variant, if any."],
+    ]),
+    fieldHints: new Map(),
+  },
+};
+
+const TTypeInfo: Type = {
+  kind: "TRecord",
+  fields: new Map<string, Type>([
+    ["name", TStr],
+    ["kind", TStr],
+    ["spl_type", TStr],
+    ["schema", TJson],
+    ["doc", tOption(TStr)],
+    ["hint", tOption(TStr)],
+    ["underlying", tOption(TStr)],
+    ["type_args", tArray(TStr)],
+    ["fields", tArray(TTypeFieldInfo)],
+    ["variants", tArray(TTypeVariantInfo)],
+    ["params", tArray(TStr)],
+    ["return_type", tOption(TStr)],
+  ]),
+  tail: { kind: "RClosed" },
+  meta: {
+    typeName: "TypeInfo",
+    doc: "First-class reified runtime type descriptor returned by `typeof(expr)` and `typeof<T>()`.",
+    fieldDocs: new Map([
+      ["name", "Type display name (e.g. `Int`, `UserId`, `Person`, `Array<Int>`)."],
+      ["kind", "Type category: `primitive`, `record`, `enum`, `newtype`, `array`, `iter`, `dict`, `tuple`, `fn`, `option`, `result`, or `var`."],
+      ["spl_type", "Full formatted SPL type signature."],
+      ["schema", "Compile-time / reified JSON Schema (`Json`) for this type."],
+      ["doc", "Developer doc-comment (`///`) on the type declaration, if any."],
+      ["hint", "LLM schema hint (`''`) on the type declaration, if any."],
+      ["underlying", "For `newtype`, the underlying SPL type string (`Some(...)`); otherwise `None`."],
+      ["type_args", "Formatted type argument names for generic/container types."],
+      ["fields", "Field descriptors for records/structs (and struct-backed newtypes)."],
+      ["variants", "Variant descriptors for enums."],
+      ["params", "Formatted parameter type names for function types."],
+      ["return_type", "Formatted return type for function types (`Some(...)`); otherwise `None`."],
+    ]),
+    fieldHints: new Map(),
+  },
+};
 
 // ==================== Checker Implementation ====================
 
@@ -189,7 +289,9 @@ export function checkProgram(program: Program, resolveModule?: ModuleResolver): 
 
 class TypeChecker {
   private rootScope: Scope = { vars: new Map() };
+  private currentScope: Scope = this.rootScope;
   private types = new Map<string, TypeDef>();
+  private newtypes = new Map<string, NewtypeDef>();
   private enums = new Map<string, EnumDef>();
   private traits = new Map<string, TraitDef>();
   private variantToEnum = new Map<string, string>();
@@ -208,6 +310,9 @@ class TypeChecker {
   private schemaLiterals = new Map<Expr, JsonSchema>();
   private decodeCodecs = new Map<Expr, DecodeCodec>();
   private reifiedExprTypes = new Map<Expr, Type>();
+  private newtypePatterns = new Set<Pattern>();
+  private newtypeValueAccess = new Set<Expr>();
+  private reifiedIdentRefs = new Map<Expr, Type[]>();
   private asyncFns = new Set<FnDecl | Expr>();
   private asyncCalls = new Set<Expr>();
   private extensionJsSymbols = new Map<FnDecl, string>();
@@ -215,6 +320,20 @@ class TypeChecker {
   private fnReifiedParams = new Map<FnDecl, Type[]>();
   private fnExplicitTypeParams = new Map<FnDecl, Type[]>();
   private fnTypeParamMaps = new Map<FnDecl, Map<string, Type>>();
+  private fnBindings = new Map<FnDecl, VarBinding>();
+  private extFnDecls = new Map<string, FnDecl>();
+  private fnDirectReifiedTypes = new Map<FnDecl, Type[]>();
+  private reifiedCallSites: Array<{
+    callerFn?: FnDecl;
+    expr: Expr;
+    kind: "Direct" | "Namespace" | "Extension" | "IdentRef";
+    targetFn?: FnDecl;
+    targetExt?: ExtensionMethodInfo;
+    fixedReifiedTypes?: Type[];
+    instantiationMap?: Map<number, Type>;
+  }> = [];
+  private topLevelLets = new Map<string, Extract<TopItem, { kind: "LetStmt" }>>();
+  private checkedTopLets = new Set<TopItem>();
   private activeTypeParams = new Map<string, Type>();
   private activeReifiedParams: Type[] = [];
   private namedParamDefaults = new Map<string, (Expr | undefined)[]>();
@@ -223,6 +342,7 @@ class TypeChecker {
 
   private currentFnRetType?: Type;
   private currentFnNode?: FnDecl | Expr;
+  private currentEnclosingFnDecl?: FnDecl;
   private currentFnBecameAsync = false;
 
   // Call graph edges for fixed-point colorless async inference
@@ -384,7 +504,7 @@ class TypeChecker {
   // ==================== Top-Level Checking ====================
 
   check(): CheckedProgram {
-    // Pass 1: Process imports, types, enums, traits
+    // Pass 1: Process imports, types, newtypes, enums, traits
     for (const item of this.program.items) {
       if (item.kind === "ImportDecl") {
         this.processImport(item);
@@ -398,6 +518,17 @@ class TypeChecker {
           span: item.span,
         });
         this.symbols.push({ name: item.name, kind: "type", doc: item.doc, llmHint: item.llmHint, span: item.span });
+      } else if (item.kind === "NewtypeDecl") {
+        this.newtypes.set(item.name, {
+          name: item.name,
+          moduleFile: this.program.file,
+          typeParams: item.typeParams.map((p) => p.name),
+          body: item.body,
+          doc: item.doc,
+          llmHint: item.llmHint,
+          span: item.span,
+        });
+        this.symbols.push({ name: item.name, kind: "newtype", doc: item.doc, llmHint: item.llmHint, span: item.span });
       } else if (item.kind === "EnumDecl") {
         const variants = new Map<string, { fields: TypeExpr[]; doc?: string; llmHint?: string }>();
         for (const v of item.variants) {
@@ -418,13 +549,17 @@ class TypeChecker {
         for (const m of item.methods) methods.set(m.name, { paramCount: m.params.length });
         this.traits.set(item.name, { name: item.name, methods, doc: item.doc, span: item.span });
         this.symbols.push({ name: item.name, kind: "trait", doc: item.doc, span: item.span });
+      } else if (item.kind === "LetStmt" && item.pattern.kind === "IdentPattern") {
+        this.topLevelLets.set(item.pattern.name, item);
       }
     }
 
-    // Register enum constructors in root scope
+    // Register enum & newtype constructors in root scope
     for (const item of this.program.items) {
       if (item.kind === "EnumDecl") {
         this.registerEnumConstructors(item);
+      } else if (item.kind === "NewtypeDecl") {
+        this.registerNewtypeConstructor(item, this.rootScope);
       }
     }
 
@@ -492,7 +627,10 @@ class TypeChecker {
       } else if (item.kind === "ImplDecl") {
         this.checkImplDecl(item);
       } else if (item.kind === "LetStmt") {
-        this.checkLetStmt(item, this.rootScope);
+        if (!this.checkedTopLets.has(item)) {
+          this.checkedTopLets.add(item);
+          this.checkLetStmt(item, this.rootScope);
+        }
       } else if (
         item.kind === "WhileStmt" ||
         item.kind === "ForStmt" ||
@@ -509,6 +647,9 @@ class TypeChecker {
     // Pass 4: Fixed-point colorless async propagation across call graph & higher-order calls
     this.propagateAsync();
 
+    // Pass 4b: Fixed-point universal reification propagation across all generic functions
+    this.propagateReification();
+
     // Collect exports
     const exports: ModuleExports = {
       file: this.program.file,
@@ -519,6 +660,7 @@ class TypeChecker {
       asyncValues: new Set(),
       reifiedValues: new Set(),
       types: new Map(),
+      newtypes: new Map(),
       enums: new Map(),
       traits: new Map(),
       extensions: [],
@@ -541,7 +683,7 @@ class TypeChecker {
             if (b.defaults) exports.valueDefaults.set(item.name, b.defaults);
             if (item.doc) exports.valueDocs.set(item.name, item.doc);
             if (this.asyncFns.has(item)) exports.asyncValues.add(item.name);
-            if (item.reified) exports.reifiedValues.add(item.name);
+            if (item.reified || b.isReified || this.fnReifiedParams.has(item)) exports.reifiedValues.add(item.name);
           }
         }
       } else if (item.kind === "ExternFnDecl" && item.pub) {
@@ -562,6 +704,14 @@ class TypeChecker {
         }
       } else if (item.kind === "TypeDecl" && item.pub) {
         exports.types.set(item.name, this.types.get(item.name)!);
+      } else if (item.kind === "NewtypeDecl" && item.pub) {
+        exports.newtypes.set(item.name, this.newtypes.get(item.name)!);
+        const b = this.rootScope.vars.get(item.name);
+        if (b) {
+          exports.values.set(item.name, b.scheme);
+          exports.valueSpans.set(item.name, item.span);
+          if (item.doc) exports.valueDocs.set(item.name, item.doc);
+        }
       } else if (item.kind === "EnumDecl" && item.pub) {
         exports.enums.set(item.name, this.enums.get(item.name)!);
         for (const v of item.variants) {
@@ -589,6 +739,11 @@ class TypeChecker {
         if (td && td.typeParams.length === 0) {
           try { sym.type = this.resolveTypeExpr({ kind: "NamedTypeExpr", name: td.name, typeArgs: [], span: sym.span }, new Map()); } catch {}
         }
+      } else if (sym.kind === "newtype") {
+        const nt = this.newtypes.get(sym.name);
+        if (nt && nt.typeParams.length === 0) {
+          try { sym.type = this.resolveTypeExpr({ kind: "NamedTypeExpr", name: nt.name, typeArgs: [], span: sym.span }, new Map()); } catch {}
+        }
       }
     }
 
@@ -602,6 +757,9 @@ class TypeChecker {
       schemaLiterals: this.schemaLiterals,
       decodeCodecs: this.decodeCodecs,
       reifiedExprTypes: this.reifiedExprTypes,
+      newtypePatterns: this.newtypePatterns,
+      newtypeValueAccess: this.newtypeValueAccess,
+      reifiedIdentRefs: this.reifiedIdentRefs,
       asyncFns: this.asyncFns,
       asyncCalls: this.asyncCalls,
       extensionJsSymbols: this.extensionJsSymbols,
@@ -677,6 +835,12 @@ class TypeChecker {
       const tDef = mod.types.get(spec.name);
       if (tDef) {
         this.types.set(localName, tDef);
+        found = true;
+      }
+
+      const ntDef = mod.newtypes?.get(spec.name);
+      if (ntDef) {
+        this.newtypes.set(localName, ntDef);
         found = true;
       }
 
@@ -767,12 +931,63 @@ class TypeChecker {
     }
   }
 
+  private registerNewtypeConstructor(decl: NewtypeDecl, scope: Scope): void {
+    const tpMap = new Map<string, Type>();
+    const explicitIds: number[] = [];
+    for (const tp of decl.typeParams) {
+      const tv = freshTVar(tp.bounds, tp.name);
+      tpMap.set(tp.name, tv);
+      if (tv.kind === "TVar") explicitIds.push(tv.id);
+    }
+    const underlying = this.resolveTypeExpr(decl.body, tpMap);
+    const ntType: Type = {
+      kind: "TNewtype",
+      name: decl.name,
+      moduleFile: this.program.file,
+      typeArgs: decl.typeParams.map((tp) => tpMap.get(tp.name)!),
+      underlying,
+      doc: decl.doc,
+      llmHint: decl.llmHint,
+    };
+    const ctorType: Type = {
+      kind: "TFn",
+      params: [underlying],
+      paramNames: ["value"],
+      requiredCount: 1,
+      ret: ntType,
+    };
+    const scheme = this.generalize(ctorType, scope);
+    if (explicitIds.length > 0) {
+      scheme.explicitTypeParams = explicitIds;
+      for (const id of explicitIds) {
+        if (!scheme.quantifiedTypeVars.includes(id)) scheme.quantifiedTypeVars.push(id);
+      }
+    }
+    scope.vars.set(decl.name, {
+      scheme,
+      mutable: false,
+      defSpan: decl.span,
+      doc: decl.doc,
+      symKind: "newtype",
+    });
+  }
+
   private collectReceiverTypeParams(te: TypeExpr, out: Set<string>): void {
     switch (te.kind) {
       case "NamedTypeExpr": {
-        const isBuiltIn =
-          ["Int", "Float", "Str", "String", "Bool", "Boolean", "Char", "Byte", "Bytes", "Json", "Prompt", "Unit", "Void", "Array", "Iter", "Dict", "Option", "Result"].includes(te.name);
-        if (te.typeArgs.length === 0 && !isBuiltIn && !this.types.has(te.name) && !this.enums.has(te.name)) {
+        const isBuiltIn = [
+          "Int", "Float", "Str", "String", "Bool", "Boolean", "Char", "Byte", "Bytes",
+          "Json", "Prompt", "Unit", "Void", "Array", "Iter", "Dict", "Option", "Result",
+          "TypeInfo", "TypeFieldInfo", "TypeVariantInfo",
+        ].includes(te.name);
+        if (
+          te.typeArgs.length === 0 &&
+          !isBuiltIn &&
+          !this.types.has(te.name) &&
+          !this.newtypes.has(te.name) &&
+          !this.enums.has(te.name) &&
+          !te.name.includes(".")
+        ) {
           out.add(te.name);
         }
         for (const a of te.typeArgs) this.collectReceiverTypeParams(a, out);
@@ -791,6 +1006,8 @@ class TypeChecker {
       case "RecordTypeExpr":
         for (const f of te.fields) this.collectReceiverTypeParams(f.type, out);
         if (te.tail.kind === "OpenDict") this.collectReceiverTypeParams(te.tail.valueType, out);
+        return;
+      case "TypeofTypeExpr":
         return;
     }
   }
@@ -873,11 +1090,12 @@ class TypeChecker {
         doc: fn.doc,
         span: fn.span,
       });
+      this.extFnDecls.set(jsSymbol, fn);
       this.fnDeclsByName.set(jsSymbol, fn);
     } else {
-      scope.vars.set(fn.name, {
+      const binding: VarBinding = {
         scheme: {
-          quantifiedTypeVars: [],
+          quantifiedTypeVars: explicitIds.length > 0 ? [...explicitIds] : [],
           quantifiedRowVars: [],
           explicitTypeParams: explicitIds.length > 0 ? explicitIds : undefined,
           type: fnType,
@@ -890,7 +1108,9 @@ class TypeChecker {
         defSpan: fn.span,
         doc: fn.doc,
         symKind: "fn",
-      });
+      };
+      scope.vars.set(fn.name, binding);
+      this.fnBindings.set(fn, binding);
       if (scope === this.rootScope) {
         this.symbols.push({ name: fn.name, kind: "fn", type: fnType, doc: fn.doc, span: fn.span });
       }
@@ -977,18 +1197,20 @@ class TypeChecker {
 
     const prevRet = this.currentFnRetType;
     const prevNode = this.currentFnNode;
+    const prevEnclosingFn = this.currentEnclosingFnDecl;
+    const prevScope = this.currentScope;
     const prevAsync = this.currentFnBecameAsync;
     const prevTypeParams = this.activeTypeParams;
     const prevReifiedParams = this.activeReifiedParams;
     this.currentFnRetType = fnType.ret;
     this.currentFnNode = fn;
+    this.currentEnclosingFnDecl = fn;
+    this.currentScope = fnScope;
     this.currentFnBecameAsync = false;
     const fnTpMap = this.fnTypeParamMaps.get(fn);
     if (fnTpMap && fnTpMap.size > 0) {
       this.activeTypeParams = new Map([...prevTypeParams, ...fnTpMap]);
-      if (fn.reified) {
-        this.activeReifiedParams = [...prevReifiedParams, ...fnTpMap.values()];
-      }
+      this.activeReifiedParams = [...prevReifiedParams, ...fnTpMap.values()];
     }
 
     const bodyType = this.checkBlock(fn.body, fnScope);
@@ -1001,6 +1223,8 @@ class TypeChecker {
 
     this.currentFnRetType = prevRet;
     this.currentFnNode = prevNode;
+    this.currentEnclosingFnDecl = prevEnclosingFn;
+    this.currentScope = prevScope;
     this.currentFnBecameAsync = prevAsync;
     this.activeTypeParams = prevTypeParams;
     this.activeReifiedParams = prevReifiedParams;
@@ -1089,16 +1313,22 @@ class TypeChecker {
 
   private checkBlock(block: BlockExpr, scope: Scope): Type {
     const inner: Scope = { vars: new Map(), parent: scope };
-    for (const stmt of block.stmts) {
-      this.checkStmt(stmt, inner);
+    const prevScope = this.currentScope;
+    this.currentScope = inner;
+    try {
+      for (const stmt of block.stmts) {
+        this.checkStmt(stmt, inner);
+      }
+      if (block.tailExpr) {
+        const t = this.checkExpr(block.tailExpr, inner);
+        this.exprTypes.set(block, t);
+        return t;
+      }
+      this.exprTypes.set(block, TUnit);
+      return TUnit;
+    } finally {
+      this.currentScope = prevScope;
     }
-    if (block.tailExpr) {
-      const t = this.checkExpr(block.tailExpr, inner);
-      this.exprTypes.set(block, t);
-      return t;
-    }
-    this.exprTypes.set(block, TUnit);
-    return TUnit;
   }
 
   private checkStmt(stmt: Stmt, scope: Scope): void {
@@ -1150,6 +1380,17 @@ class TypeChecker {
         const objT = prune(this.checkExpr(stmt.object, scope));
         if (objT.kind === "TPrim" && objT.name === "Prompt") {
           throw new SplError("type", `Cannot mutate read-only property '${stmt.property}' on Prompt`, stmt.span);
+        }
+        if (objT.kind === "TNewtype" && stmt.property === "value") {
+          const u = prune(objT.underlying);
+          const hasRealValueField = u.kind === "TRecord" && flattenRecord(u).fields.has("value");
+          if (!hasRealValueField) {
+            throw new SplError(
+              "type",
+              `Cannot mutate '.value' directly on newtype '${objT.name}' (rebind with '${objT.name}(new_val)')`,
+              stmt.span
+            );
+          }
         }
         const fieldT = this.accessProperty(objT, stmt.property, stmt.span);
         const valT = this.checkExpr(stmt.value, scope);
@@ -1263,6 +1504,18 @@ class TypeChecker {
           llmHint: stmt.llmHint,
         });
         return;
+      case "NewtypeDecl":
+        this.newtypes.set(stmt.name, {
+          name: stmt.name,
+          moduleFile: this.program.file,
+          typeParams: stmt.typeParams.map((p) => p.name),
+          body: stmt.body,
+          doc: stmt.doc,
+          llmHint: stmt.llmHint,
+          span: stmt.span,
+        });
+        this.registerNewtypeConstructor(stmt, scope);
+        return;
       case "EnumDecl": {
         const variants = new Map<string, { fields: TypeExpr[]; doc?: string; llmHint?: string }>();
         for (const v of stmt.variants) {
@@ -1341,7 +1594,27 @@ class TypeChecker {
         if (b.defSpan) {
           this.identDefs.set(expr, { span: b.defSpan, doc: b.doc, kind: b.symKind ?? "var" });
         }
-        return instantiate(b.scheme);
+        const inst = instantiateWithArgs(b.scheme, undefined, expr.span);
+        if (b.isReified) {
+          this.reifiedIdentRefs.set(expr, inst.instantiatedReifiedParams);
+          this.reifiedCallSites.push({
+            callerFn: this.currentEnclosingFnDecl,
+            expr,
+            kind: "IdentRef",
+            targetFn: b.fnDecl,
+            fixedReifiedTypes: inst.instantiatedReifiedParams,
+            instantiationMap: inst.tMap,
+          });
+        } else if (b.fnDecl) {
+          this.reifiedCallSites.push({
+            callerFn: this.currentEnclosingFnDecl,
+            expr,
+            kind: "IdentRef",
+            targetFn: b.fnDecl,
+            instantiationMap: inst.tMap,
+          });
+        }
+        return inst.type;
       }
 
       case "TupleExpr":
@@ -1409,7 +1682,7 @@ class TypeChecker {
         const objT = this.checkExpr(expr.object, scope);
         const inner = freshTVar();
         unify(objT, tOption(inner), expr.object.span);
-        const propT = prune(this.accessProperty(inner, expr.property, expr.span));
+        const propT = prune(this.accessProperty(inner, expr.property, expr.span, expr));
         // Flat-map Option so `p?.optField` yields `T?` rather than `T??`
         if (propT.kind === "TEnum" && propT.name === "Option") {
           return propT;
@@ -1527,22 +1800,22 @@ class TypeChecker {
       }
 
       case "TypeSchemaExpr": {
-        const resolved = this.resolveTypeExpr(expr.targetType, new Map());
-        this.assertNoErasedTypeParams(resolved, "type_schema<T>()", expr.span);
+        const resolved = this.resolveTypeExpr(expr.targetType, new Map(), new Set(), undefined, scope);
         const schema = generateJsonSchema(resolved);
         this.schemaLiterals.set(expr, schema);
         this.reifiedExprTypes.set(expr, resolved);
+        this.recordFnReifiedTypeUse(this.currentEnclosingFnDecl, resolved);
         return TJson;
       }
 
       case "DecodeExpr": {
-        const resolved = this.resolveTypeExpr(expr.targetType, new Map());
-        this.assertNoErasedTypeParams(resolved, "decode<T>()", expr.span);
+        const resolved = this.resolveTypeExpr(expr.targetType, new Map(), new Set(), undefined, scope);
         const argT = this.checkExpr(expr.arg, scope);
         unify(argT, TJson, expr.arg.span);
         const codec = generateDecodeCodec(resolved);
         this.decodeCodecs.set(expr, codec);
         this.reifiedExprTypes.set(expr, resolved);
+        this.recordFnReifiedTypeUse(this.currentEnclosingFnDecl, resolved);
         const decodeErrType: Type = {
           kind: "TRecord",
           fields: new Map([
@@ -1552,6 +1825,20 @@ class TypeChecker {
           tail: { kind: "RClosed" },
         };
         return tResult(resolved, decodeErrType);
+      }
+
+      case "TypeofExpr": {
+        let resolved: Type;
+        if (expr.targetType) {
+          resolved = this.resolveTypeExpr(expr.targetType, new Map(), new Set(), undefined, scope);
+        } else {
+          const prevAsync = this.currentFnBecameAsync;
+          resolved = prune(this.checkExpr(expr.arg!, scope));
+          this.currentFnBecameAsync = prevAsync;
+        }
+        this.reifiedExprTypes.set(expr, resolved);
+        this.recordFnReifiedTypeUse(this.currentEnclosingFnDecl, resolved);
+        return TTypeInfo;
       }
     }
   }
@@ -1590,6 +1877,10 @@ class TypeChecker {
         { kind: "NamedTypeExpr", name: expr.typeName, typeArgs: [], span: expr.span },
         new Map()
       );
+      if (named.kind === "TNewtype") {
+        unify(named.underlying, recType, expr.span);
+        return named;
+      }
       unify(named, recType, expr.span);
       return named;
     }
@@ -1691,6 +1982,26 @@ class TypeChecker {
       return "array_to_iter";
     }
 
+    // Newtype <-> underlying type explicit cast (zero-overhead)
+    if (f.kind === "TNewtype") {
+      try {
+        unify(cloneWithSubst(f.underlying, new Map(), new Map()), cloneWithSubst(t, new Map(), new Map()));
+        unify(f.underlying, t, span);
+        return "noop";
+      } catch {
+        // fall through to other casts (e.g. `as Str` or `as Json`)
+      }
+    }
+    if (t.kind === "TNewtype") {
+      try {
+        unify(cloneWithSubst(f, new Map(), new Map()), cloneWithSubst(t.underlying, new Map(), new Map()));
+        unify(f, t.underlying, span);
+        return "noop";
+      } catch {
+        // fall through
+      }
+    }
+
     // Identical compound types (e.g. structural record upcast / alias cast)
     if (canonicalShapeKey(f) === canonicalShapeKey(t)) {
       return "noop";
@@ -1775,11 +2086,37 @@ class TypeChecker {
     }
 
     const objT = this.checkExpr(expr.object, scope);
-    return this.accessProperty(objT, expr.property, expr.span);
+    return this.accessProperty(objT, expr.property, expr.span, expr);
   }
 
-  private accessProperty(objType: Type, prop: string, span: Span): Type {
+  private accessProperty(objType: Type, prop: string, span: Span, memberExpr?: Expr): Type {
     const p = prune(objType);
+
+    if (p.kind === "TNewtype") {
+      const u = prune(p.underlying);
+      // 1. Transparent field forwarding for struct/record-backed newtypes
+      if (u.kind === "TRecord") {
+        const flat = flattenRecord(u);
+        const fieldT = flat.fields.get(prop);
+        if (fieldT) return fieldT;
+        if (flat.tail.kind === "ROpenDict" && (flat.tail.extraName ?? "extra") === prop) {
+          return tDict(TStr, flat.tail.valueType);
+        }
+      }
+      // 2. `.value` unwraps the newtype to its underlying type (zero runtime overhead)
+      if (prop === "value") {
+        if (memberExpr) this.newtypeValueAccess.add(memberExpr);
+        return p.underlying;
+      }
+      if (u.kind === "TRecord" && flattenRecord(u).tail.kind === "RVar") {
+        return this.accessProperty(u, prop, span, memberExpr);
+      }
+      throw new SplError(
+        "type",
+        `Newtype '${p.name}' has no property '${prop}' (use '.value' to unwrap underlying ${formatType(p.underlying)})`,
+        span
+      );
+    }
 
     if (p.kind === "TRecord") {
       const flat = flattenRecord(p);
@@ -1841,10 +2178,18 @@ class TypeChecker {
           expr.typeArgs.length > 0
             ? expr.typeArgs.map((ta) => this.resolveTypeExpr(ta, new Map()))
             : undefined;
-        const { type: fnT, instantiatedParams } = instantiateWithArgs(val, explicitArgs, expr.span);
+        const { type: fnT, instantiatedReifiedParams } = instantiateWithArgs(val, explicitArgs, expr.span);
         const modDefaults = mod.valueDefaults.get(method);
         const { ret, reordered } = this.applyCallArgs(fnT, expr.args, modDefaults, scope, expr.span);
-        const reifiedTypeVars = mod.reifiedValues.has(method) ? instantiatedParams : undefined;
+        const reifiedTypeVars = mod.reifiedValues.has(method) ? instantiatedReifiedParams : undefined;
+        if (reifiedTypeVars) {
+          this.reifiedCallSites.push({
+            callerFn: this.currentEnclosingFnDecl,
+            expr,
+            kind: "Namespace",
+            fixedReifiedTypes: reifiedTypeVars,
+          });
+        }
         this.callResolutions.set(expr, {
           kind: "NamespaceCall",
           alias: obj.name,
@@ -1901,7 +2246,7 @@ class TypeChecker {
           expr.typeArgs.length > 0
             ? expr.typeArgs.map((ta) => this.resolveTypeExpr(ta, new Map()))
             : undefined;
-        const { type: instFn, instantiatedParams } = instantiateWithArgs(scheme, explicitArgs, expr.span);
+        const { type: instFn, instantiatedReifiedParams, tMap } = instantiateWithArgs(scheme, explicitArgs, expr.span);
         if (instFn.kind === "TFn") {
           unify(instFn.params[0], recvT, obj.span);
           const restFn: Type = {
@@ -1914,7 +2259,19 @@ class TypeChecker {
           };
           const restDefaults = extMatch.defaults?.slice(1);
           const { ret, reordered } = this.applyCallArgs(restFn, expr.args, restDefaults, scope, expr.span);
-          const reifiedTypeVars = extMatch.isReified ? instantiatedParams : undefined;
+          const reifiedTypeVars = extMatch.isReified ? instantiatedReifiedParams : undefined;
+          const targetExtFn = this.extFnDecls.get(extMatch.jsSymbol);
+          if (reifiedTypeVars || targetExtFn) {
+            this.reifiedCallSites.push({
+              callerFn: this.currentEnclosingFnDecl,
+              expr,
+              kind: "Extension",
+              targetFn: targetExtFn,
+              targetExt: extMatch,
+              fixedReifiedTypes: reifiedTypeVars,
+              instantiationMap: tMap,
+            });
+          }
           this.callResolutions.set(expr, {
             kind: "ExtensionMethod",
             jsSymbol: extMatch.jsSymbol,
@@ -1967,6 +2324,8 @@ class TypeChecker {
     let defaults: (Expr | undefined)[] | undefined;
     let isKnownAsync = false;
     let isReified = false;
+    let targetFnDecl: FnDecl | undefined;
+    let callTMap: Map<number, Type> | undefined;
     let fnT: Type;
     let instantiatedParams: Type[] = [];
 
@@ -1977,6 +2336,7 @@ class TypeChecker {
         defaults = b.defaults ?? this.namedParamDefaults.get(calleeName);
         isKnownAsync = Boolean(b.isAsyncFn || this.asyncFnNames.has(calleeName));
         isReified = Boolean(b.isReified);
+        targetFnDecl = b.fnDecl;
       }
       // Enum constructor?
       if (this.variantToEnum.has(calleeName)) {
@@ -1985,14 +2345,15 @@ class TypeChecker {
         this.callResolutions.set(expr, { kind: "EnumCtor", variant: calleeName });
         return ret;
       }
-      if (b && (expr.typeArgs.length > 0 || isReified)) {
+      if (b && (expr.typeArgs.length > 0 || isReified || targetFnDecl)) {
         const explicitArgs =
           expr.typeArgs.length > 0
             ? expr.typeArgs.map((ta) => this.resolveTypeExpr(ta, new Map()))
             : undefined;
         const inst = instantiateWithArgs(b.scheme, explicitArgs, expr.span);
         fnT = inst.type;
-        instantiatedParams = inst.instantiatedParams;
+        instantiatedParams = inst.instantiatedReifiedParams;
+        callTMap = inst.tMap;
         this.exprTypes.set(expr.callee, fnT);
         if (b.defSpan) {
           this.identDefs.set(expr.callee, { span: b.defSpan, doc: b.doc, kind: b.symKind ?? "fn" });
@@ -2006,6 +2367,16 @@ class TypeChecker {
 
     const { ret, reordered } = this.applyCallArgs(fnT, expr.args, defaults, scope, expr.span);
     const reifiedTypeVars = isReified ? instantiatedParams : undefined;
+    if (reifiedTypeVars || targetFnDecl) {
+      this.reifiedCallSites.push({
+        callerFn: this.currentEnclosingFnDecl,
+        expr,
+        kind: "Direct",
+        targetFn: targetFnDecl,
+        fixedReifiedTypes: reifiedTypeVars,
+        instantiationMap: callTMap,
+      });
+    }
     this.callResolutions.set(expr, { kind: "Normal", reorderedArgs: reordered, reifiedTypeVars });
 
     if (isKnownAsync || (prune(fnT).kind === "TFn" && (prune(fnT) as Extract<Type, { kind: "TFn" }>).isAsync)) {
@@ -2665,6 +3036,18 @@ class TypeChecker {
       }
     }
 
+    if (subjT.kind === "TNewtype") {
+      const hasIrrefutableNewtype = expr.arms.some(
+        (a) =>
+          !a.guard &&
+          a.pattern.kind === "EnumPattern" &&
+          a.pattern.variant === subjT.name &&
+          a.pattern.fields.length === 1 &&
+          this.isIrrefutablePattern(a.pattern.fields[0])
+      );
+      if (hasIrrefutableNewtype) return;
+    }
+
     if (subjT.kind === "TRecord" || subjT.kind === "TTuple") {
       // A single irrefutable record/tuple destructuring covers it if all nested patterns are irrefutable
       const hasIrrefutable = expr.arms.some((a) => !a.guard && this.isIrrefutablePattern(a.pattern));
@@ -2780,6 +3163,47 @@ class TypeChecker {
       }
 
       case "EnumPattern": {
+        // 0. Check if this pattern destructures a `newtype`: `UserId(raw)` or `mod.UserId(raw)`
+        let ntDef: NewtypeDef | undefined;
+        let ntCtxMod: ModuleExports | undefined;
+        if (pat.enumName && this.namespaces.has(pat.enumName)) {
+          const mod = this.namespaces.get(pat.enumName)!;
+          ntDef = mod.newtypes?.get(pat.variant);
+          ntCtxMod = mod;
+        } else if (!pat.enumName) {
+          ntDef = this.newtypes.get(pat.variant);
+        }
+        if (ntDef) {
+          if (pat.fields.length !== 1) {
+            throw new SplError(
+              "type",
+              `Newtype pattern '${pat.variant}' expects 1 inner pattern, found ${pat.fields.length}`,
+              pat.span
+            );
+          }
+          const tpMap = new Map<string, Type>();
+          const typeArgs: Type[] = [];
+          for (const tp of ntDef.typeParams) {
+            const tv = freshTVar();
+            tpMap.set(tp, tv);
+            typeArgs.push(tv);
+          }
+          const underlying = this.resolveTypeExpr(ntDef.body, tpMap, new Set(), ntCtxMod);
+          const instNt: Type = {
+            kind: "TNewtype",
+            name: ntDef.name,
+            moduleFile: ntDef.moduleFile,
+            typeArgs,
+            underlying,
+            doc: ntDef.doc,
+            llmHint: ntDef.llmHint,
+          };
+          unify(expectedType, instNt, pat.span);
+          this.newtypePatterns.add(pat);
+          this.bindPattern(pat.fields[0], underlying, mutable, scope, generalizeBindings);
+          return;
+        }
+
         let enumName: string | undefined;
         let enumDef: EnumDef | undefined;
 
@@ -2994,21 +3418,37 @@ class TypeChecker {
     te: TypeExpr,
     tpMap: Map<string, Type>,
     resolvingEnums = new Set<string>(),
-    contextMod?: ModuleExports
+    contextMod?: ModuleExports,
+    scope: Scope = this.currentScope
   ): Type {
     switch (te.kind) {
+      case "TypeofTypeExpr": {
+        const root = this.getRootIdent(te.expr);
+        if (root && !this.lookupVar(root.name, scope)) {
+          const topLet = this.topLevelLets.get(root.name);
+          if (topLet && !this.checkedTopLets.has(topLet)) {
+            this.checkedTopLets.add(topLet);
+            this.checkLetStmt(topLet, this.rootScope);
+          }
+        }
+        const prevAsync = this.currentFnBecameAsync;
+        const t = prune(this.checkExpr(te.expr, scope));
+        this.currentFnBecameAsync = prevAsync;
+        return t;
+      }
+
       case "OptionTypeExpr":
-        return tOption(this.resolveTypeExpr(te.inner, tpMap, resolvingEnums, contextMod));
+        return tOption(this.resolveTypeExpr(te.inner, tpMap, resolvingEnums, contextMod, scope));
 
       case "TupleTypeExpr":
         if (te.elements.length === 0) return TUnit;
-        return tTuple(te.elements.map((e) => this.resolveTypeExpr(e, tpMap, resolvingEnums, contextMod)));
+        return tTuple(te.elements.map((e) => this.resolveTypeExpr(e, tpMap, resolvingEnums, contextMod, scope)));
 
       case "FnTypeExpr":
         return {
           kind: "TFn",
-          params: te.params.map((p) => this.resolveTypeExpr(p, tpMap, resolvingEnums, contextMod)),
-          ret: this.resolveTypeExpr(te.returnType, tpMap, resolvingEnums, contextMod),
+          params: te.params.map((p) => this.resolveTypeExpr(p, tpMap, resolvingEnums, contextMod, scope)),
+          ret: this.resolveTypeExpr(te.returnType, tpMap, resolvingEnums, contextMod, scope),
           isAsync: te.isAsync,
         };
 
@@ -3017,7 +3457,7 @@ class TypeChecker {
         const fieldDocs = new Map<string, string>();
         const fieldHints = new Map<string, string>();
         for (const f of te.fields) {
-          fields.set(f.name, this.resolveTypeExpr(f.type, tpMap, resolvingEnums, contextMod));
+          fields.set(f.name, this.resolveTypeExpr(f.type, tpMap, resolvingEnums, contextMod, scope));
           if (f.doc) fieldDocs.set(f.name, f.doc);
           if (f.llmHint) fieldHints.set(f.name, f.llmHint);
         }
@@ -3029,7 +3469,7 @@ class TypeChecker {
         } else {
           tail = {
             kind: "ROpenDict",
-            valueType: this.resolveTypeExpr(te.tail.valueType, tpMap, resolvingEnums, contextMod),
+            valueType: this.resolveTypeExpr(te.tail.valueType, tpMap, resolvingEnums, contextMod, scope),
             extraName: te.tail.name,
             doc: te.tail.doc,
             llmHint: te.tail.llmHint,
@@ -3069,6 +3509,29 @@ class TypeChecker {
               };
             }
             return resolved;
+          }
+          const nt = nsMod.newtypes?.get(memberName);
+          if (nt) {
+            if (nt.typeParams.length !== te.typeArgs.length) {
+              throw new SplError("type", `Newtype '${te.name}' expects ${nt.typeParams.length} type arg(s)`, te.span);
+            }
+            const sub = new Map<string, Type>();
+            const resolvedArgs: Type[] = [];
+            for (let i = 0; i < nt.typeParams.length; i++) {
+              const argT = this.resolveTypeExpr(te.typeArgs[i], tpMap, resolvingEnums, contextMod, scope);
+              sub.set(nt.typeParams[i], argT);
+              resolvedArgs.push(argT);
+            }
+            const underlying = this.resolveTypeExpr(nt.body, sub, resolvingEnums, nsMod, scope);
+            return {
+              kind: "TNewtype",
+              name: nt.name,
+              moduleFile: nt.moduleFile,
+              typeArgs: resolvedArgs,
+              underlying,
+              doc: nt.doc,
+              llmHint: nt.llmHint,
+            };
           }
           const ed = nsMod.enums.get(memberName);
           if (ed) {
@@ -3114,6 +3577,9 @@ class TypeChecker {
           case "Prompt": return TPrompt;
           case "Unit":
           case "Void": return TUnit;
+          case "TypeInfo": return TTypeInfo;
+          case "TypeFieldInfo": return TTypeFieldInfo;
+          case "TypeVariantInfo": return TTypeVariantInfo;
           case "Array":
             if (te.typeArgs.length !== 1) throw new SplError("type", "Array<T> requires 1 type argument", te.span);
             return tArray(this.resolveTypeExpr(te.typeArgs[0], tpMap, resolvingEnums, contextMod));
@@ -3158,6 +3624,31 @@ class TypeChecker {
             };
           }
           return resolved;
+        }
+
+        // User-defined nominal `newtype`
+        const nt = this.newtypes.get(te.name) ?? contextMod?.newtypes?.get(te.name);
+        if (nt) {
+          if (nt.typeParams.length !== te.typeArgs.length) {
+            throw new SplError("type", `Newtype '${te.name}' expects ${nt.typeParams.length} type arg(s)`, te.span);
+          }
+          const sub = new Map<string, Type>();
+          const resolvedArgs: Type[] = [];
+          for (let i = 0; i < nt.typeParams.length; i++) {
+            const argT = this.resolveTypeExpr(te.typeArgs[i], tpMap, resolvingEnums, contextMod, scope);
+            sub.set(nt.typeParams[i], argT);
+            resolvedArgs.push(argT);
+          }
+          const underlying = this.resolveTypeExpr(nt.body, sub, resolvingEnums, contextMod, scope);
+          return {
+            kind: "TNewtype",
+            name: nt.name,
+            moduleFile: nt.moduleFile,
+            typeArgs: resolvedArgs,
+            underlying,
+            doc: nt.doc,
+            llmHint: nt.llmHint,
+          };
         }
 
         // User-defined `enum` (supports recursive generic ADTs like `TreeNode<T>`)
@@ -3303,6 +3794,162 @@ class TypeChecker {
             }
           }
           changed = true;
+        }
+      }
+    }
+  }
+
+  // ==================== Universal Automatic Reification Propagation ====================
+
+  private recordFnReifiedTypeUse(fn: FnDecl | undefined, type: Type): void {
+    if (!fn) return;
+    let list = this.fnDirectReifiedTypes.get(fn);
+    if (!list) {
+      list = [];
+      this.fnDirectReifiedTypes.set(fn, list);
+    }
+    list.push(type);
+  }
+
+  private getFnScheme(fn: FnDecl): TypeScheme | undefined {
+    if (fn.receiverType) {
+      const sym = this.extensionJsSymbols.get(fn);
+      const ext = sym ? this.extensions.find((e) => e.jsSymbol === sym) : undefined;
+      return ext?.scheme;
+    }
+    return this.fnBindings.get(fn)?.scheme;
+  }
+
+  private propagateReification(): void {
+    // Build map of all local FnDecls -> their available quantified TVar IDs
+    const allFns = new Set<FnDecl>();
+    for (const fn of this.fnBindings.keys()) allFns.add(fn);
+    for (const fn of this.extFnDecls.values()) allFns.add(fn);
+
+    const fnQuantIds = new Map<FnDecl, Set<number>>();
+    const fnNeededIds = new Map<FnDecl, Set<number>>();
+
+    for (const fn of allFns) {
+      const scheme = this.getFnScheme(fn);
+      const qSet = new Set<number>(scheme?.quantifiedTypeVars ?? []);
+      const explicitTvs = this.fnExplicitTypeParams.get(fn) ?? [];
+      for (const tv of explicitTvs) {
+        const p = prune(tv);
+        if (p.kind === "TVar") qSet.add(p.id);
+      }
+      fnQuantIds.set(fn, qSet);
+
+      const needed = new Set<number>();
+      if (fn.reified) {
+        for (const tv of explicitTvs) {
+          const p = prune(tv);
+          if (p.kind === "TVar") needed.add(p.id);
+        }
+      }
+      const directTypes = this.fnDirectReifiedTypes.get(fn) ?? [];
+      for (const dt of directTypes) {
+        const fv = collectFreeVars(dt);
+        for (const id of fv.tVars) {
+          if (qSet.has(id)) needed.add(id);
+        }
+      }
+      fnNeededIds.set(fn, needed);
+    }
+
+    // Fixed-point propagation across call sites and first-class function refs
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const site of this.reifiedCallSites) {
+        if (!site.callerFn) continue;
+        const callerQ = fnQuantIds.get(site.callerFn);
+        const callerNeeded = fnNeededIds.get(site.callerFn);
+        if (!callerQ || !callerNeeded) continue;
+
+        const passedTypes: Type[] = [];
+        if (site.fixedReifiedTypes) {
+          passedTypes.push(...site.fixedReifiedTypes);
+        }
+        if (site.targetFn) {
+          const targetNeeded = fnNeededIds.get(site.targetFn);
+          if (targetNeeded && targetNeeded.size > 0) {
+            for (const tid of targetNeeded) {
+              const mapped = site.instantiationMap?.get(tid);
+              if (mapped) passedTypes.push(mapped);
+              else passedTypes.push({ kind: "TVar", id: tid, bounds: [] });
+            }
+          }
+        }
+
+        for (const pt of passedTypes) {
+          const fv = collectFreeVars(pt);
+          for (const id of fv.tVars) {
+            if (callerQ.has(id) && !callerNeeded.has(id)) {
+              callerNeeded.add(id);
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+
+    // Finalize ordered reified param lists for every FnDecl that needs runtime type descriptors
+    const fnOrderedReifiedIds = new Map<FnDecl, number[]>();
+    for (const fn of allFns) {
+      const needed = fnNeededIds.get(fn);
+      if (!needed || needed.size === 0) continue;
+
+      const explicitTvs = this.fnExplicitTypeParams.get(fn) ?? [];
+      const ordered: number[] = [];
+      const added = new Set<number>();
+      for (const tv of explicitTvs) {
+        const p = prune(tv);
+        if (p.kind === "TVar" && needed.has(p.id) && !added.has(p.id)) {
+          ordered.push(p.id);
+          added.add(p.id);
+        }
+      }
+      const remaining = Array.from(needed).filter((id) => !added.has(id)).sort((a, b) => a - b);
+      ordered.push(...remaining);
+
+      fnOrderedReifiedIds.set(fn, ordered);
+      this.fnReifiedParams.set(
+        fn,
+        ordered.map((id) => ({ kind: "TVar" as const, id, bounds: [] }))
+      );
+
+      if (fn.receiverType) {
+        const sym = this.extensionJsSymbols.get(fn);
+        const ext = sym ? this.extensions.find((e) => e.jsSymbol === sym) : undefined;
+        if (ext) {
+          ext.isReified = true;
+          if (ext.scheme) ext.scheme.reifiedTypeParams = ordered;
+        }
+      } else {
+        const binding = this.fnBindings.get(fn);
+        if (binding) {
+          binding.isReified = true;
+          binding.scheme.reifiedTypeParams = ordered;
+        }
+      }
+    }
+
+    // Patch all call sites and first-class IdentExpr references targeting newly auto-reified functions
+    for (const site of this.reifiedCallSites) {
+      if (!site.targetFn) continue;
+      const ordered = fnOrderedReifiedIds.get(site.targetFn);
+      if (!ordered || ordered.length === 0) continue;
+
+      const argTypes = ordered.map(
+        (tid) => site.instantiationMap?.get(tid) ?? ({ kind: "TVar", id: tid, bounds: [] } as Type)
+      );
+
+      if (site.kind === "IdentRef") {
+        this.reifiedIdentRefs.set(site.expr, argTypes);
+      } else {
+        const res = this.callResolutions.get(site.expr);
+        if (res && (res.kind === "Normal" || res.kind === "ExtensionMethod" || res.kind === "NamespaceCall")) {
+          res.reifiedTypeVars = argTypes;
         }
       }
     }

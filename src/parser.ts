@@ -1,7 +1,7 @@
 import { lex, type Token, type TokenKind } from "./lexer.js";
 import { SplError, type Span } from "./errors.js";
 import type {
-  Program, TopItem, ImportDecl, ImportSpecifier, TypeDecl, TypeParam,
+  Program, TopItem, ImportDecl, ImportSpecifier, TypeDecl, NewtypeDecl, TypeParam,
   EnumDecl, EnumVariantDecl, TraitDecl, TraitMethodSig, ImplDecl,
   FnDecl, ExternFnDecl, ParamDecl, TypeExpr, StructFieldDecl, RecordRowTail,
   Stmt, LetStmt, Expr, CallArg, MatchArm, Pattern, RecordFieldPattern,
@@ -205,6 +205,8 @@ class Parser {
     switch (nextTok.kind) {
       case "type":
         return this.parseTypeDecl(pub, ann);
+      case "newtype":
+        return this.parseNewtypeDecl(pub, ann);
       case "enum":
         return this.parseEnumDecl(pub, ann);
       case "trait":
@@ -325,7 +327,36 @@ class Parser {
     const typeParams = this.parseTypeParams();
     this.expect("=", "Expected '=' in type declaration");
     const body = this.parseTypeExpr();
-    return { kind: "TypeDecl", pub, name, typeParams, doc: ann.doc, llmHint: ann.llmHint, body, span: start };
+    const trail = this.collectTrailingAnnotations();
+    return {
+      kind: "TypeDecl",
+      pub,
+      name,
+      typeParams,
+      doc: mergeDocs(ann.doc, trail.doc),
+      llmHint: mergeDocs(ann.llmHint, trail.llmHint),
+      body,
+      span: start,
+    };
+  }
+
+  private parseNewtypeDecl(pub: boolean, ann: { doc?: string; llmHint?: string }): NewtypeDecl {
+    const start = this.expect("newtype").span;
+    const name = this.expect("Ident", "Expected newtype name").value;
+    const typeParams = this.parseTypeParams();
+    this.expect("=", "Expected '=' in newtype declaration");
+    const body = this.parseTypeExpr();
+    const trail = this.collectTrailingAnnotations();
+    return {
+      kind: "NewtypeDecl",
+      pub,
+      name,
+      typeParams,
+      doc: mergeDocs(ann.doc, trail.doc),
+      llmHint: mergeDocs(ann.llmHint, trail.llmHint),
+      body,
+      span: start,
+    };
   }
 
   private parseEnumDecl(pub: boolean, ann: { doc?: string; llmHint?: string }): EnumDecl {
@@ -544,6 +575,20 @@ class Parser {
   private parsePrimaryType(): TypeExpr {
     const t = this.peek();
 
+    // `typeof expr` or `typeof(expr)` in type position
+    if (t.kind === "typeof") {
+      const start = this.next().span;
+      let expr: Expr;
+      if (this.peekSameLine().kind === "(") {
+        this.next();
+        expr = this.parseExpr(true);
+        this.expect(")", "Expected ')' after typeof expression");
+      } else {
+        expr = this.parsePostfix(false);
+      }
+      return { kind: "TypeofTypeExpr", expr, span: start };
+    }
+
     // `struct { ... }` or `{ ... }`
     if (t.kind === "struct") {
       const start = this.next().span;
@@ -742,6 +787,10 @@ class Parser {
       }
       if (t.kind === "type") {
         stmts.push(this.parseTypeDecl(false, ann));
+        continue;
+      }
+      if (t.kind === "newtype") {
+        stmts.push(this.parseNewtypeDecl(false, ann));
         continue;
       }
       if (t.kind === "enum") {
@@ -1170,6 +1219,27 @@ class Parser {
 
       case "PromptStart":
         return this.parsePromptExpr();
+
+      case "typeof": {
+        const start = this.next().span;
+        if (this.peekSameLine().kind === "<") {
+          const typeArgs = this.parseCallTypeArgs();
+          if (typeArgs.length !== 1) {
+            throw new SplError("parse", "`typeof<T>()` expects exactly 1 type argument", start);
+          }
+          this.expect("(", "Expected '()' after `typeof<T>`");
+          this.expect(")", "Expected ')' after `typeof<T>(`");
+          return { kind: "TypeofExpr", targetType: typeArgs[0], span: start };
+        }
+        if (this.peekSameLine().kind === "(") {
+          this.next();
+          const arg = this.parseExpr(true);
+          this.expect(")", "Expected ')' after `typeof(expr)`");
+          return { kind: "TypeofExpr", arg, span: start };
+        }
+        const arg = this.parseUnary(allowTrailingBrace);
+        return { kind: "TypeofExpr", arg, span: start };
+      }
 
       case "Ident":
         this.next();

@@ -48,17 +48,27 @@ fn parse_audit(raw: Str) -> Result<SecurityAudit, Str> {
 }
 ```
 
-## User-Defined Reifiable Generics (`reified fn`)
+## Universal Reifiable Types & `typeof`
 
-Regular generic functions erase their type parameters at runtime. Marking a function `reified fn` causes the compiler to inject runtime type descriptors (JSON Schema + decoder codec) at every call site — so `type_schema<T>()`, `decode<T>(json)`, compound types like `Array<T>` / `Envelope<Array<T>>`, and forwarding to `std/llm` or `std/codegen` all work generically!
+All generic functions in SPL are **automatically reifiable** — type parameters are never erased when inspected at runtime. You can use `typeof(expr)`, `typeof<T>()`, `type_schema<T>()`, and `decode<T>(json)` inside any generic function (whether or not you write the optional `reified` modifier, and even with inferred Hindley-Milner polymorphism):
 
 ```splx
-pub type Envelope<T> = struct {
-    ok: Bool '' Whether the request succeeded
-    data: T  '' Typed payload
+pub enum Priority { Low, Normal, Urgent }
+
+pub type Task = struct {
+    id: Int            '' Unique numeric task ID
+    title: Str         '' Short task summary
+    priority: Priority '' Task priority
+    assignee: Str?     '' Optional owner handle
 }
 
-pub reified fn parse_json<T>(raw: Str) -> Result<T, Str> {
+// Works in ANY generic function — no `reified` keyword required!
+pub fn describe<T>(x: T) -> Str {
+    let info = typeof(x)
+    "${info.name} (${info.kind}) = ${to_str(x)}"
+}
+
+pub fn parse_json<T>(raw: Str) -> Result<T, Str> {
     let parsed = json_parse(raw)?
     match decode<T>(parsed) {
         Ok(val) => Ok(val)
@@ -66,14 +76,39 @@ pub reified fn parse_json<T>(raw: Str) -> Result<T, Str> {
     }
 }
 
-// Compound reified types compose automatically!
-pub reified fn parse_batch<T>(raw: Str) -> Result<Array<T>, Str> {
-    parse_json<Array<T>>(raw)
-}
-
-pub reified fn batch_schema<T>() -> Json {
-    type_schema<Envelope<Array<T>>>()
-}
+// Type-level `typeof` derives static types from existing bindings
+let default_cfg = { host: "localhost", port: 8080 }
+type Config = typeof default_cfg
 ```
 
-Attempting to call `type_schema<T>()` or `decode<T>()` on an erased type parameter inside a non-`reified fn` produces a clear compile-time error.
+`typeof(expr)` and `typeof<T>()` return a first-class `TypeInfo` record with `.name`, `.kind`, `.spl_type`, `.schema`, `.doc`, `.hint`, `.underlying`, `.type_args`, `.fields`, `.variants`, `.params`, and `.return_type`.
+
+## Nominal `newtype` Declarations
+
+While `type Alias = Int` creates a transparent structural alias, `newtype` creates a **completely distinct nominal type** with zero runtime overhead:
+
+```splx
+pub newtype UserId = Int
+pub newtype OrderId = Int
+
+'' Validated customer email address
+pub newtype Email = Str
+
+pub newtype Point = struct {
+    x: Int '' Horizontal coordinate
+    y: Int '' Vertical coordinate
+}
+
+let uid = UserId(42)         // Construct via newtype constructor (or `42 as UserId`)
+let raw = uid.value          // Unwrap via `.value` (or `uid as Int`)
+let UserId(n) = uid          // Pattern match / destructure
+
+let mut p = Point { x: 1, y: 2 } // Struct newtypes support transparent field access
+p.x = p.x + 10
+
+print(typeof(uid).name)      // "UserId" (distinct from Int and OrderId!)
+print(typeof(uid) == typeof(OrderId(42))) // false
+```
+
+- `UserId` never unifies with `Int` or `OrderId`, preventing accidental mix-ups and enabling distinct `impl Trait for UserId` implementations and extension methods.
+- `newtype` preserves its name and `''` LLM hint in `type_schema<T>()`, `decode<T>()`, and `typeof(...)`.

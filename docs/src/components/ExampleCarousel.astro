@@ -179,39 +179,36 @@ let sieve = @{
 print(sieve(1000))`,
   },
   {
-    id: "reified-generics",
-    tab: "06 // Reified Types",
-    title: "Reified Generics (`reified fn<T>`)",
-    file: "examples/11_reified_types.splx",
+    id: "typeof-newtype",
+    tab: "06 // Reified, typeof & newtype",
+    title: "Universal Reifiable Types, `typeof` & `newtype`",
+    file: "examples/13_typeof_and_newtype.splx",
     summary:
-      "Preserve type descriptors across generic functions so `type_schema<T>()` and `decode<T>()` compose with any `T`.",
+      "Every generic function auto-reifies for `typeof(x)` / `typeof<T>()`, `type_schema<T>()`, and `decode<T>()`. Use `newtype` for zero-overhead nominal types.",
     docHref: "/language/prompts-and-reification/",
     docLabel: "Reified Types",
-    code: `pub enum Priority { Low, Normal, Urgent }
+    code: `pub newtype UserId = Int
+pub newtype OrderId = Int
 
 pub type Task = struct {
-    id: Int            '' Unique numeric task ID
-    title: Str         '' Short task summary
-    priority: Priority '' Task priority
-    assignee: Str?     '' Optional owner handle
+    id: UserId   '' Unique owner user ID
+    title: Str   '' Short task summary
 }
 
-/// Preserves runtime JSON Schema + decoder for any type T!
-pub reified fn validate_or_prompt<T>(raw: Str) -> Result<T, Str> {
-    let parsed = json_parse(raw)?
-    match decode<T>(parsed) {
-        Ok(val) => Ok(val)
-        Err(e) => {
-            let expected = json_stringify(type_schema<T>())
-            Err(e.path + ": " + e.message + " | schema: " + expected)
-        }
-    }
+// Plain generic functions automatically reify — inspect any type with \`typeof\`!
+fn describe<T>(x: T) -> Str {
+    let info = typeof(x)
+    "\${info.name} [\${info.kind}] = \${to_str(x)}"
 }
 
-let task = validate_or_prompt<Task>(
-    "{\\"id\\":1,\\"title\\":\\"Ship SPL\\",\\"priority\\":\\"Urgent\\"}"
-)?
-print("Task #\${task.id}: \${task.title} [\${to_str(task.priority)}]")`,
+// Type-level \`typeof\` derives static types from existing bindings
+let default_cfg = { retries: 3, strict: true }
+type Config = typeof default_cfg
+
+let uid = UserId(42)
+print(describe(uid))                                // UserId [newtype] = 42
+print(typeof(uid) == typeof(OrderId(42)))           // false
+print(typeof<Task>().fields.map { f -> f.name })    // [id, title]`,
   },
 ];
 

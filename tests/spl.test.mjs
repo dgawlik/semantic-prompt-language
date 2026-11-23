@@ -505,11 +505,11 @@ test("14. CLI smoke test: `spl check`, `spl schema`, `spl run` on examples/06_pr
   assert.match(runOut, /prompt=120, completion=45/);
 });
 
-test("15. All documented examples (`examples/01..12_*.splx`) compile and execute cleanly", () => {
+test("15. All documented examples (`examples/01..13_*.splx`) compile and execute cleanly", () => {
   const cli = path.resolve("dist/cli.js");
   const examplesDir = path.resolve("examples");
   const files = fs.readdirSync(examplesDir).filter((f) => /^\d+_.*\.splx$/.test(f)).sort();
-  assert.equal(files.length, 12);
+  assert.equal(files.length, 13);
 
   for (const file of files) {
     if (file === "08_dynamic_codegen.splx") {
@@ -546,6 +546,13 @@ test("15. All documented examples (`examples/01..12_*.splx`) compile and execute
       assert.match(out, /proc\.exec \(cwd\): code=0, stdout=spl-demo@1\.0\.0/);
       assert.match(out, /non-zero exit:\s+code=2, stderr=simulated warning/);
       assert.match(out, /cleanup:\s+done/);
+    }
+    if (file === "13_typeof_and_newtype.splx") {
+      assert.match(out, /newtype show:\s+User#42 vs Order#42 \(admin=true, raw=42\)/);
+      assert.match(out, /struct newtype:\s+Point\(15, 20\)/);
+      assert.match(out, /typeof type:\s+api\.spl\.dev:443/);
+      assert.match(out, /nominal eq:\s+UserId==OrderId=false, UserId==Int=false/);
+      assert.match(out, /compounds:\s+Array<UserId>, Box<UserId>, UserId\?/);
     }
   }
 });
@@ -1156,25 +1163,35 @@ test("24. User-defined `reified fn<T>` with `type_schema<T>()`, `decode<T>()`, c
   assert.equal(parsedSchema.items.title, "Item");
   assert.equal(parsedSchema.items.properties.qty.type, "integer");
 
-  // Compile-time error when using type_schema<T>() or decode<T>() in a non-reified generic fn
-  assert.throws(
-    () =>
-      compileSnippet(`
-        fn bad_schema<T>() -> Json {
-            type_schema<T>()
+  // Plain generic functions (WITHOUT `reified` keyword) also auto-reify `type_schema<T>()` and `decode<T>()`!
+  const { mod: autoMod } = await runSpl(`
+    type Item = struct { name: Str, qty: Int }
+
+    pub fn auto_schema<T>() -> Str {
+        json_stringify(type_schema<T>())
+    }
+
+    pub fn auto_decode<T>(raw: Str) -> Result<T, Str> {
+        let j = json_parse(raw)?
+        match decode<T>(j) {
+            Ok(v) => Ok(v)
+            Err(e) => Err(e.path + ": " + e.message)
         }
-      `),
-    /erased at runtime.*reified fn/i
-  );
-  assert.throws(
-    () =>
-      compileSnippet(`
-        fn bad_decode<T>(j: Json) -> Result<T, { path: Str, message: Str }> {
-            decode<T>(j)
+    }
+
+    pub fn run_auto() -> (Str, Str) {
+        let s = auto_schema<Item>()
+        let res = auto_decode<Item>("{\\"name\\":\\"nuts\\",\\"qty\\":5}")
+        let n = match res {
+            Ok(it) => it.name
+            Err(_) => ""
         }
-      `),
-    /erased at runtime.*reified fn/i
-  );
+        (s, n)
+    }
+  `);
+  const [autoSchemaStr, autoItemName] = autoMod.run_auto();
+  assert.equal(autoItemName, "nuts");
+  assert.equal(JSON.parse(autoSchemaStr).title, "Item");
 
   // Top-level `?` failure must report a readable error message (never `[object Object]`)
   const cli = path.resolve("dist/cli.js");
@@ -1194,4 +1211,243 @@ test("24. User-defined `reified fn<T>` with `type_schema<T>()`, `decode<T>()`, c
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+});
+
+test("25. `newtype`: nominal type safety, constructors, .value, as cast, pattern matching, struct field forwarding, traits & schemas", async () => {
+  const { mod } = await runSpl(`
+    pub newtype UserId = Int
+    pub newtype OrderId = Int
+
+    '' Validated customer email address
+    pub newtype Email = Str
+
+    pub newtype Point = struct {
+        x: Int '' Horizontal coordinate
+        y: Int '' Vertical coordinate
+    }
+
+    pub newtype Box<T> = struct {
+        item: T
+    }
+
+    impl Show for UserId {
+        fn show(self) -> Str { "User#" + to_str(self.value) }
+    }
+
+    impl Show for OrderId {
+        fn show(self) -> Str { "Order#" + to_str(self.value) }
+    }
+
+    fn UserId.is_admin(self) -> Bool {
+        self.value == 0
+    }
+
+    pub fn test_newtypes() -> (Int, Int, Bool, Str, Str, Int, Int, Str, Str, Str) {
+        let uid = UserId(42)
+        let admin = 0 as UserId
+        let oid = OrderId(42)
+
+        // Pattern destructuring in let & exhaustive match
+        let UserId(raw_let) = uid
+        let raw_match = match uid {
+            UserId(n) => n + 1
+        }
+
+        // Struct newtype: both constructor and named struct literal, transparent field access & mutation
+        let mut p = Point { x: 10, y: 20 }
+        p.x = p.x + 5
+        let p2 = Point({ x: 1, y: 2 })
+
+        // Generic newtype
+        let b = Box({ item: "hello" })
+
+        // Schema & decode on newtype preserves title + '' LLM hint
+        let email_schema = json_stringify(type_schema<Email>())
+        let decoded_email = match decode<Email>(to_json("ada@spl.dev")) {
+            Ok(e) => e.value
+            Err(_) => ""
+        }
+
+        (
+            raw_let,
+            raw_match,
+            admin.is_admin(),
+            uid.show(),
+            oid.show(),
+            p.x + p2.y,
+            uid as Int,
+            b.item,
+            email_schema,
+            decoded_email
+        )
+    }
+  `);
+
+  const [rawLet, rawMatch, isAdmin, uShow, oShow, sumXY, asInt, boxItem, emailSchemaStr, decodedEmail] =
+    mod.test_newtypes();
+  assert.equal(rawLet, 42);
+  assert.equal(rawMatch, 43);
+  assert.equal(isAdmin, true);
+  assert.equal(uShow, "User#42");
+  assert.equal(oShow, "Order#42");
+  assert.equal(sumXY, 17);
+  assert.equal(asInt, 42);
+  assert.equal(boxItem, "hello");
+  assert.equal(decodedEmail, "ada@spl.dev");
+  const emailSchema = JSON.parse(emailSchemaStr);
+  assert.equal(emailSchema.type, "string");
+  assert.equal(emailSchema.title, "Email");
+  assert.equal(emailSchema.description, "Validated customer email address");
+
+  // Nominal safety: UserId cannot unify with Int or OrderId
+  assert.throws(
+    () =>
+      compileSnippet(`
+        newtype UserId = Int
+        let x: UserId = 42
+      `),
+    /Type mismatch/
+  );
+  assert.throws(
+    () =>
+      compileSnippet(`
+        newtype UserId = Int
+        newtype OrderId = Int
+        let u = UserId(1)
+        let o: OrderId = u
+      `),
+    /Newtype mismatch/
+  );
+  assert.throws(
+    () =>
+      compileSnippet(`
+        newtype UserId = Int
+        fn take_int(n: Int) -> Int { n }
+        let _ = take_int(UserId(5))
+      `),
+    /Type mismatch/
+  );
+});
+
+test("26. `typeof` (type-level & runtime TypeInfo) and universal auto-reification across all generic functions", async () => {
+  const { mod } = await runSpl(`
+    '' A domain user record
+    type User = struct {
+        /// Primary name
+        name: Str '' Full name
+        age: Int?
+    }
+
+    enum Color { Red, Green, Blue }
+
+    newtype UserId = Int
+    newtype OrderId = Int
+    newtype Wrapper<T> = struct { inner: T }
+
+    // Type-level typeof
+    let default_cfg = { host: "localhost", port: 8080 }
+    type Config = typeof default_cfg
+
+    fn get_port(c: typeof default_cfg) -> Int {
+        c.port
+    }
+
+    // Plain generic fn<T> (NO reified keyword!) using typeof<T>() and typeof(x)
+    fn describe<T>(x: T) -> Str {
+        typeof(x).name + ":" + typeof<T>().kind + "=" + to_str(x)
+    }
+
+    // Implicit HM-polymorphic fn (NO <T> and NO reified keyword!)
+    fn kind_of(x) -> Str {
+        typeof(x).name + "/" + typeof(x).kind
+    }
+
+    // Transitive reification forwarding across plain generic functions
+    fn forward_kind(x) -> Str {
+        kind_of(x)
+    }
+
+    // Compound reified types with typeof<...> inside a plain generic function
+    fn compound_types<T>() -> (Str, Str, Str) {
+        (typeof<Array<T>>().name, typeof<Wrapper<T>>().name, typeof<T?>().name)
+    }
+
+    pub fn test_typeof_and_reification() -> (
+        Str, Str, Bool, Bool, Bool,
+        Int, Str, Str, Int,
+        Str, Str, Str,
+        Array<Str>,
+        (Str, Str, Str),
+        Int
+    ) {
+        let t_int = typeof(42)
+        let t_uid = typeof(UserId(7))
+        let t_oid = typeof(OrderId(7))
+        let t_user = typeof<User>()
+        let t_color = typeof<Color>()
+
+        // Type-level typeof
+        let custom_cfg: Config = { host: "0.0.0.0", port: 9090 }
+        let port = get_port(custom_cfg)
+
+        // Higher-order passing of auto-reified generic function
+        let mapped = [1, 2].map(describe)
+
+        // Function type reflection
+        let add = { a: Int, b: Int -> a + b }
+        let t_add = typeof(add)
+
+        (
+            t_int.name,
+            t_uid.underlying ?? "",
+            t_int == typeof<Int>(),
+            t_uid == t_oid,
+            t_uid == t_int,
+            t_user.fields.len(),
+            t_user.fields.get(0)?.hint ?? "",
+            t_color.kind,
+            t_color.variants.len(),
+            describe(UserId(9)),
+            kind_of("hello"),
+            forward_kind([1, 2]),
+            mapped,
+            compound_types<UserId>(),
+            port + t_add.params.len()
+        )
+    }
+  `);
+
+  const [
+    intName,
+    uidUnderlying,
+    intEq,
+    uidEqOid,
+    uidEqInt,
+    userFieldCount,
+    firstFieldHint,
+    colorKind,
+    colorVariantCount,
+    descUid,
+    kindStr,
+    fwdArr,
+    mapped,
+    compounds,
+    portPlusParams,
+  ] = mod.test_typeof_and_reification();
+
+  assert.equal(intName, "Int");
+  assert.equal(uidUnderlying, "Int");
+  assert.equal(intEq, true);
+  assert.equal(uidEqOid, false);
+  assert.equal(uidEqInt, false);
+  assert.equal(userFieldCount, 2);
+  assert.equal(firstFieldHint, "Full name");
+  assert.equal(colorKind, "enum");
+  assert.equal(colorVariantCount, 3);
+  assert.equal(descUid, "UserId:newtype=9");
+  assert.equal(kindStr, "Str/primitive");
+  assert.equal(fwdArr, "Array<Int>/array");
+  assert.deepEqual(mapped, ["Int:primitive=1", "Int:primitive=2"]);
+  assert.deepEqual(compounds, ["Array<UserId>", "Wrapper<UserId>", "UserId?"]);
+  assert.equal(portPlusParams, 9092);
 });

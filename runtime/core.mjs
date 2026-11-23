@@ -785,3 +785,317 @@ export async function asyncAll(thunks) {
 export async function asyncRace(thunks) {
   return Promise.race(thunks.map((fn) => fn()));
 }
+
+// ==================== Universal Reified TypeInfo Runtime Helpers ====================
+
+export function toTypeInfo(d) {
+  if (!d || typeof d !== "object") {
+    return {
+      name: "Json",
+      kind: "primitive",
+      spl_type: "Json",
+      schema: {},
+      doc: None,
+      hint: None,
+      underlying: None,
+      type_args: [],
+      fields: [],
+      variants: [],
+      params: [],
+      return_type: None,
+    };
+  }
+  return {
+    name: d.name ?? d.spl_type ?? d.splType ?? "Json",
+    kind: d.kind ?? "primitive",
+    spl_type: d.spl_type ?? d.splType ?? d.name ?? "Json",
+    schema: d.schema ?? {},
+    doc: d.doc ?? None,
+    hint: d.hint ?? None,
+    underlying: d.underlying ?? None,
+    type_args: d.type_args ?? [],
+    fields: d.fields ?? [],
+    variants: d.variants ?? [],
+    params: d.params ?? [],
+    return_type: d.return_type ?? None,
+  };
+}
+
+export function reifyArray(el) {
+  const splType = `Array<${el.splType}>`;
+  return {
+    name: splType,
+    kind: "array",
+    splType,
+    spl_type: splType,
+    schema: { type: "array", items: el.schema },
+    codec: { k: "Array", el: el.codec },
+    doc: None,
+    hint: None,
+    underlying: None,
+    type_args: [el.splType],
+    fields: [],
+    variants: [],
+    params: [],
+    return_type: None,
+  };
+}
+
+export function reifyIter(el) {
+  const splType = `Iter<${el.splType}>`;
+  return {
+    name: splType,
+    kind: "iter",
+    splType,
+    spl_type: splType,
+    schema: { type: "array", items: el.schema },
+    codec: { k: "Array", el: el.codec },
+    doc: None,
+    hint: None,
+    underlying: None,
+    type_args: [el.splType],
+    fields: [],
+    variants: [],
+    params: [],
+    return_type: None,
+  };
+}
+
+export function reifyDict(k, v) {
+  const splType = `Dict<${k.splType}, ${v.splType}>`;
+  return {
+    name: splType,
+    kind: "dict",
+    splType,
+    spl_type: splType,
+    schema: { type: "object", additionalProperties: v.splType === "Json" ? true : v.schema },
+    codec: { k: "Dict", val: v.codec },
+    doc: None,
+    hint: None,
+    underlying: None,
+    type_args: [k.splType, v.splType],
+    fields: [],
+    variants: [],
+    params: [],
+    return_type: None,
+  };
+}
+
+export function reifyTuple(els) {
+  const splType = `(${els.map((e) => e.splType).join(", ")})`;
+  return {
+    name: splType,
+    kind: "tuple",
+    splType,
+    spl_type: splType,
+    schema: {
+      type: "array",
+      prefixItems: els.map((e) => e.schema),
+      minItems: els.length,
+      maxItems: els.length,
+    },
+    codec: { k: "Tuple", els: els.map((e) => e.codec) },
+    doc: None,
+    hint: None,
+    underlying: None,
+    type_args: els.map((e) => e.splType),
+    fields: [],
+    variants: [],
+    params: [],
+    return_type: None,
+  };
+}
+
+export function reifyFn(params, ret) {
+  const paramStrs = params.map((p) => p.splType);
+  const splType = `fn(${paramStrs.join(", ")}) -> ${ret.splType}`;
+  return {
+    name: splType,
+    kind: "fn",
+    splType,
+    spl_type: splType,
+    schema: { description: "function" },
+    codec: { k: "Json" },
+    doc: None,
+    hint: None,
+    underlying: None,
+    type_args: [],
+    fields: [],
+    variants: [],
+    params: paramStrs,
+    return_type: Some(ret.splType),
+  };
+}
+
+export function reifyOption(inner) {
+  const splType = `${inner.splType}?`;
+  return {
+    name: splType,
+    kind: "option",
+    splType,
+    spl_type: splType,
+    schema: { anyOf: [inner.schema, { type: "null" }] },
+    codec: { k: "Option", inner: inner.codec },
+    doc: None,
+    hint: None,
+    underlying: None,
+    type_args: [inner.splType],
+    fields: [],
+    variants: [
+      { name: "Some", fields: [inner.splType], doc: None, hint: None },
+      { name: "None", fields: [], doc: None, hint: None },
+    ],
+    params: [],
+    return_type: None,
+  };
+}
+
+export function reifyNewtype(name, typeArgs, underlying, doc, hint) {
+  const typeArgStrs = typeArgs.map((a) => a.splType);
+  const splType = typeArgStrs.length > 0 ? `${name}<${typeArgStrs.join(", ")}>` : name;
+  const schema = { ...(underlying.schema ?? {}), title: name };
+  if (hint && hint.$tag === "Some") schema.description = hint._0;
+  return {
+    name: splType,
+    kind: "newtype",
+    splType,
+    spl_type: splType,
+    schema,
+    codec: underlying.codec,
+    doc: doc ?? None,
+    hint: hint ?? None,
+    underlying: Some(underlying.splType),
+    type_args: typeArgStrs,
+    fields: underlying.fields ?? [],
+    variants: [],
+    params: [],
+    return_type: None,
+  };
+}
+
+export function reifyRecord(typeName, doc, hint, fieldSpecs, tailKind, tailValueDesc, extraName) {
+  const props = {};
+  const required = [];
+  const codecFields = {};
+  const fieldInfos = [];
+  const fmtEntries = [];
+  for (const f of fieldSpecs) {
+    const fSchema = f.optional
+      ? { anyOf: [f.innerDesc.schema, { type: "null" }] }
+      : { ...(f.desc.schema ?? {}) };
+    if (f.hint && f.hint.$tag === "Some") fSchema.description = f.hint._0;
+    props[f.name] = fSchema;
+    if (!f.optional) required.push(f.name);
+    codecFields[f.name] = {
+      codec: f.optional ? f.innerDesc.codec : f.desc.codec,
+      optional: f.optional,
+    };
+    fieldInfos.push({
+      name: f.name,
+      type_name: f.desc.splType,
+      optional: f.optional,
+      doc: f.doc ?? None,
+      hint: f.hint ?? None,
+    });
+    fmtEntries.push(`${f.name}: ${f.desc.splType}`);
+  }
+  const schema = { type: "object", properties: props, required };
+  if (typeName) schema.title = typeName;
+  if (hint && hint.$tag === "Some") schema.description = hint._0;
+  let codec;
+  if (tailKind === "closed") {
+    schema.additionalProperties = false;
+    codec = { k: "Record", fields: codecFields, open: false };
+  } else if (tailKind === "openDict" && tailValueDesc) {
+    schema.additionalProperties = tailValueDesc.splType === "Json" ? true : tailValueDesc.schema;
+    codec = {
+      k: "Record",
+      fields: codecFields,
+      open: true,
+      extraName: extraName ?? "extra",
+      extraCodec: tailValueDesc.codec,
+    };
+    fmtEntries.push(`..${extraName ?? "extra"}: Dict<Str, ${tailValueDesc.splType}>`);
+  } else {
+    schema.additionalProperties = true;
+    codec = { k: "Record", fields: codecFields, open: true };
+  }
+  const splType = `{ ${fmtEntries.join(", ")} }`;
+  return {
+    name: typeName ?? splType,
+    kind: "record",
+    splType,
+    spl_type: splType,
+    schema,
+    codec,
+    doc: doc ?? None,
+    hint: hint ?? None,
+    underlying: None,
+    type_args: [],
+    fields: fieldInfos,
+    variants: [],
+    params: [],
+    return_type: None,
+  };
+}
+
+export function reifyEnum(name, typeArgs, variantSpecs, doc, hint) {
+  const typeArgStrs = typeArgs.map((a) => a.splType);
+  const splType = typeArgStrs.length > 0 ? `${name}<${typeArgStrs.join(", ")}>` : name;
+  const kind = name === "Option" ? "option" : name === "Result" ? "result" : "enum";
+  const allUnit = variantSpecs.every((v) => v.fields.length === 0);
+  let schema;
+  if (allUnit) {
+    schema = { type: "string", enum: variantSpecs.map((v) => v.name) };
+    if (hint && hint.$tag === "Some") schema.description = hint._0;
+  } else {
+    const oneOf = variantSpecs.map((v) => {
+      const props = { tag: { const: v.name } };
+      const req = ["tag"];
+      if (v.fields.length === 1) {
+        props.value = v.fields[0].schema;
+        req.push("value");
+      } else if (v.fields.length > 1) {
+        props.values = {
+          type: "array",
+          prefixItems: v.fields.map((f) => f.schema),
+          minItems: v.fields.length,
+          maxItems: v.fields.length,
+        };
+        req.push("values");
+      }
+      const vs = { type: "object", properties: props, required: req, additionalProperties: false };
+      if (v.hint && v.hint.$tag === "Some") vs.description = v.hint._0;
+      return vs;
+    });
+    schema = { title: name, oneOf };
+    if (hint && hint.$tag === "Some") schema.description = hint._0;
+  }
+  const codecVariants = {};
+  const variantInfos = [];
+  for (const v of variantSpecs) {
+    codecVariants[v.name] = v.fields.map((f) => f.codec);
+    variantInfos.push({
+      name: v.name,
+      fields: v.fields.map((f) => f.splType),
+      doc: v.doc ?? None,
+      hint: v.hint ?? None,
+    });
+  }
+  return {
+    name: splType,
+    kind,
+    splType,
+    spl_type: splType,
+    schema,
+    codec: { k: "Enum", name, variants: codecVariants },
+    doc: doc ?? None,
+    hint: hint ?? None,
+    underlying: None,
+    type_args: typeArgStrs,
+    fields: [],
+    variants: variantInfos,
+    params: [],
+    return_type: None,
+  };
+}

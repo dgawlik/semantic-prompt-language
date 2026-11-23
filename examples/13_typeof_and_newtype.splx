@@ -1,0 +1,95 @@
+// ============================================================================
+// 13_typeof_and_newtype.splx — Nominal `newtype`, `typeof`, & Universal Reification
+// ============================================================================
+// Run: node dist/cli.js run examples/13_typeof_and_newtype.splx
+
+// --- 1. Nominal `newtype` Declarations (Zero Runtime Overhead) ---
+// Unlike `type Alias = Int` (structural), `newtype` creates a completely distinct type.
+pub newtype UserId = Int
+pub newtype OrderId = Int
+
+'' Validated customer email address
+pub newtype Email = Str
+
+// Struct-backed newtype with transparent field access & mutation
+pub newtype Point = struct {
+    x: Int '' Horizontal coordinate
+    y: Int '' Vertical coordinate
+}
+
+// Generic newtype
+pub newtype Box<T> = struct {
+    item: T
+}
+
+// Distinct trait implementations & extension methods per newtype
+impl Show for UserId {
+    fn show(self) -> Str { "User#" + to_str(self.value) }
+}
+
+impl Show for OrderId {
+    fn show(self) -> Str { "Order#" + to_str(self.value) }
+}
+
+fn UserId.is_admin(self) -> Bool {
+    self.value == 0
+}
+
+// --- 2. Type-Level `typeof` ---
+let default_cfg = { host: "localhost", port: 8080, strict: true }
+type Config = typeof default_cfg
+
+fn format_endpoint(c: typeof default_cfg) -> Str {
+    "${c.host}:${c.port}"
+}
+
+// --- 3. Universal Auto-Reification (No `reified` Keyword Required!) ---
+// Every generic function automatically receives runtime TypeInfo when using
+// `typeof`, `type_schema<T>()`, or `decode<T>()`.
+
+fn describe<T>(val: T) -> Str {
+    let info = typeof(val)
+    "${info.name} [${info.kind}] = ${to_str(val)}"
+}
+
+// Even implicit Hindley-Milner polymorphic functions (no `<T>`) auto-reify!
+fn inspect_kind(x) -> Str {
+    let info = typeof(x)
+    match info.underlying {
+        Some(u) => "${info.name} (newtype over ${u})"
+        None => "${info.name} (${info.kind})"
+    }
+}
+
+fn compound_names<T>() -> Str {
+    "${typeof<Array<T>>().name}, ${typeof<Box<T>>().name}, ${typeof<T?>().name}"
+}
+
+// --- 4. Run All Examples ---
+print("=== 13_typeof_and_newtype ===")
+
+let uid = UserId(42)
+let oid = OrderId(42)
+let admin = 0 as UserId
+
+// Pattern matching & unwrapping
+let UserId(raw_id) = uid
+print("newtype show:   " + uid.show() + " vs " + oid.show() + " (admin=" + to_str(admin.is_admin()) + ", raw=" + to_str(raw_id) + ")")
+
+// Transparent field access & mutation on struct newtype
+let mut pt = Point { x: 10, y: 20 }
+pt.x = pt.x + 5
+print("struct newtype: Point(${pt.x}, ${pt.y})")
+
+// Type-level typeof
+let prod_cfg: Config = { host: "api.spl.dev", port: 443, strict: true }
+print("typeof type:    " + format_endpoint(prod_cfg))
+
+// Runtime typeof(expr) & typeof<T>() -> TypeInfo
+print("describe:       " + describe(uid) + " | " + describe(oid))
+print("nominal eq:     UserId==OrderId=" + to_str(typeof(uid) == typeof(oid)) + ", UserId==Int=" + to_str(typeof(uid) == typeof(42)))
+print("inspect_kind:   " + inspect_kind(uid) + " | " + inspect_kind([1, 2, 3]))
+print("higher-order:   " + to_str([1, 2].map(describe)))
+print("compounds:      " + compound_names<UserId>())
+print("Point fields:   " + to_str(typeof<Point>().fields.map { f -> f.name + ":" + f.type_name }))
+print("Email schema:   " + json_stringify(typeof<Email>().schema))

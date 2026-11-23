@@ -129,7 +129,7 @@
         },
         {
           "name": "keyword.other.declaration.splx",
-          "match": "\\b(let|mut|fn|type|struct|enum|trait|impl|pub|import|from|as|extern|async|reified)\\b"
+          "match": "\\b(let|mut|fn|type|newtype|typeof|struct|enum|trait|impl|pub|import|from|as|extern|async|reified)\\b"
         },
         {
           "name": "constant.language.boolean.splx",
@@ -145,7 +145,7 @@
       "patterns": [
         {
           "name": "support.type.primitive.splx",
-          "match": "\\b(Int|Float|Str|Bool|Char|Byte|Bytes|Json|Prompt|Array|Iter|Dict|Option|Result|Unit)\\b"
+          "match": "\\b(Int|Float|Str|Bool|Char|Byte|Bytes|Json|Prompt|Array|Iter|Dict|Option|Result|Unit|TypeInfo|TypeFieldInfo|TypeVariantInfo)\\b"
         },
         {
           "name": "entity.name.type.splx",

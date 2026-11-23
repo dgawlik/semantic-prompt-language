@@ -128,7 +128,7 @@ match decode<Finding>(parsed) {
   },
   {
     id: "reified-generics",
-    label: "04 // Reified Generics (reified fn<T>)",
+    label: "04 // Reified Generics & Schemas",
     filename: "reified.splx",
     runnableInBrowser: true,
     code: `pub enum Priority { Low, Normal, Urgent }
@@ -140,12 +140,12 @@ pub type Task = struct {
     assignee: Str?     '' Optional owner handle
 }
 
-/// Preserves compile-time schema & decoder across any generic T
-pub reified fn validate_json<T>(raw: Str) -> Result<T, Str> {
+/// All generic functions auto-reify — no \`reified\` keyword required!
+pub fn validate_json<T>(raw: Str) -> Result<T, Str> {
     let parsed = json_parse(raw)?
     match decode<T>(parsed) {
         Ok(val) => Ok(val)
-        Err(e) => Err("Invalid payload at '\${e.path}': \${e.message}")
+        Err(e) => Err("Invalid \${typeof<T>().name} at '\${e.path}': \${e.message}")
     }
 }
 
@@ -166,8 +166,76 @@ match validate_json<Task>(bad) {
 }`,
   },
   {
+    id: "typeof-newtype",
+    label: "05 // typeof, newtype & Universal Reification",
+    filename: "typeof_newtype.splx",
+    runnableInBrowser: true,
+    code: `// Try typing \`typeof(uid).\`, \`uid.\`, or \`pt.\` for live LSP completions!
+pub newtype UserId = Int
+pub newtype OrderId = Int
+
+'' Validated customer email address
+pub newtype Email = Str
+
+pub newtype Point = struct {
+    x: Int '' Horizontal coordinate
+    y: Int '' Vertical coordinate
+}
+
+pub newtype Box<T> = struct {
+    item: T
+}
+
+impl Show for UserId {
+    fn show(self) -> Str { "User#" + to_str(self.value) }
+}
+
+impl Show for OrderId {
+    fn show(self) -> Str { "Order#" + to_str(self.value) }
+}
+
+fn UserId.is_admin(self) -> Bool { self.value == 0 }
+
+// Type-level \`typeof\` derives static types from existing bindings
+let default_cfg = { host: "localhost", port: 8080, strict: true }
+type Config = typeof default_cfg
+
+// Plain generic functions automatically reify — works for \`typeof\`, \`type_schema\`, and \`decode\`!
+fn describe<T>(val: T) -> Str {
+    let info = typeof(val)
+    "\${info.name} [\${info.kind}] = \${to_str(val)}"
+}
+
+fn inspect_kind(x) -> Str {
+    let info = typeof(x)
+    match info.underlying {
+        Some(u) => "\${info.name} (newtype over \${u})"
+        None => "\${info.name} (\${info.kind})"
+    }
+}
+
+let uid = UserId(42)
+let oid = OrderId(42)
+let UserId(raw_id) = uid
+
+let mut pt = Point { x: 10, y: 20 }
+pt.x = pt.x + 5
+
+let prod_cfg: Config = { host: "api.spl.dev", port: 443, strict: true }
+
+print("show:         " + uid.show() + " vs " + oid.show() + " (raw=" + to_str(raw_id) + ")")
+print("struct:       Point(\${pt.x}, \${pt.y})")
+print("typeof type:  \${prod_cfg.host}:\${prod_cfg.port}")
+print("describe:     " + describe(uid) + " | " + describe(oid))
+print("nominal eq:   UserId==OrderId=" + to_str(typeof(uid) == typeof(oid)) + ", UserId==Int=" + to_str(typeof(uid) == typeof(42)))
+print("inspect_kind: " + inspect_kind(uid) + " | " + inspect_kind([1, 2, 3]))
+print("higher-order: " + to_str([1, 2].map(describe)))
+print("Point fields: " + to_str(typeof<Point>().fields.map { f -> f.name + ":" + f.type_name }))
+print("Email schema: " + json_stringify(typeof<Email>().schema))`,
+  },
+  {
     id: "collections",
-    label: "05 // std/collections (HashMap & TreeSet)",
+    label: "06 // std/collections (HashMap & TreeSet)",
     filename: "collections.splx",
     runnableInBrowser: true,
     code: `// Try typing \`col.\` or \`scores.\` or \`nums.\` for stdlib + extension completions!
@@ -193,7 +261,7 @@ print("Min / Max: " + to_str(nums.min() ?? -1) + " / " + to_str(nums.max() ?? -1
   },
   {
     id: "async-clock",
-    label: "06 // Colorless Async (std/clock)",
+    label: "07 // Colorless Async (std/clock)",
     filename: "async.splx",
     runnableInBrowser: true,
     code: `// No async/await keywords required — SPL infers suspension automatically!
@@ -222,7 +290,7 @@ print("Total parallel wall time: ~\${elapsed}ms")`,
   },
   {
     id: "live-llm-ask",
-    label: "07 // Live LLM: Prompt.ask<T> (OpenAI)",
+    label: "08 // Live LLM: Prompt.ask<T> (OpenAI)",
     filename: "ask.splx",
     runnableInBrowser: true,
     autoRun: false,
@@ -246,7 +314,7 @@ print("\${ada.firstName} \${ada.lastName} (\${ada.age}) — \${ada.profession}")
   },
   {
     id: "tool-agent",
-    label: "08 // Live LLM: Tool Agent & Streaming",
+    label: "09 // Live LLM: Tool Agent & Streaming",
     filename: "agent.splx",
     runnableInBrowser: true,
     autoRun: false,
@@ -287,7 +355,7 @@ print("\n\nTurns: \${trace.turns}, events: \${trace.events.len()}")`,
   },
   {
     id: "live-llm-fn",
-    label: "09 // Live LLM: Prompt.llm_fn<In, Out>",
+    label: "10 // Live LLM: Prompt.llm_fn<In, Out>",
     filename: "codegen.splx",
     runnableInBrowser: true,
     autoRun: false,

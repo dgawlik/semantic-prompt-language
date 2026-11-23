@@ -18,7 +18,7 @@ export type TokenKind =
   | "DocComment"
   | "LlmHint"
   // Keywords
-  | "let" | "mut" | "fn" | "type" | "struct" | "enum"
+  | "let" | "mut" | "fn" | "type" | "newtype" | "typeof" | "struct" | "enum"
   | "trait" | "impl" | "for" | "match" | "if" | "else"
   | "while" | "return" | "pub" | "import" | "from" | "as"
   | "extern" | "true" | "false"
@@ -41,7 +41,7 @@ export interface Token {
 }
 
 const KEYWORDS = new Set<TokenKind>([
-  "let", "mut", "fn", "type", "struct", "enum",
+  "let", "mut", "fn", "type", "newtype", "typeof", "struct", "enum",
   "trait", "impl", "for", "match", "if", "else",
   "while", "return", "pub", "import", "from", "as",
   "extern", "true", "false",

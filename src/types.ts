@@ -23,7 +23,8 @@ export type Type =
   | { kind: "TDict"; key: Type; value: Type }
   | { kind: "TFn"; params: Type[]; paramNames?: (string | undefined)[]; requiredCount?: number; ret: Type; isAsync?: boolean }
   | { kind: "TRecord"; fields: Map<string, Type>; tail: RowTail; meta?: RecordMeta }
-  | { kind: "TEnum"; name: string; typeArgs: Type[]; variants: Map<string, EnumVariantType>; doc?: string; llmHint?: string };
+  | { kind: "TEnum"; name: string; typeArgs: Type[]; variants: Map<string, EnumVariantType>; doc?: string; llmHint?: string }
+  | { kind: "TNewtype"; name: string; moduleFile?: string; typeArgs: Type[]; underlying: Type; doc?: string; llmHint?: string };
 
 export interface RecordMeta {
   typeName?: string;
@@ -48,6 +49,7 @@ export interface TypeScheme {
   quantifiedTypeVars: number[];
   quantifiedRowVars: number[];
   explicitTypeParams?: number[]; // declared `<A, B>` var IDs in order for explicit call typeArgs
+  reifiedTypeParams?: number[];  // ordered TVar IDs passed at runtime in `__spl_reified`
   type: Type;
 }
 
@@ -232,6 +234,21 @@ export function unify(a: Type, b: Type, span?: Span): void {
     return;
   }
 
+  if (t1.kind === "TNewtype" && t2.kind === "TNewtype") {
+    if (
+      t1.name !== t2.name ||
+      (t1.moduleFile && t2.moduleFile && t1.moduleFile !== t2.moduleFile) ||
+      t1.typeArgs.length !== t2.typeArgs.length
+    ) {
+      throw new SplError("type", `Newtype mismatch: expected ${formatType(t1)}, found ${formatType(t2)}`, span);
+    }
+    for (let i = 0; i < t1.typeArgs.length; i++) {
+      unify(t1.typeArgs[i], t2.typeArgs[i], span);
+    }
+    unify(t1.underlying, t2.underlying, span);
+    return;
+  }
+
   if (t1.kind === "TRecord" && t2.kind === "TRecord") {
     unifyRecords(t1, t2, span);
     return;
@@ -401,6 +418,8 @@ function occursInType(varId: number, t: Type): boolean {
       return p.params.some((e) => occursInType(varId, e)) || occursInType(varId, p.ret);
     case "TEnum":
       return p.typeArgs.some((e) => occursInType(varId, e));
+    case "TNewtype":
+      return p.typeArgs.some((e) => occursInType(varId, e)) || occursInType(varId, p.underlying);
     case "TRecord": {
       const f = flattenRecord(p);
       for (const v of f.fields.values()) {
@@ -439,6 +458,8 @@ function occursRowInType(rowId: number, t: Type): boolean {
       return p.params.some((e) => occursRowInType(rowId, e)) || occursRowInType(rowId, p.ret);
     case "TEnum":
       return p.typeArgs.some((e) => occursRowInType(rowId, e));
+    case "TNewtype":
+      return p.typeArgs.some((e) => occursRowInType(rowId, e)) || occursRowInType(rowId, p.underlying);
     default:
       return false;
   }
@@ -476,6 +497,10 @@ export function collectFreeVars(
     case "TEnum":
       p.typeArgs.forEach((e) => collectFreeVars(e, tVars, rVars));
       break;
+    case "TNewtype":
+      p.typeArgs.forEach((e) => collectFreeVars(e, tVars, rVars));
+      collectFreeVars(p.underlying, tVars, rVars);
+      break;
     case "TRecord": {
       const f = flattenRecord(p);
       for (const v of f.fields.values()) collectFreeVars(v, tVars, rVars);
@@ -495,7 +520,7 @@ export function instantiateWithArgs(
   scheme: TypeScheme,
   explicitArgs?: Type[],
   span?: Span
-): { type: Type; instantiatedParams: Type[] } {
+): { type: Type; instantiatedParams: Type[]; instantiatedReifiedParams: Type[]; tMap: Map<number, Type> } {
   const tMap = new Map<number, Type>();
   const rMap = new Map<number, RowTail>();
   for (const id of scheme.quantifiedTypeVars) {
@@ -506,6 +531,8 @@ export function instantiateWithArgs(
   }
   const paramIds = scheme.explicitTypeParams ?? scheme.quantifiedTypeVars;
   const instantiatedParams = paramIds.map((id) => tMap.get(id) ?? freshTVar());
+  const reifiedIds = scheme.reifiedTypeParams ?? paramIds;
+  const instantiatedReifiedParams = reifiedIds.map((id) => tMap.get(id) ?? freshTVar());
   if (explicitArgs && explicitArgs.length > 0) {
     if (explicitArgs.length !== instantiatedParams.length) {
       throw new SplError(
@@ -518,7 +545,7 @@ export function instantiateWithArgs(
       unify(instantiatedParams[i], explicitArgs[i], span);
     }
   }
-  return { type: cloneWithSubst(scheme.type, tMap, rMap), instantiatedParams };
+  return { type: cloneWithSubst(scheme.type, tMap, rMap), instantiatedParams, instantiatedReifiedParams, tMap };
 }
 
 export function cloneWithSubst(t: Type, tMap: Map<number, Type>, rMap: Map<number, RowTail>): Type {
@@ -565,6 +592,16 @@ export function cloneWithSubst(t: Type, tMap: Map<number, Type>, rMap: Map<numbe
       }
       return { kind: "TEnum", name: p.name, typeArgs: newArgs, variants: newVariants, doc: p.doc, llmHint: p.llmHint };
     }
+    case "TNewtype":
+      return {
+        kind: "TNewtype",
+        name: p.name,
+        moduleFile: p.moduleFile,
+        typeArgs: p.typeArgs.map((a) => cloneWithSubst(a, tMap, rMap)),
+        underlying: cloneWithSubst(p.underlying, tMap, rMap),
+        doc: p.doc,
+        llmHint: p.llmHint,
+      };
     case "TRecord": {
       const flat = flattenRecord(p);
       const newFields = new Map<string, Type>();
@@ -613,6 +650,11 @@ export function canonicalShapeKey(t: Type): string {
       return p.typeArgs.length > 0
         ? `${p.name}<${p.typeArgs.map(canonicalShapeKey).join(",")}>`
         : p.name;
+    case "TNewtype": {
+      const modPrefix = p.moduleFile ? `${p.moduleFile}::` : "";
+      const args = p.typeArgs.length > 0 ? `<${p.typeArgs.map(canonicalShapeKey).join(",")}>` : "";
+      return `newtype:${modPrefix}${p.name}${args}`;
+    }
     case "TRecord": {
       const f = flattenRecord(p);
       const keys = Array.from(f.fields.keys()).sort();
@@ -650,6 +692,10 @@ export function formatType(t: Type): string {
       if (p.name === "Option" && p.typeArgs.length === 1) {
         return `${formatType(p.typeArgs[0])}?`;
       }
+      return p.typeArgs.length > 0
+        ? `${p.name}<${p.typeArgs.map(formatType).join(", ")}>`
+        : p.name;
+    case "TNewtype":
       return p.typeArgs.length > 0
         ? `${p.name}<${p.typeArgs.map(formatType).join(", ")}>`
         : p.name;
