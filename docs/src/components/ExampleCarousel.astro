@@ -164,39 +164,19 @@ print(route_event({ kind: "call", name: "read_file", path: "README.md" }))`,
   {
     id: "dynamic-codegen",
     tab: "05 // Codegen",
-    title: "Sandboxed JS, Runtime SPL & LLM Synthesis",
-    file: "examples/08_dynamic_codegen.splx",
+    title: "LLM-Synthesized Functions with Prompt.llm_fn<In, Out>",
+    file: "examples/agents/codegen.splx",
     summary:
-      "Compile JS or SPL at runtime with timeout guards and schema-validated outputs — or synthesize typed functions via an LLM.",
+      "Synthesize strongly-typed sandboxed JS functions directly from a @{ ... } prompt with compile-time schemas and runtime output validation.",
     docHref: "/stdlib/codegen/",
     docLabel: "std/codegen docs",
-    code: `import codegen from "std/codegen"
+    code: `import llm from "std/llm"
 
-type CalcInput = struct {
-    a: Int '' First integer operand
-    b: Int '' Second integer operand
-}
+let sieve = @{
+  Create sieve of Erathostentes function sieve(n: Int) -> Array<Int>
+}.llm_fn<Int, Array<Int>>()?
 
-type CalcOutput = struct {
-    sum: Int     '' a + b
-    product: Int '' a * b
-}
-
-// 1. Sandboxed JS function with compile-time input + runtime output check
-let calc_js = codegen.js_fn<CalcInput, CalcOutput>(timeout_ms: 50) @{
-    return { sum: input.a + input.b, product: input.a * input.b };
-}?
-
-// 2. Runtime SPL compiler — type-checks generated SPL BEFORE running!
-let calc_spl = codegen.spl_fn<CalcInput, CalcOutput> @{
-    pub fn run(input) {
-        { sum: input.a + input.b, product: input.a * input.b }
-    }
-}?
-
-let r1 = calc_js({ a: 6, b: 7 })?
-let r2 = calc_spl({ a: 10, b: 20 })?
-print("js=\${r1.product}, spl=\${r2.sum}")`,
+print(sieve(1000))`,
   },
   {
     id: "reified-generics",
