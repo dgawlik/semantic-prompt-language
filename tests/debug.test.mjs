@@ -4,8 +4,11 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { EventEmitter } from "node:events";
+
+const execFileAsync = promisify(execFile);
 import {
   serializeLlmRequest,
   applyEditedLlmRequest,
@@ -184,7 +187,7 @@ test("interactive spl debug steps through LLM calls, switches views, mocks respo
   );
 
   try {
-    const { input, output } = createMockTty(120, 32);
+    const { input, output } = createMockTty(120, 48);
     const dbgPromise = runLlmDebugger(splFile, {
       savePath: saveFile,
       stdin: input,
@@ -196,6 +199,7 @@ test("interactive spl debug steps through LLM calls, switches views, mocks respo
     assert.match(frame1, /REQ/);
     assert.match(frame1, /\[redacted\]/);
     assert.doesNotMatch(frame1, /sk-test-key/);
+    assert.doesNotMatch(frame1, /\[Circular\]/);
 
     // 2. Step ('n') to send call #1 -> pauses AFTER response #1
     output.clear();
@@ -209,12 +213,13 @@ test("interactive spl debug steps through LLM calls, switches views, mocks respo
     output.clear();
     input.emit("data", "3");
     const jsFrame = await waitForOutput(output, (txt) => txt.includes("Inspector view: JS"));
-    assert.match(jsFrame, /const record =/);
+    assert.match(jsFrame, /\/\/ Trace record \(llm_response\)/);
+    assert.match(jsFrame, /const \w+ =/);
 
     output.clear();
     input.emit("data", "4");
     const splFrame = await waitForOutput(output, (txt) => txt.includes("Inspector view: SPL"));
-    assert.match(splFrame, /let record =/);
+    assert.match(splFrame, /let \w+ =/);
 
     output.clear();
     input.emit("data", "1");
@@ -230,8 +235,8 @@ test("interactive spl debug steps through LLM calls, switches views, mocks respo
     input.emit("data", "m");
     await waitForOutput(output, (txt) => txt.includes("MOCK LLM RESPONSE"));
 
-    // Kill the 6 template lines with Ctrl+K and insert our custom mock JSON
-    input.emit("data", "\x0b\x0b\x0b\x0b\x0b\x0b\x0b");
+    // Kill all template lines with Ctrl+K and insert our custom mock JSON
+    input.emit("data", "\x0b".repeat(15));
     input.emit("data", JSON.stringify({ text: JSON.stringify({ greeting: "Injected Mock", step: 99 }), finish_reason: "stop", tool_calls: [] }));
     // Apply mock with Ctrl+O
     output.clear();
@@ -356,7 +361,7 @@ test("CLI `spl debug --no-pause --save` runs non-interactively with pretty-print
   );
 
   try {
-    const out = execFileSync(
+    const { stdout: out } = await execFileAsync(
       process.execPath,
       [path.resolve("dist/cli.js"), "debug", splFile, "--no-pause", "--format", "pretty", "--save", outJsonl],
       { encoding: "utf8" }
@@ -367,8 +372,10 @@ test("CLI `spl debug --no-pause --save` runs non-interactively with pretty-print
     assert.match(plain, /\[STDOUT\]/);
     assert.match(plain, /ANS=42/);
     assert.match(plain, /\[DONE\]/);
+    assert.doesNotMatch(plain, /\[Circular\]/);
     // Embedded JS code in `body` should be rendered by trace-editor's pretty embedded code block viewer!
-    assert.match(plain, /EMBEDDED JS/);
+    assert.match(plain, /JS Preview \(text\.body\)/);
+    assert.match(plain, /return x \* 2;/);
     // Secret key must never appear in stdout or saved JSONL
     assert.doesNotMatch(plain, /sk-cli-secret/);
 
@@ -378,6 +385,83 @@ test("CLI `spl debug --no-pause --save` runs non-interactively with pretty-print
     const reloaded = TraceDocument.loadFromFile(outJsonl);
     assert.ok(reloaded.entries.some((e) => e.data?.kind === "llm_response"));
     assert.ok(reloaded.entries.some((e) => e.data?.kind === "program_done"));
+  } finally {
+    await srv.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("interactive spl debug scrolls long results immediately with arrows, PgDn, mouse wheel, and shows scrollbar", async () => {
+  const longLines = Array.from({ length: 40 }, (_, i) => `item_${i + 1}: value_${i + 1}`);
+  const srv = await startMockOpenAiServer(() => ({
+    id: "resp_scroll",
+    status: "completed",
+    output: [
+      {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: JSON.stringify({ items: longLines, tail_marker: "BOTTOM_OF_RESULT_999" }) }],
+      },
+    ],
+    usage: { input_tokens: 15, output_tokens: 45, total_tokens: 60 },
+  }));
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "spl-debug-scroll-"));
+  const splFile = path.join(tmpDir, "scroll_demo.splx");
+  fs.writeFileSync(
+    splFile,
+    [
+      'import llm from "std/llm"',
+      `let res = @{ Return a big payload }.ask<Str>(provider: "openai_responses", api_key: "sk-scroll", base_url: Some("${srv.baseUrl}"), model: "gpt-scroll")?`,
+      'print("OK")',
+    ].join("\n"),
+    "utf8"
+  );
+
+  try {
+    // Small 20-row terminal so the 40-item response definitely overflows vertically
+    const { input, output } = createMockTty(110, 20);
+    const dbgPromise = runLlmDebugger(splFile, {
+      pauseBefore: false,
+      pauseAfter: true,
+      stdin: input,
+      stdout: output,
+    });
+
+    // 1. Paused AFTER response #1: shows Ln 1-.../Total scroll indicator & scrollbar, tail marker not visible yet
+    const topFrame = await waitForOutput(output, (txt) => txt.includes("PAUSED AFTER #1"));
+    assert.match(topFrame, /Ln 1-\d+\/\d+/);
+    assert.match(topFrame, /█/);
+    assert.doesNotMatch(topFrame, /BOTTOM_OF_RESULT_999/);
+
+    // 2. Press Down arrow directly (without pressing Tab!) -> scrolls down to Ln 2-...
+    output.clear();
+    input.emit("data", "\x1b[B");
+    const downFrame = await waitForOutput(output, (txt) => /Ln 2-\d+\/\d+/.test(txt));
+    assert.match(downFrame, /Ln 2-\d+\/\d+/);
+
+    // 3. Mouse wheel down over right inspector pane (x=80, y=10) -> scrolls down by 3 lines to Ln 5-...
+    output.clear();
+    input.emit("data", "\x1b[<65;80;10M");
+    const wheelFrame = await waitForOutput(output, (txt) => /Ln 5-\d+\/\d+/.test(txt));
+    assert.match(wheelFrame, /Ln 5-\d+\/\d+/);
+
+    // 4. Jump to bottom with 'G' -> reveals tail_marker at the bottom of the result!
+    output.clear();
+    input.emit("data", "G");
+    const bottomFrame = await waitForOutput(output, (txt) => txt.includes("BOTTOM_OF_RESULT_999"));
+    assert.match(bottomFrame, /BOTTOM_OF_RESULT_999/);
+
+    // 5. Switch to left Event List with Left arrow, move up to REQ, and scroll Inspector directly with Ctrl+D
+    output.clear();
+    input.emit("data", "\x1b[D"); // focus list
+    input.emit("data", "\x1b[A"); // move to #1 REQ
+    await waitForOutput(output, (txt) => txt.includes("#1 LLM_REQUEST"));
+
+    // Quit cleanly and verify mouse tracking is disabled on exit
+    input.emit("data", "q");
+    await dbgPromise;
+    assert.match(output.getRawText(), /\x1b\[\?1006l\x1b\[\?1000l/);
   } finally {
     await srv.close();
     fs.rmSync(tmpDir, { recursive: true, force: true });

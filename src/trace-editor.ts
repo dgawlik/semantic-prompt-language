@@ -1610,6 +1610,8 @@ export interface KeyEvent {
   ctrl?: boolean;
   shift?: boolean;
   alt?: boolean;
+  mouseX?: number;
+  mouseY?: number;
 }
 
 export function decodeKeyInput(raw: string): KeyEvent[] {
@@ -1631,6 +1633,34 @@ export function decodeKeyInput(raw: string): KeyEvent[] {
       // Bracketed paste start/end markers — ignore cleanly
       if (rest.startsWith("\x1b[200~") || rest.startsWith("\x1b[201~")) {
         i += 6; continue;
+      }
+      // SGR Mouse events: `\x1b[<btn;x;yM` (press/wheel) or `\x1b[<btn;x;ym` (release)
+      const sgrMouse = rest.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
+      if (sgrMouse) {
+        const btn = Number(sgrMouse[1]);
+        const mouseX = Number(sgrMouse[2]);
+        const mouseY = Number(sgrMouse[3]);
+        const isPress = sgrMouse[4] === "M";
+        if (btn === 64) {
+          events.push({ name: "wheel_up", mouseX, mouseY });
+        } else if (btn === 65) {
+          events.push({ name: "wheel_down", mouseX, mouseY });
+        } else if (isPress && (btn & 3) === 0 && (btn & 64) === 0) {
+          events.push({ name: "mouse_click", mouseX, mouseY });
+        }
+        i += sgrMouse[0].length;
+        continue;
+      }
+      // Legacy X10 mouse events: `\x1b[M` followed by 3 bytes
+      if (rest.startsWith("\x1b[M") && rest.length >= 6) {
+        const btn = rest.charCodeAt(3) - 32;
+        const mouseX = rest.charCodeAt(4) - 32;
+        const mouseY = rest.charCodeAt(5) - 32;
+        if (btn === 64) events.push({ name: "wheel_up", mouseX, mouseY });
+        else if (btn === 65) events.push({ name: "wheel_down", mouseX, mouseY });
+        else if ((btn & 3) === 0) events.push({ name: "mouse_click", mouseX, mouseY });
+        i += 6;
+        continue;
       }
       // Common CSI / SS3 sequences
       if (rest.startsWith("\x1b[A") || rest.startsWith("\x1bOA")) {

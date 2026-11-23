@@ -72,7 +72,7 @@ function wrapOptLike(origField: unknown, value: unknown): unknown {
 }
 
 /** Convert an SPL runtime value (Options, Results, enums, Maps, Sets) to plain JSON-safe data. */
-export function splToPlainJson(val: unknown, seen = new WeakSet<object>()): unknown {
+export function splToPlainJson(val: unknown, ancestors = new WeakSet<object>()): unknown {
   if (val === null || val === undefined) return null;
   const t = typeof val;
   if (t === "string" || t === "number" || t === "boolean") return val;
@@ -81,50 +81,56 @@ export function splToPlainJson(val: unknown, seen = new WeakSet<object>()): unkn
   if (t !== "object") return String(val);
 
   const obj = val as Record<string, unknown>;
-  if (seen.has(obj)) return "[Circular]";
-  seen.add(obj);
-
+  // Handle singleton None before cycle tracking so repeated None fields never look circular
   if (obj.$tag === "None") return null;
-  if (obj.$tag === "Some") return splToPlainJson(obj._0, seen);
-  if (obj.$tag === "Ok") return { ok: splToPlainJson(obj._0, seen) };
-  if (obj.$tag === "Err") return { err: splToPlainJson(obj._0, seen) };
 
-  if (Array.isArray(obj)) {
-    return obj.map((item) => {
-      const converted = splToPlainJson(item, seen);
-      return converted === undefined ? null : converted;
-    });
-  }
+  if (ancestors.has(obj)) return "[Circular]";
+  ancestors.add(obj);
 
-  if (obj instanceof Map) {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of obj.entries()) {
-      const converted = splToPlainJson(v, seen);
-      if (converted !== undefined) out[String(k)] = converted;
+  try {
+    if (obj.$tag === "Some") return splToPlainJson(obj._0, ancestors);
+    if (obj.$tag === "Ok") return { ok: splToPlainJson(obj._0, ancestors) };
+    if (obj.$tag === "Err") return { err: splToPlainJson(obj._0, ancestors) };
+
+    if (Array.isArray(obj)) {
+      return obj.map((item) => {
+        const converted = splToPlainJson(item, ancestors);
+        return converted === undefined ? null : converted;
+      });
     }
-    return out;
-  }
 
-  if (obj instanceof Set) {
-    return Array.from(obj.values()).map((v) => splToPlainJson(v, seen));
-  }
+    if (obj instanceof Map) {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of obj.entries()) {
+        const converted = splToPlainJson(v, ancestors);
+        if (converted !== undefined) out[String(k)] = converted;
+      }
+      return out;
+    }
 
-  if (typeof obj.$tag === "string") {
-    const out: Record<string, unknown> = { $tag: obj.$tag };
+    if (obj instanceof Set) {
+      return Array.from(obj.values()).map((v) => splToPlainJson(v, ancestors));
+    }
+
+    if (typeof obj.$tag === "string") {
+      const out: Record<string, unknown> = { $tag: obj.$tag };
+      for (const [k, v] of Object.entries(obj)) {
+        if (k === "$tag") continue;
+        const converted = splToPlainJson(v, ancestors);
+        if (converted !== undefined) out[k] = converted;
+      }
+      return out;
+    }
+
+    const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) {
-      if (k === "$tag") continue;
-      const converted = splToPlainJson(v, seen);
+      const converted = splToPlainJson(v, ancestors);
       if (converted !== undefined) out[k] = converted;
     }
     return out;
+  } finally {
+    ancestors.delete(obj);
   }
-
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const converted = splToPlainJson(v, seen);
-    if (converted !== undefined) out[k] = converted;
-  }
-  return out;
 }
 
 /** Serialize an SPL `TurnRequest` into a clean, secret-free trace record. */
@@ -792,11 +798,12 @@ export async function runLlmDebugger(
     );
     let continueAll = bpMode === "none";
 
-    let focusPane: "list" | "inspector" = "list";
+    let focusPane: "list" | "inspector" = "inspector";
     let viewFormat: TraceViewFormat = initialFormat;
     let selectedFilteredIdx = 0;
     let listScroll = 0;
     let inspectorScroll = 0;
+    let lastLeftWidth = 40;
     let expandEmbedded = true;
     let searchQuery = "";
     let inputLine = "";
@@ -1043,9 +1050,12 @@ export async function runLlmDebugger(
           `  ${ANSI.fg.brightWhite}m${ANSI.reset}                   Mock LLM response when paused BEFORE a call (skips network)`,
           `  ${ANSI.fg.brightWhite}x${ANSI.reset}                   Abort the currently paused LLM call with an error`,
           "",
-          `${ANSI.bold}${ANSI.fg.yellow}Inspecting & Pretty Printing (reusing spl trace)${ANSI.reset}`,
-          `  ${ANSI.fg.brightWhite}↑/↓  j/k  PgUp/Dn${ANSI.reset}   Navigate trace records or scroll the inspector pane`,
-          `  ${ANSI.fg.brightWhite}Tab${ANSI.reset}                 Switch focus between Event List and Inspector`,
+          `${ANSI.bold}${ANSI.fg.yellow}Inspecting & Scrolling (reusing spl trace)${ANSI.reset}`,
+          `  ${ANSI.fg.brightWhite}↑/↓ j/k PgUp/Dn${ANSI.reset}     Scroll results in Inspector (or navigate List when focused)`,
+          `  ${ANSI.fg.brightWhite}Mouse Wheel / Click${ANSI.reset} Scroll whichever pane the cursor is over; click to focus/select`,
+          `  ${ANSI.fg.brightWhite}Ctrl+D/U  ]/[  S-↑↓${ANSI.reset} Always scroll Inspector down/up regardless of pane focus`,
+          `  ${ANSI.fg.brightWhite}←/→  h/l  Tab${ANSI.reset}       Switch focus between Event List (←) and Inspector (→)`,
+          `  ${ANSI.fg.brightWhite}g / G  Home / End${ANSI.reset}   Jump to top / bottom of active pane`,
           `  ${ANSI.fg.brightWhite}v  /  1 2 3 4${ANSI.reset}       Switch inspector format: 1=Pretty 2=JSON 3=JS 4=SPL`,
           `  ${ANSI.fg.brightWhite}p${ANSI.reset}                   Toggle embedded JSON / code pretty-printing`,
           `  ${ANSI.fg.brightWhite}/${ANSI.reset}                   Filter records (Esc clears filter)`,
@@ -1152,6 +1162,7 @@ export async function runLlmDebugger(
         const filtered = getFilteredIndices();
         const selDocIdx = getSelectedDocIndex();
         const leftWidth = clamp(Math.floor(cols * 0.36), 28, Math.max(28, cols - 30));
+        lastLeftWidth = leftWidth;
         const rightWidth = Math.max(18, cols - leftWidth - 1);
         const listBodyHeight = Math.max(1, bodyHeight - 1);
 
@@ -1167,6 +1178,14 @@ export async function runLlmDebugger(
         const leftTitle = `${ANSI.bold} EXECUTION TRACE (${filtered.length}/${doc.entries.length})${filterTag}${ANSI.reset}`;
 
         const selEntry = selDocIdx >= 0 ? doc.entries[selDocIdx] : null;
+        const rightContentWidth = Math.max(12, rightWidth - 3);
+        const rightLines = selEntry
+          ? renderEntryInspectorLines(selEntry, viewFormat, expandEmbedded, rightContentWidth)
+          : [`${ANSI.dim}(waiting for LLM activity...)${ANSI.reset}`];
+        const maxRightScroll = Math.max(0, rightLines.length - listBodyHeight);
+        inspectorScroll = clamp(inspectorScroll, 0, maxRightScroll);
+        const hasScrollbar = rightLines.length > listBodyHeight;
+
         const fmtTag = `${ANSI.fg.brightCyan}${viewFormat.toUpperCase()}${ANSI.reset}`;
         const prettyTag =
           viewFormat === "pretty" || viewFormat === "json"
@@ -1178,8 +1197,11 @@ export async function runLlmDebugger(
           selDocIdx >= 0 && selDocIdx === pausedEntryIndex
             ? ` ${ANSI.bold}${ANSI.fg.brightYellow}◀ PAUSED${ANSI.reset}`
             : "";
+        const scrollTag = hasScrollbar
+          ? `  ${ANSI.fg.brightYellow}Ln ${inspectorScroll + 1}-${Math.min(rightLines.length, inspectorScroll + listBodyHeight)}/${rightLines.length}${ANSI.reset}`
+          : "";
         const rightTitle = selEntry
-          ? `${ANSI.bold} #${selDocIdx} ${getEntryKind(selEntry).toUpperCase()}${ANSI.reset}${pausedTag}  [${fmtTag} · ${prettyTag}]`
+          ? `${ANSI.bold} #${selDocIdx} ${getEntryKind(selEntry).toUpperCase()}${ANSI.reset}${pausedTag}  [${fmtTag} · ${prettyTag}]${scrollTag}`
           : `${ANSI.bold} INSPECTOR${ANSI.reset}`;
 
         outLines.push(
@@ -1190,12 +1212,13 @@ export async function runLlmDebugger(
             ANSI.reset
         );
 
-        const rightContentWidth = Math.max(12, rightWidth - 2);
-        const rightLines = selEntry
-          ? renderEntryInspectorLines(selEntry, viewFormat, expandEmbedded, rightContentWidth)
-          : [`${ANSI.dim}(waiting for LLM activity...)${ANSI.reset}`];
-        const maxRightScroll = Math.max(0, rightLines.length - listBodyHeight);
-        inspectorScroll = clamp(inspectorScroll, 0, maxRightScroll);
+        // Compute scrollbar thumb geometry when inspector content overflows
+        const thumbSize = hasScrollbar
+          ? Math.max(1, Math.round((listBodyHeight / rightLines.length) * listBodyHeight))
+          : 0;
+        const thumbTop = hasScrollbar && maxRightScroll > 0
+          ? Math.round((inspectorScroll / maxRightScroll) * (listBodyHeight - thumbSize))
+          : 0;
 
         for (let r = 0; r < listBodyHeight; r++) {
           const fIdx = listScroll + r;
@@ -1224,8 +1247,17 @@ export async function runLlmDebugger(
           }
 
           const rightLine = rightLines[inspectorScroll + r] ?? "";
-          const rightCell = padAnsi(" " + rightLine, rightWidth) + ANSI.reset;
-          outLines.push(leftCell + `${ANSI.fg.gray}│${ANSI.reset}` + rightCell);
+          if (hasScrollbar) {
+            const isThumb = r >= thumbTop && r < thumbTop + thumbSize;
+            const barChar = isThumb
+              ? `${ANSI.fg.brightCyan}█${ANSI.reset}`
+              : `${ANSI.fg.gray}│${ANSI.reset}`;
+            const rightCell = padAnsi(" " + rightLine, Math.max(1, rightWidth - 1)) + ANSI.reset + barChar;
+            outLines.push(leftCell + `${ANSI.fg.gray}│${ANSI.reset}` + rightCell);
+          } else {
+            const rightCell = padAnsi(" " + rightLine, rightWidth) + ANSI.reset;
+            outLines.push(leftCell + `${ANSI.fg.gray}│${ANSI.reset}` + rightCell);
+          }
         }
       }
 
@@ -1256,13 +1288,13 @@ export async function runLlmDebugger(
           " F2/Ctrl+O/Ctrl+S Inject Mock Response  Ctrl+L Format  Esc Cancel";
       } else if (pendingPause && (pendingPause.phase === "before_turn" || pendingPause.phase === "before_decide")) {
         hints =
-          " n/Space/Enter Send  e EditReq  m MockResp  x Abort  c ContAll  b BP  v/1-4 View  p Expand  s Save  ? Help  q Quit";
+          " ↑↓/PgDn Scroll  ←→/Tab Pane  n/Space Send  e EditReq  m Mock  x Abort  c Cont  v/1-4 View  s Save  ? Help  q Quit";
       } else if (pendingPause) {
         hints =
-          " n/Space/Enter Next  e EditResp  c ContAll  b BP  v/1-4 View  p Expand  Tab Pane  / Filter  s Save  ? Help  q Quit";
+          " ↑↓/PgDn Scroll  ←→/Tab Pane  n/Space Next  e EditResp  c Cont  b BP  v/1-4 View  p Expand  s Save  ? Help  q Quit";
       } else {
         hints =
-          " ↑↓/jk Nav  Tab Pane  v/1-4 Pretty/JSON/JS/SPL  p Expand  e Edit  b BP  / Filter  s Save  W SaveAs  ? Help  q Quit";
+          " ↑↓/PgDn Scroll  ←→/Tab Pane  v/1-4 View  p Expand  e Edit  b BP  / Filter  s Save  W SaveAs  ? Help  q Quit";
       }
       outLines.push(
         withBg(padAnsi(`${ANSI.fg.brightCyan}${truncateAnsi(hints, cols)}${ANSI.reset}`, cols), ANSI.bg.header) +
@@ -1296,8 +1328,8 @@ export async function runLlmDebugger(
       } catch {
         // ignore mock streams
       }
-      // Restore cursor, auto-wrap, leave alternate screen buffer
-      output.write(`${CSI}?25h${CSI}?7h${CSI}?1049l`);
+      // Disable mouse tracking, restore cursor, auto-wrap, leave alternate screen buffer
+      output.write(`${CSI}?1006l${CSI}?1000l${CSI}?25h${CSI}?7h${CSI}?1049l`);
       try {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       } catch {
@@ -1577,6 +1609,8 @@ export async function runLlmDebugger(
           jsonBuf.killLine();
           return;
         }
+        if (ev.name === "wheel_up") { jsonBuf.moveUp(3); return; }
+        if (ev.name === "wheel_down") { jsonBuf.moveDown(3); return; }
         if (ev.name === "up") { jsonBuf.moveUp(); return; }
         if (ev.name === "down") { jsonBuf.moveDown(); return; }
         if (ev.name === "left") { ev.ctrl ? jsonBuf.moveWordLeft() : jsonBuf.moveLeft(); return; }
@@ -1604,6 +1638,14 @@ export async function runLlmDebugger(
       }
       if (ev.name === "tab") {
         focusPane = focusPane === "list" ? "inspector" : "list";
+        return;
+      }
+      if (ev.name === "left" || ev.char === "h") {
+        focusPane = "list";
+        return;
+      }
+      if (ev.name === "right" || ev.char === "l") {
+        focusPane = "inspector";
         return;
       }
       if (ev.name === "escape" && searchQuery) {
@@ -1640,8 +1682,57 @@ export async function runLlmDebugger(
       const filtered = getFilteredIndices();
       const selDocIdx = getSelectedDocIndex();
 
+      // Mouse wheel & click scrolling
+      if (ev.name === "wheel_up") {
+        if (ev.mouseX !== undefined && ev.mouseX <= lastLeftWidth) {
+          selectedFilteredIdx = clamp(selectedFilteredIdx - 1, 0, Math.max(0, filtered.length - 1));
+          inspectorScroll = 0;
+        } else {
+          inspectorScroll = Math.max(0, inspectorScroll - 3);
+        }
+        return;
+      }
+      if (ev.name === "wheel_down") {
+        if (ev.mouseX !== undefined && ev.mouseX <= lastLeftWidth) {
+          selectedFilteredIdx = clamp(selectedFilteredIdx + 1, 0, Math.max(0, filtered.length - 1));
+          inspectorScroll = 0;
+        } else {
+          inspectorScroll += 3;
+        }
+        return;
+      }
+      if (ev.name === "mouse_click" && ev.mouseX !== undefined && ev.mouseY !== undefined) {
+        if (ev.mouseX > lastLeftWidth + 1) {
+          focusPane = "inspector";
+        } else {
+          focusPane = "list";
+          if (ev.mouseY >= 3) {
+            const clickedIdx = listScroll + (ev.mouseY - 3);
+            if (clickedIdx >= 0 && clickedIdx < filtered.length) {
+              selectedFilteredIdx = clickedIdx;
+              inspectorScroll = 0;
+            }
+          }
+        }
+        return;
+      }
+
+      // Direct Inspector scrolling shortcuts (work regardless of focused pane)
+      if ((ev.ctrl && ev.name === "d") || ev.char === "]") {
+        const halfPage = Math.max(3, Math.floor(((output.rows ?? 30) - 5) / 2));
+        inspectorScroll += ev.char === "]" ? 3 : halfPage;
+        return;
+      }
+      if ((ev.ctrl && ev.name === "u") || ev.char === "[") {
+        const halfPage = Math.max(3, Math.floor(((output.rows ?? 30) - 5) / 2));
+        inspectorScroll = Math.max(0, inspectorScroll - (ev.char === "[" ? 3 : halfPage));
+        return;
+      }
+
       if (ev.name === "up" || ev.char === "k") {
-        if (focusPane === "list") {
+        if (ev.shift) {
+          inspectorScroll = Math.max(0, inspectorScroll - 3);
+        } else if (focusPane === "list") {
           selectedFilteredIdx = clamp(selectedFilteredIdx - 1, 0, Math.max(0, filtered.length - 1));
           inspectorScroll = 0;
         } else {
@@ -1650,7 +1741,9 @@ export async function runLlmDebugger(
         return;
       }
       if (ev.name === "down" || ev.char === "j") {
-        if (focusPane === "list") {
+        if (ev.shift) {
+          inspectorScroll += 3;
+        } else if (focusPane === "list") {
           selectedFilteredIdx = clamp(selectedFilteredIdx + 1, 0, Math.max(0, filtered.length - 1));
           inspectorScroll = 0;
         } else {
@@ -1754,9 +1847,9 @@ export async function runLlmDebugger(
       }
     };
 
-    // Enter alternate screen buffer, disable auto-wrap, hide cursor, enable raw mode
+    // Enter alternate screen buffer, disable auto-wrap, hide cursor, enable SGR mouse wheel/click, enable raw mode
     try {
-      output.write(`${CSI}?1049h${CSI}?7l${CSI}?25l`);
+      output.write(`${CSI}?1049h${CSI}?7l${CSI}?25l${CSI}?1000h${CSI}?1006h`);
       input.setRawMode?.(true);
       input.resume();
       input.setEncoding?.("utf8");
