@@ -505,20 +505,19 @@ test("14. CLI smoke test: `spl check`, `spl schema`, `spl run` on examples/06_pr
   assert.match(runOut, /prompt=120, completion=45/);
 });
 
-test("15. All documented examples (`examples/01..13_*.splx`) compile and execute cleanly", () => {
+test("15. All documented examples (`examples/*.splx` & `examples/agents/codegen.splx`) compile and execute cleanly", () => {
   const cli = path.resolve("dist/cli.js");
   const examplesDir = path.resolve("examples");
   const files = fs.readdirSync(examplesDir).filter((f) => /^\d+_.*\.splx$/.test(f)).sort();
-  assert.equal(files.length, 13);
+  assert.equal(files.length, 12);
+
+  // Verify live LLM codegen example type-checks cleanly
+  const codegenCheck = execFileSync(process.execPath, [cli, "check", path.join(examplesDir, "agents", "codegen.splx")], {
+    encoding: "utf8",
+  });
+  assert.match(codegenCheck, /^OK \(/);
 
   for (const file of files) {
-    if (file === "08_dynamic_codegen.splx") {
-      const checkOut = execFileSync(process.execPath, [cli, "check", path.join(examplesDir, file)], {
-        encoding: "utf8",
-      });
-      assert.match(checkOut, /^OK \(/);
-      continue;
-    }
     const out = execFileSync(process.execPath, [cli, "run", path.join(examplesDir, file)], {
       encoding: "utf8",
       env: { ...process.env, OPENAI_API_KEY: "" },
