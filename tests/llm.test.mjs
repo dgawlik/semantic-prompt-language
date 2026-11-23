@@ -1228,6 +1228,22 @@ test("CLI `spl login` & optional api_key: saves/loads ~/.spl/credentials.json fo
     assert.equal(antReq.headers["x-api-key"], "sk-saved-ant-5678");
     assert.equal(googReq.headers["x-goog-api-key"], "AIza-saved-google-9012");
 
+    // 2b. Environment variables take priority over ~/.spl/credentials.json when api_key is omitted
+    const beforeEnvCount = mock.recorded.length;
+    process.env.OPENAI_API_KEY = "sk-env-openai-9999";
+    process.env.ANTHROPIC_API_KEY = "sk-env-ant-8888";
+    process.env.GEMINI_API_KEY = "AIza-env-gem-7777";
+    const envRes = await mod.run_without_keys(baseUrl);
+    assert.equal(envRes.$tag, "Ok");
+    assert.deepEqual(envRes._0, [42, "Claude OK", "Gemini OK"]);
+    const [oaiEnvReq, antEnvReq, googEnvReq] = mock.recorded.slice(beforeEnvCount);
+    assert.equal(oaiEnvReq.headers.authorization, "Bearer sk-env-openai-9999");
+    assert.equal(antEnvReq.headers["x-api-key"], "sk-env-ant-8888");
+    assert.equal(googEnvReq.headers["x-goog-api-key"], "AIza-env-gem-7777");
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+
     // 3. Clearing credentials makes calls without api_key return a helpful `spl login` error
     execFileSync(process.execPath, [cli, "login", "--clear"], {
       encoding: "utf8",

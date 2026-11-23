@@ -8,8 +8,8 @@ description: Prompt extension methods (Prompt.ask<T>, Prompt.agent<T>, Prompt.ll
 ### Defaults & Authentication (`spl login`)
 
 All `std/llm` calls default to `provider: "openai_responses"` and `model: "gpt-6-luna"`, and `api_key` is optional. When `api_key` is omitted, SPL automatically resolves credentials in order:
-1. Saved tokens in `~/.spl/credentials.json` (configured via `spl login`, `spl login openai`, or `spl login --from-env`).
-2. Provider environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`).
+1. Provider environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`).
+2. Saved tokens in `~/.spl/credentials.json` (configured via `spl login`, `spl login openai`, or `spl login --from-env`).
 3. In the web playground, the server-side `/api/llm/*` proxy backed by Vercel Environment Variables.
 
 ## 1. Single-Turn Structured Outputs (`Prompt.ask<T>`)

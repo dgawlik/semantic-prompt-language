@@ -79,16 +79,16 @@ function resolveAuthAndBaseUrl(provider, req) {
     return { ok: true, apiKey: explicitKey, baseUrl: req.base_url };
   }
 
-  // 1. Saved credentials in ~/.spl/credentials.json (created by `spl login`)
-  const savedKey = readSavedApiKey(family);
-  if (savedKey) {
-    return { ok: true, apiKey: savedKey, baseUrl: req.base_url };
-  }
-
-  // 2. Environment variable fallback
+  // 1. Environment variables (OPENAI_API_KEY / GEMINI_API_KEY / GOOGLE_API_KEY / ANTHROPIC_API_KEY)
   const envKey = readEnvApiKey(family);
   if (envKey) {
     return { ok: true, apiKey: envKey, baseUrl: req.base_url };
+  }
+
+  // 2. Saved credentials in ~/.spl/credentials.json (created by `spl login`)
+  const savedKey = readSavedApiKey(family);
+  if (savedKey) {
+    return { ok: true, apiKey: savedKey, baseUrl: req.base_url };
   }
 
   // 3. Browser playground server-side proxy hook (keeps API keys strictly on the server)
