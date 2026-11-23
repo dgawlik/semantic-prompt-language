@@ -15,6 +15,16 @@ export default defineConfig({
       description:
         "Semantic Prompt Language (.splx) — Strongly-typed, agent-first functional language compiled to ES Module JavaScript.",
       favicon: "/favicon.svg",
+      social: [
+        {
+          icon: "github",
+          label: "GitHub",
+          href: "https://github.com/dgawlik/semantic-prompt-language",
+        },
+      ],
+      editLink: {
+        baseUrl: "https://github.com/dgawlik/semantic-prompt-language/edit/main/docs/",
+      },
       head: [
         {
           tag: "link",
