@@ -7,3 +7,5 @@ export { generateJsonSchema, generateDecodeCodec } from "./schema.js";
 export { SplError, type Span } from "./errors.js";
 export { SplLanguageService, SplLanguageServiceCore, type SplLanguageHost } from "./lsp-service.js";
 export { startLspServer } from "./lsp.js";
+export { runTraceEditor, TraceDocument, renderTracePrettyStatic, type TraceViewFormat } from "./trace-editor.js";
+export { runLlmDebugger, type LlmDebugOptions, type LlmDebugResult } from "./llm-debugger.js";

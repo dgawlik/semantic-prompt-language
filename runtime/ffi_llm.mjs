@@ -1380,24 +1380,63 @@ async function callGoogleDecisions(req) {
 }
 
 export async function llmDecide(req) {
+  const debugHook = typeof globalThis !== "undefined" ? globalThis.__splLlmDebugHook : null;
   try {
-    const provider = typeof req.provider === "string" ? req.provider.trim().toLowerCase().replace(/-/g, "_") : req.provider;
-    const auth = resolveAuthAndBaseUrl(provider, req);
-    if (!auth.ok) return Err(auth.error);
-    const effectiveReq = { ...req, api_key: auth.apiKey, base_url: auth.baseUrl };
-    switch (provider) {
-      case "openai":
-      case "openai_responses":
-      case "openai_decisions":
-        return await callOpenAiDecisions(effectiveReq);
-      case "google":
-      case "google_decisions":
-        return await callGoogleDecisions(effectiveReq);
-      default:
-        return Err(
-          `Unknown Decisions API provider '${req.provider}'. Expected 'openai' or 'google'`
-        );
+    let curReq = req;
+    let callId = 0;
+    if (debugHook && typeof debugHook.beforeDecide === "function") {
+      const dec = await debugHook.beforeDecide(curReq);
+      if (dec) {
+        if (typeof dec.callId === "number") callId = dec.callId;
+        if (dec.req) curReq = dec.req;
+        if (dec.action === "abort") {
+          const aborted = Err(dec.error ?? "Aborted by SPL debugger");
+          return typeof debugHook.afterDecide === "function"
+            ? await debugHook.afterDecide(curReq, aborted, 0, callId)
+            : aborted;
+        }
+        if (dec.action === "mock") {
+          const mocked = Ok(dec.response);
+          return typeof debugHook.afterDecide === "function"
+            ? await debugHook.afterDecide(curReq, mocked, 0, callId)
+            : mocked;
+        }
+      }
     }
+
+    const t0 = Date.now();
+    const provider =
+      typeof curReq.provider === "string"
+        ? curReq.provider.trim().toLowerCase().replace(/-/g, "_")
+        : curReq.provider;
+    const auth = resolveAuthAndBaseUrl(provider, curReq);
+    let result;
+    if (!auth.ok) {
+      result = Err(auth.error);
+    } else {
+      const effectiveReq = { ...curReq, api_key: auth.apiKey, base_url: auth.baseUrl };
+      switch (provider) {
+        case "openai":
+        case "openai_responses":
+        case "openai_decisions":
+          result = await callOpenAiDecisions(effectiveReq);
+          break;
+        case "google":
+        case "google_decisions":
+          result = await callGoogleDecisions(effectiveReq);
+          break;
+        default:
+          result = Err(
+            `Unknown Decisions API provider '${curReq.provider}'. Expected 'openai' or 'google'`
+          );
+          break;
+      }
+    }
+    const elapsedMs = Date.now() - t0;
+    if (debugHook && typeof debugHook.afterDecide === "function") {
+      return await debugHook.afterDecide(curReq, result, elapsedMs, callId);
+    }
+    return result;
   } catch (e) {
     return Err(e instanceof Error ? e.message : String(e));
   }
@@ -1558,30 +1597,83 @@ export function reifiedEncodeToolOutput(typeInfos, value) {
 // ==================== Unified Entry Point ====================
 
 export async function llmTurn(req) {
-  const onDelta = unwrapOpt(req.on_delta, null);
+  const debugHook = typeof globalThis !== "undefined" ? globalThis.__splLlmDebugHook : null;
   try {
-    const provider =
-      typeof req.provider === "string"
-        ? req.provider.trim().toLowerCase().replace(/-/g, "_")
-        : req.provider;
-    const auth = resolveAuthAndBaseUrl(provider, req);
-    if (!auth.ok) return Err(auth.error);
-    const baseReq = { ...req, api_key: auth.apiKey, base_url: auth.baseUrl };
-    const effectiveReq = typeof onDelta === "function" && !baseReq.stream ? { ...baseReq, stream: true } : baseReq;
-    switch (provider) {
-      case "openai_responses":
-        return await callOpenAiResponses(effectiveReq, onDelta);
-      case "openai_chat":
-        return await callOpenAiChat(effectiveReq, onDelta);
-      case "anthropic":
-        return await callAnthropic(effectiveReq, onDelta);
-      case "google":
-        return await callGoogle(effectiveReq, onDelta);
-      default:
-        return Err(
-          `Unknown LLM provider '${effectiveReq.provider}'. Expected one of: openai_responses, openai_chat, anthropic, google`
-        );
+    let curReq = req;
+    let callId = 0;
+    if (debugHook && typeof debugHook.beforeTurn === "function") {
+      const dec = await debugHook.beforeTurn(curReq);
+      if (dec) {
+        if (typeof dec.callId === "number") callId = dec.callId;
+        if (dec.req) curReq = dec.req;
+        if (dec.action === "abort") {
+          const aborted = Err(dec.error ?? "Aborted by SPL debugger");
+          return typeof debugHook.afterTurn === "function"
+            ? await debugHook.afterTurn(curReq, aborted, 0, callId)
+            : aborted;
+        }
+        if (dec.action === "mock") {
+          const mocked = Ok(dec.response);
+          return typeof debugHook.afterTurn === "function"
+            ? await debugHook.afterTurn(curReq, mocked, 0, callId)
+            : mocked;
+        }
+      }
     }
+
+    const userOnDelta = unwrapOpt(curReq.on_delta, null);
+    const onDelta =
+      debugHook && typeof debugHook.onDelta === "function"
+        ? async (delta) => {
+            try {
+              debugHook.onDelta(callId, delta);
+            } catch {
+              // ignore debug observer errors
+            }
+            if (typeof userOnDelta === "function") {
+              return await userOnDelta(delta);
+            }
+          }
+        : userOnDelta;
+
+    const t0 = Date.now();
+    const provider =
+      typeof curReq.provider === "string"
+        ? curReq.provider.trim().toLowerCase().replace(/-/g, "_")
+        : curReq.provider;
+    const auth = resolveAuthAndBaseUrl(provider, curReq);
+    let result;
+    if (!auth.ok) {
+      result = Err(auth.error);
+    } else {
+      const baseReq = { ...curReq, api_key: auth.apiKey, base_url: auth.baseUrl };
+      const effectiveReq =
+        typeof userOnDelta === "function" && !baseReq.stream ? { ...baseReq, stream: true } : baseReq;
+      switch (provider) {
+        case "openai_responses":
+          result = await callOpenAiResponses(effectiveReq, onDelta);
+          break;
+        case "openai_chat":
+          result = await callOpenAiChat(effectiveReq, onDelta);
+          break;
+        case "anthropic":
+          result = await callAnthropic(effectiveReq, onDelta);
+          break;
+        case "google":
+          result = await callGoogle(effectiveReq, onDelta);
+          break;
+        default:
+          result = Err(
+            `Unknown LLM provider '${effectiveReq.provider}'. Expected one of: openai_responses, openai_chat, anthropic, google`
+          );
+          break;
+      }
+    }
+    const elapsedMs = Date.now() - t0;
+    if (debugHook && typeof debugHook.afterTurn === "function") {
+      return await debugHook.afterTurn(curReq, result, elapsedMs, callId);
+    }
+    return result;
   } catch (e) {
     return Err(e instanceof Error ? e.message : String(e));
   }

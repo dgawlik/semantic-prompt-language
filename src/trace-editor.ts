@@ -8,7 +8,7 @@ import * as path from "node:path";
 const ESC = "\x1b";
 const CSI = `${ESC}[`;
 
-const ANSI = {
+export const ANSI = {
   reset: `${CSI}0m`,
   bold: `${CSI}1m`,
   dim: `${CSI}2m`,
@@ -92,7 +92,7 @@ export function padAnsi(s: string, width: number): string {
 }
 
 /** Apply a persistent background color across a string that may contain inner `ANSI.reset` sequences. */
-function withBg(s: string, bg: string): string {
+export function withBg(s: string, bg: string): string {
   if (!bg) return s;
   return bg + s.replace(/\x1b\[0m/g, `${ANSI.reset}${bg}`);
 }
@@ -377,6 +377,54 @@ export function summarizeEntry(entry: TraceEntry): string {
     }
     case "warning":
       return `${turnPrefix}${oneLinePreview(String(obj.message ?? ""), 72)}`;
+    case "llm_request": {
+      const callNum = typeof obj.call === "number" ? `#${obj.call} ` : "";
+      const prov = typeof obj.provider === "string" ? obj.provider : "?";
+      const model = typeof obj.model === "string" ? obj.model : "?";
+      const msgs = Array.isArray(obj.messages) ? `${obj.messages.length} msg` : "";
+      const tools = Array.isArray(obj.tools) && obj.tools.length > 0 ? `${obj.tools.length} tool(s)` : "";
+      const schema = obj.json_schema ? "schema" : "";
+      return oneLinePreview(`${callNum}${prov}/${model} · ${[msgs, tools, schema].filter(Boolean).join(" · ")}`, 80);
+    }
+    case "llm_response": {
+      const callNum = typeof obj.call === "number" ? `#${obj.call} ` : "";
+      const dur = typeof obj.duration_ms === "number" ? `${obj.duration_ms}ms` : "";
+      const usage = obj.usage as Record<string, unknown> | undefined;
+      const tok = usage ? `${usage.input_tokens ?? 0}→${usage.output_tokens ?? 0}tok` : "";
+      const tcs = Array.isArray(obj.tool_calls) && obj.tool_calls.length > 0 ? `${obj.tool_calls.length} tool call(s)` : "";
+      const preview = typeof obj.text === "string" && obj.text.trim() ? oneLinePreview(obj.text, 40) : tcs;
+      return oneLinePreview(`${callNum}${[tok, dur, preview].filter(Boolean).join(" · ")}`, 80);
+    }
+    case "llm_decide_request": {
+      const callNum = typeof obj.call === "number" ? `#${obj.call} ` : "";
+      const prov = typeof obj.provider === "string" ? obj.provider : "?";
+      const model = typeof obj.model === "string" ? obj.model : "?";
+      const qs = Array.isArray(obj.questions) ? `${obj.questions.length} question(s)` : "";
+      return oneLinePreview(`${callNum}${prov}/${model} · ${qs}`, 80);
+    }
+    case "llm_decide_response": {
+      const callNum = typeof obj.call === "number" ? `#${obj.call} ` : "";
+      const dur = typeof obj.duration_ms === "number" ? `${obj.duration_ms}ms` : "";
+      const ans = Array.isArray(obj.answers) ? `${obj.answers.length} answer(s)` : "";
+      return oneLinePreview(`${callNum}${[ans, dur].filter(Boolean).join(" · ")}`, 80);
+    }
+    case "llm_error": {
+      const callNum = typeof obj.call === "number" ? `#${obj.call} ` : "";
+      return oneLinePreview(`${callNum}${String(obj.error ?? "LLM error")}`, 80);
+    }
+    case "stdout":
+      return oneLinePreview(String(obj.text ?? ""), 80);
+    case "program_done": {
+      const calls = typeof obj.llm_calls === "number" ? `${obj.llm_calls} LLM call(s)` : "";
+      const tok =
+        typeof obj.total_input_tokens === "number" || typeof obj.total_output_tokens === "number"
+          ? `${obj.total_input_tokens ?? 0}→${obj.total_output_tokens ?? 0}tok`
+          : "";
+      const dur = typeof obj.duration_ms === "number" ? `${obj.duration_ms}ms` : "";
+      return oneLinePreview([calls, tok, dur, "completed"].filter(Boolean).join(" · "), 80);
+    }
+    case "program_error":
+      return oneLinePreview(String(obj.error ?? "Program error"), 80);
     default:
       return oneLinePreview(JSON.stringify(obj), 80);
   }
@@ -418,6 +466,19 @@ export function badgeForKind(kind: string, entry?: TraceEntry): { label: string;
     }
     case "turn_completed":
       return { label: "TURN  ", color: ANSI.fg.cyan };
+    case "llm_request":
+    case "llm_decide_request":
+      return { label: "REQ   ", color: ANSI.bold + ANSI.fg.brightBlue };
+    case "llm_response":
+    case "llm_decide_response":
+      return { label: "RESP  ", color: ANSI.bold + ANSI.fg.brightGreen };
+    case "llm_error":
+    case "program_error":
+      return { label: "ERROR ", color: ANSI.bold + ANSI.fg.brightRed };
+    case "stdout":
+      return { label: "STDOUT", color: ANSI.fg.white };
+    case "program_done":
+      return { label: "DONE  ", color: ANSI.bold + ANSI.fg.cyan };
     case "warning":
       return { label: "WARN  ", color: ANSI.bold + ANSI.fg.yellow };
     case "invalid":

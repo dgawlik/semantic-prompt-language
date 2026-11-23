@@ -16,6 +16,7 @@ import {
   type CredentialProvider,
 } from "./credentials.js";
 import { SplError } from "./errors.js";
+import { runLlmDebugger } from "./llm-debugger.js";
 import { startLspServer } from "./lsp.js";
 import { runTraceEditor, TRACE_VIEW_FORMATS, type TraceViewFormat } from "./trace-editor.js";
 
@@ -234,6 +235,7 @@ async function main(): Promise<void> {
         "  spl check <file.splx>             Type-check a file and its imports",
         "  spl build <file.splx> [-o dir]    Compile to ESM JavaScript (.mjs)",
         "  spl run <file.splx>               Compile and execute",
+        "  spl debug <file.splx>             Interactive step-through LLM debugger & pretty printer",
         "  spl login [provider] [token]      Save LLM API tokens in ~/.spl/credentials.json",
         "  spl trace [file.jsonl]            Interactive trace viewer & JSON/JS/SPL pretty editor",
         "  spl schema <file.splx> <Type>     Print JSON Schema for a type",
@@ -246,6 +248,107 @@ async function main(): Promise<void> {
   try {
     if (cmd === "login") {
       await runLogin(args.slice(1));
+      return;
+    }
+
+    if (cmd === "debug" || cmd === "dbg") {
+      const rest = args.slice(1);
+      if (rest.length === 0 || rest.includes("--help") || rest.includes("-h")) {
+        console.log(
+          [
+            "Interactive step-through LLM debugger with pretty-printed results (reusing spl trace).",
+            "",
+            "Usage:",
+            "  spl debug <file.splx>                     Step through every LLM request and response interactively",
+            "  spl debug <file.splx> --after-only        Only pause after each LLM response (auto-send requests)",
+            "  spl debug <file.splx> --no-pause          Run without pausing and pretty-print all LLM calls & results",
+            "  spl debug <file.splx> --format <fmt>      Initial view format: pretty | json | js | spl",
+            "  spl debug <file.splx> --save <out.jsonl>  Auto-save captured debug trace (openable with `spl trace`)",
+            "",
+            "Interactive Keys:",
+            "  n / Space / Enter   Step forward (send paused request or continue after response)",
+            "  e                   Edit selected JSON (live-modifies active paused request/response)",
+            "  m                   Mock response when paused before a call (skips network)",
+            "  x                   Abort the currently paused LLM call",
+            "  c                   Continue all remaining calls without pausing",
+            "  b                   Cycle breakpoints (BEFORE+AFTER / AFTER-ONLY / BEFORE-ONLY / NONE)",
+            "  v / 1-4             Switch inspector view: Pretty / JSON / JS / SPL",
+            "  p                   Toggle embedded JSON & code pretty-printing",
+            "  s / W               Save session trace to .jsonl",
+            "  q / Ctrl+C          Quit",
+          ].join("\n")
+        );
+        return;
+      }
+
+      let fileArg: string | undefined;
+      let noPause = false;
+      let pauseBefore = true;
+      let pauseAfter = true;
+      let format: TraceViewFormat = "pretty";
+      let savePath: string | undefined;
+
+      for (let i = 0; i < rest.length; i++) {
+        const a = rest[i];
+        if (a === "--no-pause" || a === "--run") {
+          noPause = true;
+          continue;
+        }
+        if (a === "--after-only") {
+          pauseBefore = false;
+          pauseAfter = true;
+          continue;
+        }
+        if (a === "--before-only") {
+          pauseBefore = true;
+          pauseAfter = false;
+          continue;
+        }
+        if (a === "--format" || a === "-f") {
+          const val = (rest[++i] ?? "").toLowerCase() as TraceViewFormat;
+          if (!TRACE_VIEW_FORMATS.includes(val)) {
+            throw new Error(`Invalid format '${val}'. Expected one of: ${TRACE_VIEW_FORMATS.join(", ")}`);
+          }
+          format = val;
+          continue;
+        }
+        if (a.startsWith("--format=")) {
+          const val = a.slice("--format=".length).toLowerCase() as TraceViewFormat;
+          if (!TRACE_VIEW_FORMATS.includes(val)) {
+            throw new Error(`Invalid format '${val}'. Expected one of: ${TRACE_VIEW_FORMATS.join(", ")}`);
+          }
+          format = val;
+          continue;
+        }
+        if (a === "--save" || a === "-o") {
+          const val = rest[++i];
+          if (!val) throw new Error(`Missing output path after '${a}'`);
+          savePath = val;
+          continue;
+        }
+        if (a.startsWith("--save=")) {
+          savePath = a.slice("--save=".length);
+          continue;
+        }
+        if (!a.startsWith("-") && !fileArg) {
+          fileArg = a;
+        }
+      }
+
+      if (!fileArg) {
+        throw new Error("Missing input file: spl debug <file.splx>");
+      }
+
+      const res = await runLlmDebugger(fileArg, {
+        format,
+        noPause,
+        pauseBefore,
+        pauseAfter,
+        savePath,
+      });
+      if (res.error && noPause) {
+        process.exit(1);
+      }
       return;
     }
 

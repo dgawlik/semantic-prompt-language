@@ -180,6 +180,7 @@ export interface PlaygroundRunResult {
 declare global {
   interface Window {
     __splPlaygroundOut?: (text: string, kind: PlaygroundOutputChunk["kind"]) => void;
+    __splDebugOut?: (text: string, inline: boolean) => void;
     __splLlmProxy?: Record<string, string>;
   }
 }
@@ -387,6 +388,7 @@ export async function runPlaygroundCode(
 
     // 3. Execute live in browser ESM with captured stdout/print_inline and server-side LLM proxy
     window.__splPlaygroundOut = (text, kind) => onOutput({ text, kind });
+    window.__splDebugOut = (text, inline) => onOutput({ text, kind: inline ? "inline" : "stdout" });
     const origin = window.location.origin;
     window.__splLlmProxy = {
       openai: `${origin}/api/llm/openai/v1`,
@@ -402,6 +404,7 @@ export async function runPlaygroundCode(
     return { ok: false, elapsedMs: Math.round(performance.now() - t0), error: message };
   } finally {
     window.__splPlaygroundOut = undefined;
+    window.__splDebugOut = undefined;
     window.__splLlmProxy = undefined;
     for (const url of createdUrls) {
       URL.revokeObjectURL(url);

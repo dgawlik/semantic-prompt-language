@@ -70,11 +70,20 @@ export function toStr(v) {
 }
 
 export function print(v) {
-  console.log(toStr(v));
+  const s = toStr(v);
+  if (typeof globalThis !== "undefined" && typeof globalThis.__splDebugOut === "function") {
+    globalThis.__splDebugOut(s, false);
+    return;
+  }
+  console.log(s);
 }
 
 export function printInline(v) {
   const s = toStr(v);
+  if (typeof globalThis !== "undefined" && typeof globalThis.__splDebugOut === "function") {
+    globalThis.__splDebugOut(s, true);
+    return;
+  }
   if (typeof process !== "undefined" && process.stdout && typeof process.stdout.write === "function") {
     process.stdout.write(s);
   } else {

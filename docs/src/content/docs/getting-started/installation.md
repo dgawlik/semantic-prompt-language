@@ -33,6 +33,9 @@ node dist/cli.js check examples/01_basics.splx
 # Compile and run immediately
 node dist/cli.js run examples/01_basics.splx
 
+# Step through LLM calls interactively with pretty-printed results
+node dist/cli.js debug examples/agents/agent.splx
+
 # Compile to standalone ES Modules (.mjs)
 node dist/cli.js build examples/06_prompts_and_schemas.splx -o ./dist-spl
 
