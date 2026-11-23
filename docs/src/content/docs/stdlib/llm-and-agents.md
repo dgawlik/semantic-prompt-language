@@ -135,3 +135,19 @@ let resp = llm.decide(questions: qs) @{
     Customer message: My package arrived damaged and I want a refund.
 }?
 ```
+
+## 6. LLM-Synthesized Typed Functions (`Prompt.llm_fn<In, Out>`)
+
+Synthesize a strongly-typed, sandboxed JS function directly from a `@{ ... }` prompt specification plus the compile-time JSON Schemas of `In` and `Out` (with automatic syntax-error retries and runtime `Out` validation):
+
+```splx
+import llm from "std/llm"
+
+let sieve = @{
+    Create sieve of Eratosthenes function sieve(n: Int) -> Array<Int>
+}.llm_fn<Int, Array<Int>>()?
+
+print(sieve(1000))
+```
+
+`Prompt.llm_fn<In, Out>` returns `Result<fn(In) -> Result<Out, Str>, Str>` — unwrap the outer `Result` with `?` to get a typed callable `fn(In) -> Result<Out, Str>`. See [Dynamic Codegen (`std/codegen`)](/stdlib/codegen/) or run it live in the [Playground](/playground/?example=live-llm-fn).

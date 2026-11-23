@@ -295,7 +295,7 @@ print("\n\nTurns: \${trace.turns}, events: \${trace.events.len()}")`,
 import llm from "std/llm"
 
 let sieve = @{
-  Create sieve of Erathostentes function sieve(n: Int) -> Array<Int>
+  Create sieve of Eratosthenes function sieve(n: Int) -> Array<Int>
 }.llm_fn<Int, Array<Int>>()?
 
 print(sieve(1000))`,

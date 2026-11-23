@@ -60,9 +60,11 @@ Synthesize a sandboxed JS function directly from a `@{ ... }` prompt specificati
 ```splx
 import llm from "std/llm"
 
-let normalize = @{
-    Return the sum and product of input.a and input.b.
-}.llm_fn<Pair, Stats>(max_retries: 2)?
+let sieve = @{
+    Create sieve of Eratosthenes function sieve(n: Int) -> Array<Int>
+}.llm_fn<Int, Array<Int>>()?
 
-let out = normalize({ a: 9, b: 5 })?
+print(sieve(1000))
 ```
+
+`Prompt.llm_fn<In, Out>` returns `Result<fn(In) -> Result<Out, Str>, Str>`: the outer `Result` covers LLM synthesis and compilation, while the synthesized function itself returns `Result<Out, Str>` to guard against runtime errors, timeouts, or output decode mismatches. You can also try this live in the [Playground](/playground/?example=live-llm-fn).
