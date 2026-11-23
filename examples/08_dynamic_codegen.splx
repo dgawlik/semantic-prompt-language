@@ -80,11 +80,7 @@ fn run_demo() -> Result<Unit, Str> {
         Some(key) if key.trim() != "" => {
             let calc_llm = @{
                 Compute sum (a + b) and product (a * b) of the input integers.
-            }.llm_fn<CalcInput, CalcOutput>(
-                provider: "openai_responses",
-                api_key: key,
-                model: "gpt-4.1-mini"
-            )?
+            }.llm_fn<CalcInput, CalcOutput>()?
             let r4 = calc_llm({ a: 9, b: 8 })?
             print("llm_fn: sum=" + to_str(r4.sum) + ", product=" + to_str(r4.product))
         }

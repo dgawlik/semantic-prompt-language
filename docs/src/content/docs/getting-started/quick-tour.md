@@ -67,7 +67,6 @@ Define strongly-typed tools with `llm.tool<Args, Out>` and run a multi-turn loop
 ```splx
 import llm from "std/llm"
 import fs from "std/fs"
-import os from "std/os"
 
 type FilePath = Str '' Relative file path to inspect
 
@@ -78,14 +77,9 @@ let read_file = llm.tool<FilePath, Str>(
     fs.read(path)
 }
 
-let api_key = os.env("OPENAI_API_KEY") ?? panic("Set OPENAI_API_KEY")
-
 let (answer, trace) = @{
     Read package.json and summarize its scripts.
 }.agent<Str>(
-    provider: "openai_responses",
-    api_key: api_key,
-    model: "gpt-6-luna",
     thinking: Some(llm.ThinkLow),
     tools: [read_file.any()],
     on_delta: Some({ delta ->

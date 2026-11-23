@@ -227,8 +227,7 @@ print("Total parallel wall time: ~\${elapsed}ms")`,
     runnableInBrowser: true,
     autoRun: false,
     code: `// Click Run (Ctrl+Enter) to call OpenAI live through the server-side /api/llm proxy!
-// Notice api_key is omitted: in the CLI it reads ~/.spl/credentials.json (set via \`spl login\`),
-// and in the deployed playground it uses the server's OPENAI_API_KEY secret.
+// Defaults: provider = "openai_responses", model = "gpt-6-luna", api_key from \`spl login\` / server env.
 import llm from "std/llm"
 
 '' Historical figure profile returned by the model.

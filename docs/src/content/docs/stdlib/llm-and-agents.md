@@ -5,9 +5,9 @@ description: Prompt extension methods (Prompt.ask<T>, Prompt.agent<T>, Prompt.ll
 
 `std/llm` provides a single strongly-typed, provider-agnostic facade across **OpenAI Responses** (`"openai_responses"` / `"openai-responses"`), **OpenAI Chat** (`"openai_chat"`), **Anthropic** (`"anthropic"`), and **Google Gemini** (`"google"`), exposing reified extension methods directly on `Prompt` (`@{ ... }.ask<T>(...)`, `@{ ... }.agent<T>(...)`, and `@{ ... }.llm_fn<In, Out>(...)`).
 
-### Authentication (`spl login` & optional `api_key`)
+### Defaults & Authentication (`spl login`)
 
-`api_key` is optional on all `std/llm` calls. When omitted, SPL automatically resolves credentials in order:
+All `std/llm` calls default to `provider: "openai_responses"` and `model: "gpt-6-luna"`, and `api_key` is optional. When `api_key` is omitted, SPL automatically resolves credentials in order:
 1. Saved tokens in `~/.spl/credentials.json` (configured via `spl login`, `spl login openai`, or `spl login --from-env`).
 2. Provider environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`).
 3. In the web playground, the server-side `/api/llm/*` proxy backed by Vercel Environment Variables.
@@ -18,7 +18,6 @@ Because `Prompt.ask<T>` is a `reified` extension method, SPL automatically gener
 
 ```splx
 import llm from "std/llm"
-import os from "std/os"
 
 '' Structured summary returned by the LLM.
 type Summary = struct {
@@ -26,16 +25,9 @@ type Summary = struct {
     risk_score: Int '' Risk score from 1 (low) to 10 (high)
 }
 
-let api_key = os.env("OPENAI_API_KEY") ?? panic("Set OPENAI_API_KEY")
-
 let summary = @{
     Summarize why strong static typing reduces AI agent tool-call failures.
-}.ask<Summary>(
-    provider: "openai_responses",
-    api_key: api_key,
-    model: "gpt-6-luna",
-    thinking: Some(llm.ThinkLow)
-)?
+}.ask<Summary>(thinking: Some(llm.ThinkLow))?
 
 print("${summary.headline} (risk=${summary.risk_score})")
 ```
@@ -83,9 +75,6 @@ pub enum StreamDelta {
 let (answer, trace) = @{
     Inspect ./src/cli.ts and summarize all CLI subcommands.
 }.agent<Str>(
-    provider: "openai_responses",
-    api_key: api_key,
-    model: "gpt-6-luna",
     thinking: Some(llm.ThinkLow),
     tools: [read_file.any()],
     on_delta: Some({ delta ->
@@ -123,9 +112,6 @@ let loaded = traces.load_jsonl("trace.jsonl")?
 let (replayed, replay_trace) = llm.agent_replay<Str>(
     trace: loaded,
     up_to_step: 4,
-    provider: "openai_responses",
-    api_key: api_key,
-    model: "gpt-6-luna",
     tools: [read_file.any()]
 )?
 ```
@@ -145,12 +131,7 @@ let qs = [
     llm.score("urgency", "Rate urgency from 0 to 2", ["low", "medium", "high"])
 ]
 
-let resp = llm.decide(
-    provider: "openai",
-    api_key: api_key,
-    model: "gpt-6-luna",
-    questions: qs
-) @{
+let resp = llm.decide(questions: qs) @{
     Customer message: My package arrived damaged and I want a refund.
 }?
 ```

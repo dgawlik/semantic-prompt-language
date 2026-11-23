@@ -62,12 +62,7 @@ import llm from "std/llm"
 
 let normalize = @{
     Return the sum and product of input.a and input.b.
-}.llm_fn<Pair, Stats>(
-    provider: "openai_responses",
-    api_key: api_key,
-    model: "gpt-6-luna",
-    max_retries: 2
-)?
+}.llm_fn<Pair, Stats>(max_retries: 2)?
 
 let out = normalize({ a: 9, b: 5 })?
 ```

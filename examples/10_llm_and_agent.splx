@@ -38,16 +38,13 @@ fn make_calc_tool() -> llm.AgentTool<CalcArgs, CalcResult> {
     }
 }
 
-fn run_live(api_key: Str) -> Result<Unit, Str> {
+fn run_live() -> Result<Unit, Str> {
     // 1. Parameterized single-turn `Prompt.ask<Summary>`:
-    //    Automatically passes `type_schema<Summary>()` and decodes directly into `Summary`!
+    //    Defaults to provider: "openai_responses", model: "gpt-6-luna", and saved credentials / OPENAI_API_KEY.
     print_inline("ask<Summary> stream: ")
     let summary = @{
         Summarize why strong typing helps AI agents avoid tool-call errors.
     }.ask<Summary>(
-        provider: "openai_responses",
-        api_key: api_key,
-        model: "gpt-6-luna",
         max_tokens: Some(256),
         stream: true,
         on_delta: Some({ d ->
@@ -68,9 +65,6 @@ fn run_live(api_key: Str) -> Result<Unit, Str> {
     let (answer_text, trace) = @{
         Use the multiply tool to compute 17 * 23 and report the answer.
     }.agent<Str>(
-        provider: "openai_responses",
-        api_key: api_key,
-        model: "gpt-4.1-mini",
         tool_choice: Some(ToolAuto),
         tools: [make_calc_tool()],
         stream: true,
@@ -98,10 +92,7 @@ fn run_live(api_key: Str) -> Result<Unit, Str> {
     let loaded = traces.from_jsonl(jsonl)?
     let (replayed, replay_trace) = llm.agent_replay<Str>(
         trace: loaded,
-        up_to_step: loaded.events.len(),
-        provider: "openai_responses",
-        api_key: api_key,
-        model: "gpt-4.1-mini"
+        up_to_step: loaded.events.len()
     )?
     print("replay answer (0 live calls): " + replayed + " (events=" + to_str(replay_trace.step_count()) + ")")
     Ok(())
@@ -109,7 +100,7 @@ fn run_live(api_key: Str) -> Result<Unit, Str> {
 
 // 3. Decisions API (`llm.decide`): supports OpenAI `/v1/decisions` (`gpt-6-luna`)
 //    and Google Gemini `/v1beta/decisions` (`gemini-decision-1`)
-fn classify_ticket(provider: Str, api_key: Str, model: Str, ticket: Str) -> Result<llm.DecisionsResponse, Str> {
+fn classify_ticket(ticket: Str) -> Result<llm.DecisionsResponse, Str> {
     let qs = [
         llm.predicate("needs_refund", "Is the customer requesting a refund?"),
         llm.choice("department", "Which team should handle this?", [
@@ -119,12 +110,7 @@ fn classify_ticket(provider: Str, api_key: Str, model: Str, ticket: Str) -> Resu
         ]),
         llm.score("urgency", "Rate urgency from 0 to 2", ["low", "medium", "high"])
     ]
-    llm.decide(
-        provider: provider,
-        api_key: api_key,
-        model: model,
-        questions: qs
-    ) @{
+    llm.decide(questions: qs) @{
         Customer ticket: ${ticket}
     }
 }
@@ -136,7 +122,7 @@ print("Tool schema:    " + json_stringify(calc.parameters))
 
 match os.env("OPENAI_API_KEY") {
     Some(key) if key.trim() != "" => {
-        match run_live(key) {
+        match run_live() {
             Ok(_) => print("Live LLM run succeeded")
             Err(e) => print("Live LLM error: " + e)
         }

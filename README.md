@@ -21,7 +21,6 @@
 
 ```splx
 import llm from "std/llm"
-import os from "std/os"
 
 /// Developer doc-comment (IDE hover only; omitted from LLM schemas).
 '' Historical figure profile returned by the LLM.
@@ -32,16 +31,11 @@ type Person = struct {
     profession: Str '' Primary occupation
 }
 
-let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
-
+// Defaults to provider: "openai_responses", model: "gpt-6-luna", and ~/.spl/credentials.json (`spl login`).
 // Automatically sends `type_schema<Person>()` and validates the response into `Person`!
 let ada = @{
     Generate a profile for Ada Lovelace.
-}.ask<Person>(
-    provider: "openai_responses",
-    model: "gpt-6-luna",
-    api_key: api_key
-)?
+}.ask<Person>()?
 
 print("${ada.firstName} ${ada.lastName} (${ada.age}) — ${ada.profession}")
 ```
@@ -51,7 +45,6 @@ print("${ada.firstName} ${ada.lastName} (${ada.age}) — ${ada.profession}")
 ```splx
 import llm from "std/llm"
 import fs from "std/fs"
-import os from "std/os"
 
 type FilePath = Str '' Relative file path to read
 
@@ -62,14 +55,9 @@ let read_file = llm.tool<FilePath, Str>(
     fs.read(path)
 }
 
-let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
-
 let (answer, trace) = @{
     Inspect package.json and summarize the available scripts.
 }.agent<Str>(
-    provider: "openai_responses",
-    api_key: api_key,
-    model: "gpt-6-luna",
     thinking: Some(llm.ThinkLow),
     tools: [read_file.any()],
     on_delta: Some({ delta ->
