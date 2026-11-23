@@ -17,6 +17,7 @@ import {
 } from "./credentials.js";
 import { SplError } from "./errors.js";
 import { startLspServer } from "./lsp.js";
+import { runTraceEditor, TRACE_VIEW_FORMATS, type TraceViewFormat } from "./trace-editor.js";
 
 function promptLine(question: string, mask = false): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -234,6 +235,7 @@ async function main(): Promise<void> {
         "  spl build <file.splx> [-o dir]    Compile to ESM JavaScript (.mjs)",
         "  spl run <file.splx>               Compile and execute",
         "  spl login [provider] [token]      Save LLM API tokens in ~/.spl/credentials.json",
+        "  spl trace [file.jsonl]            Interactive trace viewer & JSON/JS/SPL pretty editor",
         "  spl schema <file.splx> <Type>     Print JSON Schema for a type",
         "  spl lsp                           Start the Language Server (stdio)",
       ].join("\n")
@@ -244,6 +246,58 @@ async function main(): Promise<void> {
   try {
     if (cmd === "login") {
       await runLogin(args.slice(1));
+      return;
+    }
+
+    if (cmd === "trace" || cmd === "traces") {
+      const rest = args.slice(1);
+      if (rest.includes("--help") || rest.includes("-h")) {
+        console.log(
+          [
+            "Rich zero-dependency CLI trace viewer & JSON/JS/SPL pretty editor.",
+            "",
+            "Usage:",
+            "  spl trace [file.jsonl]                    Open interactive TUI editor (default: traces.jsonl or trace.jsonl)",
+            "  spl trace [file.jsonl] --view             Pretty-print trace to stdout (non-interactive)",
+            "  spl trace [file.jsonl] --format <fmt>     View format: pretty | json | js | spl",
+          ].join("\n")
+        );
+        return;
+      }
+      const viewOnly = rest.includes("--view") || rest.includes("--print");
+      let format: TraceViewFormat = "pretty";
+      let fileArg: string | undefined;
+      for (let i = 0; i < rest.length; i++) {
+        const a = rest[i];
+        if (a === "--view" || a === "--print") continue;
+        if (a === "--format" || a === "-f") {
+          const val = (rest[++i] ?? "").toLowerCase() as TraceViewFormat;
+          if (!TRACE_VIEW_FORMATS.includes(val)) {
+            throw new Error(`Invalid format '${val}'. Expected one of: ${TRACE_VIEW_FORMATS.join(", ")}`);
+          }
+          format = val;
+          continue;
+        }
+        if (a.startsWith("--format=")) {
+          const val = a.slice("--format=".length).toLowerCase() as TraceViewFormat;
+          if (!TRACE_VIEW_FORMATS.includes(val)) {
+            throw new Error(`Invalid format '${val}'. Expected one of: ${TRACE_VIEW_FORMATS.join(", ")}`);
+          }
+          format = val;
+          continue;
+        }
+        if (!a.startsWith("-") && !fileArg) {
+          fileArg = a;
+        }
+      }
+      const resolvedFile =
+        fileArg ??
+        (fs.existsSync("traces.jsonl")
+          ? "traces.jsonl"
+          : fs.existsSync("trace.jsonl")
+            ? "trace.jsonl"
+            : "traces.jsonl");
+      await runTraceEditor(resolvedFile, { viewOnly, format });
       return;
     }
     if (cmd === "check") {

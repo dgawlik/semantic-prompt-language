@@ -13,6 +13,7 @@ Run the SPL CLI via `node dist/cli.js <command>` or `npm run spl -- <command>`:
 | `spl build <file.splx> [-o dir]` | Compile `<file.splx>` and its imports into standalone `.mjs` ES Modules (default `./dist-spl`) |
 | `spl run <file.splx>` | Compile to a temporary directory and execute immediately |
 | `spl login [provider] [token]` | Save `openai`, `google`, and `anthropic` API tokens in `~/.spl/credentials.json` (also supports `--from-env`, `--status`, `--clear`) |
+| `spl trace [file.jsonl]` | Launch the zero-dependency interactive trace viewer & JSON editor with pretty JSON / JS / SPL syntax highlighting (`--view --format pretty\|json\|js\|spl` for non-interactive output) |
 | `spl schema <file.splx> <Type>` | Print the compile-time JSON Schema for exported type `<Type>` |
 | `spl lsp` | Start the JSON-RPC 2.0 Language Server over stdio |
 

@@ -24,6 +24,11 @@ declare var process: {
   exit(code?: number): never;
   env: Record<string, string | undefined>;
   platform: string;
+  on?(event: string, cb: (...args: any[]) => void): void;
+  removeListener?(event: string, cb: (...args: any[]) => void): void;
+  stderr?: {
+    write(chunk: string | Uint8Array): boolean;
+  };
   stdin: {
     isTTY?: boolean;
     isRaw?: boolean;
@@ -36,7 +41,12 @@ declare var process: {
     pause(): void;
   };
   stdout: {
+    isTTY?: boolean;
+    columns?: number;
+    rows?: number;
     write(chunk: string | Uint8Array): boolean;
+    on?(event: "resize", cb: () => void): void;
+    removeListener?(event: string, cb: (...args: any[]) => void): void;
   };
 };
 

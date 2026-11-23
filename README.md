@@ -103,6 +103,9 @@ node dist/cli.js run examples/06_prompts_and_schemas.splx
 # Build standalone ES Modules (.mjs)
 node dist/cli.js build examples/06_prompts_and_schemas.splx -o ./dist-spl
 
+# Inspect & edit execution traces (JSON / JS / SPL pretty printing)
+node dist/cli.js trace trace.jsonl
+
 # Print the compile-time JSON Schema for any exported type
 node dist/cli.js schema examples/06_prompts_and_schemas.splx SecurityAudit
 
