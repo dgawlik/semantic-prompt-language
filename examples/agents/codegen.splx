@@ -1,0 +1,7 @@
+import llm from "std/llm"
+
+let sieve = @{
+  Create sieve of Erathostentes function sieve(n: Int) -> Array<Int>
+}.llm_fn<Int, Array<Int>>()?
+
+print(sieve(1000))

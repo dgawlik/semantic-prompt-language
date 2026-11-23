@@ -288,28 +288,17 @@ print("\n\nTurns: \${trace.turns}, events: \${trace.events.len()}")`,
   {
     id: "live-llm-fn",
     label: "09 // Live LLM: Prompt.llm_fn<In, Out>",
-    filename: "llm_fn.splx",
+    filename: "codegen.splx",
     runnableInBrowser: true,
     autoRun: false,
     code: `// Click Run (Ctrl+Enter) to synthesize and execute a typed JS function via OpenAI!
 import llm from "std/llm"
 
-type Pair = struct {
-    a: Int '' First integer
-    b: Int '' Second integer
-}
+let sieve = @{
+  Create sieve of Erathostentes function sieve(n: Int) -> Array<Int>
+}.llm_fn<Int, Array<Int>>()?
 
-type Stats = struct {
-    sum: Int     '' a + b
-    product: Int '' a * b
-}
-
-let compute = @{
-    Return the sum (a + b) and product (a * b) of input.a and input.b.
-}.llm_fn<Pair, Stats>()?
-
-let out = compute({ a: 9, b: 8 })?
-print("sum=\${out.sum}, product=\${out.product}")`,
+print(sieve(1000))`,
   },
 ];
 
