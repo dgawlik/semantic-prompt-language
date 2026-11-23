@@ -9,7 +9,7 @@ SPL eliminates function coloring — there are **no `async` or `await` keywords*
 
 The compiler performs fixed-point effect inference across the call graph:
 - Pure functions compile to plain synchronous JavaScript functions with zero `Promise` overhead.
-- Any function that transitively calls a suspending operation (`http.fetch`, `fs.read`, `clock.sleep`, `llm.ask`, etc.) automatically compiles to a JS `async function` with `await` inserted at call sites.
+- Any function that transitively calls a suspending operation (`http.fetch`, `fs.read`, `clock.sleep`, `Prompt.ask`, etc.) automatically compiles to a JS `async function` with `await` inserted at call sites.
 
 ```splx
 import clock from "std/clock"

@@ -35,13 +35,13 @@ type Person = struct {
 let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
 
 // Automatically sends `type_schema<Person>()` and validates the response into `Person`!
-let ada = llm.ask<Person>(
+let ada = @{
+    Generate a profile for Ada Lovelace.
+}.ask<Person>(
     provider: "openai_responses",
     model: "gpt-6-luna",
     api_key: api_key
-) @{
-    Generate a profile for Ada Lovelace.
-}?
+)?
 
 print("${ada.firstName} ${ada.lastName} (${ada.age}) — ${ada.profession}")
 ```
@@ -64,7 +64,9 @@ let read_file = llm.tool<FilePath, Str>(
 
 let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
 
-let (answer, trace) = llm.agent<Str>(
+let (answer, trace) = @{
+    Inspect package.json and summarize the available scripts.
+}.agent<Str>(
     provider: "openai_responses",
     api_key: api_key,
     model: "gpt-6-luna",
@@ -78,9 +80,7 @@ let (answer, trace) = llm.agent<Str>(
             _ => ()
         }
     })
-) @{
-    Inspect package.json and summarize the available scripts.
-}?
+)?
 
 print("\nTurns: ${trace.turns}\n${answer}")
 ```
@@ -103,6 +103,9 @@ npm test
 ### CLI Usage
 
 ```bash
+# Save OpenAI / Google / Anthropic API tokens in ~/.spl/credentials.json
+node dist/cli.js login
+
 # Type-check a file and its imports
 node dist/cli.js check examples/01_basics.splx
 
@@ -135,7 +138,7 @@ Reload VS Code (`Developer: Reload Window`) after installing.
 
 | Module | Runtime | Highlights |
 |---|---|---|
-| `std/llm` | Universal | `ask<T>`, `ask_raw`, `agent<T>`, `agent_replay<T>`, `tool<Args, Out>` + `.any()`, `StreamDelta`, `Thinking`, `ToolChoice`, `Decision`, `decide` |
+| `std/llm` | Universal | `Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `ask_raw`, `agent_replay<T>`, `tool<Args, Out>` + `.any()`, `StreamDelta`, `Thinking`, `ToolChoice`, `Decision`, `decide` |
 | `std/traces` | Universal / Server | Ordered `TraceEvent` enum, `ExecutionTrace`, JSONL `to_jsonl` / `from_jsonl` / `save_jsonl` / `load_jsonl` |
 | `std/codegen` | Universal / VM | Sandboxed `js_fn<In, Out>`, `js_async_fn<In, Out>`, `js_eval<Out>`, `spl_fn<In, Out>`, and LLM-synthesized `llm_fn<In, Out>` |
 | `std/collections` | Universal | Pure SPL `HashMap<K, V>`, self-balancing AVL `TreeSet<T>`, and immutable `List<T>` with lazy `.iter()` |

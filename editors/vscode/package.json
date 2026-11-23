@@ -2,7 +2,7 @@
   "name": "spl-lang-vscode",
   "displayName": "Semantic Prompt Language (SPL / .splx)",
   "description": "Language Server, syntax highlighting, type-aware property completion, and live JSON Schema hover for SPL (.splx)",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "publisher": "spl-lang",
   "engines": {
     "vscode": "^1.85.0"

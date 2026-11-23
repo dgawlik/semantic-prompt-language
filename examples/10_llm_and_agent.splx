@@ -1,5 +1,5 @@
 // ============================================================================
-// 10_llm_and_agent.splx — Unified LLM Facade (`llm.ask` & `llm.agent`)
+// 10_llm_and_agent.splx — Unified LLM Facade (`Prompt.ask` & `Prompt.agent`)
 // ============================================================================
 // Supports: "openai_responses", "openai_chat", "anthropic", "google"
 // Set OPENAI_API_KEY (or ANTHROPIC_API_KEY / GEMINI_API_KEY) to run live;
@@ -39,10 +39,12 @@ fn make_calc_tool() -> llm.AgentTool<CalcArgs, CalcResult> {
 }
 
 fn run_live(api_key: Str) -> Result<Unit, Str> {
-    // 1. Parameterized single-turn `llm.ask<Summary>`:
+    // 1. Parameterized single-turn `Prompt.ask<Summary>`:
     //    Automatically passes `type_schema<Summary>()` and decodes directly into `Summary`!
     print_inline("ask<Summary> stream: ")
-    let summary = llm.ask<Summary>(
+    let summary = @{
+        Summarize why strong typing helps AI agents avoid tool-call errors.
+    }.ask<Summary>(
         provider: "openai_responses",
         api_key: api_key,
         model: "gpt-6-luna",
@@ -56,16 +58,16 @@ fn run_live(api_key: Str) -> Result<Unit, Str> {
                 _ => ()
             }
         })
-    ) @{
-        Summarize why strong typing helps AI agents avoid tool-call errors.
-    }?
+    )?
     print("")
     print("ask headline: " + summary.headline + " (risk=" + to_str(summary.risk_score) + ")")
 
-    // 2. Parameterized multi-turn `llm.agent<Str>`:
+    // 2. Parameterized multi-turn `Prompt.agent<Str>`:
     //    Because `T = Str`, no JSON schema is enforced and plain `Str` is returned with `ExecutionTrace`.
     print_inline("agent<Str> stream: ")
-    let (answer_text, trace) = llm.agent<Str>(
+    let (answer_text, trace) = @{
+        Use the multiply tool to compute 17 * 23 and report the answer.
+    }.agent<Str>(
         provider: "openai_responses",
         api_key: api_key,
         model: "gpt-4.1-mini",
@@ -83,9 +85,7 @@ fn run_live(api_key: Str) -> Result<Unit, Str> {
         on_decision: Some({ req ->
             if req.tool_call.name == "multiply" { Approve } else { Reject("unknown tool") }
         })
-    ) @{
-        Use the multiply tool to compute 17 * 23 and report the answer.
-    }?
+    )?
     print("")
 
     print("agent answer: " + answer_text)

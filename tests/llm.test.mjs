@@ -296,8 +296,10 @@ test("std/llm: parameterized ask<T> across all 4 providers (typed struct, inferr
               name: Some("chart.png")
           }
 
-          // 1. OpenAI Responses: explicit llm.ask<Answer> — NO manual json_schema or decode needed!
-          let r1 = llm.ask<Answer>(
+          // 1. OpenAI Responses: explicit @{ ... }.ask<Answer> — NO manual json_schema or decode needed!
+          let r1 = @{
+              What is the answer?
+          }.ask<Answer>(
               provider: "openai_responses",
               api_key: "sk-openai",
               base_url: Some(base + "/v1"),
@@ -316,32 +318,32 @@ test("std/llm: parameterized ask<T> across all 4 providers (typed struct, inferr
                       llm.DoneDelta => ()
                   }
               })
-          ) @{
-              What is the answer?
-          }?
+          )?
 
           // 1b. Type inferred from let annotation (no explicit <Answer> needed!)
-          let r1_inferred: Answer = llm.ask(
+          let r1_inferred: Answer = @{
+              Infer the return schema
+          }.ask(
               provider: "openai_responses",
               api_key: "sk-openai",
               base_url: Some(base + "/v1"),
               model: "o4-mini"
-          ) @{
-              Infer the return schema
-          }?
+          )?
 
           // 1c. Non-object root type Array<Str> — auto-wrapped as { result: [...] } and unwrapped!
-          let r1_arr = llm.ask<Array<Str>>(
+          let r1_arr = @{
+              Return two tags
+          }.ask<Array<Str>>(
               provider: "openai_responses",
               api_key: "sk-openai",
               base_url: Some(base + "/v1"),
               model: "o4-mini"
-          ) @{
-              Return two tags
-          }?
+          )?
 
-          // 2. OpenAI Chat Completions: llm.ask<Str> — returns plain Str directly, no json_schema sent!
-          let r2 = llm.ask<Str>(
+          // 2. OpenAI Chat Completions: @{ ... }.ask<Str> — returns plain Str directly, no json_schema sent!
+          let r2 = @{
+              Say hi
+          }.ask<Str>(
               provider: "openai_chat",
               api_key: "sk-chat",
               base_url: Some(base + "/v1"),
@@ -350,12 +352,12 @@ test("std/llm: parameterized ask<T> across all 4 providers (typed struct, inferr
               thinking_effort: Some("low"),
               attachments: [img],
               stream: true
-          ) @{
-              Say hi
-          }?
+          )?
 
-          // 3. Anthropic Messages: llm.ask<Str> — returns plain Str directly
-          let r3 = llm.ask<Str>(
+          // 3. Anthropic Messages: @{ ... }.ask<Str> — returns plain Str directly
+          let r3 = @{
+              Check attachment
+          }.ask<Str>(
               provider: "anthropic",
               api_key: "sk-ant",
               base_url: Some(base),
@@ -364,12 +366,12 @@ test("std/llm: parameterized ask<T> across all 4 providers (typed struct, inferr
               thinking_effort: Some("medium"),
               attachments: [img],
               stream: true
-          ) @{
-              Check attachment
-          }?
+          )?
 
-          // 4. Google Gemini: llm.ask<Str> — returns plain Str directly (and no responseSchema)
-          let r4 = llm.ask<Str>(
+          // 4. Google Gemini: @{ ... }.ask<Str> — returns plain Str directly (and no responseSchema)
+          let r4 = @{
+              Analyze image
+          }.ask<Str>(
               provider: "google",
               api_key: "AIza-test",
               base_url: Some(base),
@@ -378,9 +380,7 @@ test("std/llm: parameterized ask<T> across all 4 providers (typed struct, inferr
               thinking_effort: Some("medium"),
               attachments: [img],
               stream: true
-          ) @{
-              Analyze image
-          }?
+          )?
 
           // 5. llm.ask_raw still returns full LlmResponse with thinking/usage metadata
           let raw = llm.ask_raw(
@@ -543,7 +543,9 @@ test("std/llm + std/traces: ordered TraceEvent enum array, JSONL save/load, and 
           base: Str,
           out_path: Str
       ) -> Result<(Str, Int, Int, Int, Array<Str>, Array<(Str, Str)>), Str> {
-          let (final_text, trace) = llm.agent<Str>(
+          let (final_text, trace) = @{
+              Multiply numbers and check DB.
+          }.agent<Str>(
               provider: "anthropic",
               api_key: "sk-ant-agent",
               base_url: Some(base),
@@ -559,9 +561,7 @@ test("std/llm + std/traces: ordered TraceEvent enum array, JSONL save/load, and 
                       Approve
                   }
               })
-          ) @{
-              Multiply numbers and check DB.
-          }?
+          )?
 
           // Save trace to JSONL file via std/traces
           traces.save_jsonl(out_path, trace)?
@@ -582,7 +582,9 @@ test("std/llm + std/traces: ordered TraceEvent enum array, JSONL save/load, and 
       }
 
       pub fn run_agent_typed(base: Str) -> Result<(Int, Str, Int), Str> {
-          let (report, trace) = llm.agent<AgentReport>(
+          let (report, trace) = @{
+              Multiply numbers and report structured output.
+          }.agent<AgentReport>(
               provider: "anthropic",
               api_key: "sk-ant-agent",
               base_url: Some(base),
@@ -597,9 +599,7 @@ test("std/llm + std/traces: ordered TraceEvent enum array, JSONL save/load, and 
                       Approve
                   }
               })
-          ) @{
-              Multiply numbers and report structured output.
-          }?
+          )?
           Ok((report.product, report.blocked, trace.turns))
       }
 
@@ -1005,7 +1005,7 @@ test("std/llm: OpenAI (/v1/decisions) and Google (/v1beta/decisions) Decisions A
   }
 });
 
-test("std/codegen: llm_fn<In, Out> synthesizes sandboxed JS from description/prompt + schemas with auto syntax retry", async () => {
+test("std/llm & std/codegen: Prompt.llm_fn<In, Out> synthesizes sandboxed JS from prompt + schemas with auto syntax retry", async () => {
   const recorded = [];
   let retryCalls = 0;
 
@@ -1055,6 +1055,7 @@ test("std/codegen: llm_fn<In, Out> synthesizes sandboxed JS from description/pro
 
   try {
     const mod = await runSpl(`
+      import llm from "std/llm"
       import codegen from "std/codegen"
 
       type CalcIn = struct {
@@ -1067,46 +1068,58 @@ test("std/codegen: llm_fn<In, Out> synthesizes sandboxed JS from description/pro
           product: Int '' Product of a and b
       }
 
-      pub fn run_llm_fn(base: Str) -> Result<(Int, Int, Str, Int, Int), Str> {
-          // 1. Using named description: Str
-          let f1 = codegen.llm_fn<CalcIn, CalcOut>(
-              provider: "openai_responses",
-              api_key: "sk-test",
-              base_url: Some(base + "/v1"),
-              model: "gpt-4.1-mini",
-              description: "Compute sum and product of two integers"
-          )?
-          let r1 = f1({ a: 6, b: 7 })?
-
-          // 2. Using trailing @{ ... } prompt block (also tests markdown fence stripping!)
-          let f2 = codegen.llm_fn<Str, Str>(
+      pub fn run_llm_fn(base: Str) -> Result<(Int, Int, Str, Int, Int, Int), Str> {
+          // 1. Prompt.llm_fn<CalcIn, CalcOut> exposed directly from std/llm
+          let f1 = @{
+              Compute sum and product of two integers
+          }.llm_fn<CalcIn, CalcOut>(
               provider: "openai_responses",
               api_key: "sk-test",
               base_url: Some(base + "/v1"),
               model: "gpt-4.1-mini"
-          ) @{
+          )?
+          let r1 = f1({ a: 6, b: 7 })?
+
+          // 2. Prompt.llm_fn<Str, Str> (also tests markdown fence stripping!)
+          let f2 = @{
               Return a function to reverse and uppercase the input string.
-          }?
+          }.llm_fn<Str, Str>(
+              provider: "openai_responses",
+              api_key: "sk-test",
+              base_url: Some(base + "/v1"),
+              model: "gpt-4.1-mini"
+          )?
           let r2 = f2("hello")?
 
           // 3. Automatic retry when LLM first emits invalid JS syntax
-          let f3 = codegen.llm_fn<CalcIn, CalcOut>(
+          let f3 = @{
+              RETRY_ME compute sum and product
+          }.llm_fn<CalcIn, CalcOut>(
               provider: "openai_responses",
               api_key: "sk-test",
               base_url: Some(base + "/v1"),
               model: "gpt-4.1-mini",
-              description: "RETRY_ME compute sum and product",
               max_retries: 2
           )?
           let r3 = f3({ a: 10, b: 5 })?
 
-          Ok((r1.sum, r1.product, r2, r3.sum, r3.product))
+          // 4. Backwards compatibility: codegen.llm_fn still works
+          let f4 = codegen.llm_fn<CalcIn, CalcOut>(
+              provider: "openai_responses",
+              api_key: "sk-test",
+              base_url: Some(base + "/v1"),
+              model: "gpt-4.1-mini",
+              description: "Compute sum and product"
+          )?
+          let r4 = f4({ a: 3, b: 4 })?
+
+          Ok((r1.sum, r1.product, r2, r3.sum, r3.product, r4.sum))
       }
     `);
 
     const res = await mod.run_llm_fn(baseUrl);
     assert.equal(res.$tag, "Ok");
-    assert.deepEqual(res._0, [13, 42, "OLLEH", 15, 50]);
+    assert.deepEqual(res._0, [13, 42, "OLLEH", 15, 50, 7]);
 
     // Verify first prompt included BOTH In and Out JSON Schemas + '' LLM hints!
     const prompt1 = recorded[0].body.input[0].content;
@@ -1122,5 +1135,120 @@ test("std/codegen: llm_fn<In, Out> synthesizes sandboxed JS from description/pro
   } finally {
     server.closeAllConnections?.();
     server.close();
+  }
+});
+
+test("CLI `spl login` & optional api_key: saves/loads ~/.spl/credentials.json for openai, google, and anthropic", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const mock = startMockLlmServer();
+  const baseUrl = await mock.listen();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "spl-login-"));
+  const credsFile = path.join(tmpDir, "credentials.json");
+  const cli = path.resolve("dist/cli.js");
+
+  const prevCredsEnv = process.env.SPL_CREDENTIALS_FILE;
+  const prevOpenAi = process.env.OPENAI_API_KEY;
+  const prevAnth = process.env.ANTHROPIC_API_KEY;
+  const prevGem = process.env.GEMINI_API_KEY;
+  const prevGoog = process.env.GOOGLE_API_KEY;
+
+  try {
+    // 1. Save tokens via `spl login` (both flags and positional syntax)
+    const loginOut = execFileSync(
+      process.execPath,
+      [cli, "login", "--openai", "sk-saved-openai-1234", "--anthropic", "sk-saved-ant-5678"],
+      { encoding: "utf8", env: { ...process.env, SPL_CREDENTIALS_FILE: credsFile } }
+    );
+    assert.match(loginOut, /Saved credentials/);
+    assert.match(loginOut, /openai \(sk-s\.\.\.1234\)/);
+    assert.match(loginOut, /anthropic \(sk-s\.\.\.5678\)/);
+
+    execFileSync(
+      process.execPath,
+      [cli, "login", "google", "AIza-saved-google-9012"],
+      { encoding: "utf8", env: { ...process.env, SPL_CREDENTIALS_FILE: credsFile } }
+    );
+
+    const statusOut = execFileSync(process.execPath, [cli, "login", "--status"], {
+      encoding: "utf8",
+      env: { ...process.env, SPL_CREDENTIALS_FILE: credsFile },
+    });
+    assert.match(statusOut, /openai\s+sk-s\.\.\.1234/);
+    assert.match(statusOut, /google\s+AIza\.\.\.9012/);
+    assert.match(statusOut, /anthropic\s+sk-s\.\.\.5678/);
+
+    const savedJson = JSON.parse(fs.readFileSync(credsFile, "utf8"));
+    assert.deepEqual(savedJson, {
+      openai: "sk-saved-openai-1234",
+      google: "AIza-saved-google-9012",
+      anthropic: "sk-saved-ant-5678",
+    });
+
+    // 2. Call Prompt.ask without api_key across OpenAI, Anthropic, and Google — reads credentials file!
+    process.env.SPL_CREDENTIALS_FILE = credsFile;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+
+    const mod = await runSpl(`
+      import llm from "std/llm"
+
+      type Answer = struct {
+          answer: Int '' Numeric answer
+      }
+
+      pub fn run_without_keys(base: Str) -> Result<(Int, Str, Str), Str> {
+          // Omit provider, model, and api_key -> defaults to "openai_responses", "gpt-6-luna", and saved credentials!
+          let r1 = @{ What is 6*7? }.ask<Answer>(
+              base_url: Some(base + "/v1")
+          )?
+          let r2 = @{ Say hi }.ask<Str>(
+              provider: "anthropic",
+              model: "claude-sonnet-4-5",
+              base_url: Some(base)
+          )?
+          let r3 = @{ Say hi }.ask<Str>(
+              provider: "google",
+              model: "gemini-2.5-pro",
+              base_url: Some(base)
+          )?
+          Ok((r1.answer, r2, r3))
+      }
+    `);
+
+    const res = await mod.run_without_keys(baseUrl);
+    assert.equal(res.$tag, "Ok");
+    assert.deepEqual(res._0, [42, "Claude OK", "Gemini OK"]);
+
+    const [oaiReq, antReq, googReq] = mock.recorded;
+    assert.equal(oaiReq.url, "/v1/responses");
+    assert.equal(oaiReq.body.model, "gpt-6-luna");
+    assert.equal(oaiReq.headers.authorization, "Bearer sk-saved-openai-1234");
+    assert.equal(antReq.headers["x-api-key"], "sk-saved-ant-5678");
+    assert.equal(googReq.headers["x-goog-api-key"], "AIza-saved-google-9012");
+
+    // 3. Clearing credentials makes calls without api_key return a helpful `spl login` error
+    execFileSync(process.execPath, [cli, "login", "--clear"], {
+      encoding: "utf8",
+      env: { ...process.env, SPL_CREDENTIALS_FILE: credsFile },
+    });
+    const missingRes = await mod.run_without_keys(baseUrl);
+    assert.equal(missingRes.$tag, "Err");
+    assert.match(missingRes._0, /spl login/);
+  } finally {
+    if (prevCredsEnv === undefined) delete process.env.SPL_CREDENTIALS_FILE;
+    else process.env.SPL_CREDENTIALS_FILE = prevCredsEnv;
+    if (prevOpenAi === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = prevOpenAi;
+    if (prevAnth === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = prevAnth;
+    if (prevGem === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = prevGem;
+    if (prevGoog === undefined) delete process.env.GOOGLE_API_KEY;
+    else process.env.GOOGLE_API_KEY = prevGoog;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    mock.server.closeAllConnections?.();
+    mock.server.close();
   }
 });

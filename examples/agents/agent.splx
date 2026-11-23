@@ -1,5 +1,4 @@
 import llm from "std/llm"
-import os from "std/os"
 import fs from "std/fs"
 
 
@@ -27,13 +26,12 @@ let list_files = llm.tool<DirectoryPath, DirectoryContent>(
         Ok(content)
 }
 
-let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
-
-let (result, trace) = llm.agent(
-    provider: "openai-responses", 
-    api_key: api_key,
+// Defaults to provider: "openai_responses", model: "gpt-6-luna", and api_key from ~/.spl/credentials.json (`spl login`) or OPENAI_API_KEY.
+let (result, trace) = @{ 
+    Analyze contents of ./src for known vulnerabilites. 
+    Summarize the findings
+}.agent(
     thinking: Some(llm.ThinkLow),
-    model: "gpt-6-luna",
     tools: [read_file.any(), list_files.any()],
     on_delta: Some({ delta -> 
         match delta {
@@ -46,10 +44,7 @@ let (result, trace) = llm.agent(
             _ => ()
         }
     })
-) @{ 
-    Analyze contents of ./src for known vulnerabilites. 
-    Summarize the findings
-}?
+)?
 
 print("\n\n--------------\nResult:\n")
 print(result)

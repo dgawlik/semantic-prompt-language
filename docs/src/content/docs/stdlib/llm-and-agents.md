@@ -1,13 +1,20 @@
 ---
 title: LLM & Agents (std/llm & std/traces)
-description: Parameterized llm.ask<T>, multi-turn llm.agent<T>, typed tools, streaming StreamDelta, Decisions API, and deterministic replay.
+description: Prompt extension methods (Prompt.ask<T>, Prompt.agent<T>, Prompt.llm_fn<In, Out>), typed tools, streaming StreamDelta, Decisions API, and deterministic replay.
 ---
 
-`std/llm` provides a single strongly-typed, provider-agnostic facade across **OpenAI Responses** (`"openai_responses"` / `"openai-responses"`), **OpenAI Chat** (`"openai_chat"`), **Anthropic** (`"anthropic"`), and **Google Gemini** (`"google"`).
+`std/llm` provides a single strongly-typed, provider-agnostic facade across **OpenAI Responses** (`"openai_responses"` / `"openai-responses"`), **OpenAI Chat** (`"openai_chat"`), **Anthropic** (`"anthropic"`), and **Google Gemini** (`"google"`), exposing reified extension methods directly on `Prompt` (`@{ ... }.ask<T>(...)`, `@{ ... }.agent<T>(...)`, and `@{ ... }.llm_fn<In, Out>(...)`).
 
-## 1. Single-Turn Structured Outputs (`llm.ask<T>`)
+### Authentication (`spl login` & optional `api_key`)
 
-Because `llm.ask<T>` is a `reified fn`, SPL automatically generates and sends `type_schema<T>()` and validates/decodes the model's response into `T` (or returns plain text when `T = Str`):
+`api_key` is optional on all `std/llm` calls. When omitted, SPL automatically resolves credentials in order:
+1. Saved tokens in `~/.spl/credentials.json` (configured via `spl login`, `spl login openai`, or `spl login --from-env`).
+2. Provider environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`).
+3. In the web playground, the server-side `/api/llm/*` proxy backed by Vercel Environment Variables.
+
+## 1. Single-Turn Structured Outputs (`Prompt.ask<T>`)
+
+Because `Prompt.ask<T>` is a `reified` extension method, SPL automatically generates and sends `type_schema<T>()` and validates/decodes the model's response into `T` (or returns plain text when `T = Str`):
 
 ```splx
 import llm from "std/llm"
@@ -21,14 +28,14 @@ type Summary = struct {
 
 let api_key = os.env("OPENAI_API_KEY") ?? panic("Set OPENAI_API_KEY")
 
-let summary = llm.ask<Summary>(
+let summary = @{
+    Summarize why strong static typing reduces AI agent tool-call failures.
+}.ask<Summary>(
     provider: "openai_responses",
     api_key: api_key,
     model: "gpt-6-luna",
     thinking: Some(llm.ThinkLow)
-) @{
-    Summarize why strong static typing reduces AI agent tool-call failures.
-}?
+)?
 
 print("${summary.headline} (risk=${summary.risk_score})")
 ```
@@ -58,7 +65,7 @@ When combining tools with different `<Args, Out>` types in one `tools: [...]` ar
 tools: [read_file.any(), list_files.any()]
 ```
 
-## 3. Multi-Turn Agents & Streaming (`llm.agent<T>` & `StreamDelta`)
+## 3. Multi-Turn Agents & Streaming (`Prompt.agent<T>` & `StreamDelta`)
 
 Passing `on_delta: Some(...)` automatically enables SSE streaming. `StreamDelta` is a tagged enum so you can exhaustively `match` on text, raw thinking, reasoning summaries, tool call chunks, and turn completion:
 
@@ -73,7 +80,9 @@ pub enum StreamDelta {
 ```
 
 ```splx
-let (answer, trace) = llm.agent<Str>(
+let (answer, trace) = @{
+    Inspect ./src/cli.ts and summarize all CLI subcommands.
+}.agent<Str>(
     provider: "openai_responses",
     api_key: api_key,
     model: "gpt-6-luna",
@@ -92,9 +101,7 @@ let (answer, trace) = llm.agent<Str>(
         if req.tool_call.name == "read_file" { llm.Approve }
         else { llm.Reject("Tool not permitted") }
     })
-) @{
-    Inspect ./src/cli.ts and summarize all CLI subcommands.
-}?
+)?
 ```
 
 ### Standard Parameters & Capabilities
@@ -103,7 +110,7 @@ let (answer, trace) = llm.agent<Str>(
 
 ## 4. Traces & Deterministic Replay (`std/traces` & `llm.agent_replay<T>`)
 
-Every `llm.agent<T>` run returns an `ExecutionTrace` with an ordered `events: Array<traces.TraceEvent>` (`UserPrompt`, `ThinkingStep`, `AssistantText`, `ToolCallStep`, `ToolDecisionStep`, `ToolResultStep`, `TurnCompleted`, `WarningStep`):
+Every `Prompt.agent<T>` run returns an `ExecutionTrace` with an ordered `events: Array<traces.TraceEvent>` (`UserPrompt`, `ThinkingStep`, `AssistantText`, `ToolCallStep`, `ToolDecisionStep`, `ToolResultStep`, `TurnCompleted`, `WarningStep`):
 
 ```splx
 import traces from "std/traces"

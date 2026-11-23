@@ -16,7 +16,7 @@ const slides: ExampleSlide[] = [
   {
     id: "structured-ask",
     tab: "01 // Structured LLM",
-    title: "Compile-Time Schemas with llm.ask<T>",
+    title: "Compile-Time Schemas with Prompt.ask<T>",
     file: "examples/agents/ask.splx",
     summary:
       "Attach '' LLM hints directly to record fields. SPL emits JSON Schema + runtime decoders at compile time.",
@@ -36,13 +36,13 @@ type Person = struct {
 let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
 
 // Automatically sends type_schema<Person>() and validates the JSON response!
-let ada = llm.ask<Person>(
+let ada = @{
+    Generate a profile for Ada Lovelace.
+}.ask<Person>(
     provider: "openai-responses",
     model: "gpt-6-luna",
     api_key: api_key
-) @{
-    Generate a profile for Ada Lovelace.
-}?
+)?
 
 print("\${ada.firstName} \${ada.lastName} (\${ada.age}) — \${ada.profession}")`,
   },
@@ -80,7 +80,10 @@ let list_files = llm.tool<DirectoryPath, DirectoryContent>(
 
 let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
 
-let (result, trace) = llm.agent(
+let (result, trace) = @{
+    Analyze contents of ./src for known vulnerabilities.
+    Summarize the findings.
+}.agent(
     provider: "openai-responses",
     api_key: api_key,
     thinking: Some(llm.ThinkLow),
@@ -93,10 +96,7 @@ let (result, trace) = llm.agent(
             _ => ()
         }
     })
-) @{
-    Analyze contents of ./src for known vulnerabilities.
-    Summarize the findings.
-}?`,
+)?`,
   },
   {
     id: "row-polymorphism",

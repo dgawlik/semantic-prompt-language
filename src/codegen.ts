@@ -681,7 +681,19 @@ class JsCodegen {
       return wrap(`${res.alias}.${res.member}(${argExprs.join(", ")})`);
     }
 
-    if (res?.kind === "ExtensionMethod" || res?.kind === "TraitMethod") {
+    if (res?.kind === "ExtensionMethod") {
+      const recv = this.emitExpr(res.receiver);
+      const argExprs = res.reorderedArgs
+        ? res.reorderedArgs.map((a) => this.emitExpr(a!))
+        : expr.args.map((a) => this.emitExpr(a.value));
+      const allArgs = [recv, ...argExprs];
+      if (res.reifiedTypeVars) {
+        allArgs.unshift(this.emitReifiedArray(res.reifiedTypeVars));
+      }
+      return wrap(`${res.jsSymbol}(${allArgs.join(", ")})`);
+    }
+
+    if (res?.kind === "TraitMethod") {
       const recv = this.emitExpr(res.receiver);
       const args = expr.args.map((a) => this.emitExpr(a.value));
       return wrap(`${res.jsSymbol}(${[recv, ...args].join(", ")})`);

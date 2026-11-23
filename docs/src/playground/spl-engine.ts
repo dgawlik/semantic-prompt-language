@@ -180,6 +180,7 @@ export interface PlaygroundRunResult {
 declare global {
   interface Window {
     __splPlaygroundOut?: (text: string, kind: PlaygroundOutputChunk["kind"]) => void;
+    __splLlmProxy?: Record<string, string>;
   }
 }
 
@@ -242,31 +243,65 @@ export function consoleWriteInline(v) {
 }
 
 function buildFfiCodegenStubSource(coreUrl: string): string {
-  return `import { Ok, Err } from ${JSON.stringify(coreUrl)};
+  return `import { Ok, Err, decode } from ${JSON.stringify(coreUrl)};
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-export function compileJsFn(jsBody, isAsync, _timeoutMs, decodeOut) {
+function resolveCodeArg(strArg, promptArg) {
+  const s = typeof strArg === "string" ? strArg : "";
+  const p = promptArg && promptArg.$tag === "Prompt" && typeof promptArg.text === "string" ? promptArg.text : "";
+  return s.trim() !== "" ? s : p;
+}
+function decodeResult(outInfo, raw) {
+  if (!outInfo?.codec) return Ok(raw);
+  const checked = decode(outInfo.codec, raw);
+  if (checked.$tag === "Ok") return checked;
+  return Err("Output type mismatch at " + checked._0.path + ": " + checked._0.message);
+}
+export function reifiedTypeMeta(typeInfos) {
+  const t = Array.isArray(typeInfos) ? typeInfos[0] : null;
+  return {
+    name: t?.name ?? "Json",
+    spl_type: t?.splType ?? "Json",
+    schema_json: JSON.stringify(t?.schema ?? {}),
+  };
+}
+export function compileJsFn(typeInfos, body = "", _timeoutMs = 5000, codePrompt = null) {
+  const [_inInfo, outInfo] = typeInfos ?? [];
+  const effectiveBody = resolveCodeArg(body, codePrompt);
   try {
-    const fn = isAsync ? new AsyncFunction("input", jsBody) : new Function("input", jsBody);
-    return Ok(async (input) => {
+    const rawFn = new Function("input", '"use strict";\\n' + effectiveBody);
+    return Ok((input) => {
       try {
-        const raw = await fn(input);
-        return decodeOut ? decodeOut(raw) : Ok(raw);
+        return decodeResult(outInfo, rawFn(input));
       } catch (e) {
         return Err(e instanceof Error ? e.message : String(e));
       }
     });
   } catch (e) {
-    return Err(e instanceof Error ? e.message : String(e));
+    return Err("JS syntax error: " + (e instanceof Error ? e.message : String(e)));
   }
 }
-export async function evalJsExpr(jsCode, _timeoutMs, decodeOut) {
+export function compileJsAsyncFn(typeInfos, body = "", codePrompt = null) {
+  const [_inInfo, outInfo] = typeInfos ?? [];
+  const effectiveBody = resolveCodeArg(body, codePrompt);
   try {
-    const fn = new AsyncFunction(jsCode);
-    const raw = await fn();
-    return decodeOut ? decodeOut(raw) : Ok(raw);
+    const rawFn = new AsyncFunction("input", '"use strict";\\n' + effectiveBody);
+    return Ok(async (input) => {
+      try {
+        return decodeResult(outInfo, await rawFn(input));
+      } catch (e) {
+        return Err(e instanceof Error ? e.message : String(e));
+      }
+    });
   } catch (e) {
-    return Err(e instanceof Error ? e.message : String(e));
+    return Err("Async JS syntax error: " + (e instanceof Error ? e.message : String(e)));
   }
+}
+export function evalJsExpr(typeInfos, exprSource = "", timeoutMs = 5000, codePrompt = null) {
+  const [outInfo] = typeInfos ?? [];
+  const effectiveExpr = resolveCodeArg(exprSource, codePrompt);
+  const compiled = compileJsFn([null, outInfo], "return (" + effectiveExpr + ");", timeoutMs);
+  if (compiled.$tag === "Err") return compiled;
+  return compiled._0(undefined);
 }
 export async function compileSplFn() {
   return Err("codegen.spl_fn runtime compilation requires the Node CLI runtime.");
@@ -350,8 +385,14 @@ export async function runPlaygroundCode(
 
     const entryMod = compileMod(PLAYGROUND_PATH, source, false);
 
-    // 3. Execute live in browser ESM with captured stdout/print_inline
+    // 3. Execute live in browser ESM with captured stdout/print_inline and server-side LLM proxy
     window.__splPlaygroundOut = (text, kind) => onOutput({ text, kind });
+    const origin = window.location.origin;
+    window.__splLlmProxy = {
+      openai: `${origin}/api/llm/openai/v1`,
+      anthropic: `${origin}/api/llm/anthropic`,
+      google: `${origin}/api/llm/google`,
+    };
     await import(/* @vite-ignore */ entryMod.blobUrl);
 
     return { ok: true, elapsedMs: Math.round(performance.now() - t0) };
@@ -361,6 +402,7 @@ export async function runPlaygroundCode(
     return { ok: false, elapsedMs: Math.round(performance.now() - t0), error: message };
   } finally {
     window.__splPlaygroundOut = undefined;
+    window.__splLlmProxy = undefined;
     for (const url of createdUrls) {
       URL.revokeObjectURL(url);
     }

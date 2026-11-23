@@ -14,7 +14,17 @@ function resolveServerPath(context) {
     return configured;
   }
 
-  // 1. Check relative to real extension path (works when dev-linked into ~/.vscode/extensions)
+  // 1. Prefer an SPL compiler checkout in the currently open workspace
+  const folders = vscode.workspace.workspaceFolders || [];
+  for (const folder of folders) {
+    const candidate = path.join(folder.uri.fsPath, "dist", "lsp.js");
+    const stdlibDir = path.join(folder.uri.fsPath, "stdlib");
+    if (fs.existsSync(candidate) && fs.existsSync(stdlibDir)) {
+      return candidate;
+    }
+  }
+
+  // 2. Check relative to real extension path (works when dev-linked into ~/.vscode/extensions)
   const realExtPath = fs.existsSync(context.extensionPath)
     ? fs.realpathSync(context.extensionPath)
     : context.extensionPath;
@@ -23,17 +33,10 @@ function resolveServerPath(context) {
     return repoLocal;
   }
 
-  // 2. Check bundled server packaged inside the .vsix
+  // 3. Check bundled server packaged inside the .vsix
   const bundled = path.join(realExtPath, "server", "dist", "lsp.js");
   if (fs.existsSync(bundled)) {
     return bundled;
-  }
-
-  // 3. Check inside currently open workspace folders
-  const folders = vscode.workspace.workspaceFolders || [];
-  for (const folder of folders) {
-    const candidate = path.join(folder.uri.fsPath, "dist", "lsp.js");
-    if (fs.existsSync(candidate)) return candidate;
   }
 
   return bundled;

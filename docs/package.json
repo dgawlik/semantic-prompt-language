@@ -1,7 +1,7 @@
 {
   "name": "spl-docs",
   "type": "module",
-  "version": "0.1.0",
+  "version": "4.1.0",
   "private": true,
   "description": "Documentation site for Semantic Prompt Language (SPL / .splx)",
   "scripts": {
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@astrojs/starlight": "^0.43.1",
+    "@astrojs/vercel": "^11.0.22",
     "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/language": "^6.13.1",

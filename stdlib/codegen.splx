@@ -73,9 +73,9 @@ fn strip_code_fences(raw: Str) -> Str {
 ///
 /// Automatically retries up to `max_retries` times if the generated JS has a syntax error.
 pub reified fn llm_fn<In, Out>(
-    provider: Str,
-    api_key: Str,
-    model: Str,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
     description: Str = "",
     base_url: Str? = None,
     max_tokens: Int? = None,

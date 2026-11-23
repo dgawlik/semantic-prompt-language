@@ -3,6 +3,7 @@ export interface PlaygroundPreset {
   label: string;
   filename: string;
   runnableInBrowser: boolean;
+  autoRun?: boolean;
   code: string;
 }
 
@@ -89,7 +90,7 @@ for step in steps {
 print(route_event({ kind: "call", name: "read_file", path: "README.md" }))`,
   },
   {
-    id: "structured-ask",
+    id: "prompts-and-schemas",
     label: "03 // Prompts, '' Hints & JSON Schema",
     filename: "schema.splx",
     runnableInBrowser: true,
@@ -220,42 +221,102 @@ for line in results {
 print("Total parallel wall time: ~\${elapsed}ms")`,
   },
   {
-    id: "tool-agent",
-    label: "07 // std/llm Tool Agent (Type-Check & Completion)",
-    filename: "agent.splx",
-    runnableInBrowser: false,
-    code: `// Demonstrates std/llm type-checking, named-arg completion, and StreamDelta exhaustiveness.
-// Try typing \`llm.\` or adding arguments inside \`llm.agent(\`!
+    id: "live-llm-ask",
+    label: "07 // Live LLM: Prompt.ask<T> (OpenAI)",
+    filename: "ask.splx",
+    runnableInBrowser: true,
+    autoRun: false,
+    code: `// Click Run (Ctrl+Enter) to call OpenAI live through the server-side /api/llm proxy!
+// Notice api_key is omitted: in the CLI it reads ~/.spl/credentials.json (set via \`spl login\`),
+// and in the deployed playground it uses the server's OPENAI_API_KEY secret.
 import llm from "std/llm"
-import fs from "std/fs"
 
-type FilePath = Str '' Path to a source file
-
-let read_file = llm.tool<FilePath, Str>(
-    name: "read_file",
-    description: "Reads the UTF-8 contents of a file"
-) { path ->
-    fs.read(path)
+'' Historical figure profile returned by the model.
+type Person = struct {
+    firstName: Str  '' Given name, e.g. Ada
+    lastName: Str   '' Family name, e.g. Lovelace
+    age: Int        '' Age in years
+    profession: Str '' Primary occupation
 }
 
-fn format_delta(delta: llm.StreamDelta) -> Str {
-    match delta {
-        llm.TextDelta(text) => text
-        llm.ThinkingDelta(t) => "[think] " + t
-        llm.SummaryDelta(s) => "[summary] " + s
-        llm.ToolCallDelta(name, _, _) => "[tool:" + name + "]"
-        llm.DoneDelta => "\n[done]"
-    }
+let ada = @{
+    Generate a concise profile for Ada Lovelace.
+}.ask<Person>()?
+
+print("\${ada.firstName} \${ada.lastName} (\${ada.age}) — \${ada.profession}")`,
+  },
+  {
+    id: "tool-agent",
+    label: "08 // Live LLM: Tool Agent & Streaming",
+    filename: "agent.splx",
+    runnableInBrowser: true,
+    autoRun: false,
+    code: `// Click Run (Ctrl+Enter) to run a live multi-turn streaming agent with a typed tool!
+// Try typing \`llm.\` or \`@{ Hello }.\` or adding arguments inside \`@{ ... }.agent(\`!
+import llm from "std/llm"
+
+type CalcArgs = struct {
+    a: Int '' First integer operand
+    b: Int '' Second integer operand
 }
 
-print("Tool schema: " + json_stringify(type_schema<FilePath>()))
-print(format_delta(llm.ToolCallDelta("read_file", "call_1", "{}")))
-print(format_delta(llm.TextDelta("Analysis complete.")))`,
+type CalcOut = struct {
+    product: Int '' Exact product of a and b
+}
+
+let multiply = llm.tool<CalcArgs, CalcOut>(
+    name: "multiply",
+    description: "Multiplies two integers accurately"
+) { args ->
+    Ok({ product: args.a * args.b })
+}
+
+let (answer, trace) = @{
+    Use the multiply tool to compute 17 * 23 and explain the result in one sentence.
+}.agent<Str>(
+    tools: [multiply.any()],
+    on_delta: Some({ delta ->
+        match delta {
+            llm.TextDelta(text) => print_inline(text)
+            llm.ToolCallDelta(name, _, _) => print_inline("[tool:" + name + "] ")
+            _ => ()
+        }
+    })
+)?
+
+print("\n\nTurns: \${trace.turns}, events: \${trace.events.len()}")`,
+  },
+  {
+    id: "live-llm-fn",
+    label: "09 // Live LLM: Prompt.llm_fn<In, Out>",
+    filename: "llm_fn.splx",
+    runnableInBrowser: true,
+    autoRun: false,
+    code: `// Click Run (Ctrl+Enter) to synthesize and execute a typed JS function via OpenAI!
+import llm from "std/llm"
+
+type Pair = struct {
+    a: Int '' First integer
+    b: Int '' Second integer
+}
+
+type Stats = struct {
+    sum: Int     '' a + b
+    product: Int '' a * b
+}
+
+let compute = @{
+    Return the sum (a + b) and product (a * b) of input.a and input.b.
+}.llm_fn<Pair, Stats>()?
+
+let out = compute({ a: 9, b: 8 })?
+print("sum=\${out.sum}, product=\${out.product}")`,
   },
 ];
 
 export const PRESET_ALIASES: Record<string, string> = {
-  "dynamic-codegen": "reified-generics",
+  "dynamic-codegen": "live-llm-fn",
+  "structured-ask": "live-llm-ask",
 };
 
 export function findPreset(id: string | null | undefined): PlaygroundPreset {

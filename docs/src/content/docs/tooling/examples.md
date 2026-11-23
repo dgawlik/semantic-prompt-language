@@ -20,6 +20,6 @@ node dist/cli.js run examples/<filename>.splx
 | `07_async_and_stdlib.splx` | Colorless async, sequential `map` vs `par_map`, `async_all` / `async_race`, `std/clock`, `std/crypto`, `std/console`, `std/fs`, `std/proc`, `std/os` |
 | `08_dynamic_codegen.splx` | `std/codegen`: sandboxed `js_fn<In, Out>`, `js_async_fn<In, Out>`, `js_eval<Out>`, and runtime type-checked `spl_fn<In, Out>` |
 | `09_collections.splx` | Pure SPL `std/collections`: `HashMap<K, V>`, AVL `TreeSet<T>`, and immutable `List<T>` |
-| `10_llm_and_agent.splx` | Unified `std/llm`: `llm.ask<T>`, `llm.agent<T>`, `llm.tool<Args, Out>`, `StreamDelta` matching, `Decision` hooks, `std/traces` JSONL, `llm.agent_replay<T>`, and `llm.decide` |
+| `10_llm_and_agent.splx` | Unified `std/llm`: `Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `llm.tool<Args, Out>`, `StreamDelta` matching, `Decision` hooks, `std/traces` JSONL, `llm.agent_replay<T>`, and `llm.decide` |
 | `11_reified_types.splx` | User-defined `reified fn<T>`: generic `type_schema<T>()` & `decode<T>()`, compound types (`Array<T>`, `Envelope<Array<T>>`), and forwarding to `std/codegen` |
 | `12_files_and_shell.splx` | Practical `std/fs`, `std/proc`, and `std/os`: nested directories, typed JSON persistence, recursive directory walking, `proc.shell`, `proc.exec` with `cwd` & `timeout_ms`, and non-zero exit codes |

@@ -132,7 +132,7 @@ const STD_MODULES = [
   { name: "std/proc", desc: "Server process execution (`exec`, `shell`)" },
   { name: "std/os", desc: "Server OS environment (`env`, `args`, `cwd`, `platform`, `exit`)" },
   { name: "std/agent", desc: "Pure SPL Agent/LLM endpoint helper (`call_endpoint`)" },
-  { name: "std/llm", desc: "Unified LLM facade (`ask<T>`, `agent<T>`, `agent_replay<T>`, `tool<Args, Out>`, `decide`) for OpenAI, Anthropic & Google" },
+  { name: "std/llm", desc: "Unified LLM facade (`Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `tool<Args, Out>`, `agent_replay<T>`, `decide`) for OpenAI, Anthropic & Google" },
   { name: "std/traces", desc: "Ordered `TraceEvent` & `ExecutionTrace` types with JSONL serialization (`save_jsonl`, `load_jsonl`, `to_jsonl`, `from_jsonl`)" },
   { name: "std/codegen", desc: "Typed dynamic JS & SPL codegen (`js_fn<In, Out>`, `js_async_fn<In, Out>`, `js_eval<Out>`, `spl_fn<In, Out>`, `llm_fn<In, Out>`)" },
   { name: "std/collections", desc: "Pure SPL immutable collections (`HashMap<K, V>`, AVL `TreeSet<T>`, `List<T>`) with extension methods" },
@@ -378,7 +378,7 @@ export class SplLanguageServiceCore {
     if (!callCtx) return null;
 
     const active = this.getActiveCheckedForLine(uri, lines, pos.line);
-    const callable = this.resolveCallable(uri, text, active, callCtx.calleeText);
+    const callable = this.resolveCallable(uri, text, active, callCtx);
     if (!callable) return null;
 
     const paramLabels = callable.params.map(
@@ -447,7 +447,7 @@ export class SplLanguageServiceCore {
     active: CheckedProgram | undefined,
     callCtx: CallContext
   ): LspCompletionItem[] {
-    const callable = this.resolveCallable(uri, text, active, callCtx.calleeText);
+    const callable = this.resolveCallable(uri, text, active, callCtx);
     if (!callable || callable.params.length === 0) return [];
 
     const items: LspCompletionItem[] = [];
@@ -478,29 +478,36 @@ export class SplLanguageServiceCore {
     uri: string,
     text: string,
     active: CheckedProgram | undefined,
-    calleeText: string
+    callCtx: CallContext
   ): ResolvedCallable | undefined {
+    const calleeText = callCtx.calleeText;
     const dotIdx = calleeText.lastIndexOf(".");
-    if (dotIdx !== -1) {
-      const left = calleeText.slice(0, dotIdx).trim();
-      const member = calleeText.slice(dotIdx + 1).trim();
+    if (dotIdx !== -1 || callCtx.isMethodCall) {
+      const left = dotIdx !== -1 ? calleeText.slice(0, dotIdx).trim() : "";
+      const member = dotIdx !== -1 ? calleeText.slice(dotIdx + 1).trim() : calleeText.trim();
       if (!member) return undefined;
 
       // 1. Module namespace call (`llm.ask`, `fs.read`, `codegen.js_fn`, `traces.save_jsonl`, ...)
-      const nsMod =
-        active?.namespaces.get(left) ?? this.resolveImportsFallback(uri, text).namespaces.get(left)?.mod;
-      if (nsMod) {
-        return this.callableFromModuleExport(nsMod, member, `${left}.${member}`);
+      if (left) {
+        const nsMod =
+          active?.namespaces.get(left) ?? this.resolveImportsFallback(uri, text).namespaces.get(left)?.mod;
+        if (nsMod) {
+          return this.callableFromModuleExport(nsMod, member, `${left}.${member}`);
+        }
       }
 
-      // 2. Extension method in scope (`s.push`, `scores.put`, `trace.to_jsonl`, ...)
+      // 2. Extension method in scope (`@{ ... }.ask`, `prompt.agent`, `s.push`, `scores.put`, `trace.to_jsonl`, ...)
       const allExts: ExtensionMethodInfo[] = [];
       if (active) allExts.push(...active.extensions);
       if (allExts.length === 0) {
         const fb = this.resolveImportsFallback(uri, text);
         for (const entry of fb.namespaces.values()) allExts.push(...entry.mod.extensions);
+        for (const entry of fb.namedExports.values()) allExts.push(...entry.mod.extensions);
       }
-      const extMatch = allExts.find((e) => e.name === member);
+      const extMatch =
+        (callCtx.isPromptReceiver
+          ? allExts.find((e) => e.name === member && prune(e.receiverType).kind === "TPrim" && (prune(e.receiverType) as { name: string }).name === "Prompt")
+          : undefined) ?? allExts.find((e) => e.name === member);
       if (extMatch) {
         const fnT = prune(extMatch.fnType);
         if (fnT.kind === "TFn") {
@@ -509,15 +516,17 @@ export class SplLanguageServiceCore {
             params.push({
               name: fnT.paramNames?.[i] ?? `arg${i - 1}`,
               typeStr: formatType(fnT.params[i]),
-              hasDefault: false,
+              hasDefault: extMatch.defaults ? extMatch.defaults[i] !== undefined : false,
             });
           }
+          const recvLabel = left || formatType(extMatch.receiverType);
           return {
-            name: `${left}.${member}`,
+            name: `${recvLabel}.${member}`,
             params,
             returnTypeStr: formatType(fnT.ret),
             doc: extMatch.doc,
             isAsync: extMatch.isAsync,
+            isReified: extMatch.isReified,
           };
         }
       }
@@ -644,8 +653,20 @@ export class SplLanguageServiceCore {
     const trimmedRecv = receiverExpr.trim();
 
     // Strategy C: Even if there are errors ABOVE the cursor so the full file didn't typecheck,
-    // still resolve stdlib namespace imports (`fs.`, `llm.`, `col.`) or annotated identifiers (`arr: Array<Int>`).
+    // still resolve prompt literals (`@{ ... }.`), stdlib namespace imports (`fs.`, `llm.`, `col.`),
+    // or annotated identifiers (`arr: Array<Int>`).
     if (!probed) {
+      if (trimmedRecv.startsWith("@{") && trimmedRecv.endsWith("}")) {
+        const fbImports = this.resolveImportsFallback(uri, text);
+        const emptyChecked = makeEmptyCheckedProgram(fsPath);
+        for (const entry of fbImports.namespaces.values()) {
+          for (const ext of entry.mod.extensions) emptyChecked.extensions.push(ext);
+        }
+        for (const entry of fbImports.namedExports.values()) {
+          for (const ext of entry.mod.extensions) emptyChecked.extensions.push(ext);
+        }
+        return this.completionsForType({ kind: "TPrim", name: "Prompt" }, emptyChecked, memberPrefix);
+      }
       if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmedRecv)) {
         const fbImports = this.resolveImportsFallback(uri, text);
         const nsEntry = fbImports.namespaces.get(trimmedRecv);
@@ -1512,8 +1533,89 @@ function findLineCommentStart(line: string): number {
   return -1;
 }
 
+/** Forward-scan matching brace/prompt open offset for `closeIdx`, accurately handling `@{ ... }` prompts */
+function findMatchingBraceForward(text: string, closeIdx: number): { openIdx: number; isPrompt: boolean } | null {
+  type Frame =
+    | { kind: "brace"; offset: number }
+    | { kind: "prompt"; offset: number; innerDepth: number }
+    | { kind: "interp"; offset: number };
+  const stack: Frame[] = [];
+  let inStr = false;
+  let inChar = false;
+  let inLineComment = false;
+
+  for (let i = 0; i <= closeIdx && i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+    const top = stack[stack.length - 1];
+
+    if (top && top.kind === "prompt") {
+      if (ch === "$" && next === "{") {
+        stack.push({ kind: "interp", offset: i + 1 });
+        i++;
+        continue;
+      }
+      if (ch === "{") {
+        top.innerDepth++;
+        continue;
+      }
+      if (ch === "}") {
+        if (top.innerDepth > 0) {
+          top.innerDepth--;
+        } else {
+          stack.pop();
+          if (i === closeIdx) return { openIdx: top.offset, isPrompt: true };
+        }
+      }
+      continue;
+    }
+
+    if (inLineComment) {
+      if (ch === "\n") inLineComment = false;
+      continue;
+    }
+    if (inStr) {
+      if (ch === "\\") { i++; continue; }
+      if (ch === "\"") inStr = false;
+      continue;
+    }
+    if (inChar) {
+      if (ch === "\\") { i++; continue; }
+      if (ch === "'") inChar = false;
+      continue;
+    }
+    if ((ch === "/" && next === "/") || (ch === "'" && next === "'")) {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (ch === "\"") { inStr = true; continue; }
+    if (ch === "'") { inChar = true; continue; }
+    if (ch === "@" && next === "{") {
+      stack.push({ kind: "prompt", offset: i, innerDepth: 0 });
+      i++;
+      continue;
+    }
+    if (ch === "{") {
+      stack.push({ kind: "brace", offset: i });
+      continue;
+    }
+    if (ch === "}") {
+      const popped = stack.pop();
+      if (i === closeIdx && popped) {
+        return { openIdx: popped.offset, isPrompt: false };
+      }
+    }
+  }
+  return null;
+}
+
 /** Find matching opening delimiter walking backwards from closing `closeIdx` (`)`, `]`, `}`, or `>`) */
 function findMatchingOpen(text: string, closeIdx: number, openCh: string, closeCh: string): number {
+  if (openCh === "{" && closeCh === "}") {
+    const fwd = findMatchingBraceForward(text, closeIdx);
+    if (fwd) return fwd.isPrompt ? fwd.openIdx + 1 : fwd.openIdx;
+  }
   let depth = 0;
   let i = closeIdx;
   while (i >= 0) {
@@ -1832,6 +1934,8 @@ interface ResolvedCallable {
 interface CallContext {
   openParenOffset: number;
   calleeText: string;
+  isMethodCall?: boolean;
+  isPromptReceiver?: boolean;
   typeArgsText?: string;
   isArgNamePosition: boolean;
   argPrefix: string;
@@ -1914,7 +2018,11 @@ function hasTopLevelColon(segment: string): boolean {
 }
 
 function findEnclosingCallContext(text: string, cursorOffset: number): CallContext | null {
-  const stack: { kind: "(" | "[" | "{"; offset: number }[] = [];
+  type StackEntry =
+    | { kind: "(" | "[" | "{"; offset: number }
+    | { kind: "prompt"; offset: number; innerDepth: number }
+    | { kind: "interp"; offset: number };
+  const stack: StackEntry[] = [];
   let inStr = false;
   let inChar = false;
   let inLineComment = false;
@@ -1922,6 +2030,23 @@ function findEnclosingCallContext(text: string, cursorOffset: number): CallConte
   for (let i = 0; i < cursorOffset && i < text.length; i++) {
     const ch = text[i];
     const next = text[i + 1];
+    const top = stack[stack.length - 1];
+    if (top && top.kind === "prompt") {
+      if (ch === "$" && next === "{") {
+        stack.push({ kind: "interp", offset: i + 1 });
+        i++;
+        continue;
+      }
+      if (ch === "{") {
+        top.innerDepth++;
+        continue;
+      }
+      if (ch === "}") {
+        if (top.innerDepth > 0) top.innerDepth--;
+        else stack.pop();
+      }
+      continue;
+    }
     if (inLineComment) {
       if (ch === "\n") inLineComment = false;
       continue;
@@ -1943,13 +2068,18 @@ function findEnclosingCallContext(text: string, cursorOffset: number): CallConte
     }
     if (ch === "\"") { inStr = true; continue; }
     if (ch === "'") { inChar = true; continue; }
+    if (ch === "@" && next === "{") {
+      stack.push({ kind: "prompt", offset: i, innerDepth: 0 });
+      i++;
+      continue;
+    }
     if (ch === "(" || ch === "[" || ch === "{") {
       stack.push({ kind: ch, offset: i });
     } else if (ch === ")" && stack.length > 0 && stack[stack.length - 1].kind === "(") {
       stack.pop();
     } else if (ch === "]" && stack.length > 0 && stack[stack.length - 1].kind === "[") {
       stack.pop();
-    } else if (ch === "}" && stack.length > 0 && stack[stack.length - 1].kind === "{") {
+    } else if (ch === "}" && stack.length > 0 && (stack[stack.length - 1].kind === "{" || stack[stack.length - 1].kind === "interp")) {
       stack.pop();
     }
   }
@@ -1991,8 +2121,30 @@ function findEnclosingCallContext(text: string, cursorOffset: number): CallConte
   const calleeEnd = p + 1;
   while (p >= 0 && /[A-Za-z0-9_.]/.test(text[p])) p--;
   const calleeStart = p + 1;
-  const calleeText = text.slice(calleeStart, calleeEnd).replace(/^\.+|\.+$/g, "");
+  const rawCallee = text.slice(calleeStart, calleeEnd);
+  const hadLeadingDot = rawCallee.startsWith(".");
+  const calleeText = rawCallee.replace(/^\.+|\.+$/g, "");
   if (!calleeText) return null;
+
+  let isMethodCall = hadLeadingDot || calleeText.includes(".");
+  let isPromptReceiver = false;
+  if (hadLeadingDot) {
+    const beforeDot = skipTriviaBackward(text, calleeStart - 1);
+    if (beforeDot >= 0 && text[beforeDot] === "}") {
+      const match = findMatchingBraceForward(text, beforeDot);
+      if (match?.isPrompt) isPromptReceiver = true;
+    }
+  } else if (!calleeText.includes(".")) {
+    const beforeIdent = skipTriviaBackward(text, calleeStart - 1);
+    if (beforeIdent >= 0 && text[beforeIdent] === "." && text[beforeIdent - 1] !== ".") {
+      isMethodCall = true;
+      const beforeDot = skipTriviaBackward(text, beforeIdent - 1);
+      if (beforeDot >= 0 && text[beforeDot] === "}") {
+        const match = findMatchingBraceForward(text, beforeDot);
+        if (match?.isPrompt) isPromptReceiver = true;
+      }
+    }
+  }
 
   const lastIdent = calleeText.includes(".") ? calleeText.slice(calleeText.lastIndexOf(".") + 1) : calleeText;
   if (CALL_REJECT_KEYWORDS.has(lastIdent)) return null;
@@ -2068,6 +2220,8 @@ function findEnclosingCallContext(text: string, cursorOffset: number): CallConte
   return {
     openParenOffset,
     calleeText,
+    isMethodCall,
+    isPromptReceiver,
     typeArgsText,
     isArgNamePosition,
     argPrefix,

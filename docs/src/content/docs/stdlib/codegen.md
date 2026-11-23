@@ -53,19 +53,21 @@ let r = spl_compute({ a: 10, b: 20 })?
 
 Type errors in the generated SPL source are caught by the SPL typechecker *before* execution.
 
-## LLM-Synthesized Typed Functions (`llm_fn<In, Out>`)
+## LLM-Synthesized Typed Functions (`Prompt.llm_fn<In, Out>`)
 
-Synthesize a sandboxed JS function directly from a natural-language specification plus the compile-time JSON Schemas and `''` hints of `In` and `Out`, with automatic syntax-error retries:
+Synthesize a sandboxed JS function directly from a `@{ ... }` prompt specification plus the compile-time JSON Schemas and `''` hints of `In` and `Out`, with automatic syntax-error retries (exposed from `std/llm`):
 
 ```splx
-let normalize = codegen.llm_fn<Pair, Stats>(
+import llm from "std/llm"
+
+let normalize = @{
+    Return the sum and product of input.a and input.b.
+}.llm_fn<Pair, Stats>(
     provider: "openai_responses",
     api_key: api_key,
     model: "gpt-6-luna",
     max_retries: 2
-) @{
-    Return the sum and product of input.a and input.b.
-}?
+)?
 
 let out = normalize({ a: 9, b: 5 })?
 ```

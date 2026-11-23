@@ -5,6 +5,112 @@
 import { Ok, Err, Some, None, decode, jsonStringify } from "./core.mjs";
 import { translateStandardParams } from "./llm_capabilities.mjs";
 
+// Lazily load Node built-ins only when running on Node/Bun/Deno so this file stays browser-safe
+let nodeFs = null;
+let nodeOs = null;
+let nodePath = null;
+if (typeof process !== "undefined" && process.versions && process.versions.node) {
+  try {
+    const fsSpec = "node:fs";
+    const osSpec = "node:os";
+    const pathSpec = "node:path";
+    nodeFs = await import(/* @vite-ignore */ fsSpec);
+    nodeOs = await import(/* @vite-ignore */ osSpec);
+    nodePath = await import(/* @vite-ignore */ pathSpec);
+  } catch {
+    // Non-Node runtime
+  }
+}
+
+const PROVIDER_ENV_VARS = {
+  openai: ["OPENAI_API_KEY"],
+  google: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  anthropic: ["ANTHROPIC_API_KEY"],
+};
+
+function providerFamily(provider) {
+  const p = typeof provider === "string" ? provider.trim().toLowerCase().replace(/-/g, "_") : "";
+  if (p === "openai" || p === "openai_responses" || p === "openai_chat" || p === "openai_decisions") return "openai";
+  if (p === "google" || p === "gemini" || p === "google_decisions") return "google";
+  if (p === "anthropic" || p === "claude") return "anthropic";
+  return null;
+}
+
+function getCredentialsFilePath() {
+  if (!nodeOs || !nodePath) return null;
+  if (typeof process !== "undefined" && process.env?.SPL_CREDENTIALS_FILE?.trim()) {
+    return process.env.SPL_CREDENTIALS_FILE.trim();
+  }
+  return nodePath.join(nodeOs.homedir(), ".spl", "credentials.json");
+}
+
+function readSavedApiKey(family) {
+  if (!family || !nodeFs) return "";
+  const filePath = getCredentialsFilePath();
+  if (!filePath) return "";
+  try {
+    if (!nodeFs.existsSync(filePath)) return "";
+    const raw = nodeFs.readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && typeof parsed[family] === "string") {
+      return parsed[family].trim();
+    }
+  } catch {
+    // Ignore malformed credentials file
+  }
+  return "";
+}
+
+function readEnvApiKey(family) {
+  if (!family || typeof process === "undefined" || !process.env) return "";
+  for (const envName of PROVIDER_ENV_VARS[family] ?? []) {
+    const val = process.env[envName];
+    if (typeof val === "string" && val.trim() !== "") return val.trim();
+  }
+  return "";
+}
+
+function resolveAuthAndBaseUrl(provider, req) {
+  const family = providerFamily(provider);
+  const explicitKey = typeof req.api_key === "string" ? req.api_key.trim() : "";
+  const explicitBase = unwrapOpt(req.base_url, undefined);
+
+  if (explicitKey) {
+    return { ok: true, apiKey: explicitKey, baseUrl: req.base_url };
+  }
+
+  // 1. Saved credentials in ~/.spl/credentials.json (created by `spl login`)
+  const savedKey = readSavedApiKey(family);
+  if (savedKey) {
+    return { ok: true, apiKey: savedKey, baseUrl: req.base_url };
+  }
+
+  // 2. Environment variable fallback
+  const envKey = readEnvApiKey(family);
+  if (envKey) {
+    return { ok: true, apiKey: envKey, baseUrl: req.base_url };
+  }
+
+  // 3. Browser playground server-side proxy hook (keeps API keys strictly on the server)
+  const proxyBase =
+    !explicitBase &&
+    typeof globalThis !== "undefined" &&
+    globalThis.__splLlmProxy &&
+    family &&
+    typeof globalThis.__splLlmProxy[family] === "string"
+      ? globalThis.__splLlmProxy[family]
+      : null;
+  if (proxyBase) {
+    return { ok: true, apiKey: "", baseUrl: Some(proxyBase) };
+  }
+
+  const envHint = (PROVIDER_ENV_VARS[family] ?? []).join(" / ");
+  return {
+    ok: false,
+    error: `Missing API key for '${family ?? provider}'. Run 'spl login ${family ?? ""}' to save your token in ~/.spl/credentials.json${envHint ? `, set ${envHint}` : ""}, or pass api_key: "..."`,
+  };
+}
+
 function unwrapOpt(v, fallback = undefined) {
   if (v && typeof v === "object") {
     if (v.$tag === "Some") return v._0;
@@ -191,12 +297,11 @@ async function callOpenAiResponses(req, onDelta) {
     }));
   }
 
+  const headers = { "content-type": "application/json" };
+  if (req.api_key) headers.authorization = `Bearer ${req.api_key}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${req.api_key}`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -457,12 +562,11 @@ async function callOpenAiChat(req, onDelta) {
     }));
   }
 
+  const headers = { "content-type": "application/json" };
+  if (req.api_key) headers.authorization = `Bearer ${req.api_key}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${req.api_key}`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -677,13 +781,14 @@ async function callAnthropic(req, onDelta) {
     }));
   }
 
+  const headers = {
+    "content-type": "application/json",
+    "anthropic-version": "2023-06-01",
+  };
+  if (req.api_key) headers["x-api-key"] = req.api_key;
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": req.api_key,
-      "anthropic-version": "2023-06-01",
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -895,12 +1000,11 @@ async function callGoogle(req, onDelta) {
     ];
   }
 
+  const headers = { "content-type": "application/json" };
+  if (req.api_key) headers["x-goog-api-key"] = req.api_key;
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-goog-api-key": req.api_key,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -1086,12 +1190,11 @@ async function callOpenAiDecisions(req) {
   };
   if (cacheKey) body.prompt_cache_key = cacheKey;
 
+  const headers = { "content-type": "application/json" };
+  if (req.api_key) headers.authorization = `Bearer ${req.api_key}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${req.api_key}`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -1202,12 +1305,11 @@ async function callGoogleDecisions(req) {
     questions,
   };
 
+  const headers = { "content-type": "application/json" };
+  if (req.api_key) headers["x-goog-api-key"] = req.api_key;
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-goog-api-key": req.api_key,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
@@ -1280,13 +1382,17 @@ async function callGoogleDecisions(req) {
 export async function llmDecide(req) {
   try {
     const provider = typeof req.provider === "string" ? req.provider.trim().toLowerCase().replace(/-/g, "_") : req.provider;
+    const auth = resolveAuthAndBaseUrl(provider, req);
+    if (!auth.ok) return Err(auth.error);
+    const effectiveReq = { ...req, api_key: auth.apiKey, base_url: auth.baseUrl };
     switch (provider) {
       case "openai":
+      case "openai_responses":
       case "openai_decisions":
-        return await callOpenAiDecisions(req);
+        return await callOpenAiDecisions(effectiveReq);
       case "google":
       case "google_decisions":
-        return await callGoogleDecisions(req);
+        return await callGoogleDecisions(effectiveReq);
       default:
         return Err(
           `Unknown Decisions API provider '${req.provider}'. Expected 'openai' or 'google'`
@@ -1453,12 +1559,15 @@ export function reifiedEncodeToolOutput(typeInfos, value) {
 
 export async function llmTurn(req) {
   const onDelta = unwrapOpt(req.on_delta, null);
-  const effectiveReq = typeof onDelta === "function" && !req.stream ? { ...req, stream: true } : req;
   try {
     const provider =
-      typeof effectiveReq.provider === "string"
-        ? effectiveReq.provider.trim().toLowerCase().replace(/-/g, "_")
-        : effectiveReq.provider;
+      typeof req.provider === "string"
+        ? req.provider.trim().toLowerCase().replace(/-/g, "_")
+        : req.provider;
+    const auth = resolveAuthAndBaseUrl(provider, req);
+    if (!auth.ok) return Err(auth.error);
+    const baseReq = { ...req, api_key: auth.apiKey, base_url: auth.baseUrl };
+    const effectiveReq = typeof onDelta === "function" && !baseReq.stream ? { ...baseReq, stream: true } : baseReq;
     switch (provider) {
       case "openai_responses":
         return await callOpenAiResponses(effectiveReq, onDelta);

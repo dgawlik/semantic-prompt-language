@@ -615,12 +615,15 @@ test("LSP: initialize, diagnostics, row-polymorphic property completion, hover J
         askLabels.includes("temperature:"),
       `Expected llm.ask named arg completions inside (), got: ${askLabels.slice(0, 20)}`
     );
+    const promptItem = cAskEmpty.items.find((i) => i.label === "prompt:");
     const providerItem = cAskEmpty.items.find((i) => i.label === "provider:");
     const tempItem = cAskEmpty.items.find((i) => i.label === "temperature:");
     assert.equal(providerItem.insertText, "provider: ");
-    assert.match(providerItem.detail, /required/);
+    assert.match(promptItem.detail, /required/);
+    assert.match(providerItem.detail, /optional/);
     assert.match(tempItem.detail, /optional/);
-    assert.ok(providerItem.sortText < tempItem.sortText, "Required params should sort before optional params");
+    assert.ok(promptItem.sortText < providerItem.sortText, "Required params should sort before optional params");
+    assert.ok(providerItem.sortText < tempItem.sortText, "Earlier optional params should sort before later ones");
 
     // 18b. After `provider: "openai_responses", ` -> omits already-used `provider:`
     const cAskSecond = await client.request("textDocument/completion", {
@@ -659,6 +662,69 @@ test("LSP: initialize, diagnostics, row-polymorphic property completion, hover J
       position: { line: 12, character: 13 },
     });
     assert.ok(cRead.items.some((i) => i.label === "path:"), "Expected `path:` arg completion for imported `read()`");
+
+    // 19. Prompt extension method completions & named-arg/signatureHelp (`@{ ... }.ask<Person>(|)`)
+    const promptExtPath = path.join(tmpDir, "prompt_ext.splx");
+    const promptExtUri = pathToFileURL(promptExtPath).href;
+    const promptExtSrc = [
+      `import llm from "std/llm"`,
+      ``,
+      `type Person = {`,
+      `    firstName: String '' Ada`,
+      `}`,
+      ``,
+      `let p = @{ Generate Ada's profile }.`,
+      `let ada = @{ Generate Ada's profile }.ask<Person>()`,
+      `let ada2 = @{ Generate Ada's profile }.ask<Person>(provider: "openai_responses", temperature: )`,
+    ].join("\n");
+    const d19 = client.waitForNotification((m) => m.method === "textDocument/publishDiagnostics");
+    client.notify("textDocument/didOpen", {
+      textDocument: { uri: promptExtUri, languageId: "splx", version: 1, text: promptExtSrc },
+    });
+    await d19;
+
+    // 19a. `@{ ... }.` completes `ask`, `agent`, `llm_fn`, `render`
+    const cPromptDot = await client.request("textDocument/completion", {
+      textDocument: { uri: promptExtUri },
+      position: { line: 6, character: 36 },
+    });
+    const promptDotLabels = cPromptDot.items.map((i) => i.label);
+    assert.ok(
+      promptDotLabels.includes("ask") &&
+        promptDotLabels.includes("agent") &&
+        promptDotLabels.includes("llm_fn") &&
+        promptDotLabels.includes("render"),
+      `Expected Prompt extension method completions on @{ ... }., got: ${promptDotLabels}`
+    );
+
+    // 19b. `@{ ... }.ask<Person>(|)` completes required & optional named args (without `prompt:`)
+    const cPromptAskArgs = await client.request("textDocument/completion", {
+      textDocument: { uri: promptExtUri },
+      position: { line: 7, character: 50 },
+    });
+    const promptAskLabels = cPromptAskArgs.items.map((i) => i.label);
+    assert.ok(
+      promptAskLabels.includes("provider:") &&
+        promptAskLabels.includes("api_key:") &&
+        promptAskLabels.includes("model:") &&
+        promptAskLabels.includes("temperature:") &&
+        !promptAskLabels.includes("prompt:"),
+      `Expected Prompt.ask named arg completions inside (), got: ${promptAskLabels.slice(0, 20)}`
+    );
+    const pProv = cPromptAskArgs.items.find((i) => i.label === "provider:");
+    const pTemp = cPromptAskArgs.items.find((i) => i.label === "temperature:");
+    assert.match(pProv.detail, /optional/);
+    assert.match(pTemp.detail, /optional/);
+    assert.ok(pProv.sortText < pTemp.sortText, "Earlier params should sort before later params on Prompt.ask");
+
+    // 19c. SignatureHelp inside `@{ ... }.ask<Person>(provider: "openai_responses", temperature: |)`
+    const promptSigHelp = await client.request("textDocument/signatureHelp", {
+      textDocument: { uri: promptExtUri },
+      position: { line: 8, character: 94 },
+    });
+    assert.ok(promptSigHelp && promptSigHelp.signatures.length === 1, "Expected signatureHelp for Prompt.ask");
+    assert.match(promptSigHelp.signatures[0].label, /reified async fn Prompt\.ask\(/);
+    assert.match(promptSigHelp.signatures[0].parameters[promptSigHelp.activeParameter].label, /^temperature:/);
   } finally {
     await client.close();
     fs.rmSync(tmpDir, { recursive: true, force: true });

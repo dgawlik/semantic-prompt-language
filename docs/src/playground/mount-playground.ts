@@ -665,13 +665,30 @@ export function mountSplPlayground(root: HTMLElement): void {
     }
   });
 
+  const showManualRunPrompt = (preset: PlaygroundPreset) => {
+    selectTab("pg-tab-output");
+    outputEl.replaceChildren();
+    const note = document.createElement("p");
+    note.className = "spl-empty-state";
+    note.textContent = `Ready to run ${preset.filename} live against /api/llm. Press Run (Ctrl+Enter) to execute.`;
+    outputEl.append(note);
+    if (runMetaEl) {
+      runMetaEl.textContent = "Ready";
+      runMetaEl.dataset.state = "idle";
+    }
+  };
+
   resetBtn?.addEventListener("click", () => {
     viewRef.dispatch({
       changes: { from: 0, to: viewRef.state.doc.length, insert: activePreset.code },
     });
     if (filenameEl) filenameEl.textContent = activePreset.filename;
     announce(`Reset editor to ${activePreset.filename}`);
-    void runCurrentCode(viewRef);
+    if (activePreset.autoRun === false) {
+      showManualRunPrompt(activePreset);
+    } else {
+      void runCurrentCode(viewRef);
+    }
   });
 
   presetSelect?.addEventListener("change", () => {
@@ -682,13 +699,21 @@ export function mountSplPlayground(root: HTMLElement): void {
     if (filenameEl) filenameEl.textContent = activePreset.filename;
     window.history.replaceState(null, "", `${window.location.pathname}?example=${activePreset.id}`);
     announce(`Loaded example ${activePreset.filename}`);
-    void runCurrentCode(viewRef);
+    if (activePreset.autoRun === false) {
+      showManualRunPrompt(activePreset);
+    } else {
+      void runCurrentCode(viewRef);
+    }
   });
 
-  // Initial sync + initial run
+  // Initial sync + initial run (skip auto-run for live LLM presets so API quota is only used on Run)
   syncAnalysis(viewRef);
   updateCursorAndSignature(viewRef);
-  void runCurrentCode(viewRef);
+  if (!sharedCode && activePreset.autoRun === false) {
+    showManualRunPrompt(activePreset);
+  } else {
+    void runCurrentCode(viewRef);
+  }
 }
 
 for (const el of document.querySelectorAll<HTMLElement>("[data-spl-playground]")) {

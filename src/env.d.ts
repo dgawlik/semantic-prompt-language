@@ -25,9 +25,15 @@ declare var process: {
   env: Record<string, string | undefined>;
   platform: string;
   stdin: {
+    isTTY?: boolean;
+    isRaw?: boolean;
+    setRawMode?(mode: boolean): void;
+    setEncoding?(encoding: string): void;
     on(event: "data", cb: (chunk: Uint8Array) => void): void;
     on(event: "end", cb: () => void): void;
+    removeListener(event: string, cb: (...args: any[]) => void): void;
     resume(): void;
+    pause(): void;
   };
   stdout: {
     write(chunk: string | Uint8Array): boolean;
@@ -36,11 +42,16 @@ declare var process: {
 
 declare module "node:fs" {
   export function readFileSync(path: string, encoding: "utf8"): string;
-  export function writeFileSync(path: string, data: string, encoding?: "utf8"): void;
+  export function writeFileSync(
+    path: string,
+    data: string,
+    options?: "utf8" | { encoding?: "utf8"; mode?: number }
+  ): void;
   export function existsSync(path: string): boolean;
-  export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
+  export function mkdirSync(path: string, options?: { recursive?: boolean; mode?: number }): void;
   export function mkdtempSync(prefix: string): string;
   export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+  export function chmodSync(path: string, mode: number): void;
   export function statSync(path: string): { isDirectory(): boolean; isFile(): boolean };
 }
 
@@ -62,4 +73,13 @@ declare module "node:url" {
 
 declare module "node:os" {
   export function tmpdir(): string;
+  export function homedir(): string;
+}
+
+declare module "node:readline" {
+  export interface Interface {
+    question(query: string, callback: (answer: string) => void): void;
+    close(): void;
+  }
+  export function createInterface(options: { input: unknown; output: unknown }): Interface;
 }

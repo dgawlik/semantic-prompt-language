@@ -62,7 +62,7 @@ print(json_stringify(schema))
 
 ## 4. Typed Multi-Turn Agents
 
-Define strongly-typed tools with `llm.tool<Args, Out>` and pass them to `llm.agent<T>`:
+Define strongly-typed tools with `llm.tool<Args, Out>` and run a multi-turn loop with `Prompt.agent<T>`:
 
 ```splx
 import llm from "std/llm"
@@ -80,7 +80,9 @@ let read_file = llm.tool<FilePath, Str>(
 
 let api_key = os.env("OPENAI_API_KEY") ?? panic("Set OPENAI_API_KEY")
 
-let (answer, trace) = llm.agent<Str>(
+let (answer, trace) = @{
+    Read package.json and summarize its scripts.
+}.agent<Str>(
     provider: "openai_responses",
     api_key: api_key,
     model: "gpt-6-luna",
@@ -94,9 +96,7 @@ let (answer, trace) = llm.agent<Str>(
             _ => ()
         }
     })
-) @{
-    Read package.json and summarize its scripts.
-}?
+)?
 
 print("\nTurns: " + to_str(trace.turns))
 print(answer)

@@ -1,6 +1,10 @@
 **/node_modules
 **/dist
 **/.astro
+**/.vercel
 **/*.jsonl
+**/.env
+**/.env.*
+!**/.env.example
 editors/vscode/server
 **/*.vsix

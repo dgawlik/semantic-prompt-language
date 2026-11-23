@@ -7,12 +7,14 @@
 /// - `"google"` (Google Gemini `generateContent` / `streamGenerateContent`)
 ///
 /// Exposes:
-/// - `llm.ask<T>(...) @{ ... }`       — typed single-turn request returning `Result<T, Str>`
+/// - `Prompt.ask<T>(...)` / `llm.ask<T>(...)` — typed single-turn request returning `Result<T, Str>`
 ///   (auto-passes `type_schema<T>()` and decodes to `T`; returns plain `Str` when `T = Str`).
 /// - `llm.ask_raw(...) @{ ... }`      — raw single-turn request returning `Result<LlmResponse, Str>`.
-/// - `llm.agent<T>(...) @{ ... }`     — full multi-turn agentic loop with parameterized `AgentTool<Args, Out>`,
+/// - `Prompt.agent<T>(...)` / `llm.agent<T>(...)` — full multi-turn agentic loop with parameterized `AgentTool<Args, Out>`,
 ///   approval/modification `Decision` hooks, streaming deltas, auto-typed output `T`,
 ///   and ordered `traces.ExecutionTrace` (`events: Array<TraceEvent>`).
+/// - `Prompt.llm_fn<In, Out>(...)` / `llm.llm_fn<In, Out>(...)` — synthesizes a sandboxed typed JS function
+///   from a prompt specification plus compile-time `In`/`Out` JSON Schemas with automatic syntax retries.
 /// - `llm.agent_replay<T>(...)`       — deterministically replays an `ExecutionTrace` up to step `n`,
 ///   then continues running normally from that point onward.
 /// - `llm.decide(...) @{ ... }`       — closed-set OpenAI & Google Decisions APIs.
@@ -264,12 +266,30 @@ pub extern async fn raw_turn(req: TurnRequest) -> Result<LlmResponse, Str> = "ff
 pub extern async fn raw_decide(req: DecisionsRequest) -> Result<DecisionsResponse, Str> = "ffi_llm:llmDecide"
 
 /// Private reified FFI helpers driving automatic `type_schema<T>()` + `decode<T>()`
-/// for `llm.ask<T>`, `llm.agent<T>`, and `llm.tool<Args, Out>` (`AgentTool<Args, Out>`).
+/// for `Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, and `llm.tool<Args, Out>` (`AgentTool<Args, Out>`).
 extern reified fn reified_output_schema<T>() -> Json? = "ffi_llm:reifiedOutputSchema"
 extern reified fn reified_decode_output<T>(text: Str) -> Result<T, Str> = "ffi_llm:reifiedDecodeOutput"
 extern reified fn reified_schema<T>() -> Json = "ffi_llm:reifiedSchema"
 extern reified fn reified_decode_json<T>(raw: Json) -> Result<T, Str> = "ffi_llm:reifiedDecodeJson"
 extern reified fn reified_encode_tool_output<T>(value: T) -> Str = "ffi_llm:reifiedEncodeToolOutput"
+
+type ReifiedTypeMeta = struct {
+    name: Str
+    spl_type: Str
+    schema_json: Str
+}
+
+'' Generated synchronous JavaScript function body for `Prompt.llm_fn` / `llm.llm_fn`.
+type GeneratedJsCode = struct {
+    body: Str '' Pure synchronous JavaScript function body receiving parameter `input` and ending with a `return ...;` statement matching the output schema. Do NOT wrap in `function(...) { ... }` or markdown code fences.
+}
+
+extern reified fn codegen_reified_type_meta<T>() -> ReifiedTypeMeta = "ffi_codegen:reifiedTypeMeta"
+extern reified fn codegen_compile_js_fn<In, Out>(
+    body: Str = "",
+    timeout_ms: Int = 5000,
+    code: Prompt = @{ }
+) -> Result<fn(In) -> Result<Out, Str>, Str> = "ffi_codegen:compileJsFn"
 
 // ============================================================================
 // Parameterized AgentTool Constructors (`llm.tool<Args, Out>` & `.any()`)
@@ -375,10 +395,10 @@ pub fn score(
 /// Google Gemini `/v1beta/decisions` (e.g. `gemini-decision-1`), returning calibrated
 /// probabilities and confidence scores. Accepts a trailing `@{ ... }` `Prompt` block.
 pub fn decide(
-    provider: Str,
-    api_key: Str,
-    model: Str,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
     questions: Array<DecisionQuestion>,
+    api_key: Str = "",
     base_url: Str? = None,
     attachments: Array<Attachment> = [],
     prompt_cache_key: Str? = None,
@@ -404,9 +424,9 @@ pub fn decide(
 /// full `LlmResponse` (including `usage`, `thinking`, `warnings`, and `raw`).
 /// Accepts a trailing `@{ ... }` `Prompt` block.
 pub fn ask_raw(
-    provider: Str,
-    api_key: Str,
-    model: Str,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
     system: Str? = None,
     base_url: Str? = None,
     max_tokens: Int? = None,
@@ -464,9 +484,9 @@ pub fn ask_raw(
 /// - For any other type `T`, `type_schema<T>()` is automatically passed as `json_schema`
 ///   (unless explicitly overridden) and the response is decoded & validated into `T`.
 pub reified fn ask<T>(
-    provider: Str,
-    api_key: Str,
-    model: Str,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
     system: Str? = None,
     base_url: Str? = None,
     max_tokens: Int? = None,
@@ -514,6 +534,59 @@ pub reified fn ask<T>(
         prompt: prompt
     )?
     reified_decode_output<T>(resp.text)
+}
+
+/// Extension method on `Prompt`: sends a parameterized single-turn request `@{ ... }.ask<T>(...)`
+/// to any supported LLM provider and returns `Result<T, Str>`:
+/// - When `T` is `Str`, no JSON schema is sent and the plain text `Str` is returned.
+/// - For any other type `T`, `type_schema<T>()` is automatically passed as `json_schema`
+///   (unless explicitly overridden) and the response is decoded & validated into `T`.
+pub reified fn Prompt.ask<T>(
+    self,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
+    system: Str? = None,
+    base_url: Str? = None,
+    max_tokens: Int? = None,
+    thinking: Thinking? = None,
+    thinking_effort: Str? = None,
+    temperature: Float? = None,
+    top_p: Float? = None,
+    stop: Array<Str> = [],
+    seed: Int? = None,
+    presence_penalty: Float? = None,
+    frequency_penalty: Float? = None,
+    tool_choice: ToolChoice? = None,
+    json_schema: Json? = None,
+    tools: Array<ToolDef> = [],
+    attachments: Array<Attachment> = [],
+    stream: Bool = false,
+    on_delta: (async fn(StreamDelta) -> Unit)? = None
+) -> Result<T, Str> {
+    ask<T>(
+        provider: provider,
+        api_key: api_key,
+        model: model,
+        system: system,
+        base_url: base_url,
+        max_tokens: max_tokens,
+        thinking: thinking,
+        thinking_effort: thinking_effort,
+        temperature: temperature,
+        top_p: top_p,
+        stop: stop,
+        seed: seed,
+        presence_penalty: presence_penalty,
+        frequency_penalty: frequency_penalty,
+        tool_choice: tool_choice,
+        json_schema: json_schema,
+        tools: tools,
+        attachments: attachments,
+        stream: stream,
+        on_delta: on_delta,
+        prompt: self
+    )
 }
 
 // Internal helper: appends exact chronological model blocks + warnings from one LLM turn.
@@ -782,9 +855,9 @@ reified fn agent_loop<T>(
 /// - `execution_trace.events` is an ordered, alternated `Array<traces.TraceEvent>` capturing the
 ///   exact chronological sequence of prompts, thinking, text, tool calls, decisions & tool results.
 pub reified fn agent<T>(
-    provider: Str,
-    api_key: Str,
-    model: Str,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
     system: Str? = None,
     base_url: Str? = None,
     max_tokens: Int? = None,
@@ -835,6 +908,67 @@ pub reified fn agent<T>(
     )
 }
 
+/// Extension method on `Prompt`: runs a parameterized full multi-turn agentic loop
+/// `@{ ... }.agent<T>(...)` with tool calls, `Decision` approval/modification hooks,
+/// attachments, streaming deltas, and ordered `traces.ExecutionTrace`.
+pub reified fn Prompt.agent<T>(
+    self,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
+    system: Str? = None,
+    base_url: Str? = None,
+    max_tokens: Int? = None,
+    thinking: Thinking? = None,
+    thinking_effort: Str? = None,
+    temperature: Float? = None,
+    top_p: Float? = None,
+    stop: Array<Str> = [],
+    seed: Int? = None,
+    presence_penalty: Float? = None,
+    frequency_penalty: Float? = None,
+    tool_choice: ToolChoice? = None,
+    json_schema: Json? = None,
+    tools: Array<{
+        name: Str,
+        description: Str,
+        parameters: Json,
+        run_raw: async fn(Json) -> Result<Str, Str>,
+        ..
+    }> = [],
+    attachments: Array<Attachment> = [],
+    stream: Bool = false,
+    on_delta: (async fn(StreamDelta) -> Unit)? = None,
+    on_decision: (async fn(DecisionRequest) -> Decision)? = None,
+    max_turns: Int = 10
+) -> Result<(T, traces.ExecutionTrace), Str> {
+    agent<T>(
+        provider: provider,
+        api_key: api_key,
+        model: model,
+        system: system,
+        base_url: base_url,
+        max_tokens: max_tokens,
+        thinking: thinking,
+        thinking_effort: thinking_effort,
+        temperature: temperature,
+        top_p: top_p,
+        stop: stop,
+        seed: seed,
+        presence_penalty: presence_penalty,
+        frequency_penalty: frequency_penalty,
+        tool_choice: tool_choice,
+        json_schema: json_schema,
+        tools: tools,
+        attachments: attachments,
+        stream: stream,
+        on_delta: on_delta,
+        on_decision: on_decision,
+        max_turns: max_turns,
+        prompt: self
+    )
+}
+
 /// Deterministically replays the first `up_to_step` events (`trace.events[0..up_to_step]`)
 /// without making LLM calls or re-executing already-recorded tool calls, then resumes
 /// normal live execution from that exact state onward:
@@ -846,9 +980,9 @@ pub reified fn agent<T>(
 pub reified fn agent_replay<T>(
     trace: traces.ExecutionTrace,
     up_to_step: Int,
-    provider: Str,
-    api_key: Str,
-    model: Str,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
     system: Str? = None,
     base_url: Str? = None,
     max_tokens: Int? = None,
@@ -1092,5 +1226,140 @@ pub reified fn agent_replay<T>(
         presence_penalty, frequency_penalty, tool_choice, eff_schema,
         tools, stream, on_delta, on_decision, max_turns,
         messages, events, all_warnings, total_in, total_out, current_turn, run_start
+    )
+}
+
+// ============================================================================
+// LLM-Synthesized Sandboxed Codegen (`llm.llm_fn` & `Prompt.llm_fn`)
+// ============================================================================
+
+fn strip_code_fences(raw: Str) -> Str {
+    let s = raw.trim()
+    if s.starts_with("```") {
+        let lines = s.split("\n")
+        let n = lines.len()
+        if n >= 2 {
+            let last = lines.get(n - 1) ?? ""
+            let end_idx = if last.trim() == "```" { n - 1 } else { n }
+            return lines.slice(1, end_idx).join("\n").trim()
+        }
+    }
+    s
+}
+
+/// Uses an LLM to synthesize a synchronous JavaScript function body from a natural-language
+/// `description` and/or `prompt` plus the compile-time JSON Schemas and `''` LLM hints of
+/// `In` and `Out`, then compiles it in the isolated VM sandbox with runtime `Out` decoding.
+///
+/// Automatically retries up to `max_retries` times if the generated JS has a syntax error.
+pub reified fn llm_fn<In, Out>(
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
+    description: Str = "",
+    base_url: Str? = None,
+    max_tokens: Int? = None,
+    thinking: Thinking? = None,
+    thinking_effort: Str? = None,
+    temperature: Float? = None,
+    timeout_ms: Int = 5000,
+    max_retries: Int = 2,
+    prompt: Prompt = @{ }
+) -> Result<fn(In) -> Result<Out, Str>, Str> {
+    let prompt_part = prompt.render().trim()
+    let desc_part = description.trim()
+    let effective_desc = if desc_part != "" && prompt_part != "" {
+        desc_part + "\n" + prompt_part
+    } else if desc_part != "" {
+        desc_part
+    } else {
+        prompt_part
+    }
+
+    if effective_desc == "" {
+        return Err("llm_fn requires a non-empty description or prompt")
+    }
+
+    let in_meta = codegen_reified_type_meta<In>()
+    let out_meta = codegen_reified_type_meta<Out>()
+    let sys_prompt = "You are a JavaScript code generator for a sandboxed runtime. Return ONLY valid synchronous JavaScript function body statements in the `body` field. The function receives a single parameter named `input` and must end with a `return ...;` value matching the Output JSON Schema. Available globals: Math, JSON, Array, Object, Number, String, Boolean, RegExp, Map, Set, Date, Error. Do NOT use import, require, fetch, process, or filesystem APIs. Do NOT wrap the body in a `function(...) { ... }` declaration or markdown fences."
+
+    let mut attempt = 0
+    let mut last_error = ""
+    let max_attempts = if max_retries < 0 { 1 } else { max_retries + 1 }
+
+    while attempt < max_attempts {
+        attempt = attempt + 1
+        let retry_note = if last_error != "" {
+            "\nPrevious attempt failed JS compilation with error: " + last_error + "\nFix the syntax error and return a valid JS function body."
+        } else {
+            ""
+        }
+
+        let gen = @{
+            Generate the JavaScript function body for this specification:
+            ${effective_desc}
+
+            Input parameter `input` SPL type: ${in_meta.spl_type}
+            Input JSON Schema:
+            ${in_meta.schema_json}
+
+            Required return value SPL type: ${out_meta.spl_type}
+            Output JSON Schema:
+            ${out_meta.schema_json}${retry_note}
+        }.ask<GeneratedJsCode>(
+            provider: provider,
+            api_key: api_key,
+            model: model,
+            system: Some(sys_prompt),
+            base_url: base_url,
+            max_tokens: max_tokens,
+            thinking: thinking,
+            thinking_effort: thinking_effort,
+            temperature: temperature
+        )?
+
+        let clean_body = strip_code_fences(gen.body)
+        match codegen_compile_js_fn<In, Out>(clean_body, timeout_ms: timeout_ms) {
+            Ok(compiled) => return Ok(compiled)
+            Err(err_msg) => {
+                last_error = err_msg
+            }
+        }
+    }
+
+    Err("llm_fn failed after " + to_str(max_attempts) + " attempt(s): " + last_error)
+}
+
+/// Extension method on `Prompt`: synthesizes a synchronous sandboxed JS function
+/// `@{ ... }.llm_fn<In, Out>(...)` from the prompt specification plus the compile-time
+/// JSON Schemas and `''` LLM hints of `In` and `Out`, with automatic syntax-error retries.
+pub reified fn Prompt.llm_fn<In, Out>(
+    self,
+    provider: Str = "openai_responses",
+    model: Str = "gpt-6-luna",
+    api_key: Str = "",
+    description: Str = "",
+    base_url: Str? = None,
+    max_tokens: Int? = None,
+    thinking: Thinking? = None,
+    thinking_effort: Str? = None,
+    temperature: Float? = None,
+    timeout_ms: Int = 5000,
+    max_retries: Int = 2
+) -> Result<fn(In) -> Result<Out, Str>, Str> {
+    llm_fn<In, Out>(
+        provider: provider,
+        api_key: api_key,
+        model: model,
+        description: description,
+        base_url: base_url,
+        max_tokens: max_tokens,
+        thinking: thinking,
+        thinking_effort: thinking_effort,
+        temperature: temperature,
+        timeout_ms: timeout_ms,
+        max_retries: max_retries,
+        prompt: self
     )
 }

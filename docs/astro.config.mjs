@@ -1,7 +1,9 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import vercel from "@astrojs/vercel";
 
 export default defineConfig({
+  adapter: vercel(),
   vite: {
     server: {
       fs: {

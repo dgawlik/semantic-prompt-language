@@ -1,7 +1,5 @@
 
 import llm from "std/llm"
-import os from "std/os"
-
 
 type Person =  {
     firstName: String '' Ada
@@ -10,14 +8,10 @@ type Person =  {
     profession: String
 }
 
-let api_key = os.env("OPENAI_API_KEY") ?? panic("OPENAI_API_KEY not set")
-
-let ada = llm.ask<Person>(provider: "openai-responses",
-                    model: "gpt-6-luna", 
-                    api_key: api_key) @{ 
-
+// Defaults to provider: "openai_responses", model: "gpt-6-luna", and api_key from ~/.spl/credentials.json (`spl login`) or OPENAI_API_KEY.
+let ada = @{ 
     Generate person
-}?
+}.ask<Person>()?
 print("Person[${ada.firstName} ${ada.lastName}" + 
         ", age ${ada.age}, profession ${ada.profession}]")
                           

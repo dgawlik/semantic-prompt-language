@@ -18,11 +18,15 @@ export interface ExtensionMethodInfo {
   name: string;
   receiverType: Type;
   fnType: Type;
+  scheme?: TypeScheme;
+  defaults?: (Expr | undefined)[];
+  isReified?: boolean;
   jsSymbol: string;
   moduleFile: string;
   isAsync: boolean;
   mutSelf?: boolean;
   doc?: string;
+  span?: Span;
 }
 
 export interface TraitImplInfo {
@@ -92,7 +96,14 @@ export interface TraitDef {
 export type ResolvedCallKind =
   | { kind: "Normal"; reorderedArgs?: (Expr | undefined)[]; reifiedTypeVars?: Type[] }
   | { kind: "BuiltinMethod"; target: string; receiver: Expr; isAsync?: boolean }
-  | { kind: "ExtensionMethod"; jsSymbol: string; receiver: Expr; isAsync?: boolean }
+  | {
+      kind: "ExtensionMethod";
+      jsSymbol: string;
+      receiver: Expr;
+      isAsync?: boolean;
+      reorderedArgs?: (Expr | undefined)[];
+      reifiedTypeVars?: Type[];
+    }
   | { kind: "TraitMethod"; jsSymbol: string; receiver: Expr; isAsync?: boolean }
   | { kind: "EnumCtor"; variant: string }
   | { kind: "NamespaceCall"; alias: string; member: string; reorderedArgs?: (Expr | undefined)[]; reifiedTypeVars?: Type[] };
@@ -618,7 +629,9 @@ class TypeChecker {
       this.namespaceImports.set(imp.defaultAlias, imp.from);
       // Also import extensions & trait impls from namespace-imported module
       for (const ext of mod.extensions) {
-        this.extensions.push(ext);
+        if (!this.extensions.some((e) => e.jsSymbol === ext.jsSymbol)) {
+          this.extensions.push(ext);
+        }
         this.importBindings.set(ext.jsSymbol, { moduleSpec: imp.from, exportedName: ext.jsSymbol });
       }
       for (const impl of mod.traitImpls) {
@@ -837,15 +850,28 @@ class TypeChecker {
       const recvType = this.resolveTypeExpr(fn.receiverType, tpMap);
       const jsSymbol = `__ext_${this.moduleTag}_${fn.name}_${++this.extCounter}`;
       this.extensionJsSymbols.set(fn, jsSymbol);
+      const initScheme = this.generalize(fnType, this.rootScope);
+      if (explicitIds.length > 0) {
+        initScheme.explicitTypeParams = explicitIds;
+        for (const id of explicitIds) {
+          if (!initScheme.quantifiedTypeVars.includes(id)) {
+            initScheme.quantifiedTypeVars.push(id);
+          }
+        }
+      }
       this.extensions.push({
         name: fn.name,
         receiverType: recvType,
         fnType,
+        scheme: initScheme,
+        defaults: fn.params.map((p) => p.defaultValue),
+        isReified: Boolean(fn.reified),
         jsSymbol,
         moduleFile: this.program.file,
         isAsync: false,
         mutSelf: Boolean(fn.params[0]?.mutable),
         doc: fn.doc,
+        span: fn.span,
       });
       this.fnDeclsByName.set(jsSymbol, fn);
     } else {
@@ -1002,6 +1028,23 @@ class TypeChecker {
       if (this.asyncFns.has(fn)) b.isAsyncFn = true;
     } else {
       const ext = this.extensions.find((e) => e.jsSymbol === symName)!;
+      ext.scheme = this.generalize(fnType, parentScope);
+      const explicitTvs = this.fnExplicitTypeParams.get(fn);
+      if (explicitTvs && explicitTvs.length > 0) {
+        const prunedIds: number[] = [];
+        for (const tv of explicitTvs) {
+          const p = prune(tv);
+          if (p.kind === "TVar") {
+            prunedIds.push(p.id);
+            if (!ext.scheme.quantifiedTypeVars.includes(p.id)) {
+              ext.scheme.quantifiedTypeVars.push(p.id);
+            }
+          }
+        }
+        if (prunedIds.length > 0) {
+          ext.scheme.explicitTypeParams = prunedIds;
+        }
+      }
       if (this.asyncFns.has(fn)) ext.isAsync = true;
     }
   }
@@ -1853,21 +1896,32 @@ class TypeChecker {
         if (extMatch.mutSelf) {
           this.assertMutableReceiver(obj, method, scope, expr.span);
         }
-        const instFn = instantiate(this.generalize(extMatch.fnType, this.rootScope));
+        const scheme = extMatch.scheme ?? this.generalize(extMatch.fnType, this.rootScope);
+        const explicitArgs =
+          expr.typeArgs.length > 0
+            ? expr.typeArgs.map((ta) => this.resolveTypeExpr(ta, new Map()))
+            : undefined;
+        const { type: instFn, instantiatedParams } = instantiateWithArgs(scheme, explicitArgs, expr.span);
         if (instFn.kind === "TFn") {
           unify(instFn.params[0], recvT, obj.span);
           const restFn: Type = {
             kind: "TFn",
             params: instFn.params.slice(1),
             paramNames: instFn.paramNames?.slice(1),
+            requiredCount:
+              instFn.requiredCount !== undefined ? Math.max(0, instFn.requiredCount - 1) : undefined,
             ret: instFn.ret,
           };
-          const { ret } = this.applyCallArgs(restFn, expr.args, undefined, scope, expr.span);
+          const restDefaults = extMatch.defaults?.slice(1);
+          const { ret, reordered } = this.applyCallArgs(restFn, expr.args, restDefaults, scope, expr.span);
+          const reifiedTypeVars = extMatch.isReified ? instantiatedParams : undefined;
           this.callResolutions.set(expr, {
             kind: "ExtensionMethod",
             jsSymbol: extMatch.jsSymbol,
             receiver: obj,
             isAsync: extMatch.isAsync,
+            reorderedArgs: reordered,
+            reifiedTypeVars,
           });
           if (extMatch.isAsync || this.asyncFnNames.has(extMatch.jsSymbol)) {
             this.markCallAsync(expr);

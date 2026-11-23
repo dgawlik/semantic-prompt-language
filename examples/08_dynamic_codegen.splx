@@ -4,6 +4,7 @@
 // Run: node dist/cli.js run examples/08_dynamic_codegen.splx
 
 import codegen from "std/codegen"
+import llm from "std/llm"
 import os from "std/os"
 
 type CalcInput = struct {
@@ -72,17 +73,18 @@ fn run_demo() -> Result<Unit, Str> {
     }
     print("spl_fn type err:  " + to_str(bad_spl.is_err()))
 
-    // --- 5. LLM-Synthesized Typed JS Function (`codegen.llm_fn<In, Out>`) ---
-    // Generates sandboxed JS from a `@{ ... }` description + `In`/`Out` JSON Schemas!
+    // --- 5. LLM-Synthesized Typed JS Function (`Prompt.llm_fn<In, Out>`) ---
+    // Generates sandboxed JS from a `@{ ... }` prompt + `In`/`Out` JSON Schemas!
+    // Exposed from `std/llm`.
     match os.env("OPENAI_API_KEY") {
         Some(key) if key.trim() != "" => {
-            let calc_llm = codegen.llm_fn<CalcInput, CalcOutput>(
+            let calc_llm = @{
+                Compute sum (a + b) and product (a * b) of the input integers.
+            }.llm_fn<CalcInput, CalcOutput>(
                 provider: "openai_responses",
                 api_key: key,
                 model: "gpt-4.1-mini"
-            ) @{
-                Compute sum (a + b) and product (a * b) of the input integers.
-            }?
+            )?
             let r4 = calc_llm({ a: 9, b: 8 })?
             print("llm_fn: sum=" + to_str(r4.sum) + ", product=" + to_str(r4.product))
         }
