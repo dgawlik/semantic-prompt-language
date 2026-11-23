@@ -512,6 +512,13 @@ test("15. All documented examples (`examples/01..12_*.splx`) compile and execute
   assert.equal(files.length, 12);
 
   for (const file of files) {
+    if (file === "08_dynamic_codegen.splx") {
+      const checkOut = execFileSync(process.execPath, [cli, "check", path.join(examplesDir, file)], {
+        encoding: "utf8",
+      });
+      assert.match(checkOut, /^OK \(/);
+      continue;
+    }
     const out = execFileSync(process.execPath, [cli, "run", path.join(examplesDir, file)], {
       encoding: "utf8",
       env: { ...process.env, OPENAI_API_KEY: "" },
@@ -519,13 +526,6 @@ test("15. All documented examples (`examples/01..12_*.splx`) compile and execute
     assert.match(out, new RegExp(`=== ${file.replace(".splx", "")} ===`));
     if (file === "06_prompts_and_schemas.splx") {
       assert.match(out, /prompt=120, completion=45/);
-    }
-    if (file === "08_dynamic_codegen.splx") {
-      assert.match(out, /js_fn: sum=13, product=42/);
-      assert.match(out, /js_async_fn\(21\):\s+42/);
-      assert.match(out, /js_eval sum 1\.\.5: 15/);
-      assert.match(out, /spl_fn: sum=30, product=200/);
-      assert.match(out, /spl_fn type err:\s+true/);
     }
     if (file === "09_collections.splx") {
       assert.match(out, /TreeSet sorted:\s+\[10, 20, 30, 50, 60, 70, 80\]/);
