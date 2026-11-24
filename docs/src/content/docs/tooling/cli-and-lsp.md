@@ -18,6 +18,46 @@ Run the SPL CLI via `node dist/cli.js <command>` or `npm run spl -- <command>`:
 | `spl schema <file.splx> <Type>` | Print the compile-time JSON Schema for exported type `<Type>` |
 | `spl lsp` | Start the JSON-RPC 2.0 Language Server over stdio |
 
+## Interactive Trace Viewer & Editor (`spl trace`)
+
+`spl trace [file.jsonl]` opens a zero-dependency full-screen terminal UI for inspecting, pretty-printing, and editing JSONL execution traces produced by `traces.save_jsonl(...)` or `spl debug --save <file.jsonl>`. If no file is specified, it defaults to `traces.jsonl` (or `trace.jsonl`).
+
+```bash
+# Open interactive split-pane trace viewer & JSON editor
+node dist/cli.js trace trace.jsonl
+
+# Pretty-print a trace directly to stdout (non-interactive / piped)
+node dist/cli.js trace trace.jsonl --view --format pretty
+
+# Render trace records as syntax-highlighted JSON, JS, or SPL
+node dist/cli.js trace trace.jsonl --view --format spl
+```
+
+### View Formats & Embedded Code Highlighting
+
+Press `v` (or `1`–`4`) at any time to switch how the right-hand inspector renders the selected record:
+
+- **`1: PRETTY`**: Syntax-highlighted JSON with automatic expansion of nested JSON strings (such as `tool_result.output` or structured LLM `text`) and dedicated **JS / SPL Preview** panels for embedded synthesized code blocks (e.g. `Prompt.llm_fn` output).
+- **`2: JSON`**: Clean syntax-highlighted JSON (`p` toggles embedded JSON string expansion).
+- **`3: JS`**: Pretty-printed JavaScript object representation with JS syntax highlighting.
+- **`4: SPL`**: Pretty-printed SPL `let` binding representation with SPL syntax highlighting.
+
+### Trace Editor Controls
+
+| Mode | Keys | Action |
+|---|---|---|
+| **Browse** | `↑`/`↓`, `j`/`k`, `PgUp`/`PgDn`, `g`/`G`, `Tab` | Navigate the timeline list or scroll the inspector pane (`Tab` switches focus) |
+| **Browse** | `v` / `1`–`4`, `p` | Switch inspector view (`Pretty` / `JSON` / `JS` / `SPL`), toggle embedded JSON/code expansion (`p`) |
+| **Browse** | `e` / `Enter` | Open the selected record in the built-in multi-line JSON editor |
+| **Browse** | `a` / `c` / `d` | Insert a new templated trace event (`a`), duplicate (`c`), or delete (`d`) the selected record |
+| **Browse** | `K`/`J` (`Shift+↑`/`↓`) | Reorder records up/down in the timeline |
+| **Browse** | `r` | Recalculate the `meta` header (turns, token totals, duration, warnings) from events |
+| **Browse** | `/` / `Esc` | Filter timeline records by text (`Esc` clears filter) |
+| **Browse** | `u` (`Ctrl+Z`) / `Ctrl+Y` | Undo / redo document edits |
+| **Browse** | `s` (`Ctrl+S`) / `W` | Save JSONL file (`s`) or Save As (`W`), `?` help, `q` quit |
+| **Edit JSON** | `F2` / `Ctrl+O` / `Ctrl+S` | Validate and apply edited JSON back to the trace (`Ctrl+W` applies + saves file) |
+| **Edit JSON** | `Ctrl+L` / `F4`, `Ctrl+U`, `Esc` | Auto-format JSON (`Ctrl+L`), delete current line (`Ctrl+U`), or cancel (`Esc`) |
+
 ## Interactive LLM Step Debugger (`spl debug`)
 
 `spl debug <file.splx>` compiles and runs your SPL program while intercepting every `std/llm` call (`Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `llm.ask_raw`, `llm.decide`) inside a split-pane terminal UI built on the `spl trace` inspector. API keys are automatically redacted (`[redacted]`) from the UI and saved traces.

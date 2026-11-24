@@ -1,6 +1,6 @@
 ---
 title: Prompts, Schemas & Reified Types
-description: First-class @{ ... } prompts, '' LLM hints, type_schema<T>(), decode<T>(), and reified fn<T>.
+description: First-class @{ ... } prompts, '' LLM hints, type_schema<T>(), decode<T>(), universal reified generics, typeof, and nominal newtype.
 ---
 
 ## First-Class `Prompt` Blocks (`@{ ... }`)
@@ -48,9 +48,13 @@ fn parse_audit(raw: Str) -> Result<SecurityAudit, Str> {
 }
 ```
 
-## Universal Reifiable Types & `typeof`
+## Universal Reified Types
 
-All generic functions in SPL are **automatically reifiable** — type parameters are never erased when inspected at runtime. You can use `typeof(expr)`, `typeof<T>()`, `type_schema<T>()`, and `decode<T>(json)` inside any generic function (whether or not you write the optional `reified` modifier, and even with inferred Hindley-Milner polymorphism):
+All generic functions in SPL are **universally reifiable** — type parameters are never erased when inspected at runtime. Whenever a function uses `typeof(expr)`, `typeof<T>()`, `type_schema<T>()`, `decode<T>(json)`, or forwards a type parameter into `std/llm` / `std/codegen`, the compiler automatically passes the resolved compile-time `TypeInfo` descriptor at every call site:
+
+- **No `reified` keyword required**: works in any plain `fn foo<T>(...)` (the optional `reified fn` modifier is still accepted for explicit documentation).
+- **Works with implicit Hindley-Milner polymorphism**: even functions without an explicit `<T>` parameter list (such as `fn inspect_kind(x)`) automatically reify when they call `typeof(x)`.
+- **Works across higher-order calls & compound types**: passing a reified function to combinators like `[1, 2].map(describe)` and inspecting compound types like `typeof<Array<T>>()`, `typeof<Box<T>>()`, or `typeof<T?>()` all resolve accurately at runtime.
 
 ```splx
 pub enum Priority { Low, Normal, Urgent }
@@ -63,52 +67,123 @@ pub type Task = struct {
 }
 
 // Works in ANY generic function — no `reified` keyword required!
-pub fn describe<T>(x: T) -> Str {
-    let info = typeof(x)
-    "${info.name} (${info.kind}) = ${to_str(x)}"
+pub fn describe<T>(val: T) -> Str {
+    let info = typeof(val)
+    "${info.name} [${info.kind}] = ${to_str(val)}"
 }
 
+// Generic JSON parser using universal reification for decode<T> and typeof<T>
 pub fn parse_json<T>(raw: Str) -> Result<T, Str> {
     let parsed = json_parse(raw)?
     match decode<T>(parsed) {
         Ok(val) => Ok(val)
-        Err(e) => Err("Decode error at " + e.path + ": " + e.message)
+        Err(e) => Err("Invalid ${typeof<T>().name} at '${e.path}': ${e.message}")
     }
 }
 
-// Type-level `typeof` derives static types from existing bindings
-let default_cfg = { host: "localhost", port: 8080 }
-type Config = typeof default_cfg
+// Higher-order use: automatically supplies TypeInfo for `Int`
+print([1, 2].map(describe)) // ["Int [primitive] = 1", "Int [primitive] = 2"]
 ```
 
-`typeof(expr)` and `typeof<T>()` return a first-class `TypeInfo` record with `.name`, `.kind`, `.spl_type`, `.schema`, `.doc`, `.hint`, `.underlying`, `.type_args`, `.fields`, `.variants`, `.params`, and `.return_type`.
+## Type-Level & Runtime `typeof` (`TypeInfo`)
 
-## Nominal `newtype` Declarations
+`typeof` works in **two positions**:
 
-While `type Alias = Int` creates a transparent structural alias, `newtype` creates a **completely distinct nominal type** with zero runtime overhead:
+1. **Type position (`typeof expr`)**: extracts the static type of an existing value at compile time — useful for deriving config aliases or parameter types without duplicating struct definitions:
+   ```splx
+   let default_cfg = { host: "localhost", port: 8080, strict: true }
+   type Config = typeof default_cfg
+
+   fn format_endpoint(c: typeof default_cfg) -> Str {
+       "${c.host}:${c.port}"
+   }
+   ```
+2. **Value position (`typeof(expr)` or `typeof<T>()`)**: returns a first-class runtime `TypeInfo` record with full structural, nominal, and schema metadata:
+
+| `TypeInfo` Field | Type | Description |
+|---|---|---|
+| `name` | `Str` | Short display name (e.g. `"UserId"`, `"Point"`, `"Array<UserId>"`) |
+| `kind` | `Str` | Category (`"primitive"`, `"struct"`, `"record"`, `"enum"`, `"newtype"`, `"array"`, `"tuple"`, `"option"`, `"result"`, `"dict"`, `"function"`, …) |
+| `spl_type` | `Str` | Canonical SPL type signature |
+| `schema` | `Json` | Compile-time JSON Schema (including `''` LLM hints) |
+| `doc` / `hint` | `Str?` | Attached `///` doc-comment and `''` LLM schema hint |
+| `underlying` | `Str?` | Underlying type name when `kind == "newtype"` |
+| `type_args` | `Array<TypeInfo>` | Reified type arguments for generic/compound types |
+| `fields` | `Array<FieldInfo>` | Struct/record fields (`name`, `type_name`, `optional`, `doc`, `hint`) |
+| `variants` | `Array<VariantInfo>` | Enum variants and payload types |
+| `params` / `return_type` | `Array<TypeInfo>` / `TypeInfo?` | Parameter and return types for function types |
+
+## Nominal `newtype` Declarations & Complete Example
+
+While `type Alias = Int` creates a transparent structural alias, `newtype` creates a **completely distinct nominal type** with zero runtime wrapper overhead:
+
+- `UserId` never unifies with `Int` or `OrderId`, preventing accidental mix-ups and enabling distinct `impl Trait` blocks and extension methods.
+- Construct via `UserId(42)` or `42 as UserId`, unwrap via `.value`, `uid as Int`, or pattern matching (`let UserId(raw) = uid`).
+- Struct-backed newtypes (`newtype Point = struct { ... }`) support transparent field access and mutation (`pt.x = pt.x + 5`).
+- `newtype` preserves its nominal name and `''` LLM hint in `type_schema<T>()`, `decode<T>()`, and `typeof(...)`.
+
+Here is the complete runnable example from [`examples/13_typeof_and_newtype.splx`](https://github.com/dgawlik/semantic-prompt-language/blob/main/examples/13_typeof_and_newtype.splx) — try it live in the [Playground](/playground/?example=typeof-newtype):
 
 ```splx
+// 1. Nominal `newtype` declarations (zero runtime overhead)
 pub newtype UserId = Int
 pub newtype OrderId = Int
 
 '' Validated customer email address
 pub newtype Email = Str
 
+// Struct-backed newtype with transparent field access & mutation
 pub newtype Point = struct {
     x: Int '' Horizontal coordinate
     y: Int '' Vertical coordinate
 }
 
-let uid = UserId(42)         // Construct via newtype constructor (or `42 as UserId`)
-let raw = uid.value          // Unwrap via `.value` (or `uid as Int`)
-let UserId(n) = uid          // Pattern match / destructure
+pub newtype Box<T> = struct { item: T }
 
-let mut p = Point { x: 1, y: 2 } // Struct newtypes support transparent field access
-p.x = p.x + 10
+impl Show for UserId {
+    fn show(self) -> Str { "User#" + to_str(self.value) }
+}
 
-print(typeof(uid).name)      // "UserId" (distinct from Int and OrderId!)
-print(typeof(uid) == typeof(OrderId(42))) // false
+impl Show for OrderId {
+    fn show(self) -> Str { "Order#" + to_str(self.value) }
+}
+
+fn UserId.is_admin(self) -> Bool { self.value == 0 }
+
+// 2. Type-level `typeof`
+let default_cfg = { host: "localhost", port: 8080, strict: true }
+type Config = typeof default_cfg
+
+// 3. Universal auto-reification (explicit `<T>` and implicit HM polymorphism)
+fn describe<T>(val: T) -> Str {
+    let info = typeof(val)
+    "${info.name} [${info.kind}] = ${to_str(val)}"
+}
+
+fn inspect_kind(x) -> Str {
+    let info = typeof(x)
+    match info.underlying {
+        Some(u) => "${info.name} (newtype over ${u})"
+        None => "${info.name} (${info.kind})"
+    }
+}
+
+fn compound_names<T>() -> Str {
+    "${typeof<Array<T>>().name}, ${typeof<Box<T>>().name}, ${typeof<T?>().name}"
+}
+
+let uid = UserId(42)
+let oid = OrderId(42)
+let UserId(raw_id) = uid
+
+let mut pt = Point { x: 10, y: 20 }
+pt.x = pt.x + 5
+
+print(uid.show() + " vs " + oid.show())             // User#42 vs Order#42
+print("Point(${pt.x}, ${pt.y})")                    // Point(15, 20)
+print(typeof(uid) == typeof(oid))                   // false
+print(inspect_kind(uid))                            // UserId (newtype over Int)
+print(compound_names<UserId>())                     // Array<UserId>, Box<UserId>, UserId?
+print(typeof<Point>().fields.map { f -> f.name })   // ["x", "y"]
+print(json_stringify(typeof<Email>().schema))       // {"type":"string","description":"Validated customer email address"}
 ```
-
-- `UserId` never unifies with `Int` or `OrderId`, preventing accidental mix-ups and enabling distinct `impl Trait for UserId` implementations and extension methods.
-- `newtype` preserves its name and `''` LLM hint in `type_schema<T>()`, `decode<T>()`, and `typeof(...)`.

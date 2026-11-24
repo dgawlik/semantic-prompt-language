@@ -96,4 +96,24 @@ print("\nTurns: " + to_str(trace.turns))
 print(answer)
 ```
 
+## 5. Nominal `newtype`, `typeof` & Universal Reification
+
+Create zero-overhead nominal types with `newtype` and inspect any generic type at runtime via `typeof` — all generic functions automatically reify without needing a special keyword:
+
+```splx
+newtype UserId = Int
+newtype OrderId = Int
+
+fn describe<T>(val: T) -> Str {
+    let info = typeof(val)
+    "${info.name} [${info.kind}] = ${to_str(val)}"
+}
+
+let uid = UserId(42)
+print(describe(uid))                          // UserId [newtype] = 42
+print(typeof(uid) == typeof(OrderId(42)))     // false
+```
+
+Try it live in the [Playground](/playground/?example=typeof-newtype), or inspect and step through live LLM runs locally with `spl debug <file.splx>` and `spl trace <file.jsonl>` (see [CLI & LSP / VS Code](/tooling/cli-and-lsp/)).
+
 Continue to the [Language Guide](/language/basics/) for full details on every feature.

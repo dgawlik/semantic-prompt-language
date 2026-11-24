@@ -63,9 +63,19 @@ fn log_item<T: Describable>(item: T) {
 
 ### Coherence Under Structural Equivalence
 
-Because SPL records are structurally typed, two `impl` blocks for the same trait on structurally identical record shapes in the same scope are rejected at compile time. When you need distinct trait behavior for the same underlying shape, wrap it in a nominal single-variant `enum` (**newtype**):
+Because SPL records and `type` aliases are structurally typed, two `impl` blocks for the same trait on structurally identical shapes in the same scope are rejected at compile time. When you need distinct trait implementations or extension methods for the same underlying representation with zero runtime overhead, declare a nominal **`newtype`**:
 
 ```splx
-enum Celsius { Celsius(Float) }
-enum Fahrenheit { Fahrenheit(Float) }
+newtype Celsius = Float
+newtype Fahrenheit = Float
+
+impl Show for Celsius {
+    fn show(self) -> Str { "${self.value}°C" }
+}
+
+impl Show for Fahrenheit {
+    fn show(self) -> Str { "${self.value}°F" }
+}
 ```
+
+See [Nominal `newtype` Declarations](/language/prompts-and-reification/#nominal-newtype-declarations--complete-example) for struct-backed newtypes, pattern matching, and `typeof` support.

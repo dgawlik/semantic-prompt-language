@@ -9,11 +9,11 @@
 - **Hindley-Milner Type Inference + Row Polymorphism**: structural records, functional spread (`{ ...x, k: v }`), open records (`..r`), hybrid dynamic records (`..extra: Dict<Str, Json>`), and zero `null`/`undefined`.
 - **First-Class Prompt Blocks (`@{ ... }`)**: auto-dedented, brace-balanced templates with `${expr}` interpolation that can be passed as trailing arguments to any function.
 - **Three Comment Layers (`//`, `///`, `''`)**: regular comments (`//`), IDE doc-comments (`///`), and compile-time LLM schema hints (`''`) emitted directly into JSON Schema `"description"` fields.
-- **Compile-Time Schemas & Reifiable Generics**: `type_schema<T>()`, `decode<T>(json)`, and user-defined `reified fn<T>` with zero runtime reflection.
+- **Compile-Time Schemas, Universal Reification, `typeof` & `newtype`**: `type_schema<T>()`, `decode<T>(json)`, type-level & runtime `typeof` (`TypeInfo`), nominal `newtype` declarations, and automatic universal reification across all generic functions with zero runtime reflection.
 - **Colorless (Transparent) Async**: no `async`/`await` keywords; pure functions compile to sync JS, suspending functions compile to `async`/`await`, `map` runs sequentially by default, and concurrency is opt-in via `par_map`, `async_all`, and `async_race`.
 - **Rust-Style Safety & Ergonomics**: tagged `enum`s with exhaustive `match`, `Option<T>` (`T?`, `?.`, `??`), `Result<T, E>` (`?`, `??`), `mut self` & `mut` params, explicit `as` casts, ranges (`0..10..2`, `0..=10`), lazy `Iter<T>`, lightweight `trait`/`impl`, extension methods, and self-tail-call optimization (TCO).
 - **Batteries-Included Agentic Standard Library**: unified multi-provider `std/llm` (OpenAI Responses/Chat, Anthropic, Google Gemini), `std/traces` JSONL + deterministic `llm.agent_replay<T>`, sandboxed `std/codegen`, pure SPL `std/collections`, and universal/server host I/O.
-- **Built-In LSP & VS Code Extension**: live diagnostics, error-tolerant member completion, named-argument completions, signature help, live JSON Schema hover previews, go-to-definition, and document symbols.
+- **Built-In CLI Tools (`spl debug`, `spl trace`) & LSP / VS Code Extension**: interactive step-through LLM debugger with scrollable pretty-printed results & mocking, interactive JSON/JS/SPL trace viewer & editor, plus live diagnostics, completions, signature help, JSON Schema hovers, go-to-definition, and symbols.
 
 ---
 
