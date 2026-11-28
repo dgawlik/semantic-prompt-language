@@ -1,0 +1,112 @@
+{
+  "spec_version": "5",
+  "models": {
+    "default": {
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "max_output_tokens": 1024,
+      "temperature": 0.0,
+      "strict_schema": true
+    }
+  },
+  "decisions": {
+    "classifier_default": {
+      "adapter": "openai_logprobs",
+      "model": "gpt-4.1-mini",
+      "top_logprobs": 20,
+      "temperature": 0.0
+    }
+  },
+  "shell_profiles": {
+    "git_status": {
+      "executable": "git",
+      "base_argv": ["status", "--porcelain"],
+      "cwd_root": "workspace",
+      "params_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "argv_template": ["--", "${path}"],
+      "env_allowlist": ["LANG", "LC_ALL"],
+      "timeout_ms": 5000,
+      "max_stdout_bytes": 16384,
+      "max_stderr_bytes": 4096
+    }
+  },
+  "fs_roots": {
+    "workspace": {
+      "permissions": ["read", "list", "stat"],
+      "max_file_bytes": 1048576
+    },
+    "output": {
+      "permissions": ["read", "write", "append", "exists", "list", "stat"],
+      "max_file_bytes": 1048576
+    }
+  },
+  "web": {
+    "search": {
+      "enabled": true,
+      "max_results_cap": 5
+    },
+    "fetch": {
+      "enabled": true,
+      "allowed_methods": ["GET", "HEAD"],
+      "allowed_domains": ["example.com", "*.docs.org"],
+      "denied_domains": [],
+      "block_private_ips": true,
+      "max_redirects": 3,
+      "max_response_bytes": 65536
+    }
+  },
+  "js_tools": {
+    "score_risk": {
+      "params_schema": {
+        "type": "object",
+        "properties": {
+          "amount_cents": { "type": "integer" },
+          "account_age_days": { "type": "integer" }
+        },
+        "required": ["amount_cents", "account_age_days"],
+        "additionalProperties": false
+      },
+      "result_schema": {
+        "type": "object",
+        "properties": {
+          "score": { "type": "number" },
+          "flagged": { "type": "boolean" }
+        },
+        "required": ["score", "flagged"],
+        "additionalProperties": false
+      },
+      "timeout_ms": 2000
+    }
+  },
+  "mcp_tools": {
+    "crm": {
+      "get_customer": {
+        "params_schema": {
+          "type": "object",
+          "properties": {
+            "customer_id": { "type": "string" }
+          },
+          "required": ["customer_id"],
+          "additionalProperties": false
+        },
+        "result_schema": {
+          "type": "object",
+          "properties": {
+            "tier": { "type": "string", "enum": ["free", "pro", "enterprise"] },
+            "account_age_days": { "type": "integer" }
+          },
+          "required": ["tier", "account_age_days"],
+          "additionalProperties": false
+        },
+        "timeout_ms": 5000
+      }
+    }
+  }
+}

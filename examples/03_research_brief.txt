@@ -1,0 +1,7 @@
+Take a topic string input and an optional out_file string defaulting to "brief.md".
+
+1. Search the web for the topic (up to 3 results).
+2. For each result, try fetching its URL with HTTP GET. If status is 200, keep its URL and page body; if fetching fails (for example due to domain policy), fall back to the search snippet and record the error code.
+3. Join all collected snippets and ask the default model to return a structured brief with headline (string) and key_points (list of strings).
+4. Format the brief as Markdown and write it to the "output" virtual file root at out_file.
+5. Return { fetched_urls, written_to: out_file, headline }.

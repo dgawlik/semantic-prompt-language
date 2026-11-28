@@ -1,5 +1,0 @@
-.DS_Store
-*.vsix
-**/*.map
-**/*.d.ts
-node_modules/.bin/**

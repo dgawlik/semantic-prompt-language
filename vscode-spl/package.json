@@ -1,0 +1,61 @@
+{
+  "name": "spl-lang-v5-vscode",
+  "displayName": "SPL v5 (Semantic Prompt Language)",
+  "description": "Syntax highlighting and language configuration for Semantic Prompt Language v5 (.spl) and canonical SPLB 5 bytecode (.splb)",
+  "version": "5.0.0",
+  "publisher": "spl-lang",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "spl",
+    "splb",
+    "semantic prompt language",
+    "llm",
+    "bytecode"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "spl",
+        "aliases": [
+          "SPL",
+          "Semantic Prompt Language",
+          "spl"
+        ],
+        "extensions": [
+          ".spl"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "splb",
+        "aliases": [
+          "SPLB",
+          "SPL Bytecode",
+          "splb"
+        ],
+        "extensions": [
+          ".splb"
+        ],
+        "firstLine": "^SPLB 5$",
+        "configuration": "./splb-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "spl",
+        "scopeName": "source.spl",
+        "path": "./syntaxes/spl.tmLanguage.json"
+      },
+      {
+        "language": "splb",
+        "scopeName": "source.splb",
+        "path": "./syntaxes/splb.tmLanguage.json"
+      }
+    ]
+  }
+}

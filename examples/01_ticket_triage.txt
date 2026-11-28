@@ -1,0 +1,6 @@
+Take a refund ticket input with an integer id and text description, and keep a persistent integer counter called approved_count starting at 0.
+
+Use the classifier_default decision profile to classify the ticket into "approve" or "reject" with a minimum confidence of 0.8.
+- If confidence is below 0.8 (null), return "manual_review".
+- If "approve", increment approved_count by 1 and ask the default model to write a brief 1-sentence approval reply referencing the ticket id, then return that reply.
+- If "reject", return "rejected".

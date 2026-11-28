@@ -1,0 +1,70 @@
+input raw_document: string;
+
+type Currency = "USD" | "EUR" | "GBP";
+type Invoice = {
+  vendor: string,
+  currency: Currency,
+  po_number: string?,
+  items: list<{description: string, amount_cents: int}>
+};
+type Result = {
+  status: string,
+  vendor: string,
+  po_number: string,
+  total_cents: int,
+  error_code: string?
+};
+
+fn parse_invoice(document: string) -> Result {
+  let mut attempt: int = 0;
+  let mut last_error_code: string = "UNKNOWN";
+
+  while (attempt < 2) {
+    attempt = attempt + 1;
+    try {
+      let invoice: Invoice = model.ask<Invoice>(
+        "default",
+        `Extract a structured invoice from this document. Return vendor, currency as USD, EUR, or GBP, po_number as null when absent, and items with description and amount_cents: ${document}`
+      );
+
+      let mut total_cents: int = 0;
+      for (item in invoice.items) {
+        total_cents = total_cents + item.amount_cents;
+      }
+
+      let po_number: string = invoice.po_number ?? "NONE";
+      return {
+        status: "parsed",
+        vendor: invoice.vendor,
+        po_number: po_number,
+        total_cents: total_cents,
+        error_code: null
+      };
+    } catch (err) {
+      last_error_code = model.ask<string>(
+        "default",
+        `Extract the error code from this error. Return only the code; if none is present, return UNKNOWN: ${err.message}`
+      );
+
+      let decision: string = model.decide(
+        "classifier_default",
+        `Classify whether this error is retryable: ${err.message}`,
+        ["retryable", "not_retryable"]
+      );
+      let retryable: bool = decision == "retryable";
+      if (!retryable) {
+        break;
+      }
+    }
+  }
+
+  return {
+    status: "failed",
+    vendor: "",
+    po_number: "NONE",
+    total_cents: 0,
+    error_code: last_error_code
+  };
+}
+
+return parse_invoice(raw_document);

@@ -1,0 +1,11 @@
+Take a raw_document string input.
+
+Try up to 2 times to extract a structured invoice using the default model with:
+- vendor (string)
+- currency ("USD", "EUR", or "GBP")
+- optional po_number (nullable string)
+- items: a list of records with description (string) and amount_cents (int).
+
+If extraction succeeds, compute the sum of amount_cents across all items, default po_number to "NONE" if missing, and return { status: "parsed", vendor, po_number, total_cents, error_code: null }.
+If an error occurs and is not retryable, stop retrying immediately.
+If all attempts fail, return { status: "failed", vendor: "", po_number: "NONE", total_cents: 0, error_code: last_error_code }.

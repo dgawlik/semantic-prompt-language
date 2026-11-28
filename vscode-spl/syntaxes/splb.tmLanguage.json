@@ -1,0 +1,139 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SPLB 5 Bytecode",
+  "scopeName": "source.splb",
+  "patterns": [
+    { "include": "#header" },
+    { "include": "#fn-header" },
+    { "include": "#sections" },
+    { "include": "#instruction" },
+    { "include": "#const-schema-decl" },
+    { "include": "#strings" },
+    { "include": "#types" },
+    { "include": "#refs" },
+    { "include": "#numbers" }
+  ],
+  "repository": {
+    "header": {
+      "patterns": [
+        {
+          "match": "^(SPLB)\\s+(5)$",
+          "captures": {
+            "1": { "name": "keyword.control.directive.splb" },
+            "2": { "name": "constant.numeric.version.splb" }
+          }
+        },
+        {
+          "match": "^(CATALOG)\\s+([0-9a-f]{64})$",
+          "captures": {
+            "1": { "name": "keyword.control.directive.splb" },
+            "2": { "name": "constant.other.hash.splb" }
+          }
+        },
+        {
+          "match": "^(CAPS)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.directive.splb" }
+          }
+        }
+      ]
+    },
+    "fn-header": {
+      "match": "^(FN)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(\\([^)]*\\))\\s*(->)\\s*(\\S+)\\s+(locals)(=)(\\d+)$",
+      "captures": {
+        "1": { "name": "storage.type.function.splb" },
+        "2": { "name": "entity.name.function.splb" },
+        "3": { "name": "support.type.splb" },
+        "4": { "name": "keyword.operator.arrow.splb" },
+        "5": { "name": "support.type.splb" },
+        "6": { "name": "variable.parameter.splb" },
+        "7": { "name": "keyword.operator.assignment.splb" },
+        "8": { "name": "constant.numeric.integer.splb" }
+      }
+    },
+    "sections": {
+      "name": "keyword.control.section.splb",
+      "match": "^(INPUTS|STATE|CONSTS|SCHEMAS|END)$"
+    },
+    "instruction": {
+      "patterns": [
+        {
+          "match": "^\\s*(\\d{4,})(:)\\s+(EFF_[A-Z_]+)\\b",
+          "captures": {
+            "1": { "name": "comment.line.address.splb" },
+            "2": { "name": "punctuation.separator.colon.splb" },
+            "3": { "name": "support.function.effect.splb" }
+          }
+        },
+        {
+          "match": "^\\s*(\\d{4,})(:)\\s+(JMP|JMP_IF_FALSE|JMP_IF_TRUE|JMP_IF_NULL|JMP_IF_NOT_NULL|CALL_FN|CALL_BUILTIN|RET|TRY_PUSH|TRY_POP)\\b",
+          "captures": {
+            "1": { "name": "comment.line.address.splb" },
+            "2": { "name": "punctuation.separator.colon.splb" },
+            "3": { "name": "keyword.control.opcode.splb" }
+          }
+        },
+        {
+          "match": "^\\s*(\\d{4,})(:)\\s+([A-Z][A-Z0-9_]+)\\b",
+          "captures": {
+            "1": { "name": "comment.line.address.splb" },
+            "2": { "name": "punctuation.separator.colon.splb" },
+            "3": { "name": "keyword.operator.opcode.splb" }
+          }
+        }
+      ]
+    },
+    "const-schema-decl": {
+      "patterns": [
+        {
+          "match": "^\\s*(c\\d+)\\s+([IFSJ])\\b",
+          "captures": {
+            "1": { "name": "variable.other.constant.splb" },
+            "2": { "name": "storage.type.const-kind.splb" }
+          }
+        },
+        {
+          "match": "^\\s*(s\\d+)\\b",
+          "captures": {
+            "1": { "name": "entity.name.type.schema.splb" }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.splb",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.splb",
+          "match": "\\\\([\"\\\\bfnrt]|u[0-9a-fA-F]{4})"
+        }
+      ]
+    },
+    "types": {
+      "name": "support.type.primitive.splb",
+      "match": "\\b(null|bool|int|float|string|json|void|Error|list|map|NONE)\\b"
+    },
+    "refs": {
+      "patterns": [
+        {
+          "name": "variable.other.constant.splb",
+          "match": "\\bc\\d+\\b"
+        },
+        {
+          "name": "entity.name.type.schema.splb",
+          "match": "\\bs\\d+\\b"
+        },
+        {
+          "name": "entity.name.function.ref.splb",
+          "match": "\\bfn:[A-Za-z_][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.splb",
+      "match": "-?\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b"
+    }
+  }
+}

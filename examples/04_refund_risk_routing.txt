@@ -1,0 +1,10 @@
+Take inputs customer_id (string), refund_cents (int), and reason (string).
+
+1. Look up the customer using the MCP tool crm.get_customer to get their tier and account_age_days.
+2. Compute risk using the host JS tool score_risk with amount_cents and account_age_days.
+3. Check whether the workspace repository is clean using the git_status shell profile.
+4. Apply deterministic rules first:
+   - If risk is flagged and tier is "free", return action "deny".
+   - If tier is "enterprise" and risk is not flagged, return action "auto_approve".
+5. Otherwise, use the classifier_default decision profile to choose between "auto_approve", "escalate", and "deny" with min_confidence 0.75, defaulting to "escalate" when uncertain.
+6. Return { action, risk_score, tier, repo_clean }.

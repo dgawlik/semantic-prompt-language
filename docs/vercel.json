@@ -1,4 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "astro"
+  "framework": "nextjs",
+  "installCommand": "npm --prefix .. install && npm install",
+  "buildCommand": "npm run build"
 }

@@ -1,33 +1,26 @@
 {
-  "name": "spl-lang",
-  "version": "4.3.0",
-  "description": "Semantic Prompt Language (SPL) — Agent-first strongly-typed functional language compiled to ESM JavaScript",
+  "name": "spl-lang-v5",
+  "version": "5.0.0",
+  "description": "Semantic Prompt Language (SPL) v5 reference compiler, canonical bytecode VM, and OpenAI SDK runtime",
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "bin": {
-    "spl": "./dist/cli.js",
-    "spl-lsp": "./dist/lsp.js"
-  },
-  "exports": {
-    ".": "./dist/index.js",
-    "./runtime/core": "./runtime/core.mjs",
-    "./runtime/ffi_universal": "./runtime/ffi_universal.mjs",
-    "./runtime/ffi_server": "./runtime/ffi_server.mjs",
-    "./runtime/ffi_codegen": "./runtime/ffi_codegen.mjs",
-    "./runtime/ffi_llm": "./runtime/ffi_llm.mjs",
-    "./runtime/llm_capabilities": "./runtime/llm_capabilities.mjs"
+    "spl": "./dist/src/cli.js"
   },
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --test tests/*.test.mjs",
-    "spl": "node dist/cli.js",
-    "vscode:install": "node scripts/install-vscode.mjs",
-    "vscode:uninstall": "node scripts/install-vscode.mjs --uninstall",
-    "vscode:package": "node scripts/package-vscode.mjs",
-    "vscode:package:install": "node scripts/package-vscode.mjs --install",
-    "docs:dev": "npm --prefix docs run dev",
-    "docs:build": "npm --prefix docs run build"
+    "spl": "node dist/src/cli.js",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "typecheck": "tsc --noEmit",
+    "install:vscode": "node vscode-spl/install.mjs",
+    "uninstall:vscode": "node vscode-spl/install.mjs --uninstall"
   },
-  "engines": {
-    "node": ">=22.0.0"
+  "dependencies": {
+    "openai": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
   }
 }

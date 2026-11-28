@@ -1,170 +1,193 @@
-# Semantic Prompt Language (SPL)
+# Semantic Prompt Language (SPL) v5
 
-**SPL (`.splx`)** is a strongly-typed, agent-first functional programming language that compiles to standard ES Module JavaScript (`.mjs`), targeting **Browser** and **Node 22+ / Bun / Deno** with **zero runtime dependencies**.
+**SPL v5** is a CLI compiler and deterministic stack VM that turns **natural-language instructions** into verifiable, replayable bytecode where **the VM—not the LLM—owns control flow**.
 
----
+You write plain-English workflow instructions + a **Signature Catalog** (`catalog.json`). The `spl` CLI compiles your prose via **OpenAI Lark CFG constrained decoding** and a **bounded compile-repair loop** into statically typed, canonical UTF-8 stack bytecode (`SPLB 5`), pushing model calls strictly down to typed leaf effects (`model.decide` and `model.ask<T>`).
 
-## Highlights
-
-- **Hindley-Milner Type Inference + Row Polymorphism**: structural records, functional spread (`{ ...x, k: v }`), open records (`..r`), hybrid dynamic records (`..extra: Dict<Str, Json>`), and zero `null`/`undefined`.
-- **First-Class Prompt Blocks (`@{ ... }`)**: auto-dedented, brace-balanced templates with `${expr}` interpolation that can be passed as trailing arguments to any function.
-- **Three Comment Layers (`//`, `///`, `''`)**: regular comments (`//`), IDE doc-comments (`///`), and compile-time LLM schema hints (`''`) emitted directly into JSON Schema `"description"` fields.
-- **Compile-Time Schemas, Universal Reification, `typeof` & `newtype`**: `type_schema<T>()`, `decode<T>(json)`, type-level & runtime `typeof` (`TypeInfo`), nominal `newtype` declarations, and automatic universal reification across all generic functions with zero runtime reflection.
-- **Colorless (Transparent) Async**: no `async`/`await` keywords; pure functions compile to sync JS, suspending functions compile to `async`/`await`, `map` runs sequentially by default, and concurrency is opt-in via `par_map`, `async_all`, and `async_race`.
-- **Rust-Style Safety & Ergonomics**: tagged `enum`s with exhaustive `match`, `Option<T>` (`T?`, `?.`, `??`), `Result<T, E>` (`?`, `??`), `mut self` & `mut` params, explicit `as` casts, ranges (`0..10..2`, `0..=10`), lazy `Iter<T>`, lightweight `trait`/`impl`, extension methods, and self-tail-call optimization (TCO).
-- **Batteries-Included Agentic Standard Library**: unified multi-provider `std/llm` (OpenAI Responses/Chat, Anthropic, Google Gemini), `std/traces` JSONL + deterministic `llm.agent_replay<T>`, sandboxed `std/codegen`, pure SPL `std/collections`, and universal/server host I/O.
-- **Built-In CLI Tools (`spl debug`, `spl trace`) & LSP / VS Code Extension**: interactive step-through LLM debugger with scrollable pretty-printed results & mocking, interactive JSON/JS/SPL trace viewer & editor, plus live diagnostics, completions, signature help, JSON Schema hovers, go-to-definition, and symbols.
+See [SPEC.md](./SPEC.md) for the full normative specification.
 
 ---
 
-## Quick Example
+## What It Is & How It Works
 
-```splx
-import llm from "std/llm"
-
-/// Developer doc-comment (IDE hover only; omitted from LLM schemas).
-'' Historical figure profile returned by the LLM.
-type Person = struct {
-    firstName: Str  '' Given name, e.g. Ada
-    lastName: Str   '' Family name, e.g. Lovelace
-    age: Int        '' Age in years
-    profession: Str '' Primary occupation
-}
-
-// Defaults to provider: "openai_responses", model: "gpt-6-luna", and ~/.spl/credentials.json (`spl login`).
-// Automatically sends `type_schema<Person>()` and validates the response into `Person`!
-let ada = @{
-    Generate a profile for Ada Lovelace.
-}.ask<Person>()?
-
-print("${ada.firstName} ${ada.lastName} (${ada.age}) — ${ada.profession}")
+```text
+Natural-language prose (.txt) + Signature Catalog (catalog.json)
+   │  spl translate: OpenAI Lark CFG decoding + static typecheck + compile-repair loop
+   ▼
+Canonical UTF-8 Textual Stack Bytecode (.splb / SPLB 5)
+   │  ═══════════════ DETERMINISM BOUNDARY ═══════════════
+   │  spl run: Deterministic Stack VM + sandboxed effects + WAL + transactional state
+   ▼
+Result + Atomic Durable State Commit + Normative Trace (.json)
+   │  spl replay --strict: 0-API-call offline verification
+   ▼
+Byte-identical Normative Trace (or REPLAY_DIVERGENCE trap)
 ```
 
-### Multi-Turn Agent with Typed Tools & Streaming `StreamDelta`
-
-```splx
-import llm from "std/llm"
-import fs from "std/fs"
-
-type FilePath = Str '' Relative file path to read
-
-let read_file = llm.tool<FilePath, Str>(
-    name: "read_file",
-    description: "Reads UTF-8 contents of a file"
-) { path ->
-    fs.read(path)
-}
-
-let (answer, trace) = @{
-    Inspect package.json and summarize the available scripts.
-}.agent<Str>(
-    thinking: Some(llm.ThinkLow),
-    tools: [read_file.any()],
-    on_delta: Some({ delta ->
-        match delta {
-            llm.SummaryDelta(s) => print_inline(s)
-            llm.ThinkingDelta(t) => print_inline(t)
-            llm.TextDelta(t) => print_inline(t)
-            _ => ()
-        }
-    })
-)?
-
-print("\nTurns: ${trace.turns}\n${answer}")
-```
+### Core Guarantees
+- **Write prose, get checked bytecode:** Constrained decoding enforces the static Lark CFG ([grammar/spl_v5.lark](./grammar/spl_v5.lark)), and the compiler statically verifies types, nullability, exhaustive `switch`, strict JSON Schemas, and catalog capabilities before emitting `.splb`.
+- **VM owns control flow; models are typed data leaves:**
+  - `model.decide`: Closed-set judgment via OpenAI logprob-scored softmax classifier with optional `min_confidence` thresholds and full probability vectors in the trace.
+  - `model.ask<T>`: Text or strict JSON-Schema-constrained generation via OpenAI Responses API, runtime-validated against `T`.
+- **Byte-identical bytecode & strict replay:** Once compiled to `.splb`, identical `(bytecode, inputs, initial_state, limits, effect_log)` always produces the identical result, state commit, and normative trace.
+- **Transactional durable state:** `state` variables commit atomically to `--state` / `--save-state` only on clean completion and roll back on any trap.
+- **Sandboxed capabilities:** Virtual FS mounts (`--mount`), argv-only `shell.run` (`execFile`, never `sh -c`), SSRF/domain-checked `web.fetch`, and typed JS/MCP tools (`--js-tools`, `--mcp-module`).
 
 ---
 
-## Getting Started
+## Setup
 
-### Requirements
-
-- **Node.js 22+** (or Bun / Deno for executing compiled `.mjs` output)
-
-### Build & Test
+Requires **Node.js 22+**.
 
 ```bash
+npm install
 npm run build
 npm test
 ```
 
-### CLI Usage
+Optionally install `spl` globally from this repo so you can run `spl` directly (otherwise use `node dist/src/cli.js` or `npm run spl --`):
 
 ```bash
-# Save OpenAI / Google / Anthropic API tokens in ~/.spl/credentials.json
-node dist/cli.js login
-
-# Type-check a file and its imports
-node dist/cli.js check examples/01_basics.splx
-
-# Compile and run immediately
-node dist/cli.js run examples/06_prompts_and_schemas.splx
-
-# Step through LLM calls interactively with pretty-printed results
-node dist/cli.js debug examples/agents/agent.splx
-
-# Build standalone ES Modules (.mjs)
-node dist/cli.js build examples/06_prompts_and_schemas.splx -o ./dist-spl
-
-# Inspect & edit execution traces (JSON / JS / SPL pretty printing)
-node dist/cli.js trace trace.jsonl
-
-# Print the compile-time JSON Schema for any exported type
-node dist/cli.js schema examples/06_prompts_and_schemas.splx SecurityAudit
-
-# Start the JSON-RPC 2.0 Language Server (stdio)
-node dist/cli.js lsp
+npm link
 ```
 
-### VS Code Extension
+Set your OpenAI API key for `translate` and live model calls:
 
 ```bash
-npm run vscode:install
-# Uninstall later:
-npm run vscode:uninstall
+# macOS / Linux
+export OPENAI_API_KEY="sk-..."
+
+# Windows PowerShell
+$env:OPENAI_API_KEY="sk-..."
 ```
 
-Reload VS Code (`Developer: Reload Window`) after installing.
-
 ---
 
-## Standard Library
+## CLI Workflow: Natural Language → Bytecode → Run → Replay
 
-| Module | Runtime | Highlights |
-|---|---|---|
-| `std/llm` | Universal | `Prompt.ask<T>`, `Prompt.agent<T>`, `Prompt.llm_fn<In, Out>`, `ask_raw`, `agent_replay<T>`, `tool<Args, Out>` + `.any()`, `StreamDelta`, `Thinking`, `ToolChoice`, `Decision`, `decide` |
-| `std/traces` | Universal / Server | Ordered `TraceEvent` enum, `ExecutionTrace`, JSONL `to_jsonl` / `from_jsonl` / `save_jsonl` / `load_jsonl` |
-| `std/codegen` | Universal / VM | Sandboxed `js_fn<In, Out>`, `js_async_fn<In, Out>`, `js_eval<Out>`, `spl_fn<In, Out>`, and LLM-synthesized `llm_fn<In, Out>` |
-| `std/collections` | Universal | Pure SPL `HashMap<K, V>`, self-balancing AVL `TreeSet<T>`, and immutable `List<T>` with lazy `.iter()` |
-| `std/http` | Universal | `fetch`, `get`, `post_json` |
-| `std/clock` & `std/crypto` | Universal | `now_ms`, `sleep`, `random_bytes`, `random_hex` |
-| `std/console` | Universal | `log`, `warn`, `error` |
-| `std/fs` | Server | `read`, `write`, `stat`, `list_dir`, `mkdir`, `remove`, `join_path`, `ext_name` |
-| `std/proc` | Server | Cross-platform `shell(cmd)` and safe argv `exec(cmd, args, opts)` |
-| `std/os` | Server | `env`, `args`, `cwd`, `platform`, `exit`, `print_line`, `write` |
+### 1. Compile Natural Language to Bytecode (`spl translate`)
 
----
-
-## Documentation & Examples
-
-- **Astro Documentation Site (`docs/`)**:
-  ```bash
-  npm run docs:dev    # Start local Astro Starlight docs server
-  npm run docs:build  # Build static documentation site into docs/dist/
-  ```
-- **Language Specification**: see [SPEC.md](./SPEC.md)
-- **Runnable Examples**: see [examples/README.md](./examples/README.md) (`examples/01_basics.splx` through `examples/13_typeof_and_newtype.splx`)
-
----
-
-## Project Layout
-
-```text
-src/            TypeScript compiler (lexer, Pratt parser, HM + row typechecker, schema/codec gen, JS codegen, CLI, debugger, trace editor, LSP)
-runtime/        Zero-dependency ESM runtime & private stdlib FFI kernels
-stdlib/         SPL standard library modules (.splx)
-examples/       13 runnable, test-verified language & stdlib examples
-tests/          Compiler, runtime, LLM/traces/codegen, debugger, and LSP test suites
-editors/vscode/ VS Code extension & TextMate grammar (splx.tmLanguage.json)
-docs/           Astro + Starlight documentation website
+```bash
+spl translate examples/01_ticket_triage.txt \
+  --catalog examples/catalog.json \
+  --model gpt-4.1 \
+  --max-attempts 3 \
+  --emit-source ticket.spl \
+  --out ticket.splb
 ```
+
+You can also pipe prose from stdin using `-`:
+
+```bash
+echo "Take an integer input n and return n * 2." | spl translate - --catalog examples/catalog.json --out double.splb
+```
+
+### 2. Inspect Compiled Bytecode & Capabilities (`spl inspect`)
+
+Audit the exact capabilities, inputs, durable state, and SHA-256 hash before running anything:
+
+```bash
+spl inspect ticket.splb
+```
+
+### 3. Run Compiled Bytecode with Durable State & Trace (`spl run`)
+
+```bash
+spl run ticket.splb \
+  --catalog examples/catalog.json \
+  --inputs examples/01_ticket_inputs.json \
+  --state ticket_state.json \
+  --commit-state \
+  --wal ticket.wal.jsonl \
+  --trace-out ticket_trace.json
+```
+
+- `--state ticket_state.json --commit-state`: Loads persistent state (if the file exists) and atomically updates it **only** if the run succeeds cleanly (rolled back on trap).
+- `--wal ticket.wal.jsonl`: Appends every completed effect to a write-ahead log for mid-run crash recovery.
+- `--trace-out ticket_trace.json`: Saves the full canonical trace JSON.
+- `--input-json '{"ticket":{"id":42,"text":"Charged twice"}}'`: Pass inputs inline without a JSON file.
+- `--result-only`: Print only the result object instead of the full trace to stdout.
+
+You can also pass a `.txt` prose file directly to `spl run` to translate and execute in one command:
+
+```bash
+spl run examples/01_ticket_triage.txt \
+  --catalog examples/catalog.json \
+  --inputs examples/01_ticket_inputs.json \
+  --result-only
+```
+
+### 4. Strict Offline Replay & Crash Recovery (`spl replay`)
+
+Verify a recorded trace offline with **zero API calls** (exits non-zero on `REPLAY_DIVERGENCE` or normative trace mismatch):
+
+```bash
+spl replay ticket.splb --trace ticket_trace.json --strict
+```
+
+Recover from a mid-run crash using the partial WAL (replays completed effects from the WAL, then seamlessly resumes live execution):
+
+```bash
+spl replay ticket.splb \
+  --wal ticket.wal.jsonl \
+  --catalog examples/catalog.json \
+  --inputs examples/01_ticket_inputs.json \
+  --state ticket_state.json
+```
+
+---
+
+## Running the Examples via CLI (`examples/`)
+
+All examples in `examples/` are plain natural-language `.txt` specs paired with [`examples/catalog.json`](./examples/catalog.json):
+
+### Example 1: Refund Ticket Triage (Decisions + Durable State + Reply)
+```bash
+spl translate examples/01_ticket_triage.txt --catalog examples/catalog.json --out ticket.splb
+spl inspect ticket.splb
+spl run ticket.splb --catalog examples/catalog.json --inputs examples/01_ticket_inputs.json --state state.json --commit-state --trace-out trace.json
+spl replay ticket.splb --trace trace.json --strict
+```
+
+### Example 2: Structured Invoice Extraction (Strict JSON Schema + Bounded Retry)
+```bash
+spl translate examples/02_invoice_extraction.txt --catalog examples/catalog.json --out invoice.splb
+spl run invoice.splb --catalog examples/catalog.json --inputs examples/02_invoice_inputs.json --result-only
+```
+
+### Example 3: Research Brief (Web Search/Fetch + Virtual FS Output)
+```bash
+spl translate examples/03_research_brief.txt --catalog examples/catalog.json --out research.splb
+spl run research.splb \
+  --catalog examples/catalog.json \
+  --inputs examples/03_research_inputs.json \
+  --mount output=./out_sandbox \
+  --result-only
+```
+
+### Example 4: Hybrid Refund Risk Routing (MCP + JS Tool + Shell Profile + Decision API)
+```bash
+spl translate examples/04_refund_risk_routing.txt --catalog examples/catalog.json --out routing.splb
+spl run routing.splb \
+  --catalog examples/catalog.json \
+  --inputs examples/04_refund_inputs.json \
+  --mount workspace=. \
+  --js-tools examples/js_tools.mjs \
+  --mcp-module examples/mcp_handler.mjs \
+  --result-only
+```
+
+---
+
+## Full CLI Reference
+
+Run `spl <command> --help` for full details on any command.
+
+| Command | Purpose |
+|---|---|
+| `spl init [dir] [--force]` | Scaffold a starter `catalog.json` and `workflow.txt` |
+| `spl translate <prose.txt\|-> [-c cat.json] [-m model] [--temperature n] [--max-attempts 3] [-o out.splb] [--emit-source out.spl]` | Compile natural language into canonical `SPLB 5` bytecode via OpenAI Lark CFG + live compile-repair progress |
+| `spl inspect <file.splb> [--disasm] [--json]` | Audit bytecode SHA-256, catalog digest, capabilities, inputs, state, and functions |
+| `spl compile <file.spl\|-> [-c cat.json] [-o out.splb]` | Compile an existing `.spl` file into canonical `SPLB 5` bytecode |
+| `spl run <file.splb\|.spl\|.txt> [-c cat.json] [-i inputs.json] [--arg k=v]... [-s state.json] [--commit-state] [--mount root=dir]... [--js-tools mod.mjs] [--mcp-module mod.mjs] [--wal wal.jsonl] [--trace-out trace.json] [--json\|--result-only]` | Execute bytecode (or auto-compile `.spl`/`.txt`) with typed `--arg` inputs, sandboxed mounts/tools, transactional state, and WAL |
+| `spl replay <file.splb> -t <trace.json> [--strict] [--wal wal.jsonl]` | Strictly verify a trace offline (`--strict`) or resume from a partial WAL |

@@ -1,0 +1,142 @@
+SPLB 5
+CATALOG f27395a9be5f5f8137efc47bf5de8107a26e0ad613c48775eb6f8dfce19e6913
+CAPS ["decision:classifier_default","model:default"]
+INPUTS
+  raw_document string NONE
+STATE
+CONSTS
+  c0 I 0
+  c1 S "UNKNOWN"
+  c2 I 2
+  c3 I 1
+  c4 S "default"
+  c5 S "Extract a structured invoice from this document. Return vendor, currency as USD, EUR, or GBP, po_number as null when absent, and items with description and amount_cents: "
+  c6 S "items"
+  c7 S "amount_cents"
+  c8 S "po_number"
+  c9 S "NONE"
+  c10 S "status"
+  c11 S "parsed"
+  c12 S "vendor"
+  c13 S "total_cents"
+  c14 S "error_code"
+  c15 S "Extract the error code from this error. Return only the code; if none is present, return UNKNOWN: "
+  c16 S "message"
+  c17 S "classifier_default"
+  c18 S "Classify whether this error is retryable: "
+  c19 J ["retryable","not_retryable"]
+  c20 S "retryable"
+  c21 S "failed"
+  c22 S ""
+SCHEMAS
+  s0 {"additionalProperties":false,"properties":{"currency":{"enum":["EUR","GBP","USD"],"type":"string"},"items":{"items":{"additionalProperties":false,"properties":{"amount_cents":{"type":"integer"},"description":{"type":"string"}},"required":["amount_cents","description"],"type":"object"},"type":"array"},"po_number":{"anyOf":[{"type":"string"},{"type":"null"}]},"vendor":{"type":"string"}},"required":["currency","items","po_number","vendor"],"type":"object"}
+  s1 {"type":"string"}
+FN parse_invoice (string) -> {error_code:string?,po_number:string,status:string,total_cents:int,vendor:string} locals=12
+  0000: PUSH_CONST c0
+  0001: STORE_LOCAL 1
+  0002: PUSH_CONST c1
+  0003: STORE_LOCAL 2
+  0004: LOAD_LOCAL 1
+  0005: PUSH_CONST c2
+  0006: ILT
+  0007: JMP_IF_FALSE 0090
+  0008: LOAD_LOCAL 1
+  0009: PUSH_CONST c3
+  0010: IADD
+  0011: STORE_LOCAL 1
+  0012: TRY_PUSH 0066
+  0013: PUSH_CONST c5
+  0014: LOAD_LOCAL 0
+  0015: FMT_VAL
+  0016: STR_CONCAT 2
+  0017: EFF_ASK c4 s0 0
+  0018: STORE_LOCAL 3
+  0019: PUSH_CONST c0
+  0020: STORE_LOCAL 4
+  0021: LOAD_LOCAL 3
+  0022: GET_FIELD c6
+  0023: STORE_LOCAL 5
+  0024: PUSH_CONST c0
+  0025: STORE_LOCAL 6
+  0026: LOAD_LOCAL 6
+  0027: LOAD_LOCAL 5
+  0028: LIST_LEN
+  0029: ILT
+  0030: JMP_IF_FALSE 0045
+  0031: LOAD_LOCAL 5
+  0032: LOAD_LOCAL 6
+  0033: GET_INDEX
+  0034: STORE_LOCAL 7
+  0035: LOAD_LOCAL 4
+  0036: LOAD_LOCAL 7
+  0037: GET_FIELD c7
+  0038: IADD
+  0039: STORE_LOCAL 4
+  0040: LOAD_LOCAL 6
+  0041: PUSH_CONST c3
+  0042: IADD
+  0043: STORE_LOCAL 6
+  0044: JMP 0026
+  0045: LOAD_LOCAL 3
+  0046: GET_FIELD c8
+  0047: JMP_IF_NOT_NULL 0050
+  0048: POP
+  0049: PUSH_CONST c9
+  0050: STORE_LOCAL 8
+  0051: PUSH_CONST c10
+  0052: PUSH_CONST c11
+  0053: PUSH_CONST c12
+  0054: LOAD_LOCAL 3
+  0055: GET_FIELD c12
+  0056: PUSH_CONST c8
+  0057: LOAD_LOCAL 8
+  0058: PUSH_CONST c13
+  0059: LOAD_LOCAL 4
+  0060: PUSH_CONST c14
+  0061: PUSH_NULL
+  0062: MAKE_REC 5
+  0063: RET
+  0064: TRY_POP
+  0065: JMP 0089
+  0066: STORE_LOCAL 9
+  0067: PUSH_CONST c15
+  0068: LOAD_LOCAL 9
+  0069: GET_FIELD c16
+  0070: FMT_VAL
+  0071: STR_CONCAT 2
+  0072: EFF_ASK c4 s1 0
+  0073: STORE_LOCAL 2
+  0074: PUSH_CONST c18
+  0075: LOAD_LOCAL 9
+  0076: GET_FIELD c16
+  0077: FMT_VAL
+  0078: STR_CONCAT 2
+  0079: EFF_DECIDE c17 c19 0
+  0080: STORE_LOCAL 10
+  0081: LOAD_LOCAL 10
+  0082: PUSH_CONST c20
+  0083: EQ
+  0084: STORE_LOCAL 11
+  0085: LOAD_LOCAL 11
+  0086: NOT
+  0087: JMP_IF_FALSE 0089
+  0088: JMP 0090
+  0089: JMP 0004
+  0090: PUSH_CONST c10
+  0091: PUSH_CONST c21
+  0092: PUSH_CONST c12
+  0093: PUSH_CONST c22
+  0094: PUSH_CONST c8
+  0095: PUSH_CONST c9
+  0096: PUSH_CONST c13
+  0097: PUSH_CONST c0
+  0098: PUSH_CONST c14
+  0099: LOAD_LOCAL 2
+  0100: MAKE_REC 5
+  0101: RET
+END
+FN main () -> {error_code:string?,po_number:string,status:string,total_cents:int,vendor:string} locals=0
+  0000: LOAD_INPUT 0
+  0001: CALL_FN parse_invoice 1
+  0002: RET
+END

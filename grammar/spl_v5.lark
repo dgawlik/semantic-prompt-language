@@ -1,0 +1,160 @@
+start: program
+
+program: top_decl+ stmt* | stmt+
+
+top_decl: type_decl
+        | input_decl
+        | state_decl
+        | fn_decl
+
+type_decl: "type" IDENT "=" type_expr ";"
+input_decl: "input" IDENT ":" type_expr ("=" expr)? ";"
+state_decl: "state" IDENT ":" type_expr "=" expr ";"
+fn_decl: "fn" IDENT "(" param_list? ")" "->" type_expr block
+
+param_list: param ("," param)*
+param: IDENT ":" type_expr
+
+type_expr: union_type
+union_type: nullable_type ("|" nullable_type)*
+nullable_type: base_type "?"?
+
+base_type: "null"
+         | "bool"
+         | "int"
+         | "float"
+         | "string"
+         | "json"
+         | "void"
+         | "Error"
+         | "list" "<" type_expr ">"
+         | "map" "<" "string" "," type_expr ">"
+         | "{" field_type_list? "}"
+         | STRING
+         | IDENT
+
+field_type_list: field_type ("," field_type)* ","?
+field_type: IDENT ":" type_expr
+
+block: "{" stmt* "}"
+
+stmt: let_stmt
+    | assign_stmt
+    | if_stmt
+    | switch_stmt
+    | while_stmt
+    | for_stmt
+    | try_stmt
+    | return_stmt
+    | break_stmt
+    | continue_stmt
+    | expr_stmt
+
+let_stmt: "let" "mut"? IDENT (":" type_expr)? "=" expr ";"
+
+assign_stmt: lvalue "=" expr ";"
+lvalue: IDENT lvalue_seg*
+lvalue_seg: "." IDENT
+          | "[" expr "]"
+
+if_stmt: "if" "(" expr ")" block ("else" (if_stmt | block))?
+
+switch_stmt: "switch" "(" expr ")" "{" switch_case* switch_default? "}"
+switch_case: "case" case_lit ("," case_lit)* ":" block
+switch_default: "default" ":" block
+case_lit: STRING | INT | "true" | "false"
+
+while_stmt: "while" "(" expr ")" block
+for_stmt: "for" "(" IDENT "in" expr ")" block
+try_stmt: "try" block "catch" "(" IDENT ")" block
+
+return_stmt: "return" expr? ";"
+break_stmt: "break" ";"
+continue_stmt: "continue" ";"
+expr_stmt: expr ";"
+
+expr: coalesce_expr
+
+coalesce_expr: or_expr ("??" or_expr)*
+or_expr: and_expr ("||" and_expr)*
+and_expr: bitor_expr ("&&" bitor_expr)*
+bitor_expr: bitxor_expr ("|" bitxor_expr)*
+bitxor_expr: bitand_expr ("^" bitand_expr)*
+bitand_expr: eq_expr ("&" eq_expr)*
+eq_expr: rel_expr (EQ_OP rel_expr)*
+rel_expr: shift_expr (REL_OP shift_expr)*
+shift_expr: add_expr (SHIFT_OP add_expr)*
+add_expr: mul_expr (ADD_OP mul_expr)*
+mul_expr: cast_expr (MUL_OP cast_expr)*
+cast_expr: unary_expr ("as" type_expr)?
+
+unary_expr: UNARY_OP unary_expr
+          | postfix_expr
+
+postfix_expr: primary postfix_op*
+postfix_op: "." IDENT
+          | "?." IDENT
+          | "[" expr "]"
+          | "?.[" expr "]"
+          | "(" arg_list? ")"
+
+arg_list: expr ("," expr)* ","?
+
+primary: effect_expr
+       | literal
+       | template_str
+       | list_lit
+       | record_lit
+       | IDENT
+       | "(" expr ")"
+
+effect_expr: eff_ask
+           | eff_decide
+           | eff_web_search
+           | eff_web_fetch
+           | eff_fs
+           | eff_shell
+           | eff_js_tool
+           | eff_mcp_tool
+
+eff_ask: "model" "." "ask" "<" type_expr ">" "(" arg_list ")"
+eff_decide: "model" "." "decide" "(" arg_list ")"
+eff_web_search: "web" "." "search" "(" arg_list ")"
+eff_web_fetch: "web" "." "fetch" "(" arg_list ")"
+eff_fs: "fs" "." FS_OP "(" arg_list ")"
+eff_shell: "shell" "." "run" "(" arg_list ")"
+eff_js_tool: "tool" "." IDENT "(" expr ")"
+eff_mcp_tool: "mcp" "." IDENT "." IDENT "(" expr ")"
+
+FS_OP: "read" | "write" | "append" | "exists" | "list" | "stat"
+
+literal: "null"
+       | "true"
+       | "false"
+       | FLOAT
+       | INT
+       | STRING
+
+list_lit: "[" arg_list? "]"
+record_lit: "{" record_entry_list? "}"
+record_entry_list: record_entry ("," record_entry)* ","?
+record_entry: (IDENT | STRING) ":" expr
+
+template_str: "`" template_part* "`"
+template_part: TEMPLATE_TEXT
+             | "${" expr "}"
+
+EQ_OP: "==" | "!="
+REL_OP: "<=" | ">=" | "<" | ">"
+SHIFT_OP: ">>>" | "<<" | ">>"
+ADD_OP: "+" | "-"
+MUL_OP: "*" | "/" | "%"
+UNARY_OP: "!" | "-" | "~"
+
+IDENT: /[A-Za-z_][A-Za-z0-9_]*/
+FLOAT: /[0-9][0-9_]*\.[0-9][0-9_]*([eE][+-]?[0-9]+)?|[0-9][0-9_]*[eE][+-]?[0-9]+/
+INT: /0[xX][0-9a-fA-F][0-9a-fA-F_]*|[0-9][0-9_]*/
+STRING: /"([^"\\\r\n]|\\["\\nrt]|\\u\{[0-9a-fA-F]{1,6}\})*"/
+TEMPLATE_TEXT: /([^`\\$]|\\[`\\$nrt]|\\u\{[0-9a-fA-F]{1,6}\})+/
+
+%ignore /[ \t\r\n]+/
